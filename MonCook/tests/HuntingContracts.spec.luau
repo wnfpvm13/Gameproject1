@@ -76,5 +76,13 @@ return function(): number
 		config = copy(Registry.Definitions); config.Hunting.Rewards.ReceiptRetentionSeconds = 1
 		assert(not pcall(Registry.validate, config))
 	end)
+	check(function()
+		local config = copy(Registry.Definitions); config.Combat.Rules.DodgeCooldown = -1
+		assert(not pcall(Registry.validate, config))
+		config = copy(Registry.Definitions); config.Monster.Hornboar.HornHitbox.Size.X = 0/0
+		assert(not pcall(Registry.validate, config))
+		config = copy(Registry.Definitions); config.Spawn.GreenwoodOutskirts.Offsets[1].X = 999
+		assert(not pcall(Registry.validate, config))
+	end)
 	return count
 end

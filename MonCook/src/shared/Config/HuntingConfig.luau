@@ -6,6 +6,8 @@ local Config: any = {
 			PacketInterval = 0.08, ComboResetSeconds = 1.2, MaxSequence = 9007199254740991,
 			MaxFacingCorrectionDegrees = 55, AimAssistDegrees = 24, VerticalTolerance = 6,
 			DodgeDistance = 10, DodgeSeconds = 0.24, DodgeCooldown = 1.4,
+			DodgeCollisionSize = { X = 2.4, Y = 4, Z = 2.4 }, DodgeObstacleMargin = 0.15,
+			DodgeGroundProbeUp = 2, DodgeGroundProbeDown = 12,
 			DodgeProtectionSeconds = 0, -- Positional dodge; no stamina or i-frames.
 			TickSeconds = 0.05, StateRequestInterval = 0.4, StatePushInterval = 0.25,
 		},
@@ -26,16 +28,17 @@ local Config: any = {
 			AssetId = "MON_Hornboar_V1", MaxHealth = 140, MoveSpeed = 7, RoamSpeed = 3,
 			AlertDistance = 28, AlertSeconds = 0.55, LeashDistance = 46, RoamRadius = 9,
 			IdleSeconds = 1.2, RoamSeconds = 2.5, StaggerSeconds = 0.65,
+			RoamArrivalDistance = 0.1,
 			DeathDespawnSeconds = 2.2, HitFlashSeconds = 0.16,
 			ContributionMinimum = 1, ContributionExpirySeconds = 90,
 			BodyHitbox = { Offset = { X = 0, Y = 2.6, Z = 0 }, Size = { X = 5.2, Y = 3.8, Z = 6.4 } },
-			HornHitbox = { Offset = { X = 0, Y = 3.1, Z = -4.3 }, Size = { X = 2.6, Y = 2.8, Z = 3.3 } },
+			HornHitbox = { Offset = { X = 0, Y = 3.6, Z = -5.4 }, Size = { X = 2.6, Y = 3.3, Z = 4.9 } },
 			HornHealth = 80,
 			Attacks = {
 				Headbutt = { Windup = 0.7, Duration = 0.3, HitStart = 0.08, HitEnd = 0.25,
 					Range = 7, Radius = 3, ArcDegrees = 105, Damage = 10, Recover = 1.0 },
 				Charge = { Windup = 1.25, Duration = 0.9, HitStart = 0, HitEnd = 0.9,
-					Range = 28, MinimumRange = 8, Radius = 3, Speed = 24, Damage = 18, Recover = 1.3 },
+					Range = 28, MinimumRange = 8, Radius = 3, Speed = 24, Damage = 18, Recover = 1.3, ContactForwardOffset = 5.4 },
 			},
 		},
 	},
@@ -61,8 +64,8 @@ local Config: any = {
 		},
 	},
 	Hunting = {
-		Rewards = { RetrySeconds = 1, RetryLifetimeSeconds = 600, ReceiptRetentionSeconds = 604800,
-			MaxPending = 256, MaxStack = 2147483647 },
+		Rewards = { RetrySeconds = 1, RetryLifetimeSeconds = 600, ReceiptRetentionSeconds = 3600,
+			MaxPending = 256, MaxStack = 2147483647, DepartureFlushSeconds = 5 },
 	},
 }
 return Config

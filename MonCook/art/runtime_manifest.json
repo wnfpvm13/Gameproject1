@@ -1,0 +1,21 @@
+{
+  "representation": "native Roblox primitive V1 equivalents",
+  "baseparts": {
+    "MON_Hornboar_V1": 86,
+    "WPN_StarterCleaver_V1": 22,
+    "ING_HornboarMeat_V1": 4,
+    "ING_ArcaneFat_V1": 4,
+    "ING_MarbledLoin_V1": 9,
+    "MAT_HornCore_V1": 7,
+    "ENV_Greenwood_Tree_A_V1": 5,
+    "ENV_Greenwood_Tree_B_V1": 5,
+    "ENV_Greenwood_Tree_C_V1": 5,
+    "ENV_Greenwood_Rock_A_V1": 2,
+    "ENV_Greenwood_Rock_B_V1": 2,
+    "ENV_Greenwood_Rock_C_V1": 2,
+    "ENV_Greenwood_Bush_V1": 4,
+    "ENV_Greenwood_Grass_V1": 10,
+    "ENV_Greenwood_Stump_V1": 3,
+    "ENV_Greenwood_Sign_V1": 4
+  }
+}

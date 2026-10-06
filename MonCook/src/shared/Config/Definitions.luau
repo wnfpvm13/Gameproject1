@@ -21,7 +21,7 @@ local definitions: any = {
 		Salt = { DisplayName = "Salt", Category = "Spice", PantryStaple = true },
 	},
 	Drop = {
-		-- Loot probabilities and quantities deliberately await the loot slice: TODO_BALANCE.
+		-- Phase 1 probabilities/quantities below are extended from HuntingConfig: TODO_BALANCE.
 		Hornboar = { Entries = {
 			{ IngredientId = "HornboarMeat", InventoryBucket = "Ingredients", Guaranteed = true },
 			{ IngredientId = "ArcaneFat", InventoryBucket = "Ingredients", Guaranteed = false },

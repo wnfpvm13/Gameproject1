@@ -3,6 +3,8 @@ build/
 *.rbxlx
 *.rbxm
 *.rbxmx
+!art/runtime/**/*.rbxmx
+*.blend1
 .MonCook-docs-backups/
 .MonCook-project-backups/
 __pycache__/

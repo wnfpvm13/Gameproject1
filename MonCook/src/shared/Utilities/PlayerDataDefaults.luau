@@ -11,8 +11,8 @@ function Defaults.new(): PlayerData
 		Progression = { RestaurantLevel = 1, RestaurantRenown = 0, RegionUnlocks = { "Greenwood" } },
 		Inventory = { Ingredients = {}, Materials = {} },
 		Equipment = {
-			-- Preserve DATA_SCHEMA's sample. TODO_SCHEMA: decide config-id vs instance-id
-			-- equip semantics before equipment gameplay; no UUID instance is invented here.
+			-- Built-in starter entitlement preserves the Foundation v1 default.
+			-- Other equips resolve owned instance IDs; no ownership collection is reset.
 			EquippedWeaponId = "StarterCleaver", Weapons = {}, Cookware = {},
 		},
 		Recipes = { Discovered = {}, Mastery = {} },

@@ -122,5 +122,24 @@ return function(): number
 		inventory:Grant(1, reward("a")); assert(data:Get(1).Inventory.Ingredients.HornboarMeat == 1)
 		assert(inventory:Grant(1, reward("a")).Duplicate)
 	end)
+	check("lost store acknowledgement recovers persisted receipt after reconnect", function()
+		local inventory, _, store, clock = fixture()
+		local update = store.UpdateAsync
+		local loseAcknowledgement = true
+		store.UpdateAsync = function(self: any, key: string, transform: any): any
+			local result = update(self, key, transform)
+			if loseAcknowledgement then loseAcknowledgement = false; error("acknowledgement lost after commit") end
+			return result
+		end
+		assert(not pcall(function() inventory:Grant(1, reward("durable", nil, 2)) end))
+		assert(store:Read("Player_1").Data.Inventory.Ingredients.HornboarMeat == 2)
+		clock.Now = 281
+		local recovered = Data.new({ Store = store, OwnerId = "inventory-B", Now = function() return clock.Now end,
+			LockSeconds = 180, NewData = Defaults.new, Migrate = Migration.migrate })
+		recovered:Load(1)
+		local fresh = Inventory.new({ Data = recovered, Definitions = Registry.Definitions, Contracts = Contracts,
+			Geometry = Math, Now = function() return clock.Now end })
+		assert(fresh:Grant(1, reward("durable", nil, 2)).Duplicate and recovered:Get(1).Inventory.Ingredients.HornboarMeat == 2)
+	end)
 	return count
 end

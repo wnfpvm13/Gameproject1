@@ -1,0 +1,58 @@
+--!strict
+local Presentation = require(script.Parent.Parent.src.shared.Utilities.HuntingPresentation)
+local Animation = require(script.Parent.Parent.src.shared.Utilities.HuntingAnimation)
+local Style = require(script.Parent.Parent.src.shared.Config.HuntingUIStyle)
+local Registry = require(script.Parent.Parent.src.shared.Config.Registry)
+return function(): number
+	local count = 0
+	local function check(_name: string, test: () -> ()) test(); count += 1 end
+	check("PC portrait landscape and small-window safe layout", function()
+		for _, size in { { 1280, 720 }, { 360, 780 }, { 780, 360 }, { 320, 200 } } do
+			local layout = Presentation.layout(size[1], size[2], Style)
+			assert(layout.Button >= 44 and layout.Button*3+16 <= size[1]-24)
+			assert(layout.PanelWidth <= size[1]-24 and layout.PanelHeight+layout.CombatBottom+12 <= size[2])
+		end
+	end)
+	check("combat requires world living ready equipment state", function()
+		local state: any = { Ready = true, Location = "World", Health = 100, WeaponId = "StarterCleaver" }
+		assert(Presentation.canAct(state, false) and not Presentation.canAct(state, true))
+		state.Traveling = true; assert(not Presentation.canAct(state, false))
+		state.Traveling, state.Location = false, "Expedition"; assert(not Presentation.canAct(state, false))
+		state.Location, state.Health = "World", 0; assert(not Presentation.canAct(state, false))
+	end)
+	check("PC and gamepad share actions without replacing jump", function()
+		assert(Presentation.input("Unknown", "MouseButton1") == "Basic" and Presentation.input("ButtonR2", "Gamepad1") == "Basic")
+		assert(Presentation.input("Q", "Keyboard") == "Heavy" and Presentation.input("ButtonX", "Gamepad1") == "Heavy")
+		assert(Presentation.input("F", "Keyboard") == "Dodge" and Presentation.input("ButtonB", "Gamepad1") == "Dodge")
+		assert(Presentation.input("Space", "Keyboard") == nil and Presentation.input("ButtonA", "Gamepad1") == nil
+			and Presentation.input("LeftShift", "Keyboard") == nil)
+	end)
+	check("rare notice contains icon text name and quantity", function()
+		local text, rare = Presentation.notice({ Kind = "Dead", Items = { { IngredientId = "MarbledLoin", Quantity = 1 } } }, Registry.Definitions)
+		assert(rare and string.find(text, "✨", 1, true) and string.find(text, "RARE INGREDIENT", 1, true) and string.find(text, "Marbled Loin ×1", 1, true))
+	end)
+	check("horn notice refers to committed material reward", function()
+		local text = Presentation.notice({ Kind = "PartBroken", Items = { { IngredientId = "HornCore", Quantity = 1 } } }, Registry.Definitions)
+		assert(string.find(text, "✓", 1, true) and string.find(text, "Horn Core", 1, true))
+	end)
+	check("idle and locomotion are visibly different", function()
+		local idle = Animation.monster("Idle", nil, 0.3, 0.3, 99)
+		local walking = Animation.monster("Roam", nil, 0.3, 0.3, 99)
+		assert(idle.FrontLeg_L.Pitch == 0 and walking.FrontLeg_L.Pitch ~= 0 and walking.FrontLeg_L.Pitch == -walking.FrontLeg_R.Pitch)
+	end)
+	check("charge telegraph attack hit and death poses are distinct", function()
+		local windup = Animation.monster("Windup", "Charge", 0.5, 0.5, 99)
+		local charge = Animation.monster("Attack", "Charge", 0.2, 0.5, 99)
+		local hit = Animation.monster("Idle", nil, 0, 0.5, 0.08)
+		local dead = Animation.monster("Dead", nil, 1, 0.5, 0.08)
+		assert(windup.Head.Pitch ~= charge.Head.Pitch and charge.FrontLeg_L.Pitch ~= 0)
+		assert(hit.Spine.Roll > 0 and dead.Spine.Roll > 1 and dead.Spine.Lift < 0)
+	end)
+	check("weapon animation aligns to attack period and recovers", function()
+		local basic = Animation.weapon("Basic", 1, 0.2, 0.42)
+		local heavy = Animation.weapon("Heavy", 0, 0.5, 1)
+		assert(math.abs(heavy.Pitch) > math.abs(basic.Pitch))
+		assert(Animation.weapon("Basic", 1, 1, 0.42).Pitch == 0 and Animation.weapon("Dodge", 0, 0.1, 0.24).Pitch == 0)
+	end)
+	return count
+end

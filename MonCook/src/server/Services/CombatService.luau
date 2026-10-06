@@ -18,7 +18,7 @@ function CombatService._actor(self: any, actorId: number): any
 	local state = self._actors[actorId]
 	if not state then
 		state = { SessionId = self.NewId(), LastSequence = 0, LastPacketAt = -math.huge,
-			ComboIndex = 0, LastBasicAt = -math.huge, DodgeReadyAt = -math.huge }
+			ComboIndex = 0, LastBasicAt = -math.huge, DodgeReadyAt = 0 }
 		self._actors[actorId] = state
 	end
 	return state

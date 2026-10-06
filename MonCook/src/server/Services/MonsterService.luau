@@ -21,10 +21,12 @@ function MonsterService.new(options: any): any
 		_monsters = {}, _zones = zones, _issued = {}, _rewards = {} }, MonsterService)
 end
 function MonsterService._emit(self: any, kind: string, monster: any, extra: any?)
-	local event = { Kind = kind, EventId = monster.EncounterId .. ":" .. kind,
+	local event: any = { Kind = kind, EventId = monster.EncounterId .. ":" .. kind,
 		EncounterId = monster.EncounterId, MonsterId = monster.MonsterId, ZoneId = monster.ZoneId,
 		Origin = self.Math.copy(monster.Position), At = self.Now() }
 	if extra then for key, value in extra do event[key] = clone(value) end end
+	if kind == "PartBroken" then event.EventId = monster.EncounterId .. ":Part:" .. event.PartId end
+	if kind == "Dead" then event.EventId = monster.EncounterId .. ":Death" end
 	if kind == "PartBroken" or kind == "Dead" then self._rewards[event.EventId] = clone(event) end
 	if self.OnEvent then
 		local ok, reason = pcall(self.OnEvent, clone(event))
@@ -138,8 +140,8 @@ function MonsterService._attackHits(self: any, monster: any, previous: any, play
 			and self.Math.point(player.Position) and math.abs(player.Position.Y-monster.Position.Y) <= self.Definitions.Combat.Rules.VerticalTolerance then
 			local hit
 			if monster.AttackType == "Charge" then
-				local from = self.Math.advance(previous, monster.Facing, 2)
-				local to = self.Math.advance(monster.Position, monster.Facing, 2)
+				local from = self.Math.advance(previous, monster.Facing, attack.ContactForwardOffset)
+				local to = self.Math.advance(monster.Position, monster.Facing, attack.ContactForwardOffset)
 				hit = self.Math.segmentDistance(player.Position, from, to) <= attack.Radius
 			else
 				hit = self.Math.inArc(monster.Position, monster.Facing, player.Position, attack.Range, attack.ArcDegrees,
@@ -206,7 +208,7 @@ function MonsterService._update(self: any, monster: any, players: { any }, dt: n
 		monster.RoamTarget = self.Math.add(monster.Home, { X = math.cos(angle)*config.RoamRadius, Y = 0, Z = math.sin(angle)*config.RoamRadius })
 		self:_state(monster, "Roam", config.RoamSeconds)
 	elseif monster.State == "Roam" then
-		if now >= monster.StateUntil or self.Math.distance(monster.Position, monster.RoamTarget) < 0.1 then self:_state(monster, "Idle", config.IdleSeconds)
+		if now >= monster.StateUntil or self.Math.distance(monster.Position, monster.RoamTarget) < config.RoamArrivalDistance then self:_state(monster, "Idle", config.IdleSeconds)
 		else self:_walk(monster, monster.RoamTarget, config.RoamSpeed, dt) end
 	end
 end

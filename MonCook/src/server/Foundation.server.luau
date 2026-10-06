@@ -318,6 +318,12 @@ command.OnServerInvoke = function(player: Player, action: any, payload: any): an
 	return { Ok = ok, Error = if ok then nil else "요청을 처리하지 못했습니다. 상태를 확인하고 다시 시도하세요.", State = snapshot(id) }
 end
 network.Parent = ReplicatedStorage
+-- Additive World presentation/gameplay boundary; existing Party and travel APIs are unchanged.
+local hunting = require(script.Parent.Adapters.HuntingRuntime).start({
+	Data = data, IsRestaurant = restaurant,
+	ActorId = function(player: Player): number? return actorByPlayer[player] end,
+	Lookup = lookup, Location = location, IsTraveling = isTraveling,
+})
 local function arrival(player: Player, id: number)
 	if not restaurant then
 		local previous = sessions:GetHostSession(id)
@@ -389,6 +395,10 @@ end
 Players.PlayerRemoving:Connect(function(player)
 	local id = actorByPlayer[player]
 	if not id then return end
+	if hunting then
+		local ok, reason = pcall(hunting.FlushActor, id)
+		if not ok then log("Hunting departure flush: " .. tostring(reason)) end
+	end
 	playerByActor[id], actorByPlayer[player], sessionByActor[id], lastRequest[id] = nil, nil, nil, nil
 	party:Leave(id); travel:Forget(id)
 	expeditionTravel:Forget(id, lookup)
@@ -419,6 +429,10 @@ task.spawn(function()
 	end
 end)
 game:BindToClose(function()
+	if hunting then
+		local ok, reason = pcall(hunting.Close)
+		if not ok then log("Hunting close flush: " .. tostring(reason)) end
+	end
 	for id in playerByActor do if data:HasProfile(id) then pcall(function() data:Release(id) end) end end
 end)
 for _, player in Players:GetPlayers() do task.spawn(added, player) end

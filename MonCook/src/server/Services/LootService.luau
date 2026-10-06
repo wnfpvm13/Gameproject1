@@ -31,8 +31,8 @@ function LootService._roll(self: any, dropId: string): { any }
 	end
 	return result
 end
-function LootService.PendingCount(self: any): number
-	local count = 0; for _ in self._jobs do count += 1 end; return count
+function LootService.PendingCount(self: any, actorId: number?): number
+	local count = 0; for _, job in self._jobs do if actorId == nil or job.ActorId == actorId then count += 1 end end; return count
 end
 function LootService.Enqueue(self: any, event: any): boolean
 	assert(type(event) == "table" and (event.Kind == "Dead" or event.Kind == "PartBroken"), "server reward event required")
@@ -77,7 +77,12 @@ function LootService.Tick(self: any)
 	self._ticking = true
 	local now = self.Now()
 	for eventId, expires in self._queued do if expires < now then self._queued[eventId] = nil end end
-	for key, job in self._jobs do
+	-- Store requests may yield while new encounter events arrive. Iterate a key snapshot.
+	local pending = {}; for key in self._jobs do table.insert(pending, key) end
+	table.sort(pending)
+	for _, key in pending do
+		local job = self._jobs[key]
+		if not job then continue end
 		if job.ExpiresAt < now then
 			self._jobs[key] = nil
 			if self.Log then (self.Log :: (string) -> ())("Personal hunting reward expired for actor " .. tostring(job.ActorId)) end

@@ -2,7 +2,8 @@
 -- Minimal Phase 0 catalog. Unspecified tuning stays absent until the owning system exists.
 return {
 	Region = {
-		Greenwood = { DisplayName = "Greenwood Wilds", TravelMode = "Local", StartingRegion = true },
+		Greenwood = { DisplayName = "Greenwood Wilds", TravelMode = "Local", ActivityMode = "Shared", StartingRegion = true },
+		GreenwoodDeepRuins = { DisplayName = "Greenwood Deep Ruins", TravelMode = "Teleport", ActivityMode = "Expedition" },
 	},
 	Monster = {
 		Hornboar = {
@@ -74,5 +75,13 @@ return {
 		HuntersRhythm = { Effect = "AttackSpeedCapped", Stacking = "ExtendDuration" },
 		Bounty = { Effect = "GuaranteedBasicIngredients", Stacking = "ExtendDuration" },
 	},
-	Testing = { UseFakeTeleport = true },
+	-- Targets are stable activity contracts; Twin Ogre combat/loot is a later slice.
+	PartyTarget = {
+		Free = { DisplayName = "자유 파티", Activity = "Free" },
+		GreenwoodFarm = { DisplayName = "Greenwood 재료 사냥", Activity = "SharedHunt", RegionId = "Greenwood" },
+		TwinOgre = { DisplayName = "Twin Ogre 원정", Activity = "Expedition", RegionId = "GreenwoodDeepRuins" },
+		HostRestaurant = { DisplayName = "호스트 식당", Activity = "Restaurant" },
+	},
+	Matchmaking = { Enabled = false, Version = "V1.5" }, -- TODO: cross-server queue interface only.
+	Testing = { UseFakeTeleport = true, ShowFoundationDebugUI = false },
 }

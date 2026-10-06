@@ -11,9 +11,13 @@ local Config = require(script.Parent.ServerConfig)
 local Services = script.Parent.Services
 local DataService = require(Services.DataService)
 local PartyService = require(Services.PartyService)
+local PartyActivityService = require(Services.PartyActivityService)
 local SessionService = require(Services.SessionService)
 local TeleportWrapper = require(Services.TeleportServiceWrapper)
 local Coordinator = require(Services.FoundationCoordinator)
+local ExpeditionService = require(Services.ExpeditionService)
+local ExpeditionCoordinator = require(Services.ExpeditionCoordinator)
+local MatchmakingService = require(Services.MatchmakingService)
 local RuntimeAdapters = require(script.Parent.Adapters.RuntimeAdapters)
 local studio = RunService:IsStudio()
 local fake = studio and Registry.Definitions.Testing.UseFakeTeleport
@@ -25,6 +29,7 @@ local adapters = RuntimeAdapters.new(studio, fake, Config)
 local teleport = TeleportWrapper.new({
 	IsStudio = studio, UseFakeTeleport = fake, Transport = adapters.Transport, Log = log,
 	WorldPlaceId = Config.WorldPlaceId, RestaurantPlaceId = Config.RestaurantPlaceId,
+	ExpeditionPlaceIds = Config.ExpeditionPlaceIds,
 })
 if not studio then
 	assert(game.PlaceId == Config.WorldPlaceId or restaurant, "MonCook: this Place is not configured")
@@ -39,7 +44,14 @@ local data = DataService.new({
 		return profile
 	end,
 })
-local party = PartyService.new({ NewId = newId, MaxMembers = Config.MaxPartySize })
+local function validActivityTarget(activity: string, targetId: string): boolean
+	local target = Registry.Definitions.PartyTarget[targetId]
+	return target ~= nil and target.Activity == activity
+end
+local party = PartyService.new({
+	NewId = newId, MaxMembers = Config.MaxPartySize, Now = adapters.Now,
+	InviteTTLSeconds = Config.InviteTTLSeconds, ValidActivityTarget = validActivityTarget,
+})
 local sessions = SessionService.new({
 	Data = data, Store = adapters.Sessions, NewId = newId, Now = adapters.Now,
 	MaxPartySize = Config.MaxPartySize, IsStudio = studio,
@@ -50,6 +62,20 @@ local sessions = SessionService.new({
 	Log = function(operation: string, detail: any) log(operation .. ": " .. tostring(detail)) end,
 })
 local travel = Coordinator.new({ Data = data, Sessions = sessions, Party = party, Teleport = teleport, IsFake = fake, Log = log, NewId = newId })
+local expeditions = ExpeditionService.new({
+	NewId = newId, Now = adapters.Now, MaxMembers = Config.MaxPartySize,
+	ValidTarget = function(regionId: string, targetId: string): boolean
+		local target = Registry.Definitions.PartyTarget[targetId]
+		return target ~= nil and target.Activity == "Expedition" and target.RegionId == regionId
+	end,
+})
+local expeditionTravel = ExpeditionCoordinator.new({
+	Data = data, Party = party, Expeditions = expeditions, Teleport = teleport,
+	IsFake = fake, NewId = newId, Log = log,
+	IsOtherTraveling = function(id: number): boolean return travel:IsTraveling(id) end,
+	OtherLocation = function(id: number): string return travel:Location(id) end,
+})
+local matchmaking = MatchmakingService.new({ Enabled = Registry.Definitions.Matchmaking.Enabled })
 local actorByPlayer: { [Player]: number } = {}
 local playerByActor: { [number]: Player } = {}
 local sessionByActor: { [number]: string } = {}
@@ -62,6 +88,30 @@ command.Name, command.Parent = "Command", network
 local changed = Instance.new("RemoteEvent")
 changed.Name, changed.Parent = "Changed", network
 local function lookup(id: number): Player? return playerByActor[id] end
+local function isTraveling(id: number): boolean
+	return travel:IsTraveling(id) or expeditionTravel:IsTraveling(id)
+end
+local function location(id: number): string
+	if restaurant then return "Restaurant" end
+	local active = expeditions:GetForMember(id)
+	if active and active.State ~= "Closed" then return "Expedition" end
+	return travel:Location(id)
+end
+local function playerInfo(id: number): any
+	local member = lookup(id)
+	return {
+		ActorId = id, UserId = if member then member.UserId else id,
+		Name = if member then member.Name else "Player",
+		DisplayName = if member then member.DisplayName else "Player",
+	}
+end
+local function remoteParty(value: any): any
+	if not value then return nil end
+	local ready = {}
+	for member, response in value.ReadyStates do ready[tostring(member)] = response end
+	value.ReadyStates = ready
+	return value
+end
 local function localSession(token: string): any
 	for id, sid in sessionByActor do
 		if sid == token and lookup(id) and data:HasProfile(id) then
@@ -94,9 +144,47 @@ local function snapshot(id: number): any
 		for member, response in proposal.Responses do responses[tostring(member)] = response end
 		proposal.Responses = responses
 	end
+	local currentParty = party:Get(id)
+	-- Published Restaurant members have validated session membership, while the
+	-- World party registry remains local to its server. This view grants no API authority.
+	if not currentParty and restaurant and sessionByActor[id] and session
+		and session.SessionId == sessionByActor[id] then
+		currentParty = {
+			PartyId = "Restaurant:" .. session.SessionId, LeaderUserId = session.HostUserId,
+			MemberUserIds = table.clone(session.PartyUserIds), MaxMembers = Config.MaxPartySize,
+			Visibility = "Private", Activity = "Restaurant", TargetId = "HostRestaurant",
+			Status = "InActivity", ReadyStates = {},
+		}
+	end
+	local members, nearby, directory = {}, {}, {}
+	if currentParty then for _, member in currentParty.MemberUserIds do table.insert(members, playerInfo(member)) end end
+	if location(id) == "World" then
+		for member in playerByActor do
+			if location(member) == "World" then table.insert(nearby, playerInfo(member)) end
+		end
+		table.sort(nearby, function(a, b) return a.ActorId < b.ActorId end)
+		for _, listed in party:ListPublic() do
+			listed.HostName = playerInfo(listed.LeaderUserId).DisplayName
+			listed.TargetName = Registry.Definitions.PartyTarget[listed.TargetId].DisplayName
+			table.insert(directory, remoteParty(listed))
+		end
+	end
+	local invitations = party:GetInvites(id)
+	for _, invitation in invitations do invitation.HostName = playerInfo(invitation.LeaderUserId).DisplayName end
+	local targets = {}
+	for targetId, target in Registry.Definitions.PartyTarget do
+		if target.Activity ~= "Expedition" or fake then
+			table.insert(targets, { TargetId = targetId, Activity = target.Activity, DisplayName = target.DisplayName, RegionId = target.RegionId })
+		end
+	end
+	table.sort(targets, function(a, b) return a.TargetId < b.TargetId end)
+	local expedition = expeditions:GetForMember(id)
 	return {
-		ActorId = id, Ready = ok, Traveling = travel:IsTraveling(id), Party = party:Get(id), Proposal = proposal,
-		Location = (if restaurant then "Restaurant" else travel:Location(id)),
+		ActorId = id, Ready = ok, Traveling = isTraveling(id), Party = remoteParty(currentParty), Proposal = proposal,
+		Location = location(id), Members = members, NearbyPlayers = nearby, Directory = directory,
+		Invites = invitations, Targets = targets, Expedition = expedition,
+		Features = { ShowFoundationDebugUI = studio and Registry.Definitions.Testing.ShowFoundationDebugUI,
+			ExpeditionPrototype = fake, QuickMatchEnabled = matchmaking:GetStatus().Available },
 		Gold = if ok then profile.Currencies.Gold else nil,
 		Renown = if ok then profile.Progression.RestaurantRenown else nil,
 		Ingredients = if ok then profile.Inventory.Ingredients else {},
@@ -104,6 +192,14 @@ local function snapshot(id: number): any
 	}
 end
 local function pushAll()
+	local checked = {}
+	for id in playerByActor do
+		local current = party:Get(id)
+		if current and not checked[current.PartyId] then
+			checked[current.PartyId] = true
+			PartyActivityService.reconcile(party, id, location, isTraveling, function(member) return lookup(member) ~= nil end)
+		end
+	end
 	for id, player in playerByActor do
 		local ok, state = pcall(snapshot, id)
 		if ok and player.Parent == Players then changed:FireClient(player, state) end
@@ -117,7 +213,7 @@ local function ensurePartyIdle(id: number, targetPartyId: string?)
 			if candidate and candidate.PartyId == targetPartyId then current = candidate; break end
 		end
 	end
-	if current then for _, member in current.MemberUserIds do assert(not travel:IsTraveling(member), "party is traveling") end end
+	if current then for _, member in current.MemberUserIds do assert(not isTraveling(member), "party is traveling") end end
 end
 local function validToken(value: any): string
 	assert(type(value) == "string" and #value > 0 and #value <= 128, "invalid request identifier")
@@ -131,10 +227,19 @@ command.OnServerInvoke = function(player: Player, action: any, payload: any): an
 	lastRequest[id], busy[id] = now, true
 	local ok, reason = pcall(function()
 		if action == "State" then return end
-		assert(data:HasProfile(id) and not travel:IsTraveling(id), "profile not ready or traveling")
-		local location = if restaurant then "Restaurant" else travel:Location(id)
+		assert(data:HasProfile(id) and not isTraveling(id), "profile not ready or traveling")
+		local currentLocation = location(id)
+		if action == "CompleteExpedition" then
+			assert(fake and currentLocation == "Expedition", "Studio expedition required")
+			expeditionTravel:Complete(id, validToken(payload and payload.SessionId))
+			return
+		elseif action == "ExpeditionResult" then
+			assert(fake and payload, "Studio expedition result required")
+			expeditionTravel:Result(id, validToken(payload.SessionId), validToken(payload.Destination), validToken(payload.ActionId), lookup)
+			return
+		end
 		if action == "Return" then
-			assert(location == "Restaurant", "return requires Restaurant")
+			assert(currentLocation == "Restaurant", "return requires Restaurant")
 			local token = sessionByActor[id]
 			assert(token, "validated Restaurant arrival required")
 			local own = sessions:GetHostSession(id)
@@ -149,20 +254,62 @@ command.OnServerInvoke = function(player: Player, action: any, payload: any): an
 			end
 			return
 		end
-		assert(location == "World", "party preparation requires World")
-		ensurePartyIdle(id, if action == "Join" and payload then payload.PartyId else nil)
-		if action == "Create" then party:Create(id)
-		elseif action == "Join" then party:Join(id, validToken(payload and payload.PartyId))
+		assert(currentLocation == "World", "party preparation requires World")
+		ensurePartyIdle(id, if (action == "Join" or action == "JoinPublic") and payload then validToken(payload.PartyId) else nil)
+		if action == "Create" then
+			assert(not payload or payload.Activity ~= "Expedition" or fake, "published expeditions are not connected yet")
+			party:Create(id, payload)
+		elseif action == "Join" then
+			assert(studio and Registry.Definitions.Testing.ShowFoundationDebugUI, "Party ID join is Studio debug only")
+			party:Join(id, validToken(payload and payload.PartyId))
+		elseif action == "JoinPublic" then party:JoinPublic(id, validToken(payload and payload.PartyId))
+		elseif action == "SetVisibility" then party:SetVisibility(id, validToken(payload and payload.Visibility))
+		elseif action == "SetActivity" then
+			assert(payload, "activity required")
+			assert(payload.Activity ~= "Expedition" or fake, "published expeditions are not connected yet")
+			party:SetActivity(id, validToken(payload.Activity), validToken(payload.TargetId))
+		elseif action == "Invite" then
+			local targetId = payload and payload.TargetUserId
+			assert(type(targetId) == "number" and targetId ~= 0 and targetId % 1 == 0 and math.abs(targetId) <= 9007199254740991, "invalid invite target")
+			assert(lookup(targetId) and location(targetId) == "World" and data:HasProfile(targetId) and not isTraveling(targetId), "invite target unavailable")
+			party:Invite(id, targetId)
+		elseif action == "RespondInvite" then
+			assert(payload and type(payload.Accept) == "boolean", "invitation response required")
+			local invitation
+			for _, candidate in party:GetInvites(id) do if candidate.InviteId == payload.InviteId then invitation = candidate; break end end
+			assert(invitation, "invitation expired or missing")
+			ensurePartyIdle(id, invitation.PartyId)
+			assert(lookup(invitation.LeaderUserId) and location(invitation.LeaderUserId) == "World", "invite host unavailable")
+			party:RespondInvite(id, validToken(payload.InviteId), payload.Accept)
 		elseif action == "Leave" then party:Leave(id)
-		elseif action == "Propose" then party:Propose(id)
+		elseif action == "Propose" then
+			local currentParty = party:Get(id)
+			assert(currentParty, "party required")
+			if currentParty.Activity == "Free" then party:SetActivity(id, "Restaurant", "HostRestaurant"); currentParty = party:Get(id) end
+			assert(currentParty.Activity == "Restaurant" or (fake and currentParty.Activity == "Expedition"), "activity has no transport yet")
+			party:Propose(id)
 		elseif action == "Respond" then
 			assert(payload and type(payload.Join) == "boolean", "JOIN/STAY response required")
 			party:Respond(id, validToken(payload.ProposalId), payload.Join)
 		elseif action == "Enter" then
-			local pantry = {}
-			for ingredient, count in data:Get(id).Inventory.Ingredients do if count ~= 0 then pantry[ingredient] = count end end
-			local session = travel:Start(id, validToken(payload and payload.ProposalId), pantry, lookup)
-			if fake then for _, member in session.PartyUserIds do sessionByActor[member] = session.SessionId end end
+			local currentParty = party:Get(id)
+			assert(currentParty, "party required")
+			local proposalId = validToken(payload and payload.ProposalId)
+			if currentParty.Activity == "Expedition" then
+				local target = Registry.Definitions.PartyTarget[currentParty.TargetId]
+				expeditionTravel:Start(id, proposalId, target.RegionId, currentParty.TargetId, lookup)
+			else
+				assert(currentParty.Activity == "Restaurant", "Restaurant proposal required")
+				local selected = party:Ready(id, proposalId)
+				for _, member in selected do assert(not expeditionTravel:IsTraveling(member) and location(member) == "World", "member is in another activity") end
+				local pantry = {}
+				for ingredient, count in data:Get(id).Inventory.Ingredients do if count ~= 0 then pantry[ingredient] = count end end
+				local session = travel:Start(id, proposalId, pantry, lookup)
+				if fake then
+					for _, member in session.PartyUserIds do sessionByActor[member] = session.SessionId end
+					party:SetStatus(id, "InActivity")
+				end
+			end
 		else error("unknown command") end
 	end)
 	busy[id] = nil
@@ -244,6 +391,7 @@ Players.PlayerRemoving:Connect(function(player)
 	if not id then return end
 	playerByActor[id], actorByPlayer[player], sessionByActor[id], lastRequest[id] = nil, nil, nil, nil
 	party:Leave(id); travel:Forget(id)
+	expeditionTravel:Forget(id, lookup)
 	releaseDetached(id)
 	pushAll()
 end)

@@ -92,20 +92,3 @@ Region Pack:
 - Dragon
 
 Core Retention이 검증된 뒤만 추가 검토.
-
-
-## 8. Party / Expedition 추가 이벤트
-- PublicPartyCreated
-- PrivatePartyCreated
-- PartyFinderOpened
-- PublicPartyJoined
-- PartyInviteAccepted
-- ReadyCheckStarted
-- ReadyCheckAccepted
-- ReadyCheckStayed
-- ExpeditionStarted
-- ExpeditionCompleted
-- ExpeditionRepeated
-- ExpeditionToRestaurant
-- QuickMatchQueued (V1.5)
-- QuickMatchMatched (V1.5)

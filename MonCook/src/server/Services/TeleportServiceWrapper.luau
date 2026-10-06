@@ -1,12 +1,13 @@
 --!strict
 -- Platform transport is injected. Session/economic authority stays server-side;
 -- only session identity and destination cross the TeleportData boundary.
-export type Reservation = { AccessCode: string, PrivateServerId: string }
+export type Reservation = { AccessCode: string, PrivateServerId: string, RegionId: string?, PlaceId: number? }
 export type Options = {
 	IsStudio: boolean,
 	UseFakeTeleport: boolean,
 	WorldPlaceId: number,
 	RestaurantPlaceId: number,
+	ExpeditionPlaceIds: { [string]: number }?,
 	Transport: any,
 	Log: ((string) -> ())?,
 }
@@ -69,12 +70,54 @@ function TeleportServiceWrapper.new(options: Options)
 	assert(placeIdValid(options.WorldPlaceId, fakeMode), "invalid WorldPlaceId")
 	assert(placeIdValid(options.RestaurantPlaceId, fakeMode), "invalid RestaurantPlaceId")
 	assert(options.Log == nil or type(options.Log) == "function", "Log must be a function")
+	assert(options.ExpeditionPlaceIds == nil or type(options.ExpeditionPlaceIds) == "table", "ExpeditionPlaceIds must be a map")
+	local expeditionPlaceIds = {}
+	for region, placeId in options.ExpeditionPlaceIds or {} do
+		assert(type(region) == "string" and #region > 0 and #region <= 128, "invalid expedition region ID")
+		expeditionPlaceIds[region] = placeId
+	end
 	return setmetatable({
 		_worldPlaceId = options.WorldPlaceId,
 		_restaurantPlaceId = options.RestaurantPlaceId,
+		_expeditionPlaceIds = expeditionPlaceIds,
+		_fakeMode = fakeMode,
 		_transport = options.Transport,
 		_log = options.Log,
 	}, TeleportServiceWrapper)
+end
+
+local function expeditionPlaceId(self: any, regionId: string): number
+	assert(type(regionId) == "string" and #regionId > 0 and #regionId <= 128, "invalid expedition region ID")
+	local placeId = self._expeditionPlaceIds[regionId]
+	if placeId == nil and self._fakeMode then placeId = 0 end
+	assert(placeIdValid(placeId, self._fakeMode), "invalid or missing ExpeditionPlaceId for " .. regionId)
+	return placeId
+end
+
+function TeleportServiceWrapper.ReserveExpedition(self: any, regionId: string): Reservation
+	local ok, reservation = pcall(function(): Reservation
+		local placeId = expeditionPlaceId(self, regionId)
+		local code, privateId = self._transport:Reserve(placeId)
+		assert(type(code) == "string" and #code > 0, "transport returned an invalid access code")
+		assert(type(privateId) == "string" and #privateId > 0, "transport returned an invalid private server ID")
+		return { AccessCode = code, PrivateServerId = privateId, RegionId = regionId, PlaceId = placeId }
+	end)
+	if not ok then failure(self, "ReserveExpedition", reservation) end
+	return reservation
+end
+
+function TeleportServiceWrapper.ToExpedition(self: any, players: { any }, sessionId: string, regionId: string, reservation: Reservation, attemptId: string?)
+	local ok, message = pcall(function()
+		local placeId = expeditionPlaceId(self, regionId)
+		local payload = teleportData(sessionId, "Expedition", attemptId)
+		payload.RegionId = regionId -- Catalog identity only; no inventory/economy data.
+		assert(type(reservation) == "table" and type(reservation.AccessCode) == "string" and #reservation.AccessCode > 0,
+			"expedition reservation access code required")
+		assert(type(reservation.PrivateServerId) == "string" and #reservation.PrivateServerId > 0, "expedition private server ID required")
+		assert(reservation.RegionId == regionId and reservation.PlaceId == placeId, "expedition reservation destination mismatch")
+		self._transport:Send(placeId, copyPlayers(players), payload, reservation.AccessCode)
+	end)
+	if not ok then failure(self, "ToExpedition", message) end
 end
 
 function TeleportServiceWrapper.ReserveRestaurant(self: any): Reservation

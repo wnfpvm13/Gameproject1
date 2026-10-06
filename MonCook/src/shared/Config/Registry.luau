@@ -2,7 +2,7 @@
 local definitions: any = require(script.Parent.Definitions)
 local Registry = {}
 local families = { "Region", "Monster", "Drop", "Ingredient", "Recipe", "Weapon", "Cookware",
-	"StaffRarity", "StaffTrait", "RestaurantLevel", "Customer", "Enhancement", "Economy", "WorldBlessing" }
+	"StaffRarity", "StaffTrait", "RestaurantLevel", "Customer", "Enhancement", "Economy", "WorldBlessing", "PartyTarget" }
 local categories = { Protein = true, Produce = true, Spice = true, Special = true, Material = true }
 
 local function expect(condition: boolean, path: string, message: string)
@@ -24,6 +24,18 @@ function Registry.validate(config: any?): boolean
 	end
 	for id, region in catalog.Region do
 		expect(region.TravelMode == "Local" or region.TravelMode == "Teleport", "Region." .. id, "invalid TravelMode")
+		expect(region.ActivityMode == "Shared" or region.ActivityMode == "Expedition", "Region." .. id, "invalid ActivityMode")
+		expect(region.ActivityMode ~= "Expedition" or region.TravelMode == "Teleport", "Region." .. id, "Expedition requires Teleport")
+	end
+	local activities = { Free = true, SharedHunt = true, Expedition = true, Restaurant = true }
+	for id, target in catalog.PartyTarget do
+		local path = "PartyTarget." .. id
+		expect(activities[target.Activity] == true, path, "invalid activity")
+		expect(type(target.DisplayName) == "string" and target.DisplayName ~= "", path, "requires DisplayName")
+		if target.Activity == "Expedition" or target.Activity == "SharedHunt" then
+			reference("Region", target.RegionId, path .. ".RegionId")
+			expect(catalog.Region[target.RegionId].ActivityMode == (if target.Activity == "Expedition" then "Expedition" else "Shared"), path, "region activity mismatch")
+		end
 	end
 	for id, ingredient in catalog.Ingredient do
 		expect(categories[ingredient.Category] == true, "Ingredient." .. id, "invalid category")
@@ -70,6 +82,8 @@ function Registry.validate(config: any?): boolean
 			"StaffRarity." .. id, "invalid PerformanceMultiplier")
 	end
 	expect(type(catalog.Testing) == "table" and type(catalog.Testing.UseFakeTeleport) == "boolean", "Testing", "requires UseFakeTeleport boolean")
+	expect(type(catalog.Testing.ShowFoundationDebugUI) == "boolean", "Testing", "requires ShowFoundationDebugUI boolean")
+	expect(type(catalog.Matchmaking) == "table" and type(catalog.Matchmaking.Enabled) == "boolean", "Matchmaking", "requires Enabled hook")
 	return true
 end
 

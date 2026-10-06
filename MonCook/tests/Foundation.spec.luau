@@ -106,5 +106,24 @@ return function(): number
 		catalog = clone(Registry.Definitions); catalog.Drop.HornboarHorn.Entries[1].InventoryBucket = "Ingredients"
 		rejects(function() Registry.validate(catalog) end, "category/bucket mismatch")
 	end)
+	check("party targets match shared or reserved region contracts", function()
+		assert(Registry.get("Region", "Greenwood").ActivityMode == "Shared")
+		assert(Registry.get("PartyTarget", "TwinOgre").RegionId == "GreenwoodDeepRuins")
+		local catalog = clone(Registry.Definitions)
+		catalog.PartyTarget.TwinOgre.RegionId = "Greenwood"
+		rejects(function() Registry.validate(catalog) end, "region activity mismatch")
+		catalog = clone(Registry.Definitions); catalog.Region.GreenwoodDeepRuins.TravelMode = "Local"
+		rejects(function() Registry.validate(catalog) end, "Expedition requires Teleport")
+		catalog = clone(Registry.Definitions); catalog.PartyTarget.TwinOgre.Activity = "Raid"
+		rejects(function() Registry.validate(catalog) end, "invalid activity")
+	end)
+	check("debug and future matchmaking hooks require booleans", function()
+		assert(Registry.Definitions.Testing.ShowFoundationDebugUI == false)
+		local catalog = clone(Registry.Definitions)
+		catalog.Testing.ShowFoundationDebugUI = "true"
+		rejects(function() Registry.validate(catalog) end, "ShowFoundationDebugUI")
+		catalog = clone(Registry.Definitions); catalog.Matchmaking.Enabled = "true"
+		rejects(function() Registry.validate(catalog) end, "Enabled hook")
+	end)
 	return passed
 end

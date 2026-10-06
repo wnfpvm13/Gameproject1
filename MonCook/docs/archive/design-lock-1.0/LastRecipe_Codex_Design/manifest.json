@@ -1,6 +1,6 @@
 {
   "project": "The Last Recipe",
-  "design_version": "1.1",
+  "design_version": "1.0",
   "status": "Design Lock / Codex implementation ready",
   "documents": [
     "README.md",
@@ -13,7 +13,6 @@
     "COMBAT_WEAPONS.md",
     "RESTAURANT_SYSTEM.md",
     "STAFF_SYSTEM.md",
-    "PARTY_EXPEDITION.md",
     "ENHANCEMENT_ECONOMY.md",
     "UI_UX.md",
     "MONETIZATION.md",
@@ -23,7 +22,5 @@
     "ANALYTICS_LIVEOPS.md",
     "CODEX_RULES.md",
     "IMPLEMENTATION_PLAN.md"
-  ],
-  "canonical_source": "../The_Last_Recipe_ALL_IN_ONE_CODEX_SPEC.md",
-  "next_instruction": "../NEXT_CODEX_INSTRUCTION_Phase_0_8.md"
+  ]
 }

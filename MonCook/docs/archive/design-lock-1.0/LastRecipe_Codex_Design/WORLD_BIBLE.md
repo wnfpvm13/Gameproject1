@@ -65,29 +65,3 @@ V0.1 일부 지역은 같은 Place에 배치 가능.
 
 보너스는 약 10~20% 방향성 제공 수준.
 FOMO 강요 금지.
-
-
-## 7. Shared Field / Expedition 분리
-### Shared Field
-공용 World Place.
-초보/일반 파밍/우연한 협동.
-
-Greenwood Outskirts:
-- Hornboar
-- Mawcap
-- Glutton Slime
-
-### Expedition
-1~4인 Reserved Server.
-정예/보스/희귀 부위 재료.
-
-Greenwood Deep Ruins:
-- Razorvine Drakelet
-- Elite Hornboar
-- Twin Ogre
-
-Sunscar는 대형 Expedition 중심으로 설계 가능.
-
-RegionConfig:
-- ActivityMode = "Shared" | "Expedition"
-- TravelMode = "Local" | "Teleport"

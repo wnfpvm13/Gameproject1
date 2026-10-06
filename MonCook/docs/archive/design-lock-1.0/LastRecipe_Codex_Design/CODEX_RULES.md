@@ -100,19 +100,3 @@ Mobile safe area 고려.
 최종 모델을 기다리며 로직 개발을 막지 않는다.
 `*_PLACEHOLDER` Greybox 사용.
 Package 교체 가능한 구조 유지.
-
-
-## 16. Party UX 규칙
-Release UI에서 PartyId 직접 입력을 요구하지 않는다.
-PartyId 입력은 Studio/Debug QA 전용.
-
-실제 플레이:
-- Public Party Finder
-- Private Invite
-- Compact Party HUD
-
-기존 Foundation 테스트 UI는 삭제하지 않고 Debug UI로 격리한다.
-
-## 17. Expedition 규칙
-큰 사냥터/보스 원정은 1~4인 Reserved Server를 지원하는 구조로 구현.
-Shared Field와 Expedition이 Loot/Monster Config를 최대한 공유한다.

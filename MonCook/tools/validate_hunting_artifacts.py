@@ -76,6 +76,8 @@ def main():
         expected[path] = file
     assert scripts.keys() == expected.keys(), (scripts.keys()-expected.keys(), expected.keys()-scripts.keys())
     for path, file in expected.items():
+        expected_class = "Script" if file.name.endswith(".server.luau") else "LocalScript" if file.name.endswith(".client.luau") else "ModuleScript"
+        assert scripts[path].attrib["class"] == expected_class, (path, "script class mismatch")
         assert props(scripts[path])["Source"].text == file.read_text(), (path, "source mismatch")
     for asset_id, asset in source["assets"].items():
         path = "ReplicatedStorage/Assets/"+asset["family"]+"/"+asset_id

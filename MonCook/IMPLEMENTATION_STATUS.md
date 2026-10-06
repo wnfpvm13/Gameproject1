@@ -22,7 +22,7 @@ Hornboar는 Humanoid 없이 Idle/Roam/Alert/Chase/Windup/Attack/Recover/Stagger/
 
 사용자 승인으로 Foundation [PR #1](https://github.com/wnfpvm13/Gameproject1/pull/1)을 main에 병합했습니다. 기준 merge SHA는 `a8b3ad0fbd9beda30a1e73dfa84affc58c805648`이며 이 기준의 176개 테스트를 먼저 검증했습니다.
 
-공통 계약 커밋에서 `feature/combat`, `feature/monsters`, `feature/inventory`를 나눠 해당 순수 서비스와 테스트를 구현하고 `integration/hunting`에 merge했습니다. 최종 Roblox 어댑터·클라이언트·아트·통합 hardening은 integration에 있습니다. 검토용 Draft PR은 integration/hunting → main입니다. Phase 1 PR은 자동 병합하지 않습니다.
+공통 계약 커밋에서 `feature/combat`, `feature/monsters`, `feature/inventory`를 나눠 해당 순수 서비스와 테스트를 구현하고 `integration/hunting`에 merge했습니다. 최종 Roblox 어댑터·클라이언트·아트·통합 hardening은 integration에 있습니다. 검토용 [Draft PR #2](https://github.com/wnfpvm13/Gameproject1/pull/2)는 integration/hunting → main입니다. Phase 1 PR은 자동 병합하지 않습니다.
 
 ## 3. 코드 변경 / 변경 파일
 
@@ -82,7 +82,7 @@ Blender source와 실제 FBX reimport에 Idle/Walk/Run/Alert/ChargeWindup/Charge
 - 실제 순수 서비스 통합으로 2 contributor horn/core/death/독립 loot/persistence/duplicate/dead/respawn·늦은 contributor·장애물·저장 실패·ack 유실·yield 중 재진입을 검사했습니다. 이 결과는 Roblox physics 실행을 대신하지 않습니다.
 - Blender 4.3.2: 16개 실제 FBX reimport, triangle/object·rig/actions·vertex binding PASS; source render 4개 생성/확인.
 - Rojo 7.7.1: Studio QA place build PASS. 16개 native model/reference/rig binding, **49개 runtime script/module 경로·타입·소스 일치**, 기존 테스트 보존 PASS.
-- git diff 공백 검사 PASS. 공유 source mirror와 최종 place checksum은 전달 파일과 함께 기록합니다.
+- git diff 공백 검사 PASS. 공유 source mirror를 `/workspace/shared/MonCook`에 갱신했습니다. 최종 `MonCook_Phase_1_Hunting.rbxlx` SHA256: `c51e7c8d9cce5453dfd54b8a42304c0d9acb903f56531b5c000b99b9f6d0d286`. 원본 소스와 mirror 파일 바이트 일치를 확인했습니다.
 
 ## 10. 남은 Art TODO / TODO / Phase 2·다른 브랜치 영향
 

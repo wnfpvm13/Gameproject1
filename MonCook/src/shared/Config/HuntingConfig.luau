@@ -4,7 +4,7 @@ local Config: any = {
 	Combat = {
 		Rules = {
 			PacketInterval = 0.08, ComboResetSeconds = 1.2, MaxSequence = 9007199254740991,
-			MaxFacingCorrectionDegrees = 55, AimAssistDegrees = 24, VerticalTolerance = 6,
+			MaxFacingCorrectionDegrees = 18, AimAssistDegrees = 18, AimAssistMaxTurnDegrees = 12, VerticalTolerance = 6,
 			DodgeDistance = 10, DodgeSeconds = 0.24, DodgeCooldown = 1.4,
 			DodgeCollisionSize = { X = 2.4, Y = 4, Z = 2.4 }, DodgeObstacleMargin = 0.15,
 			DodgeGroundProbeUp = 2, DodgeGroundProbeDown = 12,
@@ -14,13 +14,13 @@ local Config: any = {
 	},
 	Weapon = {
 		StarterCleaver = {
-			AssetId = "WPN_StarterCleaver_V1", Reach = 8, ArcDegrees = 110,
+			AssetId = "WPN_StarterCleaver_V1", Reach = 5.8, ArcDegrees = 96,
 			Basic = {
 				{ Damage = 12, PartPower = 8, Windup = 0.12, Window = 0.16, Recovery = 0.14 },
 				{ Damage = 14, PartPower = 10, Windup = 0.14, Window = 0.16, Recovery = 0.16 },
 				{ Damage = 18, PartPower = 14, Windup = 0.20, Window = 0.20, Recovery = 0.20 },
 			},
-			Heavy = { Damage = 20, PartPower = 55, Windup = 0.42, Window = 0.20, Recovery = 0.38 },
+			Heavy = { Damage = 20, PartPower = 55, Windup = 0.42, Window = 0.20, Recovery = 0.38, Reach = 6.8, ArcDegrees = 108 },
 		},
 	},
 	Monster = {
@@ -31,8 +31,9 @@ local Config: any = {
 			RoamArrivalDistance = 0.1,
 			DeathDespawnSeconds = 2.2, HitFlashSeconds = 0.16,
 			ContributionMinimum = 1, ContributionExpirySeconds = 90,
-			BodyHitbox = { Offset = { X = 0, Y = 2.6, Z = 0 }, Size = { X = 5.2, Y = 3.8, Z = 6.4 } },
-			HornHitbox = { Offset = { X = 0, Y = 3.6, Z = -5.4 }, Size = { X = 2.6, Y = 3.3, Z = 4.9 } },
+			BodyHitbox = { Offset = { X = 0, Y = 2.65, Z = -0.55 }, Size = { X = 5.6, Y = 4.7, Z = 10.6 } },
+			HornHitbox = { Offset = { X = 0, Y = 4.45, Z = -5.25 }, Size = { X = 2.75, Y = 2.9, Z = 4.5 } },
+			HeavyHitStaggerSeconds = 0.24,
 			HornHealth = 80,
 			Attacks = {
 				Headbutt = { Windup = 0.7, Duration = 0.3, HitStart = 0.08, HitEnd = 0.25,

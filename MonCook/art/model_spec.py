@@ -1,4 +1,4 @@
-"""Shared, authored V1 shapes for Blender exports and native Roblox equivalents.
+"""Shared V1 primitives for weapons, ingredients and environment. Hornboar uses its Blender mesh builder.
 
 Coordinates use Roblox X/right, Y/up, -Z/forward, in studs. The Blender builder
 converts these to its axes. Primitive equivalents preserve silhouette, palette,
@@ -23,70 +23,10 @@ IVORY = (0.96, 0.86, 0.62)
 GOLD = (0.91, 0.62, 0.20)
 MAGIC = (0.30, 0.85, 0.78)
 
-RIG = {
-    "Root": {"parent": None, "position": (0, 0, 0)},
-    "Spine": {"parent": "Root", "position": (0, 2.6, 0)},
-    "Neck": {"parent": "Spine", "position": (0, 2.8, -2.5)},
-    "Head": {"parent": "Neck", "position": (0, 2.8, -3.3)},
-    "FrontLeg_L": {"parent": "Spine", "position": (-1.65, 2.3, -1.8)},
-    "FrontLeg_R": {"parent": "Spine", "position": (1.65, 2.3, -1.8)},
-    "BackLeg_L": {"parent": "Spine", "position": (-1.6, 2.25, 2.2)},
-    "BackLeg_R": {"parent": "Spine", "position": (1.6, 2.25, 2.2)},
-    "Horn": {"parent": "Head", "position": (0, 3.0, -4.4)},
-    "Tail": {"parent": "Spine", "position": (0, 2.6, 3.0)},
-}
 
 
 def hornboar():
-    p = [
-        shape("Body", "Ellipsoid", (0, 2.7, 0.2), (4.9, 3.65, 6.5), BROWN, segments=16, rings=10),
-        shape("Shoulders", "Ellipsoid", (0, 2.95, -1.45), (5.25, 3.8, 3.6), WARM, segments=16, rings=10),
-        shape("Chest", "Ellipsoid", (0, 1.95, -1.65), (3.9, 2.4, 3.9), BEIGE),
-        shape("Head", "Ellipsoid", (0, 2.8, -3.25), (3.9, 2.9, 3.4), WARM, bone="Head", segments=16, rings=10),
-        shape("Muzzle", "Ellipsoid", (0, 2.05, -4.7), (2.5, 1.5, 2.25), BEIGE, bone="Head"),
-        shape("Nose", "Ellipsoid", (0, 2.17, -5.62), (1.9, 1.12, 0.52), (0.48, 0.24, 0.15), bone="Head", segments=12, rings=8),
-        shape("Chin", "Ellipsoid", (0, 1.47, -4.65), (2.15, 0.75, 1.7), BROWN, bone="Head", segments=12, rings=8),
-    ]
-    for side, x in (("L", -1), ("R", 1)):
-        p += [
-            shape(f"Nostril_{side}", "Ellipsoid", (x*0.43, 2.20, -5.89), (0.27, 0.28, 0.1), BROWN, bone="Head", segments=8, rings=6),
-            shape(f"EyeGold_{side}", "Ellipsoid", (x*1.64, 3.27, -3.67), (0.37, 0.43, 0.62), GOLD, bone="Head", segments=10, rings=8),
-            shape(f"Pupil_{side}", "Ellipsoid", (x*1.80, 3.29, -3.79), (0.17, 0.27, 0.26), BROWN, bone="Head", segments=8, rings=6),
-            shape(f"EyeGlint_{side}", "Ellipsoid", (x*1.88, 3.40, -3.88), (0.08, 0.09, 0.1), IVORY, bone="Head", segments=8, rings=6),
-            shape(f"Brow_{side}", "Box", (x*1.62, 3.61, -3.62), (0.58, 0.27, 1.03), BROWN, bone="Head", rotation=(0, 0, x*12), bevel=0.07),
-            shape(f"Ear_{side}", "Wedge", (x*1.68, 4.02, -2.84), (1.02, 1.75, 1.02), BROWN, bone="Head", rotation=(12, 0, -x*26)),
-            shape(f"EarInset_{side}", "Wedge", (x*1.68, 4.05, -3.0), (0.64, 1.17, 0.35), BEIGE, bone="Head", rotation=(12, 0, -x*26)),
-            shape(f"Tusk_{side}", "Wedge", (x*1.16, 1.91, -5.0), (0.48, 1.27, 0.95), IVORY, bone="Head", rotation=(25, 0, x*18)),
-        ]
-    for prefix, z in (("FrontLeg", -1.8), ("BackLeg", 2.2)):
-        for side, x in (("L", -1.65), ("R", 1.65)):
-            bone = f"{prefix}_{side}"
-            p += [
-                shape(f"{bone}_Haunch", "Ellipsoid", (x, 1.95, z), (1.48, 2.05, 1.63), WARM, bone=bone, segments=12, rings=8),
-                shape(f"{bone}_Shin", "Ellipsoid", (x, 0.89, z-0.12), (0.91, 1.56, 1.08), BROWN, bone=bone, segments=12, rings=8),
-                shape(f"{bone}_Hoof", "Box", (x, 0.3, z-0.25), (1.02, 0.59, 1.42), (0.29, 0.21, 0.15), bone=bone, bevel=0.12),
-                shape(f"{bone}_HoofTip", "Box", (x, 0.32, z-0.87), (0.92, 0.32, 0.12), GOLD, bone=bone, bevel=0.03),
-            ]
-    for index in range(4):
-        p.append(shape(f"BackPlate_{index}", "Wedge", (0, 4.18-index*0.11, -1.12+index*1.08),
-                       (2.38-index*0.15, 0.81, 1.24), (0.62+index*0.025, 0.39, 0.19), rotation=(8, 0, 0)))
-        p.append(shape(f"PlateAccent_{index}", "Box", (0, 4.56-index*0.11, -1.24+index*1.08),
-                       (0.4, 0.08, 0.44), GOLD, bevel=0.02))
-    # One large signature horn, kept separate from the face and broken stump.
-    for index in range(5):
-        t = index/4
-        p.append(shape(f"PART_Hornboar_Horn_{index}", "Cone", (0, 3.00+0.94*t+0.47*t*t, -4.46-3.1*t),
-                       (1.75*(1-t)+0.15, 1.1, 1.75*(1-t)+0.15), IVORY if index < 4 else MAGIC,
-                       bone="Horn", binding="HornIntact", rotation=(-65+index*5, 0, 0), segments=8))
-    p.append(shape("HornRune", "Box", (0, 3.33, -4.91), (0.20, 0.12, 0.75), MAGIC, bone="Horn", binding="HornIntact", rotation=(-20, 0, 0), bevel=0.03))
-    p.append(shape("Horn_Broken", "Cone", (0, 3.04, -4.45), (1.2, 0.52, 1.2), IVORY,
-                   bone="Horn", binding="HornBroken", rotation=(-65, 0, 0), segments=8))
-    p.append(shape("BrokenCoreGlow", "Ellipsoid", (0, 3.2, -4.65), (0.48, 0.24, 0.24), MAGIC,
-                   bone="Horn", binding="HornBroken", segments=8, rings=6))
-    for index in range(3):
-        p.append(shape(f"Tail_{index}", "Ellipsoid", (0.18*index, 2.7+index*0.2, 3.0+index*0.45),
-                       (0.36, 0.36, 0.95), BROWN, bone="Tail", rotation=(18, index*20, 0), segments=10, rings=6))
-    return p
+    raise RuntimeError("Hornboar uses art/blender/redesign_hornboar.py actual mesh, not native primitive blockout")
 
 
 def cleaver():
@@ -156,8 +96,9 @@ def environments():
 
 
 def catalog():
+    from hornboar_design import RIG as hornboar_rig
     assets = {
-        "MON_Hornboar_V1": {"family": "Monsters", "parts": hornboar(), "rig": RIG},
+        "MON_Hornboar_V1": {"family": "Monsters", "parts": [], "rig": hornboar_rig},
         "WPN_StarterCleaver_V1": {"family": "Weapons", "parts": cleaver(), "rig": {}},
     }
     for name in ("ING_HornboarMeat_V1", "ING_ArcaneFat_V1", "ING_MarbledLoin_V1", "MAT_HornCore_V1"):

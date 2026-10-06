@@ -1,5 +1,7 @@
 # Phase 1 Studio QA — 미실행 체크리스트
 
+최신 판정·애니메이션·재설계 모델의 실행 조건/acceptance는 [CORRECTION_QA.md](CORRECTION_QA.md)를 먼저 확인합니다.
+
 이 환경에서는 Roblox Studio에 연결하지 못했습니다. 아래는 실제 실행 결과가 아니라 판정 절차입니다. 자동 테스트 288개 그룹/빌드 검증과 Studio 판정을 분리해 기록합니다. Phase 1 acceptance는 이 체크리스트가 통과한 뒤 판정합니다.
 
 ## 준비
@@ -54,7 +56,7 @@ Published 검증은 Experience의 기존 World/Restaurant 설정과 API 허용�
 - 서버의 `HIT_Hornboar_Body`/`HIT_Hornboar_Horn` 투명도를 QA용으로만 잠시 낮춰 돌진/머리치기/스윙 판정과 시각 차이를 측정. 결과와 설정 보정 필요 여부 기록.
 - 재료 pop/move/fade는 지급 성공 뒤 개인 cosmetic만 발생하고 다른 사람이 주워갈 수 없음. 희귀/부위 알림은 아이콘+텍스트로 구분.
 - Streaming 재등장, 모바일 frame time/메모리, native Part 수, 벽에 막힌 AI, 장시간 respawn 확인.
-- FBX 소스의 ten actions는 보존했지만 현재 실행 모델은 native Parts + procedural Motor6D poses입니다. Blender 메시/AnimationId 업로드와 실제 재생은 별도 미검증입니다. Custom SFX도 아직 placeholder입니다.
+- FBX 소스는 13 actions로 보강했습니다. 현재 Hornboar visual은 Blender topology 기반 EditableMesh MeshParts + procedural Motor6D poses이며, API 실행 조건은 CORRECTION_QA를 따릅니다. Blender 메시/AnimationId 업로드와 실제 재생은 별도 미검증입니다. Custom SFX도 아직 placeholder입니다.
 
 ## 결과 기록
 

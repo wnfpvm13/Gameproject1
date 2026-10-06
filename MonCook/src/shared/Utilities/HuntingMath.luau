@@ -31,9 +31,19 @@ function Math.correctFacing(original: Point, hint: Point?, degrees: number): Poi
 	return facing
 end
 function Math.inArc(origin: Point, facing: Point, target: Point, range: number, degrees: number, vertical: number): boolean
-	if math.abs(origin.Y - target.Y) > vertical or Math.distance(origin, target) > range then return false end
+	if math.abs(origin.Y - target.Y) > vertical or Math.distance(origin, target) > range+0.000001 then return false end
 	if Math.distance(origin, target) < 0.000001 then return true end
-	return Math.dot(facing, Math.direction(origin, target)) >= math.cos(math.rad(degrees/2))
+	-- Clipped sector-edge contacts can round one ulp outside the angle/radius.
+	return Math.dot(facing, Math.direction(origin, target)) >= math.cos(math.rad(degrees/2))-0.000001
+end
+function Math.turnToward(original: Point, target: Point, maximum: number): Point
+	local dot = math.clamp(Math.dot(original, target), -1, 1)
+	local angle = math.acos(dot)
+	if angle <= math.rad(maximum) then return Math.copy(target) end
+	local sign = if original.X*target.Z-original.Z*target.X >= 0 then 1 else -1
+	local turn = math.rad(maximum)*sign
+	return { X = original.X*math.cos(turn)-original.Z*math.sin(turn), Y = 0,
+		Z = original.X*math.sin(turn)+original.Z*math.cos(turn) }
 end
 function Math.segmentDistance(point: Point, start: Point, finish: Point): number
 	local x, z = finish.X - start.X, finish.Z - start.Z

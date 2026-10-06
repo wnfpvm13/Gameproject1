@@ -11,3617 +11,25 @@
       <Properties>
         <string name="Name">Visual</string>
       </Properties>
-      <Item class="Part" referent="RBX45">
+      <Item class="Folder" referent="RBX61">
         <Properties>
-          <string name="Name">Body</string>
-          <Vector3 name="size">
-            <X>4.9</X>
-            <Y>3.65</Y>
-            <Z>6.5</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>2.7</Y>
-            <Z>0.2</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
+          <string name="Name">HornIntact</string>
         </Properties>
-        <Item class="StringValue" referent="RBX46">
+        <Item class="StringValue" referent="RBX62">
           <Properties>
             <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX47">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX7</Ref>
-            <Ref name="Part1">RBX45</Ref>
+            <string name="Value">HornIntact</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="Part" referent="RBX48">
+      <Item class="Folder" referent="RBX63">
         <Properties>
-          <string name="Name">Shoulders</string>
-          <Vector3 name="size">
-            <X>5.25</X>
-            <Y>3.8</Y>
-            <Z>3.6</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>2.95</Y>
-            <Z>-1.45</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">8868398</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX49">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX50">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX7</Ref>
-            <Ref name="Part1">RBX48</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX51">
-        <Properties>
-          <string name="Name">Chest</string>
-          <Vector3 name="size">
-            <X>3.9</X>
-            <Y>2.4</Y>
-            <Z>3.9</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>1.95</Y>
-            <Z>-1.65</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">13080156</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX52">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX53">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX7</Ref>
-            <Ref name="Part1">RBX51</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX54">
-        <Properties>
-          <string name="Name">Head</string>
-          <Vector3 name="size">
-            <X>3.9</X>
-            <Y>2.9</Y>
-            <Z>3.4</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>2.8</Y>
-            <Z>-3.25</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">8868398</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX55">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX56">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX54</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX57">
-        <Properties>
-          <string name="Name">Muzzle</string>
-          <Vector3 name="size">
-            <X>2.5</X>
-            <Y>1.5</Y>
-            <Z>2.25</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>2.05</Y>
-            <Z>-4.7</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">13080156</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX58">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX59">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX57</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX60">
-        <Properties>
-          <string name="Name">Nose</string>
-          <Vector3 name="size">
-            <X>1.9</X>
-            <Y>1.12</Y>
-            <Z>0.52</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>2.17</Y>
-            <Z>-5.62</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">8011046</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX61">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX62">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX60</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX63">
-        <Properties>
-          <string name="Name">Chin</string>
-          <Vector3 name="size">
-            <X>2.15</X>
-            <Y>0.75</Y>
-            <Z>1.7</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>1.47</Y>
-            <Z>-4.65</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
+          <string name="Name">HornBroken</string>
         </Properties>
         <Item class="StringValue" referent="RBX64">
           <Properties>
             <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX65">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX63</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX66">
-        <Properties>
-          <string name="Name">Nostril_L</string>
-          <Vector3 name="size">
-            <X>0.27</X>
-            <Y>0.28</Y>
-            <Z>0.1</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-0.43</X>
-            <Y>2.2</Y>
-            <Z>-5.89</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX67">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX68">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX66</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX69">
-        <Properties>
-          <string name="Name">EyeGold_L</string>
-          <Vector3 name="size">
-            <X>0.37</X>
-            <Y>0.43</Y>
-            <Z>0.62</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.64</X>
-            <Y>3.27</Y>
-            <Z>-3.67</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">15244851</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX70">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX71">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX69</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX72">
-        <Properties>
-          <string name="Name">Pupil_L</string>
-          <Vector3 name="size">
-            <X>0.17</X>
-            <Y>0.27</Y>
-            <Z>0.26</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.8</X>
-            <Y>3.29</Y>
-            <Z>-3.79</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX73">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX74">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX72</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX75">
-        <Properties>
-          <string name="Name">EyeGlint_L</string>
-          <Vector3 name="size">
-            <X>0.08</X>
-            <Y>0.09</Y>
-            <Z>0.1</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.88</X>
-            <Y>3.4</Y>
-            <Z>-3.88</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX76">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX77">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX75</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX78">
-        <Properties>
-          <string name="Name">Brow_L</string>
-          <Vector3 name="size">
-            <X>0.58</X>
-            <Y>0.27</Y>
-            <Z>1.03</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.62</X>
-            <Y>3.61</Y>
-            <Z>-3.62</Z>
-            <R00>0.9781476</R00>
-            <R01>0.20791169</R01>
-            <R02>0</R02>
-            <R10>-0.20791169</R10>
-            <R11>0.9781476</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX79">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX80">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX78</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX81">
-        <Properties>
-          <string name="Name">Ear_L</string>
-          <Vector3 name="size">
-            <X>1.02</X>
-            <Y>1.75</Y>
-            <Z>1.02</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.68</X>
-            <Y>4.02</Y>
-            <Z>-2.84</Z>
-            <R00>0.89879405</R00>
-            <R01>-0.43837115</R01>
-            <R02>0</R02>
-            <R10>0.42879169</R10>
-            <R11>0.87915324</R11>
-            <R12>-0.20791169</R12>
-            <R20>0.091142486</R20>
-            <R21>0.18686979</R21>
-            <R22>0.9781476</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX82">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX83">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX81</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX84">
-        <Properties>
-          <string name="Name">EarInset_L</string>
-          <Vector3 name="size">
-            <X>0.64</X>
-            <Y>1.17</Y>
-            <Z>0.35</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.68</X>
-            <Y>4.05</Y>
-            <Z>-3</Z>
-            <R00>0.89879405</R00>
-            <R01>-0.43837115</R01>
-            <R02>0</R02>
-            <R10>0.42879169</R10>
-            <R11>0.87915324</R11>
-            <R12>-0.20791169</R12>
-            <R20>0.091142486</R20>
-            <R21>0.18686979</R21>
-            <R22>0.9781476</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">13080156</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX85">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX86">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX84</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX87">
-        <Properties>
-          <string name="Name">Tusk_L</string>
-          <Vector3 name="size">
-            <X>0.48</X>
-            <Y>1.27</Y>
-            <Z>0.95</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.16</X>
-            <Y>1.91</Y>
-            <Z>-5</Z>
-            <R00>0.95105652</R00>
-            <R01>0.30901699</R01>
-            <R02>0</R02>
-            <R10>-0.28006451</R10>
-            <R11>0.86194993</R11>
-            <R12>-0.42261826</R12>
-            <R20>-0.13059623</R20>
-            <R21>0.40193385</R21>
-            <R22>0.90630779</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX88">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX89">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX87</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX90">
-        <Properties>
-          <string name="Name">Nostril_R</string>
-          <Vector3 name="size">
-            <X>0.27</X>
-            <Y>0.28</Y>
-            <Z>0.1</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0.43</X>
-            <Y>2.2</Y>
-            <Z>-5.89</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX91">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX92">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX90</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX93">
-        <Properties>
-          <string name="Name">EyeGold_R</string>
-          <Vector3 name="size">
-            <X>0.37</X>
-            <Y>0.43</Y>
-            <Z>0.62</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.64</X>
-            <Y>3.27</Y>
-            <Z>-3.67</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">15244851</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX94">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX95">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX93</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX96">
-        <Properties>
-          <string name="Name">Pupil_R</string>
-          <Vector3 name="size">
-            <X>0.17</X>
-            <Y>0.27</Y>
-            <Z>0.26</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.8</X>
-            <Y>3.29</Y>
-            <Z>-3.79</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX97">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX98">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX96</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX99">
-        <Properties>
-          <string name="Name">EyeGlint_R</string>
-          <Vector3 name="size">
-            <X>0.08</X>
-            <Y>0.09</Y>
-            <Z>0.1</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.88</X>
-            <Y>3.4</Y>
-            <Z>-3.88</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX100">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX101">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX99</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX102">
-        <Properties>
-          <string name="Name">Brow_R</string>
-          <Vector3 name="size">
-            <X>0.58</X>
-            <Y>0.27</Y>
-            <Z>1.03</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.62</X>
-            <Y>3.61</Y>
-            <Z>-3.62</Z>
-            <R00>0.9781476</R00>
-            <R01>-0.20791169</R01>
-            <R02>0</R02>
-            <R10>0.20791169</R10>
-            <R11>0.9781476</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX103">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX104">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX102</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX105">
-        <Properties>
-          <string name="Name">Ear_R</string>
-          <Vector3 name="size">
-            <X>1.02</X>
-            <Y>1.75</Y>
-            <Z>1.02</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.68</X>
-            <Y>4.02</Y>
-            <Z>-2.84</Z>
-            <R00>0.89879405</R00>
-            <R01>0.43837115</R01>
-            <R02>0</R02>
-            <R10>-0.42879169</R10>
-            <R11>0.87915324</R11>
-            <R12>-0.20791169</R12>
-            <R20>-0.091142486</R20>
-            <R21>0.18686979</R21>
-            <R22>0.9781476</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX106">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX107">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX105</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX108">
-        <Properties>
-          <string name="Name">EarInset_R</string>
-          <Vector3 name="size">
-            <X>0.64</X>
-            <Y>1.17</Y>
-            <Z>0.35</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.68</X>
-            <Y>4.05</Y>
-            <Z>-3</Z>
-            <R00>0.89879405</R00>
-            <R01>0.43837115</R01>
-            <R02>0</R02>
-            <R10>-0.42879169</R10>
-            <R11>0.87915324</R11>
-            <R12>-0.20791169</R12>
-            <R20>-0.091142486</R20>
-            <R21>0.18686979</R21>
-            <R22>0.9781476</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">13080156</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX109">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX110">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX108</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX111">
-        <Properties>
-          <string name="Name">Tusk_R</string>
-          <Vector3 name="size">
-            <X>0.48</X>
-            <Y>1.27</Y>
-            <Z>0.95</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.16</X>
-            <Y>1.91</Y>
-            <Z>-5</Z>
-            <R00>0.95105652</R00>
-            <R01>-0.30901699</R01>
-            <R02>0</R02>
-            <R10>0.28006451</R10>
-            <R11>0.86194993</R11>
-            <R12>-0.42261826</R12>
-            <R20>0.13059623</R20>
-            <R21>0.40193385</R21>
-            <R22>0.90630779</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX112">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX113">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX15</Ref>
-            <Ref name="Part1">RBX111</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX114">
-        <Properties>
-          <string name="Name">FrontLeg_L_Haunch</string>
-          <Vector3 name="size">
-            <X>1.48</X>
-            <Y>2.05</Y>
-            <Z>1.63</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.65</X>
-            <Y>1.95</Y>
-            <Z>-1.8</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">8868398</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX115">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX116">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX19</Ref>
-            <Ref name="Part1">RBX114</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX117">
-        <Properties>
-          <string name="Name">FrontLeg_L_Shin</string>
-          <Vector3 name="size">
-            <X>0.91</X>
-            <Y>1.56</Y>
-            <Z>1.08</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.65</X>
-            <Y>0.89</Y>
-            <Z>-1.92</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX118">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX119">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX19</Ref>
-            <Ref name="Part1">RBX117</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX120">
-        <Properties>
-          <string name="Name">FrontLeg_L_Hoof</string>
-          <Vector3 name="size">
-            <X>1.02</X>
-            <Y>0.59</Y>
-            <Z>1.42</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.65</X>
-            <Y>0.3</Y>
-            <Z>-2.05</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">4863526</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX121">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX122">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX19</Ref>
-            <Ref name="Part1">RBX120</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX123">
-        <Properties>
-          <string name="Name">FrontLeg_L_HoofTip</string>
-          <Vector3 name="size">
-            <X>0.92</X>
-            <Y>0.32</Y>
-            <Z>0.12</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.65</X>
-            <Y>0.32</Y>
-            <Z>-2.67</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">15244851</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX124">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX125">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX19</Ref>
-            <Ref name="Part1">RBX123</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX126">
-        <Properties>
-          <string name="Name">FrontLeg_R_Haunch</string>
-          <Vector3 name="size">
-            <X>1.48</X>
-            <Y>2.05</Y>
-            <Z>1.63</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.65</X>
-            <Y>1.95</Y>
-            <Z>-1.8</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">8868398</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX127">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX128">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX23</Ref>
-            <Ref name="Part1">RBX126</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX129">
-        <Properties>
-          <string name="Name">FrontLeg_R_Shin</string>
-          <Vector3 name="size">
-            <X>0.91</X>
-            <Y>1.56</Y>
-            <Z>1.08</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.65</X>
-            <Y>0.89</Y>
-            <Z>-1.92</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX130">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX131">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX23</Ref>
-            <Ref name="Part1">RBX129</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX132">
-        <Properties>
-          <string name="Name">FrontLeg_R_Hoof</string>
-          <Vector3 name="size">
-            <X>1.02</X>
-            <Y>0.59</Y>
-            <Z>1.42</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.65</X>
-            <Y>0.3</Y>
-            <Z>-2.05</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">4863526</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX133">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX134">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX23</Ref>
-            <Ref name="Part1">RBX132</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX135">
-        <Properties>
-          <string name="Name">FrontLeg_R_HoofTip</string>
-          <Vector3 name="size">
-            <X>0.92</X>
-            <Y>0.32</Y>
-            <Z>0.12</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.65</X>
-            <Y>0.32</Y>
-            <Z>-2.67</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">15244851</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX136">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX137">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX23</Ref>
-            <Ref name="Part1">RBX135</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX138">
-        <Properties>
-          <string name="Name">BackLeg_L_Haunch</string>
-          <Vector3 name="size">
-            <X>1.48</X>
-            <Y>2.05</Y>
-            <Z>1.63</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.65</X>
-            <Y>1.95</Y>
-            <Z>2.2</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">8868398</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX139">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX140">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX27</Ref>
-            <Ref name="Part1">RBX138</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX141">
-        <Properties>
-          <string name="Name">BackLeg_L_Shin</string>
-          <Vector3 name="size">
-            <X>0.91</X>
-            <Y>1.56</Y>
-            <Z>1.08</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.65</X>
-            <Y>0.89</Y>
-            <Z>2.08</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX142">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX143">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX27</Ref>
-            <Ref name="Part1">RBX141</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX144">
-        <Properties>
-          <string name="Name">BackLeg_L_Hoof</string>
-          <Vector3 name="size">
-            <X>1.02</X>
-            <Y>0.59</Y>
-            <Z>1.42</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.65</X>
-            <Y>0.3</Y>
-            <Z>1.95</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">4863526</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX145">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX146">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX27</Ref>
-            <Ref name="Part1">RBX144</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX147">
-        <Properties>
-          <string name="Name">BackLeg_L_HoofTip</string>
-          <Vector3 name="size">
-            <X>0.92</X>
-            <Y>0.32</Y>
-            <Z>0.12</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-1.65</X>
-            <Y>0.32</Y>
-            <Z>1.33</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">15244851</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX148">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX149">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX27</Ref>
-            <Ref name="Part1">RBX147</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX150">
-        <Properties>
-          <string name="Name">BackLeg_R_Haunch</string>
-          <Vector3 name="size">
-            <X>1.48</X>
-            <Y>2.05</Y>
-            <Z>1.63</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.65</X>
-            <Y>1.95</Y>
-            <Z>2.2</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">8868398</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX151">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX152">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX31</Ref>
-            <Ref name="Part1">RBX150</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX153">
-        <Properties>
-          <string name="Name">BackLeg_R_Shin</string>
-          <Vector3 name="size">
-            <X>0.91</X>
-            <Y>1.56</Y>
-            <Z>1.08</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.65</X>
-            <Y>0.89</Y>
-            <Z>2.08</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX154">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX155">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX31</Ref>
-            <Ref name="Part1">RBX153</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX156">
-        <Properties>
-          <string name="Name">BackLeg_R_Hoof</string>
-          <Vector3 name="size">
-            <X>1.02</X>
-            <Y>0.59</Y>
-            <Z>1.42</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.65</X>
-            <Y>0.3</Y>
-            <Z>1.95</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">4863526</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX157">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX158">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX31</Ref>
-            <Ref name="Part1">RBX156</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX159">
-        <Properties>
-          <string name="Name">BackLeg_R_HoofTip</string>
-          <Vector3 name="size">
-            <X>0.92</X>
-            <Y>0.32</Y>
-            <Z>0.12</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.65</X>
-            <Y>0.32</Y>
-            <Z>1.33</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">15244851</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX160">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX161">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX31</Ref>
-            <Ref name="Part1">RBX159</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX162">
-        <Properties>
-          <string name="Name">BackPlate_0</string>
-          <Vector3 name="size">
-            <X>2.38</X>
-            <Y>0.81</Y>
-            <Z>1.24</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>4.18</Y>
-            <Z>-1.12</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>0.99026807</R11>
-            <R12>-0.1391731</R12>
-            <R20>0</R20>
-            <R21>0.1391731</R21>
-            <R22>0.99026807</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">10380080</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX163">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX164">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX7</Ref>
-            <Ref name="Part1">RBX162</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX165">
-        <Properties>
-          <string name="Name">PlateAccent_0</string>
-          <Vector3 name="size">
-            <X>0.4</X>
-            <Y>0.08</Y>
-            <Z>0.44</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>4.56</Y>
-            <Z>-1.24</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">15244851</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX166">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX167">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX7</Ref>
-            <Ref name="Part1">RBX165</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX168">
-        <Properties>
-          <string name="Name">BackPlate_1</string>
-          <Vector3 name="size">
-            <X>2.23</X>
-            <Y>0.81</Y>
-            <Z>1.24</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>4.07</Y>
-            <Z>-0.04</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>0.99026807</R11>
-            <R12>-0.1391731</R12>
-            <R20>0</R20>
-            <R21>0.1391731</R21>
-            <R22>0.99026807</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">10773296</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX169">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX170">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX7</Ref>
-            <Ref name="Part1">RBX168</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX171">
-        <Properties>
-          <string name="Name">PlateAccent_1</string>
-          <Vector3 name="size">
-            <X>0.4</X>
-            <Y>0.08</Y>
-            <Z>0.44</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>4.45</Y>
-            <Z>-0.16</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">15244851</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX172">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX173">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX7</Ref>
-            <Ref name="Part1">RBX171</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX174">
-        <Properties>
-          <string name="Name">BackPlate_2</string>
-          <Vector3 name="size">
-            <X>2.08</X>
-            <Y>0.81</Y>
-            <Z>1.24</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>3.96</Y>
-            <Z>1.04</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>0.99026807</R11>
-            <R12>-0.1391731</R12>
-            <R20>0</R20>
-            <R21>0.1391731</R21>
-            <R22>0.99026807</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">11232048</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX175">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX176">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX7</Ref>
-            <Ref name="Part1">RBX174</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX177">
-        <Properties>
-          <string name="Name">PlateAccent_2</string>
-          <Vector3 name="size">
-            <X>0.4</X>
-            <Y>0.08</Y>
-            <Z>0.44</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>4.34</Y>
-            <Z>0.92</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">15244851</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX178">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX179">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX7</Ref>
-            <Ref name="Part1">RBX177</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX180">
-        <Properties>
-          <string name="Name">BackPlate_3</string>
-          <Vector3 name="size">
-            <X>1.93</X>
-            <Y>0.81</Y>
-            <Z>1.24</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>3.85</Y>
-            <Z>2.12</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>0.99026807</R11>
-            <R12>-0.1391731</R12>
-            <R20>0</R20>
-            <R21>0.1391731</R21>
-            <R22>0.99026807</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">11625264</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX181">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX182">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX7</Ref>
-            <Ref name="Part1">RBX180</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX183">
-        <Properties>
-          <string name="Name">PlateAccent_3</string>
-          <Vector3 name="size">
-            <X>0.4</X>
-            <Y>0.08</Y>
-            <Z>0.44</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>4.23</Y>
-            <Z>2</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">15244851</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX184">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX185">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX7</Ref>
-            <Ref name="Part1">RBX183</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX186">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_0_0</string>
-          <Vector3 name="size">
-            <X>1.33</X>
-            <Y>1.1</Y>
-            <Z>1.178</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>3.2755176</Y>
-            <Z>-4.331524</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>0.42261826</R11>
-            <R12>0.90630779</R12>
-            <R20>0</R20>
-            <R21>-0.90630779</R21>
-            <R22>0.42261826</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX187">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX194">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX186</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX188">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_0_1</string>
-          <Vector3 name="size">
-            <X>1.33</X>
-            <Y>1.1</Y>
-            <Z>1.178</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0.304</X>
-            <Y>3</Y>
-            <Z>-4.46</Z>
-            <R00>6.123234e-17</R00>
-            <R01>0</R01>
-            <R02>1</R02>
-            <R10>-0.90630779</R10>
-            <R11>0.42261826</R11>
-            <R12>5.5495347e-17</R12>
-            <R20>-0.42261826</R20>
-            <R21>-0.90630779</R21>
-            <R22>2.5877905e-17</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX189">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX195">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX188</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX190">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_0_2</string>
-          <Vector3 name="size">
-            <X>1.33</X>
-            <Y>1.1</Y>
-            <Z>1.178</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>3.7229263e-17</X>
-            <Y>2.7244824</Y>
-            <Z>-4.588476</Z>
-            <R00>-1</R00>
-            <R01>0</R01>
-            <R02>1.2246468e-16</R02>
-            <R10>-1.1099069e-16</R10>
-            <R11>0.42261826</R11>
-            <R12>-0.90630779</R12>
-            <R20>-5.175581e-17</R20>
-            <R21>-0.90630779</R21>
-            <R22>-0.42261826</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX191">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX196">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX190</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX192">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_0_3</string>
-          <Vector3 name="size">
-            <X>1.33</X>
-            <Y>1.1</Y>
-            <Z>1.178</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-0.304</X>
-            <Y>3</Y>
-            <Z>-4.46</Z>
-            <R00>-1.8369702e-16</R00>
-            <R01>0</R01>
-            <R02>-1</R02>
-            <R10>0.90630779</R10>
-            <R11>0.42261826</R11>
-            <R12>-1.6648604e-16</R12>
-            <R20>0.42261826</R20>
-            <R21>-0.90630779</R21>
-            <R22>-7.7633715e-17</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX193">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX197">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX192</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX198">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_1_0</string>
-          <Vector3 name="size">
-            <X>1.02375</X>
-            <Y>1.1</Y>
-            <Z>0.90675</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>3.4670249</Y>
-            <Z>-5.118</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>0.5</R11>
-            <R12>0.8660254</R12>
-            <R20>0</R20>
-            <R21>-0.8660254</R21>
-            <R22>0.5</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX199">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX206">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX198</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX200">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_1_1</string>
-          <Vector3 name="size">
-            <X>1.02375</X>
-            <Y>1.1</Y>
-            <Z>0.90675</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0.234</X>
-            <Y>3.264375</Y>
-            <Z>-5.235</Z>
-            <R00>6.123234e-17</R00>
-            <R01>0</R01>
-            <R02>1</R02>
-            <R10>-0.8660254</R10>
-            <R11>0.5</R11>
-            <R12>5.3028762e-17</R12>
-            <R20>-0.5</R20>
-            <R21>-0.8660254</R21>
-            <R22>3.061617e-17</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX201">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX207">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX200</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX202">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_1_2</string>
-          <Vector3 name="size">
-            <X>1.02375</X>
-            <Y>1.1</Y>
-            <Z>0.90675</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>2.8656735e-17</X>
-            <Y>3.0617251</Y>
-            <Z>-5.352</Z>
-            <R00>-1</R00>
-            <R01>0</R01>
-            <R02>1.2246468e-16</R02>
-            <R10>-1.0605752e-16</R10>
-            <R11>0.5</R11>
-            <R12>-0.8660254</R12>
-            <R20>-6.123234e-17</R20>
-            <R21>-0.8660254</R21>
-            <R22>-0.5</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX203">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX208">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX202</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX204">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_1_3</string>
-          <Vector3 name="size">
-            <X>1.02375</X>
-            <Y>1.1</Y>
-            <Z>0.90675</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-0.234</X>
-            <Y>3.264375</Y>
-            <Z>-5.235</Z>
-            <R00>-1.8369702e-16</R00>
-            <R01>0</R01>
-            <R02>-1</R02>
-            <R10>0.8660254</R10>
-            <R11>0.5</R11>
-            <R12>-1.5908629e-16</R12>
-            <R20>0.5</R20>
-            <R21>-0.8660254</R21>
-            <R22>-9.184851e-17</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX205">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX209">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX204</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX210">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_2_0</string>
-          <Vector3 name="size">
-            <X>0.7175</X>
-            <Y>1.1</Y>
-            <Z>0.6355</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>3.7218409</Y>
-            <Z>-5.9159335</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>0.57357644</R11>
-            <R12>0.81915204</R12>
-            <R20>0</R20>
-            <R21>-0.81915204</R21>
-            <R22>0.57357644</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX211">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX218">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX210</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX212">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_2_1</string>
-          <Vector3 name="size">
-            <X>0.7175</X>
-            <Y>1.1</Y>
-            <Z>0.6355</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0.164</X>
-            <Y>3.5875</Y>
-            <Z>-6.01</Z>
-            <R00>6.123234e-17</R00>
-            <R01>0</R01>
-            <R02>1</R02>
-            <R10>-0.81915204</R10>
-            <R11>0.57357644</R11>
-            <R12>5.0158596e-17</R12>
-            <R20>-0.57357644</R20>
-            <R21>-0.81915204</R21>
-            <R22>3.5121427e-17</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX213">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX219">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX212</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX214">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_2_2</string>
-          <Vector3 name="size">
-            <X>0.7175</X>
-            <Y>1.1</Y>
-            <Z>0.6355</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>2.0084208e-17</X>
-            <Y>3.4531591</Y>
-            <Z>-6.1040665</Z>
-            <R00>-1</R00>
-            <R01>0</R01>
-            <R02>1.2246468e-16</R02>
-            <R10>-1.0031719e-16</R10>
-            <R11>0.57357644</R11>
-            <R12>-0.81915204</R12>
-            <R20>-7.0242855e-17</R20>
-            <R21>-0.81915204</R21>
-            <R22>-0.57357644</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX215">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX220">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX214</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX216">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_2_3</string>
-          <Vector3 name="size">
-            <X>0.7175</X>
-            <Y>1.1</Y>
-            <Z>0.6355</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-0.164</X>
-            <Y>3.5875</Y>
-            <Z>-6.01</Z>
-            <R00>-1.8369702e-16</R00>
-            <R01>0</R01>
-            <R02>-1</R02>
-            <R10>0.81915204</R10>
-            <R11>0.57357644</R11>
-            <R12>-1.5047579e-16</R12>
-            <R20>0.57357644</R20>
-            <R21>-0.81915204</R21>
-            <R22>-1.0536428e-16</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX217">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX221">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX216</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX222">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_3_0</string>
-          <Vector3 name="size">
-            <X>0.41125</X>
-            <Y>1.1</Y>
-            <Z>0.36425</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>4.0413832</Y>
-            <Z>-6.724578</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>0.64278761</R11>
-            <R12>0.76604444</R12>
-            <R20>0</R20>
-            <R21>-0.76604444</R21>
-            <R22>0.64278761</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX223">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX230">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX222</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX224">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_3_1</string>
-          <Vector3 name="size">
-            <X>0.41125</X>
-            <Y>1.1</Y>
-            <Z>0.36425</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0.094</X>
-            <Y>3.969375</Y>
-            <Z>-6.785</Z>
-            <R00>6.123234e-17</R00>
-            <R01>0</R01>
-            <R02>1</R02>
-            <R10>-0.76604444</R10>
-            <R11>0.64278761</R11>
-            <R12>4.6906694e-17</R12>
-            <R20>-0.64278761</R20>
-            <R21>-0.76604444</R21>
-            <R22>3.9359389e-17</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX225">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX231">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX224</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX226">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_3_2</string>
-          <Vector3 name="size">
-            <X>0.41125</X>
-            <Y>1.1</Y>
-            <Z>0.36425</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>1.151168e-17</X>
-            <Y>3.8973668</Y>
-            <Z>-6.845422</Z>
-            <R00>-1</R00>
-            <R01>0</R01>
-            <R02>1.2246468e-16</R02>
-            <R10>-9.3813388e-17</R10>
-            <R11>0.64278761</R11>
-            <R12>-0.76604444</R12>
-            <R20>-7.8718779e-17</R20>
-            <R21>-0.76604444</R21>
-            <R22>-0.64278761</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX227">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX232">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX226</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX228">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_3_3</string>
-          <Vector3 name="size">
-            <X>0.41125</X>
-            <Y>1.1</Y>
-            <Z>0.36425</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-0.094</X>
-            <Y>3.969375</Y>
-            <Z>-6.785</Z>
-            <R00>-1.8369702e-16</R00>
-            <R01>0</R01>
-            <R02>-1</R02>
-            <R10>0.76604444</R10>
-            <R11>0.64278761</R11>
-            <R12>-1.4072008e-16</R12>
-            <R20>0.64278761</R20>
-            <R21>-0.76604444</R21>
-            <R22>-1.1807817e-16</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX229">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX233">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX228</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX234">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_4_0</string>
-          <Vector3 name="size">
-            <X>0.105</X>
-            <Y>1.1</Y>
-            <Z>0.093</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>4.4269706</Y>
-            <Z>-7.5430294</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>0.70710678</R11>
-            <R12>0.70710678</R12>
-            <R20>0</R20>
-            <R21>-0.70710678</R21>
-            <R22>0.70710678</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5036487</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX235">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX242">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX234</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX236">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_4_1</string>
-          <Vector3 name="size">
-            <X>0.105</X>
-            <Y>1.1</Y>
-            <Z>0.093</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0.024</X>
-            <Y>4.41</Y>
-            <Z>-7.56</Z>
-            <R00>6.123234e-17</R00>
-            <R01>0</R01>
-            <R02>1</R02>
-            <R10>-0.70710678</R10>
-            <R11>0.70710678</R11>
-            <R12>4.3297803e-17</R12>
-            <R20>-0.70710678</R20>
-            <R21>-0.70710678</R21>
-            <R22>4.3297803e-17</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5036487</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX237">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX243">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX236</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX238">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_4_2</string>
-          <Vector3 name="size">
-            <X>0.105</X>
-            <Y>1.1</Y>
-            <Z>0.093</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>2.9391523e-18</X>
-            <Y>4.3930294</Y>
-            <Z>-7.5769706</Z>
-            <R00>-1</R00>
-            <R01>0</R01>
-            <R02>1.2246468e-16</R02>
-            <R10>-8.6595606e-17</R10>
-            <R11>0.70710678</R11>
-            <R12>-0.70710678</R12>
-            <R20>-8.6595606e-17</R20>
-            <R21>-0.70710678</R21>
-            <R22>-0.70710678</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5036487</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX239">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX244">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX238</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX240">
-        <Properties>
-          <string name="Name">PART_Hornboar_Horn_4_3</string>
-          <Vector3 name="size">
-            <X>0.105</X>
-            <Y>1.1</Y>
-            <Z>0.093</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-0.024</X>
-            <Y>4.41</Y>
-            <Z>-7.56</Z>
-            <R00>-1.8369702e-16</R00>
-            <R01>0</R01>
-            <R02>-1</R02>
-            <R10>0.70710678</R10>
-            <R11>0.70710678</R11>
-            <R12>-1.2989341e-16</R12>
-            <R20>0.70710678</R20>
-            <R21>-0.70710678</R21>
-            <R22>-1.2989341e-16</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5036487</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX241">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX245">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX240</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX246">
-        <Properties>
-          <string name="Name">HornRune</string>
-          <Vector3 name="size">
-            <X>0.2</X>
-            <Y>0.12</Y>
-            <Z>0.75</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>3.33</Y>
-            <Z>-4.91</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>0.93969262</R11>
-            <R12>0.34202014</R12>
-            <R20>0</R20>
-            <R21>-0.34202014</R21>
-            <R22>0.93969262</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5036487</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">1</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX247">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornIntact</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX248">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX246</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX249">
-        <Properties>
-          <string name="Name">Horn_Broken_0</string>
-          <Vector3 name="size">
-            <X>0.84</X>
-            <Y>0.52</Y>
-            <Z>0.744</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>3.2140111</Y>
-            <Z>-4.3688573</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>0.42261826</R11>
-            <R12>0.90630779</R12>
-            <R20>0</R20>
-            <R21>-0.90630779</R21>
-            <R22>0.42261826</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">1</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX250">
-          <Properties>
-            <string name="Name">Binding</string>
             <string name="Value">HornBroken</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX257">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX249</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX251">
-        <Properties>
-          <string name="Name">Horn_Broken_1</string>
-          <Vector3 name="size">
-            <X>0.84</X>
-            <Y>0.52</Y>
-            <Z>0.744</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0.192</X>
-            <Y>3.04</Y>
-            <Z>-4.45</Z>
-            <R00>6.123234e-17</R00>
-            <R01>0</R01>
-            <R02>1</R02>
-            <R10>-0.90630779</R10>
-            <R11>0.42261826</R11>
-            <R12>5.5495347e-17</R12>
-            <R20>-0.42261826</R20>
-            <R21>-0.90630779</R21>
-            <R22>2.5877905e-17</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">1</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX252">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornBroken</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX258">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX251</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX253">
-        <Properties>
-          <string name="Name">Horn_Broken_2</string>
-          <Vector3 name="size">
-            <X>0.84</X>
-            <Y>0.52</Y>
-            <Z>0.744</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>2.3513219e-17</X>
-            <Y>2.8659889</Y>
-            <Z>-4.5311427</Z>
-            <R00>-1</R00>
-            <R01>0</R01>
-            <R02>1.2246468e-16</R02>
-            <R10>-1.1099069e-16</R10>
-            <R11>0.42261826</R11>
-            <R12>-0.90630779</R12>
-            <R20>-5.175581e-17</R20>
-            <R21>-0.90630779</R21>
-            <R22>-0.42261826</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">1</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX254">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornBroken</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX259">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX253</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="WedgePart" referent="RBX255">
-        <Properties>
-          <string name="Name">Horn_Broken_3</string>
-          <Vector3 name="size">
-            <X>0.84</X>
-            <Y>0.52</Y>
-            <Z>0.744</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>-0.192</X>
-            <Y>3.04</Y>
-            <Z>-4.45</Z>
-            <R00>-1.8369702e-16</R00>
-            <R01>0</R01>
-            <R02>-1</R02>
-            <R10>0.90630779</R10>
-            <R11>0.42261826</R11>
-            <R12>-1.6648604e-16</R12>
-            <R20>0.42261826</R20>
-            <R21>-0.90630779</R21>
-            <R22>-7.7633715e-17</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">16112542</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">1</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX256">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornBroken</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX260">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX255</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX261">
-        <Properties>
-          <string name="Name">BrokenCoreGlow</string>
-          <Vector3 name="size">
-            <X>0.48</X>
-            <Y>0.24</Y>
-            <Z>0.24</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>3.2</Y>
-            <Z>-4.65</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>1</R11>
-            <R12>0</R12>
-            <R20>0</R20>
-            <R21>0</R21>
-            <R22>1</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5036487</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">1</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX262">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">HornBroken</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX263">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX35</Ref>
-            <Ref name="Part1">RBX261</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX264">
-        <Properties>
-          <string name="Name">Tail_0</string>
-          <Vector3 name="size">
-            <X>0.36</X>
-            <Y>0.36</Y>
-            <Z>0.95</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>2.7</Y>
-            <Z>3</Z>
-            <R00>1</R00>
-            <R01>0</R01>
-            <R02>0</R02>
-            <R10>0</R10>
-            <R11>0.95105652</R11>
-            <R12>-0.30901699</R12>
-            <R20>0</R20>
-            <R21>0.30901699</R21>
-            <R22>0.95105652</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX265">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX266">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX39</Ref>
-            <Ref name="Part1">RBX264</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX267">
-        <Properties>
-          <string name="Name">Tail_1</string>
-          <Vector3 name="size">
-            <X>0.36</X>
-            <Y>0.36</Y>
-            <Z>0.95</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0.18</X>
-            <Y>2.9</Y>
-            <Z>3.45</Z>
-            <R00>0.93969262</R00>
-            <R01>0</R01>
-            <R02>0.34202014</R02>
-            <R10>0.10569004</R10>
-            <R11>0.95105652</R11>
-            <R12>-0.29038099</R12>
-            <R20>-0.32528049</R20>
-            <R21>0.30901699</R21>
-            <R22>0.89370079</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX268">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX269">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX39</Ref>
-            <Ref name="Part1">RBX267</Ref>
-          </Properties>
-        </Item>
-      </Item>
-      <Item class="Part" referent="RBX270">
-        <Properties>
-          <string name="Name">Tail_2</string>
-          <Vector3 name="size">
-            <X>0.36</X>
-            <Y>0.36</Y>
-            <Z>0.95</Z>
-          </Vector3>
-          <CoordinateFrame name="CFrame">
-            <X>0.36</X>
-            <Y>3.1</Y>
-            <Z>3.9</Z>
-            <R00>0.76604444</R00>
-            <R01>0</R01>
-            <R02>0.64278761</R02>
-            <R10>0.1986323</R10>
-            <R11>0.95105652</R11>
-            <R12>-0.23672075</R12>
-            <R20>-0.61132734</R20>
-            <R21>0.30901699</R21>
-            <R22>0.72855156</R22>
-          </CoordinateFrame>
-          <Color3uint8 name="Color3uint8">5187864</Color3uint8>
-          <token name="Material">272</token>
-          <bool name="Anchored">false</bool>
-          <bool name="CanCollide">false</bool>
-          <bool name="CanTouch">false</bool>
-          <bool name="CanQuery">false</bool>
-          <bool name="Massless">true</bool>
-          <float name="Transparency">0</float>
-          <token name="TopSurface">0</token>
-          <token name="BottomSurface">0</token>
-          <token name="shape">0</token>
-        </Properties>
-        <Item class="StringValue" referent="RBX271">
-          <Properties>
-            <string name="Name">Binding</string>
-            <string name="Value">Visual</string>
-          </Properties>
-        </Item>
-        <Item class="WeldConstraint" referent="RBX272">
-          <Properties>
-            <string name="Name">VisualWeld</string>
-            <Ref name="Part0">RBX39</Ref>
-            <Ref name="Part1">RBX270</Ref>
           </Properties>
         </Item>
       </Item>
@@ -3630,7 +38,7 @@
       <Properties>
         <string name="Name">Gameplay</string>
       </Properties>
-      <Item class="StringValue" referent="RBX273">
+      <Item class="StringValue" referent="RBX66">
         <Properties>
           <string name="Name">Binding</string>
           <string name="Value">GameplayContainer</string>
@@ -3651,7 +59,7 @@
           </Vector3>
           <CoordinateFrame name="CFrame">
             <X>0</X>
-            <Y>2.6</Y>
+            <Y>2.8</Y>
             <Z>0</Z>
             <R00>1</R00>
             <R01>0</R01>
@@ -3689,7 +97,7 @@
           <Ref name="Part1">RBX7</Ref>
           <CoordinateFrame name="C0">
             <X>0</X>
-            <Y>2.6</Y>
+            <Y>2.8</Y>
             <Z>0</Z>
             <R00>1</R00>
             <R01>0</R01>
@@ -3733,8 +141,8 @@
           </Vector3>
           <CoordinateFrame name="CFrame">
             <X>0</X>
-            <Y>2.8</Y>
-            <Z>-2.5</Z>
+            <Y>3</Y>
+            <Z>-2.6</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -3772,7 +180,7 @@
           <CoordinateFrame name="C0">
             <X>0</X>
             <Y>0.2</Y>
-            <Z>-2.5</Z>
+            <Z>-2.6</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -3815,8 +223,8 @@
           </Vector3>
           <CoordinateFrame name="CFrame">
             <X>0</X>
-            <Y>2.8</Y>
-            <Z>-3.3</Z>
+            <Y>3</Y>
+            <Z>-3.5</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -3854,7 +262,7 @@
           <CoordinateFrame name="C0">
             <X>0</X>
             <Y>0</Y>
-            <Z>-0.8</Z>
+            <Z>-0.9</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -3896,9 +304,9 @@
             <Z>0.12</Z>
           </Vector3>
           <CoordinateFrame name="CFrame">
-            <X>-1.65</X>
-            <Y>2.3</Y>
-            <Z>-1.8</Z>
+            <X>-1.85</X>
+            <Y>2.6</Y>
+            <Z>-1.75</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -3934,9 +342,9 @@
           <Ref name="Part0">RBX7</Ref>
           <Ref name="Part1">RBX19</Ref>
           <CoordinateFrame name="C0">
-            <X>-1.65</X>
-            <Y>-0.3</Y>
-            <Z>-1.8</Z>
+            <X>-1.85</X>
+            <Y>-0.2</Y>
+            <Z>-1.75</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -3978,9 +386,9 @@
             <Z>0.12</Z>
           </Vector3>
           <CoordinateFrame name="CFrame">
-            <X>1.65</X>
-            <Y>2.3</Y>
-            <Z>-1.8</Z>
+            <X>1.85</X>
+            <Y>2.6</Y>
+            <Z>-1.75</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -4016,9 +424,9 @@
           <Ref name="Part0">RBX7</Ref>
           <Ref name="Part1">RBX23</Ref>
           <CoordinateFrame name="C0">
-            <X>1.65</X>
-            <Y>-0.3</Y>
-            <Z>-1.8</Z>
+            <X>1.85</X>
+            <Y>-0.2</Y>
+            <Z>-1.75</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -4060,9 +468,9 @@
             <Z>0.12</Z>
           </Vector3>
           <CoordinateFrame name="CFrame">
-            <X>-1.6</X>
+            <X>-1.7</X>
             <Y>2.25</Y>
-            <Z>2.2</Z>
+            <Z>2.55</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -4098,9 +506,9 @@
           <Ref name="Part0">RBX7</Ref>
           <Ref name="Part1">RBX27</Ref>
           <CoordinateFrame name="C0">
-            <X>-1.6</X>
-            <Y>-0.35</Y>
-            <Z>2.2</Z>
+            <X>-1.7</X>
+            <Y>-0.55</Y>
+            <Z>2.55</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -4142,9 +550,9 @@
             <Z>0.12</Z>
           </Vector3>
           <CoordinateFrame name="CFrame">
-            <X>1.6</X>
+            <X>1.7</X>
             <Y>2.25</Y>
-            <Z>2.2</Z>
+            <Z>2.55</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -4180,9 +588,9 @@
           <Ref name="Part0">RBX7</Ref>
           <Ref name="Part1">RBX31</Ref>
           <CoordinateFrame name="C0">
-            <X>1.6</X>
-            <Y>-0.35</Y>
-            <Z>2.2</Z>
+            <X>1.7</X>
+            <Y>-0.55</Y>
+            <Z>2.55</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -4217,16 +625,16 @@
       </Item>
       <Item class="Part" referent="RBX35">
         <Properties>
-          <string name="Name">Bone_Horn</string>
+          <string name="Name">Bone_FrontShin_L</string>
           <Vector3 name="size">
             <X>0.12</X>
             <Y>0.12</Y>
             <Z>0.12</Z>
           </Vector3>
           <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>3</Y>
-            <Z>-4.4</Z>
+            <X>-1.85</X>
+            <Y>1.15</Y>
+            <Z>-1.9</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -4258,13 +666,13 @@
       </Item>
       <Item class="Motor6D" referent="RBX37">
         <Properties>
-          <string name="Name">Horn</string>
-          <Ref name="Part0">RBX15</Ref>
+          <string name="Name">FrontShin_L</string>
+          <Ref name="Part0">RBX19</Ref>
           <Ref name="Part1">RBX35</Ref>
           <CoordinateFrame name="C0">
             <X>0</X>
-            <Y>0.2</Y>
-            <Z>-1.1</Z>
+            <Y>-1.45</Y>
+            <Z>-0.15</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -4293,22 +701,22 @@
         <Item class="StringValue" referent="RBX38">
           <Properties>
             <string name="Name">Binding</string>
-            <string name="Value">Joint:Horn</string>
+            <string name="Value">Joint:FrontShin_L</string>
           </Properties>
         </Item>
       </Item>
       <Item class="Part" referent="RBX39">
         <Properties>
-          <string name="Name">Bone_Tail</string>
+          <string name="Name">Bone_FrontShin_R</string>
           <Vector3 name="size">
             <X>0.12</X>
             <Y>0.12</Y>
             <Z>0.12</Z>
           </Vector3>
           <CoordinateFrame name="CFrame">
-            <X>0</X>
-            <Y>2.6</Y>
-            <Z>3</Z>
+            <X>1.85</X>
+            <Y>1.15</Y>
+            <Z>-1.9</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -4340,13 +748,13 @@
       </Item>
       <Item class="Motor6D" referent="RBX41">
         <Properties>
-          <string name="Name">Tail</string>
-          <Ref name="Part0">RBX7</Ref>
+          <string name="Name">FrontShin_R</string>
+          <Ref name="Part0">RBX23</Ref>
           <Ref name="Part1">RBX39</Ref>
           <CoordinateFrame name="C0">
             <X>0</X>
-            <Y>0</Y>
-            <Z>3</Z>
+            <Y>-1.45</Y>
+            <Z>-0.15</Z>
             <R00>1</R00>
             <R01>0</R01>
             <R02>0</R02>
@@ -4375,15 +783,343 @@
         <Item class="StringValue" referent="RBX42">
           <Properties>
             <string name="Name">Binding</string>
+            <string name="Value">Joint:FrontShin_R</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX43">
+        <Properties>
+          <string name="Name">Bone_BackShin_L</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>-1.7</X>
+            <Y>1.05</Y>
+            <Z>2.7</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX44">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX45">
+        <Properties>
+          <string name="Name">BackShin_L</string>
+          <Ref name="Part0">RBX27</Ref>
+          <Ref name="Part1">RBX43</Ref>
+          <CoordinateFrame name="C0">
+            <X>0</X>
+            <Y>-1.2</Y>
+            <Z>0.15</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX46">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:BackShin_L</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX47">
+        <Properties>
+          <string name="Name">Bone_BackShin_R</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>1.7</X>
+            <Y>1.05</Y>
+            <Z>2.7</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX48">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX49">
+        <Properties>
+          <string name="Name">BackShin_R</string>
+          <Ref name="Part0">RBX31</Ref>
+          <Ref name="Part1">RBX47</Ref>
+          <CoordinateFrame name="C0">
+            <X>0</X>
+            <Y>-1.2</Y>
+            <Z>0.15</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX50">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:BackShin_R</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX51">
+        <Properties>
+          <string name="Name">Bone_Horn</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>0</X>
+            <Y>4.05</Y>
+            <Z>-3.65</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX52">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX53">
+        <Properties>
+          <string name="Name">Horn</string>
+          <Ref name="Part0">RBX15</Ref>
+          <Ref name="Part1">RBX51</Ref>
+          <CoordinateFrame name="C0">
+            <X>0</X>
+            <Y>1.05</Y>
+            <Z>-0.15</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX54">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:Horn</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX55">
+        <Properties>
+          <string name="Name">Bone_Tail</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>0</X>
+            <Y>2.8</Y>
+            <Z>3.6</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX56">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX57">
+        <Properties>
+          <string name="Name">Tail</string>
+          <Ref name="Part0">RBX7</Ref>
+          <Ref name="Part1">RBX55</Ref>
+          <CoordinateFrame name="C0">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>3.6</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX58">
+          <Properties>
+            <string name="Name">Binding</string>
             <string name="Value">Joint:Tail</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="AnimationController" referent="RBX43">
+      <Item class="AnimationController" referent="RBX59">
         <Properties>
           <string name="Name">AnimationController</string>
         </Properties>
-        <Item class="Animator" referent="RBX44">
+        <Item class="Animator" referent="RBX60">
           <Properties>
             <string name="Name">Animator</string>
           </Properties>
@@ -4430,6 +1166,12 @@
           <string name="Value">Root</string>
         </Properties>
       </Item>
+    </Item>
+    <Item class="StringValue" referent="RBX65">
+      <Properties>
+        <string name="Name">VisualSource</string>
+        <string name="Value">BlenderMeshData:MON_Hornboar_V1</string>
+      </Properties>
     </Item>
   </Item>
 </roblox>

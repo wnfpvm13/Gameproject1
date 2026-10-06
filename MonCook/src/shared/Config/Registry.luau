@@ -86,6 +86,7 @@ function Registry.validate(config: any?): boolean
 		positive(monster.MaxHealth, "Monster." .. id .. ".MaxHealth")
 		positive(monster.MoveSpeed, "Monster." .. id .. ".MoveSpeed")
 		positive(monster.HornHealth, "Monster." .. id .. ".HornHealth")
+		positive(monster.HeavyHitStaggerSeconds, "Monster." .. id .. ".HeavyHitStaggerSeconds")
 		for _, key in { "RoamSpeed", "AlertDistance", "AlertSeconds", "LeashDistance", "RoamRadius", "IdleSeconds", "RoamSeconds",
 			"StaggerSeconds", "DeathDespawnSeconds", "ContributionMinimum", "ContributionExpirySeconds", "RoamArrivalDistance" } do positive(monster[key], "Monster." .. id .. "." .. key) end
 		for _, key in { "BodyHitbox", "HornHitbox" } do
@@ -104,9 +105,14 @@ function Registry.validate(config: any?): boolean
 		expect(type(weapon.Basic) == "table" and #weapon.Basic == 3, path, "requires three-hit combo")
 		positive(weapon.Reach, path .. ".Reach")
 		positive(weapon.ArcDegrees, path .. ".ArcDegrees")
+		expect(weapon.ArcDegrees < 180, path, "attack arc must remain forward")
 		for _, attack in { weapon.Basic[1], weapon.Basic[2], weapon.Basic[3], weapon.Heavy } do
 			for _, key in { "Damage", "PartPower", "Windup", "Window", "Recovery" } do positive(attack[key], path .. "." .. key) end
 		end
+		positive(weapon.Heavy.Reach, path .. ".Heavy.Reach")
+		positive(weapon.Heavy.ArcDegrees, path .. ".Heavy.ArcDegrees")
+		expect(weapon.Heavy.Reach > weapon.Reach and weapon.Heavy.ArcDegrees > weapon.ArcDegrees
+			and weapon.Heavy.ArcDegrees < 180, path, "heavy requires a longer forward reach and wider arc")
 		expect(weapon.Heavy.PartPower > weapon.Basic[3].PartPower and weapon.Heavy.Damage > weapon.Basic[1].Damage,
 			path, "heavy must have higher damage and part power")
 	end
@@ -152,6 +158,7 @@ function Registry.validate(config: any?): boolean
 	end
 	expect(type(catalog.Testing) == "table" and type(catalog.Testing.UseFakeTeleport) == "boolean", "Testing", "requires UseFakeTeleport boolean")
 	expect(type(catalog.Testing.ShowFoundationDebugUI) == "boolean", "Testing", "requires ShowFoundationDebugUI boolean")
+	expect(type(catalog.Testing.ShowCombatHitboxes) == "boolean", "Testing", "requires ShowCombatHitboxes boolean")
 	expect(type(catalog.Matchmaking) == "table" and type(catalog.Matchmaking.Enabled) == "boolean", "Matchmaking", "requires Enabled hook")
 	return true
 end

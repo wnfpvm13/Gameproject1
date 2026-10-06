@@ -9,7 +9,7 @@ end
 function CombatService.new(options: any): any
 	assert(type(options.GetContext) == "function" and type(options.ResolveContacts) == "function"
 		and type(options.ApplyHit) == "function" and type(options.GetTarget) == "function", "combat server adapters required")
-	return setmetatable({ Definitions = options.Definitions, Math = options.Geometry, Contracts = options.Contracts,
+	return setmetatable({ Definitions = options.Definitions, Math = options.Geometry, Contracts = options.Contracts, HitGeometry = options.HitGeometry,
 		Now = options.Now, NewId = options.NewId, GetContext = options.GetContext, GetTarget = options.GetTarget,
 		ResolveContacts = options.ResolveContacts, ApplyHit = options.ApplyHit, MoveDodge = options.MoveDodge,
 		OnAction = options.OnAction, Log = options.Log, _actors = {} }, CombatService)
@@ -55,11 +55,17 @@ function CombatService.Request(self: any, actorId: number, payload: any): any
 		action.EndAt = now + rules.DodgeSeconds
 		state.DodgeReadyAt, state.ComboIndex = now + rules.DodgeCooldown, 0
 	else
+		local reach = if payload.AttackType == "Heavy" then weapon.Heavy.Reach or weapon.Reach else weapon.Reach
 		if payload.TargetHint then
 			local target = self.GetTarget(payload.TargetHint)
+			local aim = if target then target.Position else nil
+			if target and self.HitGeometry and target.MonsterId and self.Definitions.Monster[target.MonsterId] then
+				aim = self.HitGeometry.aimPoint(context.Position, facing, target, self.Definitions.Monster[target.MonsterId], reach, rules.AimAssistDegrees*2, rules.VerticalTolerance)
+			end
 			if target and target.State ~= "Dead" and self.Math.point(target.Position)
-				and self.Math.inArc(context.Position, facing, target.Position, weapon.Reach, rules.AimAssistDegrees*2, rules.VerticalTolerance) then
-				action.Facing = self.Math.direction(context.Position, target.Position, facing)
+				and self.Math.point(aim) and self.Math.inArc(context.Position, facing, aim, reach, rules.AimAssistDegrees*2, rules.VerticalTolerance) then
+				action.Facing = self.Math.turnToward(facing, self.Math.direction(context.Position, aim, facing), rules.AimAssistMaxTurnDegrees)
+				action.Facing = self.Math.turnToward(self.Math.direction({ X = 0, Y = 0, Z = 0 }, context.Facing), action.Facing, rules.MaxFacingCorrectionDegrees)
 			end
 		end
 		local attack
@@ -70,7 +76,7 @@ function CombatService.Request(self: any, actorId: number, payload: any): any
 			attack = weapon.Basic[state.ComboIndex]
 		else state.ComboIndex = 0; attack = weapon.Heavy end
 		action.Damage, action.PartPower = attack.Damage, attack.PartPower
-		action.Reach, action.ArcDegrees = weapon.Reach, weapon.ArcDegrees
+		action.Reach, action.ArcDegrees = reach, attack.ArcDegrees or weapon.ArcDegrees
 		action.WindowStartAt, action.WindowEndAt = now + attack.Windup, now + attack.Windup + attack.Window
 		action.EndAt = action.WindowEndAt + attack.Recovery
 	end
@@ -100,10 +106,13 @@ function CombatService.Tick(self: any)
 				local target = self.GetTarget(contact.EncounterId)
 				if action.HitTargets[contact.EncounterId] or not target or target.State == "Dead"
 					or contact.ValidHitbox ~= true or not self.Math.point(contact.Position) then continue end
+				if self.Math.point(target.Position) and self.Math.distance(context.Position,target.Position) > 0.000001
+					and self.Math.dot(action.Facing,self.Math.direction(context.Position,target.Position)) < 0 then continue end
 				if not self.Math.inArc(context.Position, action.Facing, contact.Position, action.Reach, action.ArcDegrees, rules.VerticalTolerance) then continue end
 				action.HitTargets[contact.EncounterId] = true
 				self.ApplyHit(contact.EncounterId, actorId, { AttackId = action.AttackId, Damage = action.Damage,
-					PartPower = action.PartPower, Horn = contact.Horn == true })
+					PartPower = action.PartPower, Horn = contact.Horn == true, AttackType = action.AttackType,
+					Position = clone(contact.Position) })
 			end
 		end
 	end

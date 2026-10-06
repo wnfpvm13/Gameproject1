@@ -26,5 +26,9 @@
   ],
   "canonical_source": "../The_Last_Recipe_ALL_IN_ONE_CODEX_SPEC.md",
   "next_instruction": "../NEXT_CODEX_INSTRUCTION_Phase_1_Hunting_Foundation.md",
-  "additional_instruction": "../ADDITIONAL_PHASE_1_3D_ASSET_PRODUCTION.md"
+  "additional_instruction": "../ADDITIONAL_PHASE_1_3D_ASSET_PRODUCTION.md",
+  "latest_correction_instructions": [
+    "../PHASE_1_CORRECTION_Animation_Hornboar_Redesign.md",
+    "../PHASE_1_CORRECTION_Combat_Hitbox_Range.md"
+  ]
 }

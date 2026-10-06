@@ -1,7 +1,7 @@
 """Run with Blender 4.3+: blender --background --python art/blender/build_assets.py.
 
-Produces real triangulated .blend/.fbx/.glb assets, a measured manifest, ten
-Hornboar actions, and close/medium/far previews. Native Roblox model equivalents
+Produces real triangulated .blend/.fbx/.glb assets and calls the redesigned
+Hornboar mesh builder (14 bones / 13 actions) with measured manifests/previews. Native Roblox model equivalents
 are generated separately from the same authored specification.
 """
 from __future__ import annotations
@@ -161,6 +161,7 @@ def preview_scene(target, distance, output, ground_height=-0.03):
 def main():
     manifest = {"coordinate_system": "Roblox X/right Y/up -Z/forward", "assets": {}}
     for asset_id, asset in catalog().items():
+        if asset_id == "MON_Hornboar_V1": continue
         bpy.ops.object.select_all(action="SELECT")
         bpy.ops.object.delete(use_global=False)
         # Clear previous objects/actions so exported actions belong to this rig only.
@@ -198,7 +199,10 @@ def main():
             preview = ART / "previews"; preview.mkdir(exist_ok=True)
             for label, distance in (("Close", 18), ("Medium", 28), ("Far", 48)):
                 preview_scene((0, 1.7, 2.2), distance, preview / f"Hornboar_{label}.png")
+    manifest["assets"]["MON_Hornboar_V1"] = {"family":"Monsters", "source":"blender/Hornboar/MON_Hornboar_V1.blend", "fbx":"exports/Monsters/MON_Hornboar_V1.fbx", "glb":"exports/Monsters/MON_Hornboar_V1.glb"}
     (ART / "asset_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+"\n")
+    import runpy
+    runpy.run_path(str(ART / "blender/redesign_hornboar.py"), run_name="__main__")
     print("Asset source/export/manifest generation finished.", flush=True)
 
 

@@ -41,12 +41,37 @@ def main():
     source = json.loads((art / "asset_manifest.json").read_text())
     native = json.loads((art / "runtime_manifest.json").read_text())["baseparts"]
     exports = json.loads((art / "export_validation.json").read_text())
+    topology = json.loads((art / "hornboar_mesh.json").read_text())
+    hornboar = source["assets"]["MON_Hornboar_V1"]
+    assert topology["SourceSHA256"] == hashlib.sha256((art / hornboar["source"]).read_bytes()).hexdigest()
+    assert topology["TriangleCount"] == hornboar["blender_triangles"] == sum(len(g["Faces"]) for g in topology["Groups"])
+    packet_source = (PROJECT / "src/shared/Assets/HornboarMeshData.luau").read_text()
+    assert json.loads(packet_source.split("[=[", 1)[1].split("]=]", 1)[0]) == topology
+    bounds = []
+    for group in topology["Groups"]:
+        assert group["Bone"] in hornboar["bones"]
+        for vertex in group["Vertices"]:
+            assert len(vertex) == 3 and all(abs(v) < 100 for v in vertex)
+        for face in group["Faces"]:
+            assert len(face) == 4 and all(1 <= index <= len(group["Vertices"]) for index in face[:3])
+            assert 1 <= face[3] <= len(topology["Palette"])
+            a,b,c = (group["Vertices"][i-1] for i in face[:3])
+            u,v = [b[i]-a[i] for i in range(3)], [c[i]-a[i] for i in range(3)]
+            assert sum((u[(i+1)%3]*v[(i+2)%3]-u[(i+2)%3]*v[(i+1)%3])**2 for i in range(3)) > 1e-14
+        if group["Binding"] == "Visual" and group["Bone"] != "Tail":
+            bounds.extend([[v[i]+group["Center"][i] for i in range(3)] for v in group["Vertices"]])
+        if group["Binding"] == "HornIntact":
+            horn_vertices = [[v[i]+group["Center"][i] for i in range(3)] for v in group["Vertices"]]
+            assert all(abs(v[0]) <= 1.375 and 3.0 <= v[1] <= 5.9 and -7.5 <= v[2] <= -3.0 for v in horn_vertices)
+    # Body box intentionally includes the torso/neck, head and leg-gap silhouette.
+    assert all(abs(v[0]) <= 2.8 and -.01 <= v[1] <= 5.0 and -5.85 <= v[2] <= 4.75 for v in bounds)
     assert 3000 <= source["assets"]["MON_Hornboar_V1"]["blender_triangles"] <= 6000
     assert 1000 <= source["assets"]["WPN_StarterCleaver_V1"]["blender_triangles"] <= 2500
     for asset_id, asset in source["assets"].items():
         for kind in ("source", "fbx", "glb"):
             path = art / asset[kind]; assert path.is_file() and path.stat().st_size > 100
         assert exports[asset_id]["fbx_reimport"] == "PASS"
+        assert exports[asset_id]["triangles"] == asset["blender_triangles"], (asset_id, "stale FBX validation record")
         root = ET.parse(art / "runtime" / asset["family"] / (asset_id+".rbxmx")).getroot()
         objects = list(root.iter("Item")); refs = {i.attrib["referent"] for i in objects}
         count = sum(i.attrib["class"] in ("Part", "WedgePart", "CornerWedgePart", "MeshPart") for i in objects)
@@ -62,6 +87,7 @@ def main():
             assert joints == set(asset["bones"])-{"Root"}
             bindings = [props(i)["Value"].text for i in objects if i.attrib["class"] == "StringValue" and name(i) == "Binding"]
             assert "HornIntact" in bindings and "HornBroken" in bindings and "Root" in bindings
+            assert not any(i.attrib["class"] == "Part" and props(i).get("shape") is not None and props(i)["shape"].text == "0" for i in objects), "rejected sphere prototype returned"
     place = ET.parse(args.place).getroot()
     entries = index(place)
     scripts = {p:i for p,i in entries.items() if i.attrib["class"] in ("Script", "LocalScript", "ModuleScript")}
@@ -87,7 +113,7 @@ def main():
     for path in old:
         expected_bytes = subprocess.check_output(["git", "show", baseline+":"+path], cwd=PROJECT.parent)
         assert (PROJECT.parent/path).read_bytes() == expected_bytes, (path, "existing test changed")
-    print(f"PASS: {len(source['assets'])} real FBX/source/GLB assets, native references/rig bindings, {len(scripts)} runtime script sources, all original test files unchanged.")
+    print(f"PASS: {len(source['assets'])} real FBX/source/GLB assets, {topology['TriangleCount']} exact Blender topology triangles, skeleton/bindings, {len(scripts)} runtime script sources, all original test files unchanged.")
     print("Studio place SHA256:", hashlib.sha256(args.place.read_bytes()).hexdigest())
 
 

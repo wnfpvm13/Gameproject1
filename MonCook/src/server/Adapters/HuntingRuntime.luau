@@ -8,10 +8,12 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Registry = require(Shared.Config.Registry)
 local Math = require(Shared.Utilities.HuntingMath)
+local HitGeometry = require(Shared.Utilities.HuntingHitGeometry)
 local Contracts = require(Shared.Utilities.HuntingContracts)
 local NetworkDefinition = require(Shared.Remotes.Definitions).Hunting
 local FieldConfig = require(Shared.Config.GreenwoodConfig)
 local Style = require(Shared.Config.HuntingUIStyle)
+local CombatStyle = require(Shared.Config.CombatPresentationConfig)
 local Services = script.Parent.Parent.Services
 local MonsterService = require(Services.MonsterService)
 local CombatService = require(Services.CombatService)
@@ -28,12 +30,14 @@ local function newId(): string return HttpService:GenerateGUID(false) end
 function Runtime.start(options: any): any
 	if options.IsRestaurant then return nil end
 	local definitions, rules = Registry.Definitions, Registry.Definitions.Combat.Rules
+	local showHitboxes = HitGeometry.debugEnabled(RunService:IsStudio(), definitions.Testing.ShowCombatHitboxes)
 	local assets = ReplicatedStorage:WaitForChild("Assets")
 	local monsterAssets, weaponAssets = assets:WaitForChild("Monsters"), assets:WaitForChild("Weapons")
 	for _, definition in definitions.Monster do assert(monsterAssets:FindFirstChild(definition.AssetId), "missing monster V1 asset") end
 	Field.build(Workspace, assets:WaitForChild("Environment"), FieldConfig)
 	local modelsFolder = Instance.new("Folder")
 	modelsFolder.Name, modelsFolder.Parent = "MonCookMonsters", Workspace
+	local debugView = if showHitboxes then require(script.Parent.CombatDebugView).new(modelsFolder, CombatStyle) else nil
 	local network = Instance.new("Folder")
 	network.Name = NetworkDefinition.Folder
 	local intent, stateRemote, changed = Instance.new("RemoteEvent"), Instance.new("RemoteFunction"), Instance.new("RemoteEvent")
@@ -159,7 +163,10 @@ function Runtime.start(options: any): any
 			return to
 		end,
 		OnEvent = function(event: any)
-			if event.Kind == "AttackHit" then
+			if event.Kind == "Damaged" then
+				changed:FireAllClients({ Kind = "Hit", EncounterId = event.EncounterId, ActorId = event.ActorId,
+					Origin = event.Origin, Part = event.Part, Heavy = event.Heavy, Reaction = event.Reaction, At = event.At })
+			elseif event.Kind == "AttackHit" then
 				local ctx = context(event.ActorId)
 				if ctx and ctx.Alive and ctx.Location == "World" and ctx.Eligible
 					and lineClear(vector(event.Origin)+Vector3.new(0, 3, 0), ctx.Root.Position) then ctx.Humanoid:TakeDamage(event.Damage) end
@@ -183,22 +190,21 @@ function Runtime.start(options: any): any
 		local position, facing = vector(ctx.Position), vector(action.Facing)
 		local frame = CFrame.lookAt(position, position+facing)*CFrame.new(0, 0, -action.Reach/2)
 		local size = Vector3.new(2*action.Reach*math.sin(math.rad(action.ArcDegrees/2)), rules.VerticalTolerance*2, action.Reach)
-		local byEncounter, result = {}, {}
+		local result = {}
 		for _, part in Workspace:GetPartBoundsInBox(frame, size, overlap) do
 			local id = part:GetAttribute("EncounterId")
 			local asset = if type(id) == "string" then models[id] else nil
-			if not asset or (part ~= asset.BodyHitbox and part ~= asset.HornHitbox)
-				or not lineClear(position, part.Position) then continue end
+			if not asset or (part ~= asset.BodyHitbox and part ~= asset.HornHitbox) then continue end
 			local horn = part == asset.HornHitbox and asset.HornHitbox.CanQuery
-			local contact = byEncounter[id]
-			if not contact then
-				contact = { EncounterId = id, Position = point(part.Position), ValidHitbox = true, Horn = horn }
-				byEncounter[id] = contact; table.insert(result, contact)
-			elseif horn then contact.Horn, contact.Position = true, point(part.Position) end
+			local contact = HitGeometry.contact(ctx.Position, action.Facing, point(part.Position), point(part.CFrame.LookVector),
+				point(part.Size), action.Reach, action.ArcDegrees, rules.VerticalTolerance)
+			if contact and lineClear(position, vector(contact)) then
+				table.insert(result, { EncounterId = id, Position = contact, ValidHitbox = true, Horn = horn })
+			end
 		end
-		return result
+		return HitGeometry.prefer(result)
 	end
-	combat = CombatService.new({ Definitions = definitions, Geometry = Math, Contracts = Contracts, Now = now, NewId = newId,
+	combat = CombatService.new({ Definitions = definitions, Geometry = Math, HitGeometry = HitGeometry, Contracts = Contracts, Now = now, NewId = newId,
 		GetContext = context, GetTarget = function(id: string) return monsters:Get(id) end, ResolveContacts = contacts,
 		ApplyHit = function(id: string, actorId: number, hit: any) monsters:ApplyHit(id, actorId, hit) end,
 		Log = log, MoveDodge = function(actorId: number, facing: any, distance: number)
@@ -228,6 +234,8 @@ function Runtime.start(options: any): any
 			ctx.Character:SetAttribute("HuntingCombo", action.ComboIndex or 0)
 			ctx.Character:SetAttribute("HuntingAttackStart", action.StartedAt)
 			ctx.Character:SetAttribute("HuntingAttackEnd", action.EndAt)
+			ctx.Character:SetAttribute("HuntingHitStart", action.WindowStartAt)
+			ctx.Character:SetAttribute("HuntingHitEnd", action.WindowEndAt)
 			observe({ Name = if action.AttackType == "Heavy" then "HeavyAttackUsed" elseif action.AttackType == "Dodge" then "DodgeUsed" else "AttackUsed",
 				ActorId = action.ActorId, WeaponId = action.WeaponId, ComboIndex = action.ComboIndex })
 		end })
@@ -251,14 +259,19 @@ function Runtime.start(options: any): any
 				asset = Binder.monster(monsterAssets:FindFirstChild(definition.AssetId) :: Model, definition, id)
 				asset.Model:SetAttribute("MonsterId", monster.MonsterId)
 				asset.Model.Parent = modelsFolder
+				if showHitboxes then
+					asset.BodyHitbox.Transparency, asset.BodyHitbox.Color = 0.72, Color3.fromRGB(60, 190, 255)
+					asset.HornHitbox.Transparency, asset.HornHitbox.Color = 0.55, Color3.fromRGB(210, 90, 255)
+				end
 				header(asset); models[id] = asset
 			end
 			local position, facing = vector(monster.Position), vector(monster.Facing)
 			asset.Root.CFrame = CFrame.lookAt(position, position+facing)
-			for _, key in { "State", "BodyHP", "HornHP", "HornBroken", "StateStartedAt", "StateUntil", "AttackType", "LastHitAt" } do
+			for _, key in { "State", "BodyHP", "HornHP", "HornBroken", "StateStartedAt", "StateUntil", "AttackType", "LastHitAt", "LastHitKind", "LastHitHeavy" } do
 				asset.Model:SetAttribute(key, monster[key])
 			end
 			Binder.horn(asset, monster.HornBroken)
+			if showHitboxes and monster.HornBroken then asset.HornHitbox.Transparency = 1 end
 			if asset.State ~= monster.State then telegraph(asset, monster, definition); asset.State = monster.State end
 			local warning = if monster.State == "Windup" then (if monster.AttackType == "Charge" then "! 돌진 준비" else "! 머리치기 준비")
 				elseif monster.State == "Dead" then "처치" else "Hornboar"
@@ -307,7 +320,10 @@ function Runtime.start(options: any): any
 			local actors = contexts()
 			combat:Tick(); monsters:Tick(actors, step); syncModels()
 			for _, event in monsters:PendingRewards() do if loot:Enqueue(event) then monsters:AckReward(event.EventId) end end
-			for _, ctx in actors do attachWeapon(ctx) end
+			for _, ctx in actors do
+				attachWeapon(ctx)
+				if debugView then debugView:Render(ctx, combat:State(ctx.ActorId).Action, now()) end
+			end
 			for actorId, dodge in dodges do
 				local action = combat:State(actorId).Action
 				if not action or action.AttackType ~= "Dodge" then
@@ -336,6 +352,7 @@ function Runtime.start(options: any): any
 		if actorId then
 			departing[actorId] = options.Lookup(actorId)
 			combat:Forget(actorId)
+			if debugView then debugView:Remove(actorId) end
 		else closing = true end
 		for _, event in monsters:PendingRewards() do if loot:Enqueue(event) then monsters:AckReward(event.EventId) end end
 		local deadline = now()+definitions.Hunting.Rewards.DepartureFlushSeconds

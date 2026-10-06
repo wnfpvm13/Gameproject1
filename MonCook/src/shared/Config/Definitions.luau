@@ -84,7 +84,7 @@ local definitions: any = {
 		HostRestaurant = { DisplayName = "호스트 식당", Activity = "Restaurant" },
 	},
 	Matchmaking = { Enabled = false, Version = "V1.5" }, -- TODO: cross-server queue interface only.
-	Testing = { UseFakeTeleport = true, ShowFoundationDebugUI = false },
+	Testing = { UseFakeTeleport = true, ShowFoundationDebugUI = false, ShowCombatHitboxes = false },
 }
 -- Extend stable Foundation keys; no parallel item/weapon catalog or data reset.
 for _, family in { "Monster", "Weapon", "Ingredient" } do

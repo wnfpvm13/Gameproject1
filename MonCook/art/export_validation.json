@@ -1,7 +1,7 @@
 {
   "MON_Hornboar_V1": {
-    "triangles": 5888,
-    "mesh_objects": 58,
+    "triangles": 4248,
+    "mesh_objects": 44,
     "bones": [
       "Root",
       "Spine",
@@ -9,9 +9,13 @@
       "Head",
       "Horn",
       "FrontLeg_L",
+      "FrontShin_L",
       "FrontLeg_R",
+      "FrontShin_R",
       "BackLeg_L",
+      "BackShin_L",
       "BackLeg_R",
+      "BackShin_R",
       "Tail"
     ],
     "imported_actions": [
@@ -20,8 +24,11 @@
       "Rig|Rig|ChargeWindup",
       "Rig|Rig|Death",
       "Rig|Rig|Headbutt",
-      "Rig|Rig|HitReact",
+      "Rig|Rig|HeavyHit",
+      "Rig|Rig|HornBreak",
+      "Rig|Rig|HornHit",
       "Rig|Rig|Idle",
+      "Rig|Rig|LightHit",
       "Rig|Rig|Run",
       "Rig|Rig|Stagger",
       "Rig|Rig|Walk"

@@ -8,6 +8,7 @@ local Data = require(script.Parent.Parent.src.server.Services.DataService)
 local Store = require(script.Parent.Support.InMemoryStore)
 local Registry = require(script.Parent.Parent.src.shared.Config.Registry)
 local Math = require(script.Parent.Parent.src.shared.Utilities.HuntingMath)
+local HitGeometry = require(script.Parent.Parent.src.shared.Utilities.HuntingHitGeometry)
 local Contracts = require(script.Parent.Parent.src.shared.Utilities.HuntingContracts)
 local Defaults = require(script.Parent.Parent.src.shared.Utilities.PlayerDataDefaults)
 local Migration = require(script.Parent.Parent.src.shared.Utilities.PlayerDataMigration)
@@ -43,9 +44,11 @@ return function(): number
 				for _, m in monster:List() do
 					local definition = config.Monster[m.MonsterId]
 					local body, horn = Math.offset(m.Position, m.Facing, definition.BodyHitbox.Offset), Math.offset(m.Position, m.Facing, definition.HornHitbox.Offset)
-					local hitHorn = not m.HornBroken and Math.inArc(ctx.Position, action.Facing, horn, action.Reach, action.ArcDegrees, config.Combat.Rules.VerticalTolerance)
-					local hitBody = Math.inArc(ctx.Position, action.Facing, body, action.Reach, action.ArcDegrees, config.Combat.Rules.VerticalTolerance)
-					if hitHorn or hitBody then table.insert(result, { EncounterId = m.EncounterId, Position = if hitHorn then horn else body, Horn = hitHorn, ValidHitbox = true }) end
+					local hitHorn = if m.HornBroken then nil else HitGeometry.contact(ctx.Position, action.Facing, horn, m.Facing,
+						definition.HornHitbox.Size, action.Reach, action.ArcDegrees, config.Combat.Rules.VerticalTolerance)
+					local hitBody = HitGeometry.contact(ctx.Position, action.Facing, body, m.Facing,
+						definition.BodyHitbox.Size, action.Reach, action.ArcDegrees, config.Combat.Rules.VerticalTolerance)
+					if hitHorn or hitBody then table.insert(result, { EncounterId = m.EncounterId, Position = hitHorn or hitBody, Horn = hitHorn ~= nil, ValidHitbox = true }) end
 				end
 				return result
 			end,

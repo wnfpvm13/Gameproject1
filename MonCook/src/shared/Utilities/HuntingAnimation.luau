@@ -1,7 +1,7 @@
 --!strict
 -- Readable temporary poses; no uploaded animation IDs are needed for native V1 rigs.
 local Animation = {}
-function Animation.monster(state: string, attackType: string?, elapsed: number, phase: number, hitAge: number): any
+function Animation.monster(state: string, attackType: string?, elapsed: number, phase: number, hitAge: number, hitKind: string?, heavy: boolean?): any
 	local pose: any = { Spine = { Pitch = 0, Yaw = 0, Roll = 0, Lift = 0 }, Head = { Pitch = 0, Yaw = 0, Roll = 0, Lift = 0 },
 		FrontLeg_L = { Pitch = 0 }, FrontLeg_R = { Pitch = 0 }, BackLeg_L = { Pitch = 0 }, BackLeg_R = { Pitch = 0 } }
 	local moving = state == "Roam" or state == "Chase" or (state == "Attack" and attackType == "Charge")
@@ -10,9 +10,15 @@ function Animation.monster(state: string, attackType: string?, elapsed: number, 
 		pose.FrontLeg_L.Pitch, pose.BackLeg_R.Pitch = stride, stride
 		pose.FrontLeg_R.Pitch, pose.BackLeg_L.Pitch = -stride, -stride
 		pose.Spine.Lift = math.abs(math.sin(phase*12))*0.10
+		for _, side in { "L", "R" } do
+			pose["FrontShin_"..side] = { Pitch = -(pose["FrontLeg_"..side].Pitch or 0)*0.50 }
+			pose["BackShin_"..side] = { Pitch = -(pose["BackLeg_"..side].Pitch or 0)*0.50 }
+		end
 	elseif state == "Idle" then pose.Spine.Lift = math.sin(phase*2.2)*0.045 end
 	if state == "Alert" then pose.Head.Pitch = -0.20
-	elseif state == "Windup" then pose.Head.Pitch, pose.Spine.Pitch = 0.28, 0.10
+	elseif state == "Windup" then
+		pose.Head.Pitch, pose.Spine.Pitch, pose.Spine.Lift = 0.28, 0.10, -0.08
+		pose.FrontLeg_L.Pitch = math.sin(elapsed*18)*0.12
 	elseif state == "Attack" and attackType == "Headbutt" then pose.Head.Pitch = -math.sin(math.min(elapsed/0.3, 1)*math.pi)*0.5
 	elseif state == "Attack" then pose.Head.Pitch, pose.Spine.Pitch = 0.17, 0.05
 	elseif state == "Recover" then pose.Head.Pitch = 0.14
@@ -21,7 +27,18 @@ function Animation.monster(state: string, attackType: string?, elapsed: number, 
 		pose.Spine.Roll, pose.Spine.Lift = math.min(elapsed/0.4, 1)*1.2, -math.min(elapsed/0.4, 1)*1.0
 		pose.Head.Pitch = 0.30
 	end
-	if state ~= "Dead" and hitAge >= 0 and hitAge < 0.16 then pose.Spine.Roll += math.sin(hitAge/0.16*math.pi)*0.12 end
+	if state ~= "Dead" then
+		local duration = if hitKind == "HornBreak" then 0.55 elseif heavy then 0.32 else 0.19
+		if hitAge >= 0 and hitAge < duration then
+			local recoil = math.sin(hitAge/duration*math.pi)
+			local strong = heavy or hitKind == "HornBreak"
+			pose.Spine.Roll += recoil*(if strong then 0.25 else 0.14)
+			pose.Spine.Pitch += recoil*(if strong then -0.14 else -0.04)
+			pose.Spine.Lift += recoil*(if strong then -0.16 else -0.025)
+			pose.Head.Pitch += recoil*(if hitKind == "HornBreak" then -0.65 elseif hitKind == "HornHit" then -0.38 else -0.16)
+			pose.Head.Yaw += recoil*(if hitKind == "HornHit" then 0.16 else 0.09)
+		end
+	end
 	return pose
 end
 function Animation.weapon(attackType: string?, combo: number, elapsed: number, duration: number): any

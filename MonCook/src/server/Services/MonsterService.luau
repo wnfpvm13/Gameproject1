@@ -97,12 +97,21 @@ function MonsterService.ApplyHit(self: any, encounterId: string, actorId: number
 	end
 	contribution.BodyDamage += bodyDamage; contribution.PartDamage += partDamage; contribution.LastAt = self.Now()
 	monster.LastHitAt = self.Now()
-	self:_emit("Damaged", monster, { ActorId = actorId, BodyHP = monster.BodyHP, HornHP = monster.HornHP })
+	local breaking = monster.HornHP == 0 and not monster.HornBroken
+	monster.LastHitKind = if breaking then "HornBreak" elseif partDamage > 0 then "HornHit"
+		elseif hit.AttackType == "Heavy" then "HeavyHit" else "LightHit"
+	monster.LastHitHeavy = hit.AttackType == "Heavy"
+	self:_emit("Damaged", monster, { ActorId = actorId, BodyHP = monster.BodyHP, HornHP = monster.HornHP,
+		Reaction = monster.LastHitKind, Heavy = monster.LastHitHeavy, AttackId = hit.AttackId,
+		Part = if partDamage > 0 then "Horn" else "Body",
+		Origin = if self.Math.point(hit.Position) then hit.Position else self.Math.add(monster.Position, { X = 0, Y = 2.6, Z = 0 }) })
 	if monster.HornHP == 0 and not monster.HornBroken then
 		monster.HornBroken = true
 		self:_emit("PartBroken", monster, { PartId = "Horn", DropId = self.Definitions.Monster[monster.MonsterId].Parts.Horn.DropId,
 			Members = self:Eligible(encounterId) })
 		self:_state(monster, "Stagger", self.Definitions.Monster[monster.MonsterId].StaggerSeconds)
+	elseif hit.AttackType == "Heavy" and monster.BodyHP > 0 then
+		self:_state(monster, "Stagger", self.Definitions.Monster[monster.MonsterId].HeavyHitStaggerSeconds)
 	end
 	if monster.BodyHP == 0 then
 		monster.DeathAt = self.Now()

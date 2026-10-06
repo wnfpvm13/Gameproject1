@@ -1,95 +1,89 @@
-# MonCook 작업 상태 — Phase 1 Hunting Foundation + V1 Art
+# MonCook 작업 상태 — Phase 1 Correction
 
-기록일: 2026-10-06 UTC. 상태: **구현·자동 검증 완료 / 실제 Studio acceptance 미검증**. Phase 2로 진행하지 않습니다.
+기록일: 2026-10-06 (한국 시간). 브랜치 `integration/hunting`, [Draft PR #2](https://github.com/wnfpvm13/Gameproject1/pull/2). **수정 구현·자동 검증 완료 / 실제 Studio acceptance 보류**. 사용자 Studio 확인에서 기존 공격 모션·구형 모델·hit readability가 거절되어 수정합니다. [이전 Phase 1 보고](docs/implementation-reports/Phase_1_Initial_Hunting.md)는 당시 기록으로 보존하며, 현재 아트 승인을 의미하지 않습니다.
 
-[사냥 지침](docs/NEXT_CODEX_INSTRUCTION_Phase_1_Hunting_Foundation.md), [3D 추가 지침](docs/ADDITIONAL_PHASE_1_3D_ASSET_PRODUCTION.md), [공통 계약](docs/PHASE_1_HUNTING_CONTRACTS.md), [수동 QA](HUNTING_QA.md)를 따릅니다. 기존 [Phase 0.8 최종 보고](docs/implementation-reports/Phase_0_8_Final_Drag_Clamp.md)는 별도 보존합니다.
+[첨부 재설계/애니메이션 지침](docs/PHASE_1_CORRECTION_Animation_Hornboar_Redesign.md)과 [공격 판정 지침](docs/PHASE_1_CORRECTION_Combat_Hitbox_Range.md)을 함께 적용했습니다. [최신 수동 QA](CORRECTION_QA.md)를 먼저 따릅니다.
 
 ## 1. 구현 내용
 
-World의 `Greenwood Outskirts_PLACEHOLDER`에 Config 기반 Hornboar 슬롯 2개와 V1 나무·바위·덤불·풀·그루터기·표지판을 배치했습니다. 일반 플레이어가 파티 없이도 같은 개체를 공격할 수 있습니다. SpawnZone/MaxAlive/RespawnDelay/MonsterId로 생성하며 매번 새 EncounterId를 사용합니다.
+기존 Body/Horn query 뒤에 박스 중심만 range/arc로 검사하던 부분을 실제 **전방 sector와 upright oriented box의 교차 표면** 검사로 바꿨습니다. 탐색 broadphase는 box, 최종 검증은 원형 reach/두 angular boundary/수직 제한과 서버 LOS입니다. 돌아온 표면점에도 CombatService의 거리/arc 검증을 유지합니다. Root가 뒤에 있는 몬스터는 별도 제외하며 client가 hit/damage/part를 지정하지 못합니다.
 
-Starter Cleaver Basic 3연타·콤보 timeout reset·느린 Heavy/높은 PartPower·짧은 위치 Dodge/cooldown을 구현했습니다. PC M1/Q/F/I, Touch 3개 버튼, Gamepad R2/X/B를 같은 action abstraction으로 처리합니다. Space·Gamepad A 점프·Shift Lock은 유지합니다. 자동 공격·stamina·i-frame 의존은 없습니다. 약한 facing/target assist만 제공합니다.
+Body: center `(0,2.65,-0.55)`, size `(5.6,4.7,10.6)`. 긴 torso·shoulder·neck·head·leg gap을 포함하며 시각보다 약간 관대합니다. Horn: center `(0,4.45,-5.25)`, size `(2.75,2.9,4.5)`로 root/forward tip을 포함합니다. 서버에서 유효한 접촉만 모은 뒤 Horn을 우선하여 body center 밖의 올바른 Horn hit가 사라지지 않습니다. 공격당 encounter 한 번, 뿔 파괴 즉시 query false를 유지합니다.
 
-서버가 actor·소유/장착 무기·살아 있음·World/travel 상태·rate/sequence·공격 window·range/arc·명시적 hitbox·line-of-sight를 검증합니다. 클라이언트는 Sequence/AttackType/선택 Facing·TargetHint만 전송합니다. 동일 공격의 Body/Horn 겹침은 개체당 한 번 처리합니다.
+Basic reach **5.8 studs / 96°**, Heavy **6.8 / 108°**, Heavy PartPower 55를 Config/TODO_BALANCE로 둡니다. 약한 assist는 화면에 보이는 전방 가까운 surface를 hint로 고르고 서버가 다시 검사합니다. assist 최대 12°, 전체 facing correction 최대 18°이며 lock-on/자동 공격은 없습니다.
 
-Hornboar는 Humanoid 없이 Idle/Roam/Alert/Chase/Windup/Attack/Recover/Stagger/Dead 상태를 사용합니다. Headbutt와 방향 고정/예고 있는 Charge, 별도 Body HP/Horn HP, 뿔 파괴·stump 전환·horn query 비활성, death/despawn/respawn을 연결했습니다. 서버 돌진과 Dodge는 장애물 검사로 이동을 제한합니다.
+## 2. 코드 변경 / 변경 파일
 
-의미 있는 Body/Part damage의 최근 기여자별 독립 loot입니다. Meat 보장, Fat common/uncommon, Loin rare, 파괴 당시 기여자 Core를 지급합니다. 마지막 타격/Party 소속/근처 AFK로 독점하거나 무임승차하지 않습니다. Gold 드롭이나 물리 pickup은 없습니다. 최초 재료/기여자 Hornboar 처치 flags와 Analytics BindableEvent hook을 제공합니다.
+- `HuntingHitGeometry`: sector/OBB surface contact·Horn priority·near-surface aim·Studio debug gate. `HuntingMath`: bounded turn 및 경계 부동소수점 보정.
+- `CombatService`: action별 reach/arc, bounded server assist, rear target 제외, trusted hit의 위치/AttackType 추가. 기존 sequence/rate/weapon/alive/window/once 검증 유지.
+- `MonsterService`: accepted-hit Reaction/Part/Heavy를 표시 event로 추가, Light/Horn/Heavy/Break 구분 및 Heavy 0.24초 stagger. 기여/보상/receipt IDs·Core/Death 지급 계약 유지.
+- `HuntingRuntime`/`CombatDebugView`: volume 접촉/LOS, 서버 확정 feedback, 실제 attack window attrs, Studio flag + IsStudio 이중 debug gate. 기본 false·Published 강제 비표시.
+- `CombatAnimation`/`HuntingAnimation`/`HuntingAnimator`: torso/root·waist·neck·양팔·elbow/wrist·cleaver, 네 다리/하퇴, distinct reactions/Death.
+- `HuntingHitFeedback`/`CombatPresentationConfig`: Body/Horn 다른 spark·pitch/volume, Heavy 강화, death particles. Miss는 server hit event가 없어 효과도 없음.
+- `HornboarMeshVisual`/`shared/Assets/HornboarMeshData`: 실제 Blender topology를 MeshParts로 표시, cache/streaming 재사용, 구형 sphere fallback 제거.
+- `art/blender/redesign_hornboar.py`, `hornboar_design.py`, export/data/runtime/manifest/FBX/GLB/blend/previews/audio: 실제 모델 교체와 재현 pipeline.
+- `CombatReadability.spec` 신규 28그룹; `HuntingIntegration.spec`의 contact fixture를 점에서 실제 box 계산으로 교체. 기존 8개 시나리오/보상 assert는 유지.
+- 최신 QA/지침/README/본 보고/이전 보고 archive, artifact validator 보강.
 
-기존 Ingredients/Materials numeric stack에 DataService.Update로 증가와 HuntingReceipt를 원자 저장합니다. roll은 한 번 고정하고 실패 시 재시도합니다. 지급 성공 후 개인 알림·재료 pop/move/fade가 발생합니다. 가방에는 두 탭·아이콘 placeholder·이름·수량을 표시합니다. 정상 종료 전 bounded flush를 추가했습니다.
+## 3. 제작한 Asset / Asset별 상태
 
-## 2. 브랜치 / PR
+기존 구형 중심 Hornboar는 승인된 V1로 취급하지 않고 제거했습니다. 새 모델은 authored longitudinal mesh cross-sections로 만든 가로로 긴 torso·큰 어깨/낮은 후면·작고 무거운 head·protruding snout·작은 귀/낮은 눈·Upper→Lower→Hoof 네 다리입니다. 이마에서 굵게 시작해 앞/위로 휘고 가늘어지는 ivory Horn, 별도 stump, 절제한 magic accent를 사용합니다.
 
-사용자 승인으로 Foundation [PR #1](https://github.com/wnfpvm13/Gameproject1/pull/1)을 main에 병합했습니다. 기준 merge SHA는 `a8b3ad0fbd9beda30a1e73dfa84affc58c805648`이며 이 기준의 176개 테스트를 먼저 검증했습니다.
+`MON_Hornboar_V1`: **재설계 V1 candidate, Studio 시각 승인 대기**. Cleaver 및 기존 재료 4종/환경 10종은 이전 V1 상태를 유지합니다. Source Close/Medium/Far/AvatarScale renders를 실제 생성·확인했습니다. 이 renders는 Studio 화면이 아닙니다. [Art 보고](art/README.md)에 구분합니다.
 
-공통 계약 커밋에서 `feature/combat`, `feature/monsters`, `feature/inventory`를 나눠 해당 순수 서비스와 테스트를 구현하고 `integration/hunting`에 merge했습니다. 최종 Roblox 어댑터·클라이언트·아트·통합 hardening은 integration에 있습니다. 검토용 [Draft PR #2](https://github.com/wnfpvm13/Gameproject1/pull/2)는 integration/hunting → main입니다. Phase 1 PR은 자동 병합하지 않습니다.
+Body/Horn/Heavy original WAV도 생성했습니다. 현재 game sound는 업로드 ID 없이 동작하는 built-in landing sample의 pitch/volume를 구분하며, authored WAV의 Roblox 업로드는 미수행입니다.
 
-## 3. 코드 변경 / 변경 파일
+## 4. Triangle / Rig / Runtime 표현
 
-- `src/server/Services/{CombatService,MonsterService,LootService,InventoryService}.luau`: 전투·AI/기여도·고정 roll/재시도·원자 stack/receipt.
-- `src/server/Adapters/{HuntingRuntime,HuntingAssetBinder,GreenwoodField}.luau`: 인증/API 주입·서버 physics·개인 network·모델 binding·필드.
-- `src/server/Foundation.server.luau`: additive World startup 및 profile release 전 flush hook.
-- `src/shared/Config/{HuntingConfig,HuntingUIStyle,GreenwoodConfig,Definitions,Registry}.luau`: TODO_BALANCE, stable catalog 확장·validation·presentation 상수.
-- `src/shared/Types/{Hunting,PlayerData}.luau`, `Remotes/Definitions.luau`, `Utilities/{HuntingMath,HuntingContracts,HuntingPresentation,HuntingAnimation,PlayerDataDefaults}.luau`: 새 계약·별도 network·순수 geometry/input/layout·기존 starter 설명.
-- `src/client/Controllers/Hunting*.luau`: 입력·HUD·inventory·개인 visual·서버 timestamp 기반 pose.
-- `tests/{CombatService,MonsterService,LootService,InventoryService,HuntingContracts,HuntingPresentation,HuntingIntegration}.spec.luau`: 신규 112개 그룹.
-- `art/`: 실제 제작 source/export/runtime 16세트, 측정 manifest·reimport 결과·4개 render.
-- `default.project.json`, `.gitignore`, `tools/validate_hunting_artifacts.py`: 모델 포함·native 모델 추적·빌드 serialization 검증.
-- README/본 보고/HUNTING_QA/설계 DATA_SCHEMA·TECH_ARCHITECTURE/첨부 지침·공통 계약·과거 보고 archive.
+새 Hornboar **4,248 triangles**, 44 source objects, **14 bones**. Duplicate vertices/zero-area bevel faces를 정리하고 모든 exported face의 면적·index·palette·source SHA를 검증했습니다. 3,000–6,000 budget을 만족합니다. Cleaver는 기존 2,168 triangles입니다.
 
-기존 DataService·PartyService·SessionService·ExpeditionService·PartyHUD 파일과 기존 테스트 파일은 main 기준과 바이트 동일합니다. 새로운 network는 MonCookHuntingNetwork이고 기존 Foundation remote/payload는 유지합니다. 다른 게임의 파일은 변경하지 않습니다.
+Hornboar source/FBX의 Root/Spine/Neck/Head/4 upper legs/4 shins/Horn/Tail hierarchy를 보존했습니다. 서버 runtime은 14 invisible rig/root BaseParts + 2 gameplay hitboxes입니다. Visual은 client가 생성하는 14 MeshPart groups입니다. 각 group의 vertex/triangle/color는 실제 `.blend`에서 추출했으며 JSON→Luau packet equality/source hash를 확인했습니다. sphere/Part silhouette가 재등장하지 않는 검사도 추가했습니다.
 
-## 4. 제작한 3D Asset
+`.rbxlx`는 skeleton과 실제 topology/loader를 포함합니다. **MeshParts는 Play 시 EditableMesh API로 생성하며, 생성된 MeshParts를 이미 Studio에서 검증한 것으로 보고하지 않습니다.** API 메모리/권한/버전 실패 시 prototype로 대체하지 않고 Output과 모델 로드 실패 표시로 QA 보류를 알립니다. Published API는 Roblox의 활성화/소유·인증 조건이 필요하거나 소유한 imported mesh로 교체해야 합니다. 업로드된 mesh IDs는 없습니다.
 
-실제 Blender 4.3.2에서 생성·저장·FBX/GLB export 후 **16개 FBX를 재가져와 검증**했습니다. 단순 생성 script만으로 완료 처리하지 않았습니다.
+## 5. Animation / Hit feedback
 
-Hornboar, Starter Cleaver, HornboarMeat/ArcaneFat/MarbledLoin/HornCore, Tree A/B/C, Rock A/B/C, Bush/Grass/Stump/Sign입니다. `.blend`/FBX/GLB 각 16개와 대응 `.rbxmx` 모델 16개를 보존했습니다. [에셋 보고](art/README.md)에 각 파일·triangle·native part 수·재현 명령을 기록했습니다.
+Basic1 right→left 횡베기, Basic2 반대 방향, Basic3 overhead, Heavy 긴 windup/양팔 support/큰 torso 회전과 weight shift, Dodge lean을 구현했습니다. 캐릭터의 grip만 돌리는 이전 방식 대신 RootJoint/Waist/Neck/Shoulders/Elbows/Wrist/Grip에 additive poses를 적용합니다. R6/R15 rest axes를 retarget하고 PreAnimation에서 이전 delta를 제거한 뒤 PreSimulation에서 기본 Animator pose 위에 적용합니다.
 
-`.rbxlx`에는 바로 열 수 있는 **native Part/WedgePart V1 equivalents**를 포함했습니다. Blender 메시가 이미 Roblox에 import/upload된 것으로 보고하지 않습니다. Root/Visual/Gameplay/rig와 Binding tag를 분리하여 후속 mesh 교체가 AI·보상 코드를 바꾸지 않도록 합니다.
+서버가 보낸 Start/HitStart/HitEnd/End timestamp를 같은 Windup→Hit→Recover 함수에 사용합니다. Client Animation은 damage를 결정하지 않습니다. 실제 blade 최대 reach와 최초 damage의 화면 동기화는 Studio로 최종 판정해야 합니다.
 
-## 5. Asset별 상태
+Hornboar source/실제 FBX reimport에 **13 actions**: Idle/Walk/Run/Alert/ChargeWindup/Charge/Headbutt/LightHit/HeavyHit/HornHit/HornBreak/Stagger/Death. Runtime은 joints를 state/time/reaction으로 pose합니다. Source action의 uploaded AnimationTrack playback을 주장하지 않습니다.
 
-16개 모두 **V1**, Final은 없습니다. Hornboar/Cleaver는 `_V1` 실제 game model이며 greybox-only 상태로 끝내지 않습니다. 재료/환경도 V1입니다. 테스트 필드 이름만 지침대로 `_PLACEHOLDER`를 유지합니다. Inventory 아이콘과 custom SFX는 placeholder입니다. 전체 asset별 표는 [art/README.md](art/README.md)를 참조합니다.
+Body는 warm spark·short flinch, Horn은 cyan thin spark·head recoil, Heavy는 큰 spark/recoil와 short stagger, HornBreak는 강한 head recoil·intact→stump·VFX를 사용합니다. Death는 쓰러짐·밝은 particles·fade 뒤 despawn입니다. 개인 loot cosmetic만 recoil/death가 시작된 뒤 표시하며 서버 지급/receipt 시점은 유지합니다.
 
-## 6. Triangle 수 / Rig 상태
+## 6. 테스트 결과
 
-Hornboar: **5,888 source triangles**, 58 mesh objects, ten bones, native **86 BaseParts + 2 hitboxes**. Cleaver: **2,168 source triangles**, 21 mesh objects, native 22 BaseParts. 두 source budget 모두 만족합니다. Meat/Fat/Loin/Core는 각각 504/504/1,044/240 triangles입니다. Native parts의 rendering 비용은 이 source triangle 값과 별개입니다.
+**316개 그룹 PASS = 기존 288개 시나리오 + 신규 28개**. 기존 Foundation 176개 테스트 파일은 merge baseline과 바이트 동일합니다. 기존 Phase 1 보상 통합 8개 시나리오는 유지하고 기존 center-only contact fixture만 실제 box geometry로 갱신했습니다.
 
-Hornboar bones는 Root/Spine/Neck/Head/4 legs/Horn/Tail이고 FBX reimport에서 모두 확인했습니다. Native rig는 ten joint nodes와 nine Motor6Ds입니다. 각 visual의 combat collision은 껐으며 별도 Body/Horn hitbox를 서버가 생성합니다. 모델 내부 경로 대신 stable Binding으로 intact/broken horn과 joints를 찾습니다.
+신규 검증: center가 범위/각도 밖인 surface/shoulder/flank, exact max range/외부, 뒤·옆·수직/diagonal broadphase corner, rotated box/inside/tangent, front/diagonal Horn, Horn priority/파괴 후 Body, Basic/Heavy 차이, Debug default/Release gate, 다수 box의 contact 범위 불변식, bounded mirrored assist/near-surface, rear overlapping target, 뿔 옆 Body, 서버 Heavy window, 3 combo full-body 차이/Heavy 양팔/rest/Dodge, distinct recoil/accepted hit only/duplicate.
 
-## 7. Animation 상태
+Official Luau 0.741: **79개 syntax compile PASS**, 순수 모듈/테스트 strict 분석 PASS. Blender 4.3.2: 실제 16개 FBX reimport PASS, 새 Hornboar 4,248/14 bones/13 actions 확인. Rojo 7.7.1: **56개 runtime script/module 경로·타입·소스 일치**, 16 asset source/export·native skeleton/binding·정확한 topology/index/면적/palette/Body·Horn bounds·원본 회귀 보존 PASS.
 
-Blender source와 실제 FBX reimport에 Idle/Walk/Run/Alert/ChargeWindup/Charge/Headbutt/HitReact/Stagger/Death ten actions가 있습니다. Source vertex rig binding도 확인했습니다.
+실행 중 발견한 퇴화 face와 생성 데이터의 type complexity는 topology 정리/JSON packet으로 해결했습니다. 최종 검증에는 남은 실패가 없습니다. Roblox API의 실제 실행/클라이언트 이벤트·physics는 위 offline 결과와 구분합니다.
 
-현재 game model은 서버 state/time을 읽는 client Motor6D procedural V1 poses와 Cleaver grip swing을 사용합니다. Uploaded FBX AnimationId playback은 구현/검증 완료로 주장하지 않습니다. Close/Medium/Far Hornboar와 Cleaver source renders를 실제 생성·시각 확인했습니다. 이 이미지는 Studio 화면이 아닙니다.
+## 7. 실제 Studio 미검증 / acceptance
 
-## 8. Studio 테스트 결과 / 실패·미검증 / 알려진 문제
+이 환경에서는 Studio 연결이 없습니다. 사용자 피드백은 수정 전 실제 플레이 결과이며, 수정 후 검증으로 간주하지 않습니다. [CORRECTION_QA.md](CORRECTION_QA.md)의 hit 12항목과 animation/art 18항목, 2–4인·R6/R15·Touch/Gamepad·attack timing·EditableMesh 생성/메모리/streaming·새 실루엣·Body/Horn feedback를 실제 실행해야 합니다.
 
-**Studio 연결이 없어 실제 엔진 플레이를 실행하지 못했습니다.** 2–4인 동시 사냥/개인 loot, Touch/Gamepad 실제 조작, R6/R15 grip, animation/hitbox/telegraph 동기화, broken horn visual, 모바일 세로/가로·Chat/PlayerList/Safe Area·streaming/performance, Published persistence는 [HUNTING_QA.md](HUNTING_QA.md)에 미검증으로 남깁니다. 이 확인 전 Phase 1 acceptance 완료를 선언하지 않습니다.
+특히 새 geometry packet/loader의 API 성공 여부, 첨부 재설계 시각 승인, 실제 무기/box 타이밍, built-in Horn sound의 읽힘, mobile 성능은 미검증입니다. **Phase 1 acceptance 완료를 선언하지 않습니다.**
 
-- Native Horn hitbox는 server root에 고정된 근사 box여서 animated horn과의 차이를 Studio에서 측정해야 합니다. Native part 수와 원거리 실루엣도 모바일에서 확인해야 합니다.
-- AI는 단순 추적/장애물 blockcast로 벽에서 막힐 수 있습니다. 새로운 pathfinding 시스템은 추가하지 않았습니다.
-- Custom hit/break SFX는 placeholder입니다. Horn break particle VFX는 포함했습니다. Imported mesh/material/rig·uploaded animations·asset ownership은 후속 Art QA입니다.
-- 미확정 reward queue는 서버 메모리입니다. 성공한 grant는 durable receipt로 중복 방지하지만, 저장 장애/정상 종료 timeout/프로세스 강제 종료 시 미확정 보상이 유실될 수 있습니다. 정상 종료에는 release 전 최대 5초 flush를 시도합니다.
-- Analytics는 hook/첫 flags만 준비했습니다. 실제 외부 전송·대시보드·전투 balance는 미완료입니다.
-- 기존 Published Place IDs 0/실제 teleport·Expedition actual combat 제한과 Restaurant skeleton은 유지합니다. Windows PC에 직접 복사하지 못했습니다. 요청 지침에 따라 새 전체 소스 ZIP은 생성하지 않습니다.
+## 8. 알려진 문제 / TODO
 
-## 9. 자동 테스트 수 / 검증 결과
+- API 미지원/메모리 부족이면 새 Hornboar visual을 만들 수 없습니다. Source FBX import/owned mesh replacement 또는 API 설정 후 실제 재검증이 필요합니다. 구형 sphere fallback은 없습니다.
+- Source rig와 runtime rigid MeshPart/Motor6D visual 사이의 변형·R6/R15 retarget 품질은 실제 장면에서 확인합니다. Source imported skinned-animation playback은 별도 후속 작업입니다.
+- Box는 현재 pose의 conservative root-relative approximation입니다. Horn recoil 중 visual 차이를 QA로 측정하고 필요하면 Config/Binder 범위 안에서 조정합니다.
+- Basic/Heavy 값은 TODO_BALANCE입니다. 낮은 frame rate/latency에서 window readability·mesh cache/mobile memory·streaming을 확인합니다.
+- Authored WAV/audio IDs 및 최종 Horn impact tone은 추가 Art QA입니다. 현재 작은 소리는 builtin fallback이고 source만 만들어 놓은 무음 상태는 아닙니다.
+- 기존 단순 AI 장애물 정체, 미확정 server-memory loot queue의 강제 종료/장기 저장 장애 유실 가능성, Published IDs/real teleport 미검증은 유지합니다. DataService/Inventory/Loot 경제 계약을 이번 수정으로 바꾸지 않았습니다.
 
-- **288개 그룹 PASS = 기존 176 + 신규 112**. 기존 모든 테스트 파일 바이트 보존 검증 PASS.
-- 신규: Combat 24, Monster 24, Inventory 19, Loot 16, Contracts 13, Presentation 8, Integration 8.
-- Official Luau 0.741: **71개 Luau 파일 syntax compilation PASS**, 순수 모듈/테스트 strict 분석 PASS. Roblox API가 필요한 controller/adapter의 엔진 타입·실행은 별도입니다.
-- 실제 순수 서비스 통합으로 2 contributor horn/core/death/독립 loot/persistence/duplicate/dead/respawn·늦은 contributor·장애물·저장 실패·ack 유실·yield 중 재진입을 검사했습니다. 이 결과는 Roblox physics 실행을 대신하지 않습니다.
-- Blender 4.3.2: 16개 실제 FBX reimport, triangle/object·rig/actions·vertex binding PASS; source render 4개 생성/확인.
-- Rojo 7.7.1: Studio QA place build PASS. 16개 native model/reference/rig binding, **49개 runtime script/module 경로·타입·소스 일치**, 기존 테스트 보존 PASS.
-- 직접 작성한 코드·문서의 git diff 공백 검사 PASS. 원본 첨부 두 문서는 CRLF/Markdown 줄바꿈을 바이트 그대로 보존하여 검사에서 제외했습니다. 공유 source mirror를 `/workspace/shared/MonCook`에 갱신했습니다. 최종 `MonCook_Phase_1_Hunting.rbxlx` SHA256: `c51e7c8d9cce5453dfd54b8a42304c0d9acb903f56531b5c000b99b9f6d0d286`. 원본 소스와 mirror 파일 바이트 일치를 확인했습니다.
+## 9. 산출물
 
-## 10. 남은 Art TODO / TODO / Phase 2·다른 브랜치 영향
+[Draft PR #2](https://github.com/wnfpvm13/Gameproject1/pull/2)를 갱신합니다. 공유 폴더 `/workspace/shared/MonCook`에 최신 source/art/docs 및 `MonCook_Phase_1_Correction.rbxlx`를 보관합니다. 이전 파일도 보존하되 이번 수동 QA는 Correction 파일을 사용합니다. 전체 소스 PC 설치 ZIP은 만들지 않습니다. Windows C: 직접 복사는 미수행입니다.
 
-우선 HUNTING_QA 15항목·2–4인·PC/Touch/Gamepad·뿔/리그/판정/성능을 실제 Studio에서 확인합니다. 실패 시 Phase 1만 수정합니다. 이후 필요하면 Blender mesh/animation upload, primitive 비용 개선, custom SFX·최종 icon, V2/Final art를 계획합니다. 현재 수치는 전부 TODO_BALANCE입니다.
+최종 place SHA256은 공유 `.sha256` 파일에 기록합니다. 소스 mirror와 원본 파일 바이트 일치 검증 후 전달합니다.
 
-Phase 2는 동일 ingredient IDs/stack bucket·server-only mutation·receipt와 RecipeConfig를 재사용할 수 있습니다. Cooking 소비나 Restaurant 매출은 아직 추가하지 않았습니다. Owned weapon instance 계약·Binding 기반 asset 교체·SpawnZone·low contribution 정책을 유지해야 합니다. 새 몬스터는 Config/binder를 확장할 수 있지만 이 Phase에서 구현하지 않습니다.
+## 10. 다른 브랜치 / Phase 2 영향
 
-기존 공통 Config key는 유지하고 Combat/Spawn/Hunting family 및 선택적 HuntingReceipts를 추가했습니다. SchemaVersion 1 및 기존 migration/Restaurant escrow/SettlementReceipts/경제 계약은 그대로입니다. Foundation startup/release hook을 수정하는 후속 브랜치는 사냥 flush 순서를 유지해야 합니다. Phase 1 feature branches는 서비스 단위 snapshot이고 최종 integration adapters/presentation을 함께 병합해야 합니다.
+변경은 MonCook/에만 있습니다. DataService·InventoryService·LootService·Party/Session/Expedition·Foundation core와 경제/저장/migration/receipt/remote intent fields는 유지합니다. Monster presentation event/optional hit metadata, Heavy short stagger, action reach/arc와 선택적 geometry injection만 확장합니다. 기존 feature 서비스 snapshot보다 최종 integration/hunting adapter/mesh/animation이 우선합니다.
 
-**Phase 1 구현 보고 상태에서 멈춥니다. Studio acceptance와 PR review/merge는 후속 판정이며 Phase 2 개발은 시작하지 않습니다.**
+후속 mesh 교체는 Root/Joint/Visual/HornIntact/HornBroken Binding과 server hitbox 계약을 보존해야 합니다. Cooking/Restaurant·새 몬스터·Expedition 실제 전투·Quick Match/Phase 2는 시작하지 않습니다. **수정 결과와 새 Studio 파일을 제공한 뒤 멈춥니다.**

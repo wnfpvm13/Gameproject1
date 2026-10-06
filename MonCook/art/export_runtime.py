@@ -1,6 +1,7 @@
 """Build native Roblox .rbxmx V1 equivalents from the authored shape specification.
 
-This path needs no uploaded mesh/animation IDs. It preserves rig joints, authored
+Hornboar is a skeleton only; its actual Blender topology is supplied by the mesh packet.
+The other assets use native visual primitives. This path needs no uploaded mesh/animation IDs. It preserves rig joints, authored
 palette, named intact/broken horn bindings and separate visual geometry. Gameplay
 hitboxes are added by the runtime binder from Config, not from mesh collision.
 """
@@ -136,6 +137,11 @@ def build(asset_id, asset):
         count += len(parts)
         for part in parts:
             writer.weld(part, bones.get(spec["bone"], root), part)
+    if asset_id == "MON_Hornboar_V1":
+        for state in ("HornIntact", "HornBroken"):
+            writer.binding(writer.item(visual, "Folder", state), state)
+        source = writer.item(model, "StringValue", "VisualSource")
+        writer.property(source, "string", "Value", "BlenderMeshData:MON_Hornboar_V1")
     # Binding-based Gameplay hitboxes are configured by the runtime, intentionally absent in art.
     writer.binding(gameplay, "GameplayContainer")
     path = ART / "runtime" / asset["family"] / f"{asset_id}.rbxmx"
@@ -150,7 +156,7 @@ def main():
     for asset_id, asset in catalog().items():
         counts[asset_id] = build(asset_id, asset)
     path = ART / "runtime_manifest.json"
-    path.write_text(json.dumps({"representation": "native Roblox primitive V1 equivalents", "baseparts": counts}, indent=2)+"\n")
+    path.write_text(json.dumps({"representation": "native props/weapon; Hornboar authoritative skeleton + embedded Blender topology, runtime MeshParts", "baseparts": counts}, indent=2)+"\n")
     print(f"Native Roblox model generation: {len(counts)} assets, {sum(counts.values())} template BaseParts.")
 
 

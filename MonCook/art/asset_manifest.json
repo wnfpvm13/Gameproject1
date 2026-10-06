@@ -3,9 +3,9 @@
   "assets": {
     "MON_Hornboar_V1": {
       "family": "Monsters",
-      "status": "V1",
-      "blender_triangles": 5888,
-      "objects": 58,
+      "status": "V1_CANDIDATE",
+      "blender_triangles": 4248,
+      "objects": 44,
       "bones": [
         "Root",
         "Spine",
@@ -15,6 +15,10 @@
         "FrontLeg_R",
         "BackLeg_L",
         "BackLeg_R",
+        "FrontShin_L",
+        "FrontShin_R",
+        "BackShin_L",
+        "BackShin_R",
         "Horn",
         "Tail"
       ],
@@ -26,11 +30,14 @@
         "ChargeWindup",
         "Charge",
         "Headbutt",
-        "HitReact",
+        "LightHit",
+        "HeavyHit",
+        "HornHit",
+        "HornBreak",
         "Stagger",
         "Death"
       ],
-      "runtime_representation": "native Roblox primitive equivalent; not an imported mesh",
+      "runtime_representation": "actual Blender vertex/triangle data, client EditableMesh MeshParts; Studio execution pending",
       "source": "blender/Hornboar/MON_Hornboar_V1.blend",
       "fbx": "exports/Monsters/MON_Hornboar_V1.fbx",
       "glb": "exports/Monsters/MON_Hornboar_V1.glb"

@@ -2,9 +2,17 @@
 
 사용자는 기존 Phase 0.8 파티 기능이 Studio에서 정상 동작한다고 확인했습니다. 이번 UI Polish의 화면·입력은 이 환경에서 Studio를 실행하지 못해 미검증입니다. 아래 수동 판정을 별도로 기록합니다. 기존 기능 QA 절차도 보존합니다.
 
+## 최종 Drag Clamp 수동 판정
+
+1. 최신 `MonCook_Phase_0_8_Final.rbxlx`로 시작합니다. 기본 자동 위치가 기존 Chat/PlayerList·TopBar·Safe Area 회피를 유지해야 합니다.
+2. PC 마우스와 Touch 손잡이로 Chat 창 위, PlayerList 위에 각각 놓습니다. 원하는 위치로 이동되고 놓은 뒤 1초 이상 기다리거나 파티 상태가 갱신되어도 자동으로 밀려나지 않아야 합니다.
+3. 화면 네 모서리 밖으로 드래그합니다. 패널과 손잡이·펼치기 버튼이 필수 Safe Area 안에 남아야 합니다. 버튼 동작·크기·색·Finder·ReadyCheck는 기존과 같아야 합니다.
+4. 작은 창·모바일 세로/가로로 resize합니다. 수동 상태가 자동 배치로 전환되고 접근 가능한 위치에서 Chat/PlayerList 회피를 적용해야 합니다. 이후 새 드래그로 다시 겹쳐 놓을 수 있어야 합니다.
+5. 드래그 중 회전/resize·포커스 이탈·메뉴 열기에서 입력이 끝나고 숨긴 HUD가 정상 복구되는지 확인합니다. 수동 선택의 CoreUI 겹침과 자동 위치의 겹침을 구분해 판정합니다.
+
 ## UI Polish 수동 판정
 
-1. 최신 `MonCook_Phase_0_8_UI_Polish.rbxlx`로 시작하고 Debug 기본 false를 확인합니다. 밝은 텍스트·반투명 웜브라운 배경 뒤에 게임 화면이 보이는지 확인합니다.
+1. 최신 `MonCook_Phase_0_8_Final.rbxlx`로 시작하고 Debug 기본 false를 확인합니다. 밝은 텍스트·반투명 웜브라운 배경 뒤에 게임 화면이 보이는지 확인합니다.
 2. 공개 Finder 카드가 낮은 두 줄 형태이며 모집 상태 오른쪽에 44px 이상의 참가 버튼이 있는지 확인합니다. 긴 한국어/영문 이름·목표, 만원·활동 중·현재 파티 소속의 비활성 상태를 확인합니다.
 3. PC Hover는 밝아지고 Pressed는 진해지며 밖에서 놓기/창 포커스 이탈 후 복구되어야 합니다. Disabled는 구별되고 클릭해도 동작하지 않아야 합니다. Touch와 Gamepad 선택/누름도 확인합니다.
 4. 접힌 HUD가 최대 4명 세로 얼굴 스택인지, 좁은 화면에서 가로폭이 줄고 펼치기 44px 버튼이 명확한지 확인합니다. 공간이 부족하면 멤버 영역을 세로 스크롤합니다.
@@ -15,7 +23,7 @@
 
 ## Studio 파티 UX
 
-1. `MonCook_Phase_0_8_UI_Polish.rbxlx`를 열거나 `default.project.json`을 Rojo로 연결합니다. `Testing.UseFakeTeleport = true`, `Testing.ShowFoundationDebugUI = false`로 시작합니다.
+1. `MonCook_Phase_0_8_Final.rbxlx`를 열거나 `default.project.json`을 Rojo로 연결합니다. `Testing.UseFakeTeleport = true`, `Testing.ShowFoundationDebugUI = false`로 시작합니다.
 2. **Server & Clients**에서 2–4개 클라이언트를 시작합니다. 서버 준비 로그와 우측 상단 파티 HUD가 보이고 큰 Debug UI와 Party ID 입력칸은 숨겨져야 합니다. 기본 seed는 HornboarMeat 5개·Salt 5개입니다.
 3. 호스트가 공개 파티를 만듭니다. 다른 클라이언트의 Finder에 Activity·Target·호스트·인원/4 카드가 보이고 참가 버튼으로 가입되어야 합니다. 5개 클라이언트로 최대 4인 제한을 확인합니다.
 4. 공개/비공개를 바꿉니다. 비공개는 Finder에서 사라져야 합니다. 같은 서버 플레이어에게 초대하고 수락/거절·만료·중복·정원 초과를 확인합니다. 오래된 초대나 다른 사용자의 초대는 사용할 수 없어야 합니다.
@@ -56,4 +64,4 @@ Published Expedition은 진입을 차단합니다. 지역별 Place 연결, 서�
 python tools/run_foundation_tests.py
 ```
 
-공식 Luau 0.741로 43개 파일 문법 컴파일·순수 모듈 strict 분석과 기존 141개를 포함한 169개 테스트 그룹을 확인했습니다. 이는 Roblox 엔진 실행 결과가 아닙니다. 실제 QA 날짜·Place ID·클라이언트 수·Output 근거와 판정을 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)에 추가합니다.
+공식 Luau 0.741로 44개 파일 문법 컴파일·순수 모듈 strict 분석과 기존 169개를 포함한 176개 테스트 그룹을 확인했습니다. 이는 Roblox 엔진 실행 결과가 아닙니다. 실제 QA 날짜·Place ID·클라이언트 수·Output 근거와 판정을 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)에 추가합니다.

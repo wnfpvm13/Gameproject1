@@ -125,6 +125,7 @@ function PartyHUD.new(playerGui: PlayerGui, send: (string, any?) -> ())
 			local desired = drag.Origin + Vector2.new(input.Position.X, input.Position.Y) - drag.Start
 			local request = self:LayoutInput()
 			self.PositionPreference = Geometry.normalize(request, self.Panel.AbsoluteSize.X, self.Panel.AbsoluteSize.Y, desired.X, desired.Y)
+			self.ManualPlacement = true
 			self:Resize()
 		end
 	end)
@@ -133,7 +134,10 @@ function PartyHUD.new(playerGui: PlayerGui, send: (string, any?) -> ())
 	end)
 	UserInputService.WindowFocusReleased:Connect(function() self.Drag = nil end)
 	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() self.Drag = nil; self:Resize() end)
-	gui:GetPropertyChangedSignal("AbsolutePosition"):Connect(function() self:Resize() end)
+	gui:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+		self.Drag, self.ManualPlacement = nil, false
+		self:Resize()
+	end)
 	Players.PlayerAdded:Connect(function() self:Resize() end)
 	Players.PlayerRemoving:Connect(function() task.defer(function() self:Resize() end) end)
 	for _, property in { "TopbarInset", "MenuIsOpen" } do
@@ -179,7 +183,18 @@ function PartyHUD:LayoutInput(): any
 end
 
 function PartyHUD:Resize()
-	local metrics = Geometry.measure(self:LayoutInput())
+	local request = self:LayoutInput()
+	if Geometry.viewportChanged(self.LayoutViewport, request) then
+		self.Drag, self.ManualPlacement = nil, false
+	end
+	self.LayoutViewport = request
+	local metrics = Geometry.measure(request)
+	-- Keep existing responsive sizing; only the placement policy changes.
+	-- Polls, snapshots and release preserve the manual choice until a resize.
+	if self.ManualPlacement then
+		local dragged = Geometry.dragPlacement(request, metrics.Width, metrics.Height, self.PositionPreference)
+		metrics.Left, metrics.Top, metrics.Position, metrics.Policy = dragged.Left, dragged.Top, dragged.Position, dragged.Policy
+	end
 	local widthChanged = self.Metrics and self.Metrics.Width ~= metrics.Width
 	self.Metrics = metrics
 	self.DisplayExpanded = metrics.EffectiveExpanded

@@ -133,6 +133,21 @@ local function fallback(base: Rect, width: number, height: number, position: Pos
 		Position = normalized(base, actualWidth, actualHeight, left, top), Policy = "ChatSpaceFallback" }
 end
 
+-- Manual coordinates may overlap Chat/PlayerList. Keep the whole panel inside
+-- the essential viewport so the handle and expand control remain accessible.
+function Geometry.dragPlacement(input: Input, width: number, height: number, position: Position?): Placement
+	local result = fallback(viewport(input), math.max(0, finite(width)), math.max(0, finite(height)), position or input.Position)
+	result.Policy = "ManualSafeArea"
+	return result
+end
+
+function Geometry.viewportChanged(previous: Input?, current: Input): boolean
+	if not previous then return false end
+	local before, after = viewport(previous), viewport(current)
+	return before.Left ~= after.Left or before.Top ~= after.Top
+		or before.Right ~= after.Right or before.Bottom ~= after.Bottom
+end
+
 function Geometry.placement(input: Input, width: number, height: number, position: Position?): Placement
 	local base = viewport(input)
 	local desiredWidth, desiredHeight = math.max(0, finite(width)), math.max(0, finite(height))

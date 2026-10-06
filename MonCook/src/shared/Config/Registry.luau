@@ -2,7 +2,8 @@
 local definitions: any = require(script.Parent.Definitions)
 local Registry = {}
 local families = { "Region", "Monster", "Drop", "Ingredient", "Recipe", "Weapon", "Cookware",
-	"StaffRarity", "StaffTrait", "RestaurantLevel", "Customer", "Enhancement", "Economy", "WorldBlessing", "PartyTarget" }
+	"StaffRarity", "StaffTrait", "RestaurantLevel", "Customer", "Enhancement", "Economy", "WorldBlessing", "PartyTarget",
+	"Combat", "Spawn", "Hunting" }
 local categories = { Protein = true, Produce = true, Spice = true, Special = true, Material = true }
 
 local function expect(condition: boolean, path: string, message: string)
@@ -21,6 +22,9 @@ function Registry.validate(config: any?): boolean
 	end
 	local function reference(family: string, id: any, path: string)
 		expect(type(id) == "string" and catalog[family][id] ~= nil, path, "unknown " .. family .. " key " .. tostring(id))
+	end
+	local function positive(value: any, path: string)
+		expect(type(value) == "number" and value == value and value > 0 and value < math.huge, path, "requires positive finite number")
 	end
 	for id, region in catalog.Region do
 		expect(region.TravelMode == "Local" or region.TravelMode == "Teleport", "Region." .. id, "invalid TravelMode")
@@ -49,6 +53,11 @@ function Registry.validate(config: any?): boolean
 			local material = catalog.Ingredient[entry.IngredientId].Category == "Material"
 			expect(entry.InventoryBucket == (if material then "Materials" else "Ingredients"), path, "category/bucket mismatch")
 			expect(type(entry.Guaranteed) == "boolean", path, "Guaranteed must be boolean")
+			expect(type(entry.Chance) == "number" and entry.Chance >= 0 and entry.Chance <= 1, path, "invalid Chance")
+			expect(not entry.Guaranteed or entry.Chance == 1, path, "guaranteed drop requires Chance 1")
+			positive(entry.MinQuantity, path .. ".MinQuantity")
+			expect(entry.MinQuantity % 1 == 0 and type(entry.MaxQuantity) == "number" and entry.MaxQuantity >= entry.MinQuantity
+				and entry.MaxQuantity < math.huge and entry.MaxQuantity % 1 == 0, path, "invalid quantity range")
 		end
 	end
 	for id, monster in catalog.Monster do
@@ -59,7 +68,40 @@ function Registry.validate(config: any?): boolean
 			expect(type(entry) == "table", "Monster." .. id .. ".Parts." .. tostring(part), "part must be a table")
 			reference("Drop", entry.DropId, "Monster." .. id .. ".Parts." .. tostring(part))
 		end
+		positive(monster.MaxHealth, "Monster." .. id .. ".MaxHealth")
+		positive(monster.MoveSpeed, "Monster." .. id .. ".MoveSpeed")
+		positive(monster.HornHealth, "Monster." .. id .. ".HornHealth")
+		for attackId, attack in monster.Attacks do
+			local path = "Monster." .. id .. ".Attacks." .. attackId
+			for _, key in { "Windup", "Duration", "Damage", "Recover", "Range", "Radius" } do positive(attack[key], path .. "." .. key) end
+			expect(type(attack.HitStart) == "number" and attack.HitStart >= 0 and attack.HitStart <= attack.HitEnd
+				and attack.HitEnd <= attack.Duration, path, "invalid hit window")
+		end
 	end
+	for id, weapon in catalog.Weapon do
+		local path = "Weapon." .. id
+		expect(type(weapon.Basic) == "table" and #weapon.Basic == 3, path, "requires three-hit combo")
+		positive(weapon.Reach, path .. ".Reach")
+		positive(weapon.ArcDegrees, path .. ".ArcDegrees")
+		for _, attack in { weapon.Basic[1], weapon.Basic[2], weapon.Basic[3], weapon.Heavy } do
+			for _, key in { "Damage", "PartPower", "Windup", "Window", "Recovery" } do positive(attack[key], path .. "." .. key) end
+		end
+		expect(weapon.Heavy.PartPower > weapon.Basic[3].PartPower and weapon.Heavy.Damage > weapon.Basic[1].Damage,
+			path, "heavy must have higher damage and part power")
+	end
+	for id, zone in catalog.Spawn do
+		local path = "Spawn." .. id
+		reference("Monster", zone.MonsterId, path)
+		reference("Region", zone.RegionId, path)
+		expect(catalog.Region[zone.RegionId].ActivityMode == "Shared", path, "hunting spawn requires shared region")
+		for _, key in { "Radius", "MaxAlive", "RespawnDelay" } do positive(zone[key], path .. "." .. key) end
+		expect(zone.MaxAlive % 1 == 0 and type(zone.Center) == "table" and type(zone.Offsets) == "table"
+			and #zone.Offsets >= zone.MaxAlive, path, "invalid spawn slots")
+	end
+	positive(catalog.Hunting.Rewards.RetryLifetimeSeconds, "Hunting.Rewards.RetryLifetimeSeconds")
+	positive(catalog.Hunting.Rewards.ReceiptRetentionSeconds, "Hunting.Rewards.ReceiptRetentionSeconds")
+		expect(catalog.Hunting.Rewards.ReceiptRetentionSeconds > catalog.Hunting.Rewards.RetryLifetimeSeconds,
+		"Hunting.Rewards", "receipt retention must exceed retry lifetime")
 	for id, recipe in catalog.Recipe do
 		local path = "Recipe." .. id
 		expect(type(recipe.BasePriceGold) == "number" and recipe.BasePriceGold >= 0 and recipe.BasePriceGold < math.huge, path, "invalid BasePriceGold")

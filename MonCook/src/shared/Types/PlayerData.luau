@@ -45,5 +45,7 @@ export type PlayerData = {
 	AnalyticsFlags: Collection,
 	RestaurantSession: RestaurantSession?,
 	SettlementReceipts: { [string]: SettlementReceipt }?,
+	-- Additive Phase 1 receipts; existing v1 profiles need no destructive migration.
+	HuntingReceipts: { [string]: any }?,
 }
 return {}

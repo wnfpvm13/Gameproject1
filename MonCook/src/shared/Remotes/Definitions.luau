@@ -1,4 +1,6 @@
 --!strict
--- Remote intent contracts are added with their authoritative server handlers.
--- This foundation batch intentionally exposes no economic mutations to clients.
-return table.freeze({})
+-- Foundation's MonCookNetwork is unchanged. Hunting uses a separate transport.
+return table.freeze({
+	Hunting = table.freeze({ Folder = "MonCookHuntingNetwork", Intent = "Intent", State = "State", Changed = "Changed",
+		Actions = table.freeze({ "Basic", "Heavy", "Dodge" }) }),
+})

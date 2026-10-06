@@ -8,13 +8,18 @@ local StarterGui = game:GetService("StarterGui")
 local TextChatService = game:GetService("TextChatService")
 local RunService = game:GetService("RunService")
 local Presentation = require(ReplicatedStorage:WaitForChild("Shared").Utilities.PartyPresentation)
-local Layout = require(ReplicatedStorage:WaitForChild("Shared").Utilities.PartyHUDLayout)
+local Geometry = require(ReplicatedStorage:WaitForChild("Shared").Utilities.PartyHUDGeometry)
+local Style = require(ReplicatedStorage:WaitForChild("Shared").Config.PartyUIStyle)
+local ButtonStyle = require(script.Parent.PartyButtonStyle)
+local Theme = Style.Theme
 
 local PartyHUD = {}
 PartyHUD.__index = PartyHUD
-local INK = Color3.fromRGB(57, 42, 29)
-local CREAM = Color3.fromRGB(248, 239, 220)
-local GOLD = Color3.fromRGB(166, 112, 41)
+local function surface(item: GuiObject, name: string)
+	local value = Theme.Surface[name]
+	item.BackgroundColor3 = ButtonStyle.color(value.Color)
+	item.BackgroundTransparency = value.Transparency
+end
 local ACTIVITY = { Free = "자유", SharedHunt = "공용 사냥", Expedition = "원정", Restaurant = "식당" }
 local STATUS = { Forming = "모집 중", ReadyCheck = "이동 응답 중", InActivity = "활동 중", Closed = "종료" }
 -- The public API exposes PlayerList enablement, but not its panel bounds.
@@ -41,7 +46,7 @@ local function chatBounds(gui: ScreenGui): { any }
 			end)
 			if ok and enabled and size.X > 0 and size.Y > 0 then
 				local origin = position - gui.AbsolutePosition
-				table.insert(bounds, { Left = origin.X, Right = origin.X + size.X, Bottom = origin.Y + size.Y })
+				table.insert(bounds, { Left = origin.X, Top = origin.Y, Right = origin.X + size.X, Bottom = origin.Y + size.Y })
 			end
 		end
 	end
@@ -60,41 +65,74 @@ end
 local function label(parent: Instance, text: string, height: number): TextLabel
 	local item = Instance.new("TextLabel")
 	item.Size, item.BackgroundTransparency, item.Text = UDim2.new(1, 0, 0, height), 1, text
-	item.Font, item.TextSize, item.TextColor3 = Enum.Font.Gotham, 13, INK
+	item.Font, item.TextSize, item.TextColor3 = Enum.Font.Gotham, 13, ButtonStyle.color(Theme.Text.Primary)
 	item.TextWrapped, item.TextXAlignment, item.Parent = true, Enum.TextXAlignment.Left, parent
 	return item
 end
 
 function PartyHUD.new(playerGui: PlayerGui, send: (string, any?) -> ())
 	local self: any = setmetatable({ State = nil, Send = send, Expanded = false, Section = "main", Pending = false,
-		ChosenVisibility = "Public", ChosenTarget = nil, Status = "", Buttons = {} }, PartyHUD)
+		ChosenVisibility = "Public", ChosenTarget = nil, Status = "", Buttons = {}, Rows = {}, PositionPreference = nil }, PartyHUD)
 	local gui = Instance.new("ScreenGui")
 	gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset, gui.DisplayOrder = "MonCookPartyHUD", false, false, 5
 	pcall(function() gui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets end)
 	local panel = Instance.new("Frame")
-	panel.Name, panel.AnchorPoint, panel.Position = "CompactParty", Vector2.new(1, 0), UDim2.new(1, -12, 0, 12)
-	panel.BackgroundColor3, panel.BorderSizePixel, panel.ClipsDescendants, panel.Parent = CREAM, 0, true, gui
+	panel.Name, panel.AnchorPoint = "CompactParty", Vector2.new(0, 0)
+	panel.BorderSizePixel, panel.ClipsDescendants, panel.Parent = 0, true, gui
+	surface(panel, "Panel")
 	round(panel, 10)
-	local heading = label(panel, "파티", 20)
-	heading.Position, heading.Size, heading.Font = UDim2.fromOffset(10, 3), UDim2.new(1, -52, 0, 20), Enum.Font.GothamBold
+	-- This handle owns drag input. Action buttons never initiate a drag.
+	local handle = Instance.new("TextButton")
+	handle.Name, handle.Position, handle.Size = "DragHandle", UDim2.fromOffset(0, 0), UDim2.new(1, -44, 0, 44)
+	handle.Text, handle.Font, handle.TextSize = "⠿", Enum.Font.GothamBold, 13
+	handle.TextTruncate, handle.BorderSizePixel, handle.Parent = Enum.TextTruncate.AtEnd, 0, panel
+	ButtonStyle.bind(handle, true, "Subtle")
+	handle.Selectable = false
+	round(handle, 8)
 	local expand = Instance.new("TextButton")
-	expand.Name, expand.Text, expand.Font, expand.TextSize = "Expand", "＋", Enum.Font.GothamBold, 20
-	expand.AnchorPoint, expand.Position, expand.Size = Vector2.new(1, 0), UDim2.new(1, -3, 0, 2), UDim2.fromOffset(42, 42)
-	expand.BackgroundTransparency, expand.TextColor3, expand.Selectable = 1, INK, true
+	expand.Name, expand.Text, expand.Font, expand.TextSize = "Expand", "＋", Enum.Font.GothamBold, 22
+	expand.AnchorPoint, expand.Position, expand.Size = Vector2.new(1, 0), UDim2.new(1, 0, 0, 0), UDim2.fromOffset(44, 44)
+	expand.BorderSizePixel, expand.Parent = 0, panel
 	expand:SetAttribute("FocusKey", "Expand")
-	expand.Parent = panel
+	ButtonStyle.bind(expand, true, "Subtle")
+	round(expand, 8)
 	expand.Activated:Connect(function() self:Toggle() end)
-	local portraits = Instance.new("Frame")
-	portraits.Name, portraits.Position, portraits.Size = "Members", UDim2.fromOffset(8, 24), UDim2.new(1, -48, 0, 45)
-	portraits.BackgroundTransparency, portraits.Parent = 1, panel
+	local portraits = Instance.new("ScrollingFrame")
+	portraits.Name, portraits.Position = "VerticalMembers", UDim2.fromOffset(6, 48)
+	portraits.BackgroundTransparency, portraits.BorderSizePixel, portraits.ScrollBarThickness = 1, 0, 3
+	portraits.ScrollingDirection, portraits.AutomaticCanvasSize = Enum.ScrollingDirection.Y, Enum.AutomaticSize.Y
+	portraits.CanvasSize, portraits.Parent = UDim2.fromOffset(0, 0), panel
+	portraits.ScrollBarImageColor3 = ButtonStyle.color(Theme.Scrollbar)
 	local body = Instance.new("ScrollingFrame")
-	body.Name, body.Position, body.Size = "Expanded", UDim2.fromOffset(8, 76), UDim2.new(1, -16, 1, -84)
+	body.Name, body.Position = "Expanded", UDim2.fromOffset(8, 46)
 	body.BackgroundTransparency, body.BorderSizePixel, body.ScrollBarThickness = 1, 0, 4
-	body.CanvasSize, body.AutomaticCanvasSize, body.Visible = UDim2.fromOffset(0, 0), Enum.AutomaticSize.Y, false
+	body.ScrollBarImageColor3 = ButtonStyle.color(Theme.Scrollbar)
+	body.CanvasSize, body.AutomaticCanvasSize, body.ScrollingDirection, body.Visible = UDim2.fromOffset(0, 0), Enum.AutomaticSize.Y, Enum.ScrollingDirection.Y, false
 	body.Parent = panel
 	gui.Parent = playerGui
-	self.Gui, self.Panel, self.Heading, self.Expand, self.Portraits, self.Body = gui, panel, heading, expand, portraits, body
-	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() self:Resize() end)
+	self.Gui, self.Panel, self.Heading, self.Expand, self.Portraits, self.Body = gui, panel, handle, expand, portraits, body
+	handle.InputBegan:Connect(function(input)
+		if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and panel.Visible then
+			self.Drag = { Input = input, Start = Vector2.new(input.Position.X, input.Position.Y),
+				Origin = panel.AbsolutePosition - gui.AbsolutePosition }
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		local drag = self.Drag
+		if not drag then return end
+		local mouse = drag.Input.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement
+		if input == drag.Input or mouse then
+			local desired = drag.Origin + Vector2.new(input.Position.X, input.Position.Y) - drag.Start
+			local request = self:LayoutInput()
+			self.PositionPreference = Geometry.normalize(request, self.Panel.AbsoluteSize.X, self.Panel.AbsoluteSize.Y, desired.X, desired.Y)
+			self:Resize()
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if self.Drag and input == self.Drag.Input then self.Drag = nil end
+	end)
+	UserInputService.WindowFocusReleased:Connect(function() self.Drag = nil end)
+	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() self.Drag = nil; self:Resize() end)
 	gui:GetPropertyChangedSignal("AbsolutePosition"):Connect(function() self:Resize() end)
 	Players.PlayerAdded:Connect(function() self:Resize() end)
 	Players.PlayerRemoving:Connect(function() task.defer(function() self:Resize() end) end)
@@ -109,8 +147,6 @@ function PartyHUD.new(playerGui: PlayerGui, send: (string, any?) -> ())
 			end
 		end
 	end
-	-- GetCoreGuiEnabled has no public change event. A small layout-only poll
-	-- follows changes made by other scripts without rebuilding controls/focus.
 	local elapsed = 0
 	RunService.Heartbeat:Connect(function(delta)
 		elapsed += delta
@@ -130,27 +166,42 @@ function PartyHUD.new(playerGui: PlayerGui, send: (string, any?) -> ())
 	return self
 end
 
-function PartyHUD:Resize()
+function PartyHUD:LayoutInput(): any
 	local available = self.Gui.AbsoluteSize
 	local topbarBottom = 0
 	pcall(function() topbarBottom = GuiService.TopbarInset.Max.Y - self.Gui.AbsolutePosition.Y end)
-	local metrics = Layout.calculate({
+	return {
 		Width = available.X, Height = available.Y, TopbarBottom = topbarBottom,
 		PlayerListEnabled = coreEnabled(Enum.CoreGuiType.PlayerList), PlayerCount = #Players:GetPlayers(),
-		ChatBounds = chatBounds(self.Gui), Expanded = self.Expanded,
-	})
-	self.Panel.Position = UDim2.new(1, -metrics.Right, 0, metrics.Top)
-	self.Panel.Size = UDim2.fromOffset(metrics.Width, metrics.Height)
+		ChatBounds = chatBounds(self.Gui), Expanded = self.Expanded, MemberCount = #self.Rows,
+		Position = self.PositionPreference,
+	}
+end
+
+function PartyHUD:Resize()
+	local metrics = Geometry.measure(self:LayoutInput())
+	local widthChanged = self.Metrics and self.Metrics.Width ~= metrics.Width
+	self.Metrics = metrics
+	self.DisplayExpanded = metrics.EffectiveExpanded
+	self.Panel.Position, self.Panel.Size = UDim2.fromOffset(metrics.Left, metrics.Top), UDim2.fromOffset(metrics.Width, metrics.Height)
 	self.Panel:SetAttribute("LayoutPolicy", metrics.Policy)
-	self.Portraits.Visible = not metrics.SmallHeader
-	self.Body.Position = UDim2.fromOffset(8, metrics.Header + 2)
-	self.Body.Size = UDim2.new(1, -16, 0, metrics.BodyHeight)
-	self.Body.Visible, self.Expand.Text = self.Expanded, if self.Expanded then "−" else "＋"
-	pcall(function() self.Panel.Visible = not GuiService.MenuIsOpen end)
+	self.Panel:SetAttribute("PreferredX", if self.PositionPreference then self.PositionPreference.X else nil)
+	self.Panel:SetAttribute("PreferredY", if self.PositionPreference then self.PositionPreference.Y else nil)
+	self.Portraits.Size = UDim2.new(1, -12, 0, metrics.PortraitHeight)
+	self.Portraits.Visible = not self.DisplayExpanded
+	self.Body.Position, self.Body.Size = UDim2.fromOffset(8, metrics.Header + 2), UDim2.new(1, -16, 0, metrics.BodyHeight)
+	self.Body.Visible, self.Expand.Text = self.DisplayExpanded, if self.DisplayExpanded then "−" else "＋"
+	self.Heading.Text = if self.DisplayExpanded then "⠿ " .. (self.Title or "파티") else "⠿"
+	if self.PortraitNamesVisible ~= metrics.NamesVisible then self.PortraitNamesVisible = metrics.NamesVisible; self:RenderPortraits(self.Rows) end
+	pcall(function()
+		self.Panel.Visible = not GuiService.MenuIsOpen
+		if not self.Panel.Visible then self.Drag = nil end
+	end)
+	if widthChanged and self.State and not self.Rendering then self:Render(self.State) end
 end
 
 function PartyHUD:Toggle()
-	self.Expanded = not self.Expanded
+	self.Expanded = not (self.DisplayExpanded == true)
 	self:Resize()
 	if self.State then self:Render(self.State) end
 end
@@ -169,9 +220,9 @@ end
 function PartyHUD:Button(parent: Instance, text: string, key: string, enabled: boolean, action: () -> (), localAction: boolean?): TextButton
 	local button = Instance.new("TextButton")
 	local active = enabled and (localAction == true or (not self.Pending and self.State and self.State.Ready and not self.State.Traveling))
-	button.Size, button.Text, button.Font, button.TextSize = UDim2.new(1, 0, 0, 42), text, Enum.Font.GothamMedium, 13
-	button.BackgroundColor3, button.TextColor3 = if active then GOLD else Color3.fromRGB(209, 198, 179), if active then Color3.new(1, 1, 1) else INK
-	button.BorderSizePixel, button.Active, button.Selectable, button.AutoButtonColor = 0, active == true, active == true, active == true
+	button.Size, button.Text, button.Font, button.TextSize = UDim2.new(1, 0, 0, 44), text, Enum.Font.GothamMedium, 13
+	button.BorderSizePixel, button.TextWrapped = 0, true
+	ButtonStyle.bind(button, active == true, "Accent")
 	button:SetAttribute("FocusKey", key)
 	button.Parent = parent
 	round(button, 6)
@@ -182,40 +233,76 @@ end
 
 function PartyHUD:Row(choices: { any })
 	local frame = Instance.new("Frame")
-	frame.Size, frame.BackgroundTransparency, frame.Parent = UDim2.new(1, 0, 0, 42), 1, self.Body
+	local width = math.max(0, (self.Metrics and self.Metrics.Width or 300) - 16)
+	local metrics = Geometry.actionRow(width, #choices)
+	frame.Size, frame.BackgroundTransparency, frame.Parent = UDim2.new(1, 0, 0, metrics.Height), 1, self.Body
 	for index, choice in choices do
 		local button = self:Button(frame, choice.Text, choice.Key, choice.Enabled ~= false, choice.Action, choice.Local)
-		button.Size, button.Position = UDim2.new(1 / #choices, -3, 1, 0), UDim2.new((index - 1) / #choices, if index == 1 then 0 else 3, 0, 0)
+		if metrics.Stacked then
+			button.Size, button.Position = UDim2.new(1, 0, 0, metrics.ButtonHeight), UDim2.fromOffset(0, (index - 1) * (metrics.ButtonHeight + metrics.Gap))
+		else
+			button.Size, button.Position = UDim2.new(1 / #choices, -3, 1, 0), UDim2.new((index - 1) / #choices, if index == 1 then 0 else 3, 0, 0)
+		end
+	end
+end
+
+local function portrait(parent: Instance, member: any, left: number, top: number)
+	local image = Instance.new("ImageLabel")
+	image.Name, image.Position, image.Size = "Face", UDim2.fromOffset(left, top), UDim2.fromOffset(32, 32)
+	image.BorderSizePixel, image.Parent = 0, parent
+	surface(image, "Portrait")
+	if member.UserId > 0 then image.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(member.UserId) .. "&w=48&h=48" end
+	round(image, 16)
+	if member.IsLeader then
+		local crown = label(image, "♛", 14)
+		crown.Position, crown.Size, crown.TextColor3 = UDim2.fromOffset(-2, -3), UDim2.fromOffset(14, 14), ButtonStyle.color(Theme.Text.Accent)
+		surface(crown, "Badge")
+		round(crown, 5)
+	end
+	if member.Ready ~= "Idle" then
+		local indicator = label(image, if member.Ready == "Joined" then "✓" elseif member.Ready == "Stayed" then "—" else "…", 14)
+		indicator.Position, indicator.Size = UDim2.fromOffset(23, 21), UDim2.fromOffset(14, 14)
+		indicator.TextColor3 = ButtonStyle.color(if member.Ready == "Joined" then Theme.Text.Ready elseif member.Ready == "Stayed" then Theme.Text.Stayed else Theme.Text.Waiting)
+		surface(indicator, "Badge")
+		round(indicator, 5)
 	end
 end
 
 function PartyHUD:RenderPortraits(rows: { any })
 	self.Portraits:ClearAllChildren()
-	if #rows == 0 then label(self.Portraits, "함께할 파티를 찾아보세요", 42); return end
-	for index, member in rows do
-		local cell = Instance.new("Frame")
-		cell.BackgroundTransparency, cell.Size, cell.Position = 1, UDim2.new(1 / #rows, 0, 1, 0), UDim2.new((index - 1) / #rows, 0, 0, 0)
-		cell.Parent = self.Portraits
-		local portrait = Instance.new("ImageLabel")
-		portrait.Size, portrait.AnchorPoint, portrait.Position = UDim2.fromOffset(26, 26), Vector2.new(0.5, 0), UDim2.new(0.5, 0, 0, 0)
-		portrait.BackgroundColor3, portrait.BorderSizePixel = Color3.fromRGB(219, 199, 160), 0
-		if member.UserId > 0 then portrait.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(member.UserId) .. "&w=48&h=48" end
-		portrait.Parent = cell
-		round(portrait, 13)
-		if member.IsLeader then
-			local crown = label(cell, "♛", 14)
-			crown.AnchorPoint, crown.Position, crown.Size = Vector2.new(0.5, 0), UDim2.new(0.5, -10, 0, 0), UDim2.fromOffset(12, 14)
-			crown.BackgroundTransparency, crown.BackgroundColor3 = 0, CREAM
-		end
-		if member.Ready ~= "Idle" then
-			local indicator = label(cell, if member.Ready == "Joined" then "✓" elseif member.Ready == "Stayed" then "—" else "…", 14)
-			indicator.AnchorPoint, indicator.Position, indicator.Size = Vector2.new(0.5, 0), UDim2.new(0.5, 10, 0, 0), UDim2.fromOffset(12, 14)
-			indicator.BackgroundTransparency, indicator.BackgroundColor3 = 0, CREAM
-		end
-		local name = label(cell, Presentation.shortName(member.Name, 4), 18)
-		name.Position, name.TextSize, name.TextXAlignment = UDim2.fromOffset(0, 27), 11, Enum.TextXAlignment.Center
-		name.TextWrapped, name.TextTruncate = false, Enum.TextTruncate.AtEnd
+	local stack = Instance.new("UIListLayout")
+	stack.SortOrder, stack.Padding, stack.Parent = Enum.SortOrder.LayoutOrder, UDim.new(0, 0), self.Portraits
+	if #rows == 0 then
+		local empty = label(self.Portraits, "+ 파티", 40)
+		empty.TextXAlignment, empty.TextColor3 = Enum.TextXAlignment.Center, ButtonStyle.color(Theme.Text.Muted)
+		return
 	end
+	for index = 1, math.min(4, #rows) do
+		local member = rows[index]
+		local cell = Instance.new("Frame")
+		cell.Name, cell.LayoutOrder = "Member:" .. tostring(member.ActorId), index
+		cell.BackgroundTransparency, cell.Size, cell.Parent = 1, UDim2.new(1, -4, 0, 40), self.Portraits
+		local names = self.Metrics and self.Metrics.NamesVisible
+		local left = if names then 2 else math.max(0, ((self.Metrics and self.Metrics.Width or 88) - 48) * 0.5)
+		portrait(cell, member, left, 4)
+		if names then
+			local name = label(cell, Presentation.shortName(member.Name, 7), 34)
+			name.Position, name.Size = UDim2.fromOffset(40, 3), UDim2.new(1, -42, 0, 34)
+			name.TextWrapped, name.TextTruncate, name.TextSize = false, Enum.TextTruncate.AtEnd, 12
+		end
+	end
+end
+
+function PartyHUD:MemberRow(member: any)
+	local row = Instance.new("Frame")
+	row.Size, row.BackgroundTransparency, row.Parent = UDim2.new(1, -6, 0, 42), 1, self.Body
+	portrait(row, member, 2, 5)
+	local name = label(row, Presentation.shortName(member.Name, 12), 18)
+	name.Position, name.Size, name.TextWrapped, name.TextTruncate = UDim2.fromOffset(44, 2), UDim2.new(1, -46, 0, 18), false, Enum.TextTruncate.AtEnd
+	name.Font = if member.IsLeader then Enum.Font.GothamBold else Enum.Font.Gotham
+	local ready = label(row, Presentation.readyLabel(member.Ready), 20)
+	ready.Position, ready.Size = UDim2.fromOffset(44, 20), UDim2.new(1, -46, 0, 20)
+	ready.TextColor3 = ButtonStyle.color(if member.Ready == "Joined" then Theme.Text.Ready elseif member.Ready == "Stayed" then Theme.Text.Stayed elseif member.Ready == "Waiting" then Theme.Text.Waiting else Theme.Text.Muted)
 end
 
 function PartyHUD:RenderInvites(state: any)
@@ -229,17 +316,33 @@ function PartyHUD:RenderInvites(state: any)
 end
 
 function PartyHUD:RenderFinder(state: any)
-	label(self.Body, "현재 서버의 공개 파티", 26)
+	label(self.Body, "공개 파티 · 현재 서버", 24)
 	local parties = Presentation.publicDirectory(state)
-	if #parties == 0 then label(self.Body, "모집 중인 공개 파티가 없어요.", 40) end
+	if #parties == 0 then label(self.Body, "모집 중인 파티가 없어요.", 36) end
 	for _, candidate in parties do
-		local count = #(candidate.MemberUserIds or {})
-		local limit = candidate.MaxMembers or 4
-		label(self.Body, (ACTIVITY[candidate.Activity] or candidate.Activity or "자유") .. " · " .. (candidate.TargetName or "자유 파티")
-			.. "\n" .. (candidate.HostName or "플레이어") .. " · " .. tostring(count) .. "/" .. tostring(limit) .. " · " .. (STATUS[candidate.Status] or "모집 중"), 56)
+		local count, limit = #(candidate.MemberUserIds or {}), candidate.MaxMembers or 4
+		local width = math.max(0, (self.Metrics and self.Metrics.Width or 300) - 22)
+		local metrics = Geometry.finderCard(width)
+		local card = Instance.new("Frame")
+		card.Name, card.Size, card.BorderSizePixel, card.Parent = "PublicPartyCard", UDim2.new(1, -6, 0, metrics.Height), 0, self.Body
+		surface(card, "Card")
+		round(card, 7)
+		local title = label(card, (ACTIVITY[candidate.Activity] or candidate.Activity or "자유") .. " · " .. (candidate.TargetName or "자유 파티"), metrics.InfoHeight)
+		title.Position, title.Size = UDim2.fromOffset(metrics.InfoLeft, metrics.InfoTop), UDim2.fromOffset(metrics.InfoWidth, metrics.InfoHeight)
+		title.TextWrapped, title.TextTruncate, title.Font = false, Enum.TextTruncate.AtEnd, Enum.Font.GothamBold
+		local info = label(card, candidate.HostName or "플레이어", metrics.StatusHeight)
+		info.Position, info.Size = UDim2.fromOffset(metrics.InfoLeft, metrics.HostTop), UDim2.fromOffset(metrics.HostNameWidth, metrics.HostHeight)
+		info.TextWrapped, info.TextTruncate, info.TextColor3 = false, Enum.TextTruncate.AtEnd, ButtonStyle.color(Theme.Text.Muted)
+		local status = label(card, if count >= limit then "정원 참" else (STATUS[candidate.Status] or "모집 중"), metrics.StatusHeight)
+		status.Position, status.Size = UDim2.fromOffset(metrics.StatusLeft, metrics.StatusTop), UDim2.fromOffset(metrics.StatusWidth, metrics.StatusHeight)
+		status.TextWrapped, status.TextTruncate, status.TextXAlignment = false, Enum.TextTruncate.AtEnd, Enum.TextXAlignment.Right
+		local members = label(card, tostring(count) .. "/" .. tostring(limit), metrics.CountHeight)
+		members.Position, members.Size = UDim2.fromOffset(metrics.CountLeft, metrics.CountTop), UDim2.fromOffset(metrics.CountWidth, metrics.CountHeight)
+		members.TextWrapped, members.TextXAlignment = false, Enum.TextXAlignment.Center
 		local canJoin = not state.Party and count < limit and candidate.Status == "Forming" and state.Location == "World"
-		self:Button(self.Body, if count >= limit then "인원이 가득 찼어요" elseif state.Party then "참가하려면 현재 파티를 나가세요" else "파티 참가", "Join:" .. candidate.PartyId, canJoin,
+		local join = self:Button(card, "참가", "Join:" .. candidate.PartyId, canJoin,
 			function() self.Send("JoinPublic", { PartyId = candidate.PartyId }) end)
+		join.Position, join.Size = UDim2.fromOffset(metrics.ButtonLeft, metrics.ButtonTop), UDim2.fromOffset(metrics.ButtonWidth, metrics.ButtonHeight)
 	end
 end
 
@@ -294,9 +397,9 @@ function PartyHUD:RenderMain(state: any, rows: { any }, isLeader: boolean)
 		return
 	end
 	local summary = Presentation.summary(party, proposal)
-	label(self.Body, if proposal then tostring(summary.Moving) .. "/" .. tostring(summary.Total) .. "명 이동 준비" else (STATUS[party.Status] or "모집 중") .. " · " .. tostring(#rows) .. "/4명", 28)
+	label(self.Body, if proposal then tostring(summary.Moving) .. " / " .. tostring(summary.Total) .. "명 이동 준비" else (STATUS[party.Status] or "모집 중") .. " · " .. tostring(#rows) .. "/4명", 28)
 	for _, member in rows do
-		label(self.Body, (if member.IsLeader then "♛ " else "") .. member.Name .. " · " .. Presentation.readyLabel(member.Ready), 36)
+		self:MemberRow(member)
 	end
 	if proposal then
 		if not isLeader then self:Row({
@@ -341,13 +444,17 @@ function PartyHUD:RenderExpedition(state: any)
 end
 
 function PartyHUD:Render(state: any)
+	self.Rendering = true
 	self.State = state
 	local rows = Presentation.memberRows(state)
+	self.Rows = rows
+	self:Resize()
 	self:RenderPortraits(rows)
 	local invitations = #(state.Invites or {})
 	local summary = Presentation.summary(state.Party, state.Proposal)
-	self.Heading.Text = if state.Traveling then "파티 · 이동 준비 중" elseif state.Proposal then "파티 · " .. tostring(summary.Moving) .. "/" .. tostring(summary.Total) .. "명 준비"
+	self.Title = if state.Traveling then "파티 · 이동 준비 중" elseif state.Proposal then "파티 · " .. tostring(summary.Moving) .. "/" .. tostring(summary.Total) .. "명 준비"
 		elseif invitations > 0 then "파티 · 초대 " .. tostring(invitations) else "파티"
+	self.Heading.Text = if self.DisplayExpanded then "⠿ " .. self.Title else "⠿"
 	local selected = GuiService.SelectedObject
 	local hadSelection = selected and selected:IsDescendantOf(self.Body)
 	local focusKey = if hadSelection then selected:GetAttribute("FocusKey") else nil
@@ -355,7 +462,7 @@ function PartyHUD:Render(state: any)
 	self.Body:ClearAllChildren()
 	self.Buttons = {}
 	local layout = Instance.new("UIListLayout")
-	layout.SortOrder, layout.Padding, layout.Parent = Enum.SortOrder.LayoutOrder, UDim.new(0, 7), self.Body
+	layout.SortOrder, layout.Padding, layout.Parent = Enum.SortOrder.LayoutOrder, UDim.new(0, 5), self.Body
 	if self.Status ~= "" then label(self.Body, self.Status, 50) end
 	if state.Traveling then label(self.Body, "이동 준비 중…", 34) elseif not state.Ready then label(self.Body, "서버에 연결 중…", 34) end
 	self:RenderInvites(state)
@@ -378,8 +485,9 @@ function PartyHUD:Render(state: any)
 	self.Body.CanvasPosition = scroll
 	if hadSelection then
 		local replacement = focusKey and self.Buttons[focusKey]
-		GuiService.SelectedObject = if replacement and replacement.Selectable and self.Expanded then replacement else self.Expand
+		GuiService.SelectedObject = if replacement and replacement.Selectable and self.DisplayExpanded then replacement else self.Expand
 	end
+	self.Rendering = false
 end
 
 return PartyHUD

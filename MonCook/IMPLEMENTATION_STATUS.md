@@ -1,77 +1,67 @@
-# MonCook 작업 상태 — Design Lock 1.1 / Phase 0.8
+# MonCook 작업 상태 — Phase 0.8 UI Polish
 
-기록일: 2026-10-06. 작업 브랜치: `feature/moncook-foundation`. [Draft PR #1](https://github.com/wnfpvm13/Gameproject1/pull/1).
+기록일: 2026-10-06 (한국 시간). 브랜치: `feature/moncook-foundation`. [Draft PR #1](https://github.com/wnfpvm13/Gameproject1/pull/1). 이번 지침: [UI Polish](docs/NEXT_CODEX_INSTRUCTION_Phase_0_8_UI_Polish.md). 이전 기능 구현·검증 보고는 [보관본](docs/implementation-reports/Phase_0_8_Foundation.md)에 있습니다.
 
 ## 1. 구현 내용
 
-첨부 설계 1.1로 통합 기준 문서와 해당 분리 문서를 갱신했습니다. 새 `PARTY_EXPEDITION.md`와 Phase 0.8 실행 지침을 추가하고 변경 전 통합본·분리 문서·목록 11개는 `docs/archive/design-lock-1.0/`에 보관했습니다. `CODEX_START_HERE.md`부터 필수 설계 문서를 읽고 이번 범위를 Party UX & Expedition Foundation으로 제한했습니다.
+사용자는 기존 Phase 0.8 파티 기능의 Studio 정상 동작을 확인했습니다. 이번 작업은 해당 기능을 그대로 두고 UI Presentation만 다듬었습니다. CODEX_START_HERE·MASTER_GDD·PARTY_EXPEDITION·UI_UX·CODEX_RULES·기존 작업 상태와 관련 데이터/아키텍처를 먼저 읽었습니다. 새 게임 시스템 구현으로 넘어가지 않고 UI Polish에서 종료합니다.
 
-기존 DataService 잠금·저장·migration, Restaurant SessionId·escrow·0보상 반환·중복 정산 방지와 이동 골격을 유지했습니다. 실행 지침의 **기존 Foundation Studio QA 통과는 제공받은 전제**이며 이번 환경에서 재실행한 결과가 아닙니다.
+Finder를 **68px 카드**로 바꾸고 활동/목표는 첫 줄, 호스트·인원·모집 상태는 둘째 줄에 배치했습니다. 상태 오른쪽의 **44×44px 참가 버튼**은 같은 행 중심에 정렬합니다. 기존 전체 너비의 큰 하단 버튼을 제거했습니다. 인원수는 고정 영역에 보존하고 긴 이름/목표는 줄임표를 사용합니다. 가입 가능 여부와 JoinPublic payload는 기존 그대로입니다.
 
-실제 플레이용 파티 HUD에 얼굴·짧은 이름·왕관·접기/펼치기, 활동/목표, 공개/비공개, 준비 요약, 초대·탈퇴·Finder를 연결했습니다. Finder는 현재 World/Hearthcross 서버의 Public 파티만 보여주며 카드 버튼으로 가입합니다. Private는 초대 수락이 필요합니다. 초대는 서버가 대상·권한·TTL·정원을 검사하며 목표/공개 여부 변경 시 이전 동의 확인·초대를 무효화합니다. 기본 Release UI에는 Party ID 입력이 없습니다. 기존 큰 Debug UI는 별도 모듈로 보존하고 Studio AND `Testing.ShowFoundationDebugUI == true`에서만 표시합니다. 기본값은 false입니다.
+색상은 PartyUIStyle의 반투명 웜브라운/웜그레이와 밝은 텍스트로 분리했습니다. 패널 RGB는 61/53/48, BackgroundTransparency는 0.16이며 완전 검정은 사용하지 않습니다. 카드·얼굴·배지·텍스트·스크롤바·버튼 색도 같은 Theme에서 제공합니다. 따뜻한 브라운/골드 포인트를 유지합니다.
 
-JOIN/STAY 내부 계약을 재사용해 `✓ 함께 이동`, `… 응답 중`, `— 이번엔 남음`, `3/4명 이동 준비`를 표시합니다. 버튼은 Activated·선택 가능한 컨트롤을 사용하며 안전 영역·공개 채팅 bounds·PlayerList 예약 영역·작은 화면 스크롤을 처리합니다. PlayerList 실제 bounds는 공개 API가 없어 화면 검증이 남습니다.
+버튼 helper가 Normal / Hover / Pressed / Disabled를 재사용합니다. Hover는 밝게, Pressed는 진하게, Disabled는 채도를 낮추고 투명하게 표시합니다. 전환은 0.08초입니다. 마우스·Touch·Gamepad 선택과 누름, 밖에서 놓기·두 번째 Touch·창 포커스 이탈·메뉴 열기·컨트롤 파괴 시 입력/Tween 정리를 처리하며 실제 Activated 기능은 기존 HUD가 담당합니다.
 
-ExpeditionSession에 Preparing → Teleporting → Active → Result → Returning → Closed 상태, 호스트·파티·Region/Target·선택 멤버·결과 ActionId·영수증을 추가했습니다. Restaurant과 같은 예약/전송 래퍼를 사용하며 Fake 이동 전후 프로필 잠금을 해제·재획득합니다. 결과는 호스트가 Repeat / HostRestaurant / Hearthcross를 선택합니다. Repeat와 HostRestaurant은 World로 돌아와 새 JOIN/STAY 동의 확인을 생성하고 이후 함께 이동한 멤버만 출발합니다. 사냥·전투·드롭·보상을 구현하거나 경제 데이터를 수정하지 않습니다.
+Collapsed는 최대 4명의 **세로 얼굴 스택**입니다. 모바일 기본 폭은 88px, 넓은 화면은 136px로 짧은 이름도 표시합니다. 작은 왕관과 준비 아이콘을 유지하고 44px 펼치기 버튼을 둡니다. 공간이 부족하면 멤버 영역을 세로 스크롤합니다. Expanded는 최대 폭 300px·높이 420px/화면 70% 범위에서 목표·공개 여부·멤버 얼굴/리더·준비·초대·탈퇴·Finder를 표시합니다. 좁은 열에서는 버튼을 44px 높이의 세로 행으로 배치하고 문구를 줄바꿈합니다.
 
-Published Expedition은 상태를 바꾸기 전에 서버에서 차단합니다. 지역별 Place 설정과 전송 API만 후속 연결용으로 마련했습니다. Quick Match는 Enabled Config와 `Available = false / NotAvailable` 인터페이스·TODO만 있으며 MemoryStoreQueue 구현은 없습니다.
+상단 **전용 드래그 손잡이**는 PC 마우스와 Touch를 받으며 펼치기/참가/Ready 버튼과 영역을 분리했습니다. 위치는 safe-area 좌표의 normalized X/Y 선호점으로 분리해 후속 저장을 연결할 수 있습니다. 현재 클라이언트 세션 안에서만 유지하고 영구 저장은 하지 않습니다. 화면 크기 변경·회전·확대/축소 때 유효 영역과 측정 가능한 CoreUI 사각형 안에서 위치를 보정합니다.
 
-호스트 이탈 후 STAY 멤버가 World에서 활동 잠금에 남는 문제를 복구했습니다. 오래된 원정 작업의 실패 정리가 새 Active 세션·동의 확인·초대·잠금 소유권을 덮어쓰지 않도록 작업/파티 세대와 현재 소유권을 검사합니다. Published Restaurant HUD는 검증된 세션 멤버의 표시용 파티를 제공하며 서버 권한은 기존 세션 검증을 사용합니다.
+공개 Chat 창/입력창의 실제 사각형과 TopBar·Safe Area를 회피하고 Roblox Menu가 열리면 파티 HUD만 숨깁니다. 넓은 화면의 PlayerList는 추정 사각형을 예약합니다. 좁은 화면에는 compact 대체 정책을 사용합니다. 실제 크기가 공개되지 않는 PlayerList와 물리적으로 화면 전체를 덮는 Chat은 완전한 비겹침을 보장할 수 없으므로 아래 수동 판정이 남습니다.
+
+ReadyCheck의 `✓ 함께 이동 / … 응답 중 / — 이번엔 남음` 아이콘·텍스트를 밝게 표시하고 `3 / 4명 이동 준비`처럼 요약합니다. 기존 Foundation Debug UI와 Studio AND ShowFoundationDebugUI 게이트 및 기본 false는 그대로입니다.
 
 ## 2. 변경 파일
 
-- `docs/The_Last_Recipe_ALL_IN_ONE_CODEX_SPEC.md`, `NEXT_CODEX_INSTRUCTION_Phase_0_8.md`: 첨부 원문
-- `docs/LastRecipe_Codex_Design/`: 설계 1.1 변경 섹션·새 PARTY_EXPEDITION·README·manifest
-- `docs/archive/design-lock-1.0/`: 변경 전 원본 11개
-- `src/client/Controllers/`: Foundation 네트워크 연결, PartyHUD, FoundationDebugUI
-- `src/shared/Utilities/`: PartyPresentation 및 HUD 레이아웃 로직
-- `src/shared/Config/Definitions.luau`, `Registry.luau`: PartyTarget·Region 활동/이동 계약·Debug gating·Matchmaking hook
-- `src/shared/Types/ExpeditionSession.luau`: 세션·상태·결과 계약
-- `src/server/Services/PartyService.luau`, `PartyActivityService.luau`: Public/Private·초대·준비 상태·이탈 후 복구
-- `src/server/Services/ExpeditionService.luau`, `ExpeditionCoordinator.luau`, `MatchmakingService.luau`: 원정 수명주기·Fake 이동/복구·매칭 인터페이스
-- `src/server/Services/TeleportServiceWrapper.luau`, `ServerConfig.luau`, `Foundation.server.luau`: 지역별 전송·설정·서버 요청/스냅샷 연결
-- `tests/`: 기존 Foundation 확장, PartyUX·표시·레이아웃·활동 복구·원정·원정 Coordinator 회귀 테스트
-- `README.md`, `FOUNDATION_QA.md`, 이 파일: 실행·검증·인계 안내
-
-기존 PlayerDataDefaults/Migration·DataService·SessionService·FoundationCoordinator와 PC 설치 도구는 수정하지 않았습니다.
+- `src/client/Controllers/PartyHUD.luau`: 카드·반투명 테마·세로 스택·멤버 행·드래그·반응형 표시 연결
+- `src/client/Controllers/PartyButtonStyle.luau`: 재사용 시각 상태와 Roblox 입력/Tween 정리
+- `src/shared/Config/PartyUIStyle.luau`: 순수 Theme·상태별 스타일 데이터
+- `src/shared/Utilities/PartyHUDGeometry.luau`: 세로 치수·선호 위치/Clamp·resize·CoreUI 회피·카드/버튼 행 계산
+- `tests/PartyHUDGeometry.spec.luau`, `PartyUIStyle.spec.luau`: UI 회귀 검사 28개 그룹
+- `docs/NEXT_CODEX_INSTRUCTION_Phase_0_8_UI_Polish.md`: 이번 사용자 지시 기록
+- `docs/implementation-reports/Phase_0_8_Foundation.md`: 이전 작업 상태 원문 보관
+- `README.md`, `FOUNDATION_QA.md`, 이 파일: 최신 실행·수동 판정·6항목 보고
 
 ## 3. 테스트 결과
 
-- 두 첨부 원문은 저장소 사본과 바이트 단위로 일치합니다. 설계 SHA256: `9469fac5a7701388c392f9bede172f0d0c9778e02cf5f55039ea43dc5ce14003`, 실행 지침 SHA256: `d3ccff87fba5569b8c958639527c68a5e15b02ebe452bb080952194560892066`.
-- 분리 설계 19개 섹션이 새 통합본과 일치합니다. 변경 전 보관본 11개와 변경하지 않은 분리 문서 10개는 이전 커밋 원본과 바이트 단위로 일치합니다.
-- 공식 Luau 0.741로 소스·테스트 문법 컴파일, CLI용 require만 변환한 임시 사본의 순수 모듈 strict 타입 분석 및 회귀 테스트를 통과했습니다. 최종 그룹 수는 아래 검증 기록에 기재합니다. Roblox 시작 코드·API 어댑터·UI는 문법 검사 대상이며 Roblox 타입/엔진 실행 검증 대상은 아닙니다.
-- 기존 66개 그룹을 유지하고 Public join·Private hidden·정원·공개 여부/목표 변경·초대·준비 표시·Debug gating, 원정 수명주기·중복/오래된 작업·Fake 전송·결과 실패 재시도·호스트 이탈·새 작업 보호를 추가 검증했습니다.
-- 작은 화면에서 20인 PlayerList 추정 영역 때문에 HUD가 사라지는 회귀를 순수 레이아웃 계산으로 검증했습니다. 좁은 화면에서 추정 영역이 공간을 모두 차지하면 공개 topbar/chat bounds를 피하는 compact 배치를 사용합니다. 실제 PlayerList overlay와의 겹침은 미검증입니다. 실제 CoreUI 화면 검증과는 구분합니다.
-- Rojo 7.7.1의 `.rbxlx` 빌드와 생성 파일의 26개 스크립트/모듈 배치·타입·소스 일치를 확인했습니다. 이는 Studio 엔진 실행 결과가 아닙니다.
-- PowerShell 7.6.6 Linux에서 PC 설치 도구의 12개 검증을 통과했습니다. WhatIf, 두 경로의 전체 파일 해시, 동일 재실행, 변경 파일 백업, 추가 파일·Git 정보 보존, ZIP/빌드 제외, 경로 겹침·링크·불완전 번들 거부를 확인했습니다.
-- 공유 소스 사본·전체 소스 ZIP은 저장소 파일과 바이트 단위로 비교했습니다. ZIP에 Studio 확인용 `.rbxlx`와 Windows 실행 안내도 포함합니다.
+- 기준 실행에서 기존 **141개 그룹**이 통과했습니다. 기존 테스트 파일을 수정하지 않았으며 최종에도 모두 통과했습니다.
+- 공식 Luau 0.741: **43개 Luau 파일 문법 컴파일**, 순수 모듈 strict 분석, **총 169개 그룹 통과**. 기존 141 + Geometry 19 + Style 9입니다.
+- Geometry: 세로 최대4·empty·작은 portrait viewport, 화면 밖 드래그·normalized 값·resize/clamp, Chat/TopBar·PlayerList 예약·zero startup·narrow expansion/automatic compact, Finder 상태/버튼 중심·최소 터치·고정 인원, 좁은 버튼 세로 행을 검증했습니다.
+- Style: 네 상태의 우선순위·명도·Disabled 채도/투명도·반투명 표면·비검정 테마·동결·fallback·작은 전환값을 검증했습니다. 실제 Hover/Press 입력 검증과는 구분합니다.
+- 기존 서버·테스트·Definitions/Registry·Foundation 연결·Debug UI·PartyPresentation/기존 Layout **33개 파일이 이전 커밋과 바이트 동일**함을 확인했습니다. 서버와 저장/경제 계약은 수정하지 않았습니다.
+- Rojo 7.7.1로 `.rbxlx`를 빌드하고 포함한 **29개 스크립트/모듈의 경로·타입·소스 일치**를 확인했습니다. Roblox 엔진 실행 결과가 아닙니다.
+- git diff 공백 검사 통과. 공유 사본·새 전체 소스 ZIP·Studio 파일은 저장소/빌드 원본과 바이트 단위로 비교했습니다. PC 설치 도구는 이번에 변경하지 않았습니다.
 
-최종 로직 검증: **Luau 38개 파일 문법, 순수 모듈 strict 분석, 141개 그룹 통과**. Coordinator 12, DataService 14, Expedition 14, ExpeditionCoordinator 14, Foundation 12, PartyActivity 12, PartyHUDLayout 8, PartyPresentation 6, PartyTeleport 16, PartyUX 19, SessionService 14.
+## 4. 실제 Studio 미검증 항목
 
-## 4. 미검증 항목
+이번 환경에는 Roblox Studio 연결이 없어 **새 UI의 실제 수동 QA를 실행하지 못했습니다**. 사용자에게서 받은 이전 파티 기능의 정상 동작 판정과 이번 UI Polish 검증을 구분합니다.
 
-로직 검사에서 알려진 실패는 없습니다. Roblox Studio 연결이 없어 **Phase 0.8 실제 2–4인 실행, 20인/모바일 세로·가로 CoreUI 겹침과 스크롤, Touch/Gamepad 포커스, 실제 Restaurant 왕복·API 저장·재접속**은 미검증입니다. 확인 순서는 `FOUNDATION_QA.md`에 있습니다.
+필수 수동 항목은 Finder 참가 버튼 위치·긴 이름/목표·비활성 표시, Hover/Pressed 복구, 반투명 배경, PC/Touch 드래그와 회전, 축소 세로 얼굴/왕관, 모바일 세로·가로, Chat/PlayerList/TopBar/Menu/Safe Area 겹침, Gamepad 포커스와 기존 Debug 독립성입니다. 절차는 [FOUNDATION_QA.md](FOUNDATION_QA.md)에 있습니다.
 
-Published Expedition의 세션 저장·목적지 도착 import·cross-server 복구와 실제 사냥 콘텐츠는 미구현입니다. Published 시작을 차단했으므로 전송 래퍼가 있다는 이유로 출시 가능한 원정으로 판정하지 않습니다. 기존 Published Restaurant도 실제 Place ID가 0이므로 설정·실행 QA가 필요합니다.
+PlayerList 실제 bounds는 공개 API가 없어 넓은 화면 예약·좁은 화면 fallback은 실제 화면 판정이 필요합니다. 전체 화면 Chat처럼 빈 공간 자체가 없는 경우 `ChatSpaceFallback`으로 안전 영역 안에 유지하며 비겹침 판정은 남습니다. UI 코드의 Roblox 타입/이벤트 실행도 문법 검사만으로 통과했다고 판정하지 않습니다.
 
-Windows PowerShell 5.1과 사용자 PC의 실제 설치는 미검증입니다. 클라우드 환경은 `C:` 드라이브에 직접 접근하지 못합니다. 공유 `MonCook_Phase_0_8_Source.zip`을 PC 임시 폴더에 풀어 `MonCook/tools/Install-LocalProject.ps1`을 실행하면 `C:\smallsize\wak\MonCook`과 `C:\smallsize\wak\MonCook_LocalRepository\MonCook`에 복사합니다. 변경 파일은 백업하고 기존 추가 파일은 보존합니다.
+Windows PC 설치는 이 클라우드에서 직접 실행하지 못했습니다. 새 ZIP의 `Install-LocalProject.ps1`로 `C:\smallsize\wak\MonCook`과 `C:\smallsize\wak\MonCook_LocalRepository\MonCook`에 백업 복사할 수 있습니다. Published/API·Expedition 실제 이동·콘텐츠는 이전 보고의 미검증/미구현 범위를 유지합니다.
 
 ## 5. TODO
 
-- Phase 0.8 Studio 파티 UX·Expedition·모바일/Gamepad QA와 작은 화면 CoreUI 판정 기록.
-- World/Restaurant 실제 Place ID와 테스트 Experience·양수 escrow fixture를 설정하고 Published 기존 저장·왕복·실패 복구 검증.
-- Published Expedition 지역 Place·공유 세션 저장·도착 검증·잠금 인계·실패/재접속 복구 설계 및 구현. `ExpeditionPlaceIds`만 설정해서 차단을 해제하면 안 됩니다.
-- 실제 Hornboar 공급망·전투·드롭·개인 기여도/보상·원정 콘텐츠는 후속 Phase. TwinOgre 목표는 계약용이며 몬스터 구현은 없습니다.
-- Quick Match V1.5의 cross-server 정책·큐·중복 매칭/취소 계약은 후속 범위.
-- 실제 조리·판매 장부 이후 Gold/Renown 정산, 호스트 재접속 유예·helper 보상과 영수증 보관 정책 확장.
-- Config의 `TODO_SETUP`, `TODO_BALANCE`, `TODO_SCHEMA` 검토. PlayerData SchemaVersion 변경은 이번에 필요하지 않습니다.
+- 최신 `MonCook_Phase_0_8_UI_Polish.rbxlx`로 위 Studio 수동 항목을 판정하고 화면 크기·입력 장치·Output 근거를 기록합니다.
+- 실제 PlayerList variants·모바일 Chat 표시 상태에 맞춰 UI 예약 치수를 조정할 필요가 있는지 확인합니다.
+- 후속 요청이 있으면 normalized PositionPreference의 저장을 연결할 수 있습니다. 이번에는 세션 로컬 상태만 사용합니다.
+- 현재 작업은 **Phase 0.8 UI Polish 완료 상태에서 종료**합니다. 전투·드롭·경제·원정/식당 서버 확장·Quick Match는 이번에 진행하지 않습니다.
 
 ## 6. 다른 브랜치 영향
 
-모든 변경은 `MonCook/` 아래입니다. 다른 게임과 저장소 루트 파일은 수정하지 않았습니다. 기존 `feature/moncook-foundation`과 Draft PR #1을 갱신하며 main 병합·Roblox 게시는 수행하지 않습니다.
+모든 변경은 `MonCook/` 아래의 UI·Presentation·새 UI 검사·문서입니다. 기존 `feature/moncook-foundation`과 Draft PR #1을 갱신하며 main 병합·Roblox 게시를 하지 않습니다. 다른 게임 파일은 변경하지 않았습니다.
 
-기존 PartyService 메서드는 유지합니다. `Create(userId, settings?)`, Visibility/Activity/TargetId/Status/ReadyStates·Public Finder·Invite API가 추가되었습니다. ReadyStates는 내부 숫자 키이며 Remote snapshot에서는 문자열 키로 변환합니다. 서버가 Config의 Activity/Target을 검증하므로 후속 Config에는 PartyTarget family와 Region.ActivityMode/TravelMode 참조 계약이 필요합니다.
+PartyService·Public/Private·Finder 서버·ReadyCheck·ExpeditionSession·FakeTeleport·Restaurant Session·DataService와 경제/저장/migration은 바이트 그대로입니다. Remote action·payload·snapshot 계약은 바뀌지 않습니다. Debug UI/게이트도 그대로입니다.
 
-ExpeditionService와 ExpeditionCoordinator는 새 런타임 계약입니다. Party·Restaurant Session·Expedition의 ID와 상태를 혼용하지 않습니다. 전송 래퍼에는 선택적 ExpeditionPlaceIds·ReserveExpedition·ToExpedition이 추가되었고 기존 Restaurant/World API는 유지했습니다. Matchmaking은 사용 불가 hook입니다. PlayerData 저장 형식·migration·정산 경제 계약은 바뀌지 않습니다.
-
-후속 브랜치는 새 목표/이동 연결 시 현재 제안·선택 멤버·서버 권한과 작업 소유권 검사를 보존해야 합니다. 공유 보관본과 PC 설치용 ZIP을 함께 제공합니다. 실제 사용자 PC 복사는 아직 실행하지 못했습니다.
+후속 UI 브랜치는 PartyUIStyle·PartyButtonStyle·PartyHUDGeometry를 재사용할 수 있습니다. 새 Theme는 서버 Config Registry family를 바꾸지 않는 표시 전용 모듈입니다. 기존 PartyHUDLayout과 141개 테스트를 보존했습니다. 공유본과 PC ZIP을 갱신했고 새 게임 시스템으로 넘어가지 않습니다.

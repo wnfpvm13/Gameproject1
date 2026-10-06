@@ -82,7 +82,7 @@ Blender source와 실제 FBX reimport에 Idle/Walk/Run/Alert/ChargeWindup/Charge
 - 실제 순수 서비스 통합으로 2 contributor horn/core/death/독립 loot/persistence/duplicate/dead/respawn·늦은 contributor·장애물·저장 실패·ack 유실·yield 중 재진입을 검사했습니다. 이 결과는 Roblox physics 실행을 대신하지 않습니다.
 - Blender 4.3.2: 16개 실제 FBX reimport, triangle/object·rig/actions·vertex binding PASS; source render 4개 생성/확인.
 - Rojo 7.7.1: Studio QA place build PASS. 16개 native model/reference/rig binding, **49개 runtime script/module 경로·타입·소스 일치**, 기존 테스트 보존 PASS.
-- git diff 공백 검사 PASS. 공유 source mirror를 `/workspace/shared/MonCook`에 갱신했습니다. 최종 `MonCook_Phase_1_Hunting.rbxlx` SHA256: `c51e7c8d9cce5453dfd54b8a42304c0d9acb903f56531b5c000b99b9f6d0d286`. 원본 소스와 mirror 파일 바이트 일치를 확인했습니다.
+- 직접 작성한 코드·문서의 git diff 공백 검사 PASS. 원본 첨부 두 문서는 CRLF/Markdown 줄바꿈을 바이트 그대로 보존하여 검사에서 제외했습니다. 공유 source mirror를 `/workspace/shared/MonCook`에 갱신했습니다. 최종 `MonCook_Phase_1_Hunting.rbxlx` SHA256: `c51e7c8d9cce5453dfd54b8a42304c0d9acb903f56531b5c000b99b9f6d0d286`. 원본 소스와 mirror 파일 바이트 일치를 확인했습니다.
 
 ## 10. 남은 Art TODO / TODO / Phase 2·다른 브랜치 영향
 

@@ -1,0 +1,29 @@
+{
+  "project": "The Last Recipe",
+  "design_version": "1.1",
+  "status": "Design Lock / Codex implementation ready",
+  "documents": [
+    "README.md",
+    "CODEX_START_HERE.md",
+    "MASTER_GDD.md",
+    "ART_BIBLE.md",
+    "WORLD_BIBLE.md",
+    "MONSTER_BIBLE.md",
+    "INGREDIENT_RECIPE_BIBLE.md",
+    "COMBAT_WEAPONS.md",
+    "RESTAURANT_SYSTEM.md",
+    "STAFF_SYSTEM.md",
+    "PARTY_EXPEDITION.md",
+    "ENHANCEMENT_ECONOMY.md",
+    "UI_UX.md",
+    "MONETIZATION.md",
+    "DATA_SCHEMA.md",
+    "TECH_ARCHITECTURE.md",
+    "ASSET_PRODUCTION.md",
+    "ANALYTICS_LIVEOPS.md",
+    "CODEX_RULES.md",
+    "IMPLEMENTATION_PLAN.md"
+  ],
+  "canonical_source": "../The_Last_Recipe_ALL_IN_ONE_CODEX_SPEC.md",
+  "next_instruction": "../NEXT_CODEX_INSTRUCTION_Phase_0_8.md"
+}

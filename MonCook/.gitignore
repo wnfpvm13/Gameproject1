@@ -1,0 +1,8 @@
+build/
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+.MonCook-docs-backups/
+.MonCook-project-backups/
+__pycache__/

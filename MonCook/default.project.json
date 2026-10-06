@@ -1,0 +1,36 @@
+{
+  "name": "MonCook",
+  "tree": {
+    "$className": "DataModel",
+    "$ignoreUnknownInstances": true,
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/shared" }
+    },
+    "ServerScriptService": {
+      "ServerConfig": { "$path": "src/server/ServerConfig.luau" },
+      "Adapters": { "$path": "src/server/Adapters" },
+      "Services": { "$path": "src/server/Services" },
+      "Foundation": { "$path": "src/server/Foundation.server.luau" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Controllers": { "$path": "src/client/Controllers" }
+      }
+    },
+    "Workspace": {
+      "$ignoreUnknownInstances": true,
+      "$properties": { "StreamingEnabled": true },
+      "Foundation_PLACEHOLDER": {
+        "$className": "Folder",
+        "Ground": {
+          "$className": "Part",
+          "$properties": { "Anchored": true, "Size": [128, 1, 128], "Position": [0, -1, 0], "Color": [0.44, 0.64, 0.39] }
+        },
+        "Spawn": {
+          "$className": "SpawnLocation",
+          "$properties": { "Anchored": true, "Neutral": true, "Size": [6, 1, 6], "Position": [0, 0, 0] }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "task_id": "848ef369-413b-4906-ae8a-8e9da4b95c2c",
+  "type": "multiview_to_model",
+  "status": "success",
+  "input": {
+    "pbr": false,
+    "files": [
+      {
+        "object": {
+          "key": "tcli_11669e35c03d4b2990b11bbba850c748/20261007/16b0a533-db84-4670-8321-8d6b943aa9fd/file.png",
+          "bucket": "tripo-data"
+        }
+      },
+      {
+        "object": {
+          "key": "tcli_11669e35c03d4b2990b11bbba850c748/20261007/319d1122-e9ac-4a8a-bfc9-b8650f091c8e/file.png",
+          "bucket": "tripo-data"
+        }
+      },
+      {
+        "object": {
+          "key": "tcli_11669e35c03d4b2990b11bbba850c748/20261007/8010b66a-b9e6-426f-89c9-a402f89aeefd/file.png",
+          "bucket": "tripo-data"
+        }
+      },
+      null
+    ],
+    "texture": true,
+    "export_uv": true,
+    "face_limit": 2800,
+    "model_seed": 1940595825,
+    "model_version": "P1-20260311"
+  },
+  "output_fields": [
+    "model_url",
+    "rendered_image_url"
+  ],
+  "credits_consumed": 50,
+  "created_at": "2026-10-07T10:34:35.707118Z",
+  "completed_at": "2026-10-07T10:36:05.616656Z",
+  "files": [
+    "model.glb",
+    "rendered_image.webp",
+    "preview.png"
+  ]
+}

@@ -1,0 +1,410 @@
+{
+  "scene": "MonCook_V2_Final",
+  "blender": "5.2.2 LTS",
+  "mesh_count": 5,
+  "object_count": 10,
+  "materials": [
+    "HornCore_Fracture.001",
+    "Hornboar_Atlas.001"
+  ],
+  "material_count": 2,
+  "textures": [
+    {
+      "name": "Hornboar_BaseColor_512.001",
+      "resolution": [
+        512,
+        512
+      ]
+    }
+  ],
+  "texture_count": 1,
+  "triangles": 2966,
+  "meshes": [
+    {
+      "name": "Body",
+      "triangles": 900,
+      "vertices": 551,
+      "materials": 1,
+      "uv_layers": 1,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 189,
+      "nonmanifold_edges": 221,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        5.5986328125,
+        9.369138717651367,
+        4.044726848602295
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ],
+      "unweighted_vertices": 0,
+      "max_weight_sum_error": 4.237517714500427e-08
+    },
+    {
+      "name": "Head",
+      "triangles": 547,
+      "vertices": 316,
+      "materials": 1,
+      "uv_layers": 1,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 62,
+      "nonmanifold_edges": 63,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        3.1078121662139893,
+        4.2275390625,
+        3.3363285064697266
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ],
+      "unweighted_vertices": 0,
+      "max_weight_sum_error": 3.67872416973114e-08
+    },
+    {
+      "name": "Legs",
+      "triangles": 1185,
+      "vertices": 611,
+      "materials": 1,
+      "uv_layers": 1,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 93,
+      "nonmanifold_edges": 123,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        5.530078887939453,
+        5.575780868530273,
+        3.290626049041748
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ],
+      "unweighted_vertices": 0,
+      "max_weight_sum_error": 4.3248292058706284e-08
+    },
+    {
+      "name": "Horn_Intact",
+      "triangles": 190,
+      "vertices": 113,
+      "materials": 1,
+      "uv_layers": 1,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 32,
+      "nonmanifold_edges": 33,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        1.6453123092651367,
+        4.044727325439453,
+        1.9195313453674316
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ],
+      "unweighted_vertices": 0,
+      "max_weight_sum_error": 2.9802322387695312e-08
+    },
+    {
+      "name": "Horn_Broken",
+      "triangles": 144,
+      "vertices": 92,
+      "materials": 2,
+      "uv_layers": 1,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 32,
+      "nonmanifold_edges": 32,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        1.6453123092651367,
+        1.5061523914337158,
+        1.4076056480407715
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ],
+      "unweighted_vertices": 0,
+      "max_weight_sum_error": 4.6333298087120056e-08
+    }
+  ],
+  "rigs": [
+    {
+      "name": "HornboarRig",
+      "bone_count": 14,
+      "bones": [
+        {
+          "name": "Root",
+          "parent": null,
+          "head": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "tail": [
+            0.0,
+            0.0,
+            0.5
+          ]
+        },
+        {
+          "name": "Spine",
+          "parent": "Root",
+          "head": [
+            0.0,
+            0.0,
+            2.799999952316284
+          ],
+          "tail": [
+            0.0,
+            0.0,
+            3.299999952316284
+          ]
+        },
+        {
+          "name": "Neck",
+          "parent": "Spine",
+          "head": [
+            0.0,
+            2.5999999046325684,
+            3.0
+          ],
+          "tail": [
+            0.0,
+            2.5999999046325684,
+            3.5
+          ]
+        },
+        {
+          "name": "Head",
+          "parent": "Neck",
+          "head": [
+            0.0,
+            3.5,
+            3.0
+          ],
+          "tail": [
+            0.0,
+            3.5,
+            3.5
+          ]
+        },
+        {
+          "name": "Horn",
+          "parent": "Head",
+          "head": [
+            0.0,
+            3.6500000953674316,
+            4.050000190734863
+          ],
+          "tail": [
+            0.0,
+            3.6500000953674316,
+            4.550000190734863
+          ]
+        },
+        {
+          "name": "FrontLeg_L",
+          "parent": "Spine",
+          "head": [
+            -1.850000023841858,
+            1.75,
+            2.5999999046325684
+          ],
+          "tail": [
+            -1.850000023841858,
+            1.75,
+            3.0999999046325684
+          ]
+        },
+        {
+          "name": "FrontShin_L",
+          "parent": "FrontLeg_L",
+          "head": [
+            -1.850000023841858,
+            1.899999976158142,
+            1.149999976158142
+          ],
+          "tail": [
+            -1.850000023841858,
+            1.899999976158142,
+            1.649999976158142
+          ]
+        },
+        {
+          "name": "FrontLeg_R",
+          "parent": "Spine",
+          "head": [
+            1.850000023841858,
+            1.75,
+            2.5999999046325684
+          ],
+          "tail": [
+            1.850000023841858,
+            1.75,
+            3.0999999046325684
+          ]
+        },
+        {
+          "name": "FrontShin_R",
+          "parent": "FrontLeg_R",
+          "head": [
+            1.850000023841858,
+            1.899999976158142,
+            1.149999976158142
+          ],
+          "tail": [
+            1.850000023841858,
+            1.899999976158142,
+            1.649999976158142
+          ]
+        },
+        {
+          "name": "BackLeg_L",
+          "parent": "Spine",
+          "head": [
+            -1.7000000476837158,
+            -2.549999952316284,
+            2.25
+          ],
+          "tail": [
+            -1.7000000476837158,
+            -2.549999952316284,
+            2.75
+          ]
+        },
+        {
+          "name": "BackShin_L",
+          "parent": "BackLeg_L",
+          "head": [
+            -1.7000000476837158,
+            -2.700000047683716,
+            1.0499999523162842
+          ],
+          "tail": [
+            -1.7000000476837158,
+            -2.700000047683716,
+            1.5499999523162842
+          ]
+        },
+        {
+          "name": "BackLeg_R",
+          "parent": "Spine",
+          "head": [
+            1.7000000476837158,
+            -2.549999952316284,
+            2.25
+          ],
+          "tail": [
+            1.7000000476837158,
+            -2.549999952316284,
+            2.75
+          ]
+        },
+        {
+          "name": "BackShin_R",
+          "parent": "BackLeg_R",
+          "head": [
+            1.7000000476837158,
+            -2.700000047683716,
+            1.0499999523162842
+          ],
+          "tail": [
+            1.7000000476837158,
+            -2.700000047683716,
+            1.5499999523162842
+          ]
+        },
+        {
+          "name": "Tail",
+          "parent": "Spine",
+          "head": [
+            0.0,
+            -3.5999999046325684,
+            2.799999952316284
+          ],
+          "tail": [
+            0.0,
+            -3.5999999046325684,
+            3.299999952316284
+          ]
+        }
+      ]
+    }
+  ],
+  "inspection_limits": "Internal/intersecting surfaces require visual inspection; edge metrics do not prove their absence.",
+  "original_triangles": 2822,
+  "scale_studs": 11.7,
+  "forward": "Blender +Y / Roblox -Z",
+  "removed_helper": "Tripo Icosphere armature display helper excluded from production scene",
+  "rig_repair": "25 asymmetric bones collapsed to 14 canonical bones; skin weights remapped and normalized",
+  "bounds_min": [
+    -2.799316883087158,
+    -4.738572597503662,
+    0.0
+  ],
+  "bounds_max": [
+    2.799316167831421,
+    6.938575267791748,
+    5.872852325439453
+  ],
+  "camera_names": [
+    "V2_front",
+    "V2_left",
+    "V2_back",
+    "V2_three_quarter"
+  ]
+}

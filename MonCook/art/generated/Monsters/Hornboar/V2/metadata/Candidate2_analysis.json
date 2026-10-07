@@ -1,0 +1,69 @@
+{
+  "scene": "MonCook_Candidate2",
+  "blender": "5.2.2 LTS",
+  "mesh_count": 1,
+  "object_count": 1,
+  "materials": [
+    "tripo_material_848ef369-413b-4906-ae8a-8e9da4b95c2c"
+  ],
+  "material_count": 1,
+  "textures": [
+    {
+      "name": "Color_848ef369-413b-4906-ae8a-8e9da4b95c2c",
+      "resolution": [
+        2048,
+        2048
+      ]
+    }
+  ],
+  "texture_count": 1,
+  "triangles": 2633,
+  "meshes": [
+    {
+      "name": "tripo_node_848ef369-413b-4906-ae8a-8e9da4b95c2c",
+      "triangles": 2633,
+      "vertices": 2194,
+      "materials": 1,
+      "uv_layers": 1,
+      "duplicate_vertices": 824,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 1449,
+      "nonmanifold_edges": 1449,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.998046875,
+        0.486328125,
+        0.505859375
+      ],
+      "modifiers": []
+    }
+  ],
+  "rigs": [],
+  "inspection_limits": "Internal/intersecting surfaces require visual inspection; edge metrics do not prove their absence.",
+  "bounds_min": [
+    -0.4990234375,
+    -0.2431640625,
+    -0.2529296875
+  ],
+  "bounds_max": [
+    0.4990234375,
+    0.2431640625,
+    0.2529296875
+  ],
+  "camera_names": [
+    "Candidate2_front",
+    "Candidate2_left",
+    "Candidate2_back",
+    "Candidate2_three_quarter"
+  ]
+}

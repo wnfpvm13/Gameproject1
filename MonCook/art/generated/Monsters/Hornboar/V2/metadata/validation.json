@@ -1,0 +1,14 @@
+{
+  "offline_validation": "PASS",
+  "triangles": 2966,
+  "meshes": 5,
+  "materials": 2,
+  "textures": 1,
+  "bones": 14,
+  "max_skin_influences": 4,
+  "player_clips": 5,
+  "unchanged_baseline_files": 81,
+  "largest_asset_bytes": 6349284,
+  "studio_execution": "미검증",
+  "mobile_performance": "미검증"
+}

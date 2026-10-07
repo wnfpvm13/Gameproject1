@@ -10,6 +10,7 @@ local Registry = require(Shared.Config.Registry)
 local Math = require(Shared.Utilities.HuntingMath)
 local HitGeometry = require(Shared.Utilities.HuntingHitGeometry)
 local Contracts = require(Shared.Utilities.HuntingContracts)
+local LoadScenario = require(Shared.Utilities.HuntingLoadScenario)
 local NetworkDefinition = require(Shared.Remotes.Definitions).Hunting
 local FieldConfig = require(Shared.Config.GreenwoodConfig)
 local Style = require(Shared.Config.HuntingUIStyle)
@@ -33,7 +34,8 @@ function Runtime.start(options: any): any
 	local showHitboxes = HitGeometry.debugEnabled(RunService:IsStudio(), definitions.Testing.ShowCombatHitboxes)
 	local assets = ReplicatedStorage:WaitForChild("Assets")
 	local monsterAssets, weaponAssets = assets:WaitForChild("Monsters"), assets:WaitForChild("Weapons")
-	for _, definition in definitions.Monster do assert(monsterAssets:FindFirstChild(definition.AssetId), "missing monster V1 asset") end
+	local templates: { [string]: Model } = {}
+	for id, definition in definitions.Monster do templates[id] = Binder.resolve(monsterAssets, definition) end
 	Field.build(Workspace, assets:WaitForChild("Environment"), FieldConfig)
 	local modelsFolder = Instance.new("Folder")
 	modelsFolder.Name, modelsFolder.Parent = "MonCookMonsters", Workspace
@@ -151,7 +153,14 @@ function Runtime.start(options: any): any
 		mark.CFrame, mark.Parent = CFrame.lookAt(origin, origin+facing)*CFrame.new(0, 0, -length/2), modelsFolder
 		asset.Telegraph = mark
 	end
-	monsters = MonsterService.new({ Definitions = definitions, Geometry = Math, Now = now, NewId = newId, Log = log,
+	local monsterDefinitions = definitions
+	local qaCount = Workspace:GetAttribute("MonCookQASpawnCount")
+	if RunService:IsStudio() and table.find({1,5,10,25,50},qaCount) then
+		monsterDefinitions = table.clone(definitions)
+		monsterDefinitions.Spawn = table.clone(definitions.Spawn)
+		monsterDefinitions.Spawn.GreenwoodOutskirts = LoadScenario.zone(definitions.Spawn.GreenwoodOutskirts, qaCount :: number)
+	end
+	monsters = MonsterService.new({ Definitions = monsterDefinitions, Geometry = Math, Now = now, NewId = newId, Log = log,
 		Move = function(id: string, from: any, to: any): any
 			local definition = definitions.Monster[monsters:Get(id).MonsterId]
 			local start, finish = vector(from)+vector(definition.BodyHitbox.Offset), vector(to)+vector(definition.BodyHitbox.Offset)
@@ -231,6 +240,7 @@ function Runtime.start(options: any): any
 			if action.AttackType ~= "Dodge" then ctx.Root.CFrame = CFrame.lookAt(ctx.Root.Position, ctx.Root.Position+vector(action.Facing)) end
 			ctx.Character:SetAttribute("HuntingActorId", action.ActorId)
 			ctx.Character:SetAttribute("HuntingAttack", action.AttackType)
+			ctx.Character:SetAttribute("HuntingAttackId", action.AttackId)
 			ctx.Character:SetAttribute("HuntingCombo", action.ComboIndex or 0)
 			ctx.Character:SetAttribute("HuntingAttackStart", action.StartedAt)
 			ctx.Character:SetAttribute("HuntingAttackEnd", action.EndAt)
@@ -240,6 +250,10 @@ function Runtime.start(options: any): any
 				ActorId = action.ActorId, WeaponId = action.WeaponId, ComboIndex = action.ComboIndex })
 		end })
 	local function attachWeapon(ctx: any)
+		-- Tracks use the server-created Animator so owned published clips can replicate.
+		if not ctx.Humanoid:FindFirstChildOfClass("Animator") then
+			local animator = Instance.new("Animator"); animator.Parent = ctx.Humanoid
+		end
 		if ctx.Character:FindFirstChild("MonCookEquippedWeapon") then return end
 		local weaponId, definition = Contracts.weapon(ctx.Profile, definitions.Weapon)
 		if not weaponId then return end
@@ -256,7 +270,7 @@ function Runtime.start(options: any): any
 			present[id] = true
 			local asset = models[id]
 			if not asset then
-				asset = Binder.monster(monsterAssets:FindFirstChild(definition.AssetId) :: Model, definition, id)
+				asset = Binder.monster(templates[monster.MonsterId], definition, id)
 				asset.Model:SetAttribute("MonsterId", monster.MonsterId)
 				asset.Model.Parent = modelsFolder
 				if showHitboxes then
@@ -322,6 +336,9 @@ function Runtime.start(options: any): any
 			for _, event in monsters:PendingRewards() do if loot:Enqueue(event) then monsters:AckReward(event.EventId) end end
 			for _, ctx in actors do
 				attachWeapon(ctx)
+				if not combat:State(ctx.ActorId).Action and (ctx.Character:GetAttribute("HuntingAttackEnd") or 0) > 0 then
+					ctx.Character:SetAttribute("HuntingAttackEnd", 0)
+				end
 				if debugView then debugView:Render(ctx, combat:State(ctx.ActorId).Action, now()) end
 			end
 			for actorId, dodge in dodges do

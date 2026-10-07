@@ -25,7 +25,7 @@ local Config: any = {
 	},
 	Monster = {
 		Hornboar = {
-			AssetId = "MON_Hornboar_V1", MaxHealth = 140, MoveSpeed = 7, RoamSpeed = 3,
+			AssetId = "MON_Hornboar_V1", PreferredAssetId = "MON_Hornboar_V2", MaxHealth = 140, MoveSpeed = 7, RoamSpeed = 3,
 			AlertDistance = 28, AlertSeconds = 0.55, LeashDistance = 46, RoamRadius = 9,
 			IdleSeconds = 1.2, RoamSeconds = 2.5, StaggerSeconds = 0.65,
 			RoamArrivalDistance = 0.1,

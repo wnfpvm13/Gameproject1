@@ -3,6 +3,7 @@
 -- for the user-imported Hornboar MeshPart + Motor6D rig.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RigMap = require(ReplicatedStorage:WaitForChild("Shared").Utilities.ImportedHornboarRig)
+local Policy = require(ReplicatedStorage:WaitForChild("Shared").Utilities.HuntingAssetPolicy)
 
 local Binder = {}
 local function binding(object: Instance): string?
@@ -16,6 +17,32 @@ local function semanticJoint(object: Motor6D): string?
 	local tag = binding(object)
 	if tag and string.sub(tag, 1, 6) == "Joint:" then return string.sub(tag, 7) end
 	return RigMap.jointSemantic(object.Name, if object.Parent then object.Parent.Name else nil)
+end
+
+function Binder.resolve(folder: Instance, config: any): Model
+	local preferred = config.PreferredAssetId and folder:FindFirstChild(config.PreferredAssetId)
+	if preferred and preferred:IsA("Model") then
+		local summary: any = { MarkedReady = preferred:GetAttribute("HornboarV2Ready") == true,
+			Root = false, Meshes = 0, HornIntact = false, HornBroken = false, Bones = {} }
+		for _, object in preferred:GetDescendants() do
+			if object:IsA("BasePart") then
+				local semantic = semanticPart(object)
+				if semantic == "Root" then summary.Root = true end
+				if object:IsA("MeshPart") then summary.Meshes += 1 end
+				if semantic == "HornIntact" then summary.HornIntact = true end
+				if semantic == "HornBroken" then summary.HornBroken = true end
+			elseif object:IsA("Bone") then
+				local semantic = RigMap.boneSemantic(object.Name)
+				if semantic then summary.Bones[semantic] = true end
+			end
+		end
+		local ready, reason = Policy.ready(summary)
+		if ready then return preferred end
+		warn("[MonCook Art] V2 unavailable: "..tostring(reason).."; using retained V1")
+	end
+	local fallback = folder:FindFirstChild(config.AssetId)
+	assert(fallback and fallback:IsA("Model"), "missing imported monster template: "..config.AssetId)
+	return fallback :: Model
 end
 
 function Binder.scan(model: Model): any

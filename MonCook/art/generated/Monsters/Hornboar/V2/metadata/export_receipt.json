@@ -1,0 +1,8 @@
+{
+  "studio_execution": "unverified",
+  "glb_sha256": "c66ef1432318edb4dc17205e2474a69eb2f0122209f070d95d7c547f6fed90be",
+  "fbx_sha256": "ba07d54c2a509c0fe82687d9555330ddf5707e6f749e9cd78f5b939fd7825e82",
+  "fbx_reimport": "measured 2966 triangles / 5 meshes / 14 bones",
+  "source_commit": "5fcb8a93d7e9d294a69425b9c54c9016ae74a008",
+  "date_kst": "2026-10-07"
+}

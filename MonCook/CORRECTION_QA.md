@@ -4,11 +4,11 @@
 
 ## 모델 실행 조건
 
-새 Hornboar는 Blender에서 직접 만든 low-poly mesh입니다. `.rbxlx`에는 실제 vertex/triangle/palette 데이터와 14-joint skeleton/loader를 포함하며, 실행 시 각 클라이언트가 `AssetService:CreateEditableMesh()` → `CreateMeshPartAsync(Content.fromObject(...))`로 14개 MeshPart visual을 만듭니다. 동일 topology를 클라이언트마다 한 번 cache하고 respawn/두 몬스터가 공유합니다. Gameplay는 서버 skeleton/hitbox를 계속 사용합니다.
+Hornboar는 사용자가 Studio에서 FBX Import 3D로 가져온 `MeshPart + Motor6D + AnimationController` custom rigid rig를 사용합니다. 런타임 `EditableMesh` 생성은 더 이상 사용하지 않습니다. 필수 part는 RootPart/Torso/Head/4 upper legs/4 lower shins/Horn_Intact/Horn_Broken/Tail이며, Binder가 이름을 semantic Root/HornIntact/HornBroken 및 joints로 매핑합니다.
 
-이 경로의 **실제 Studio 실행은 아직 확인하지 못했습니다**. 최신 Studio에서 Play 후 `LocalBlenderMesh`와 `LocalMeshReady`를 확인합니다. API 권한/버전/메모리 실패 시 Output에 이유를 출력하고 `모델 로드 실패 · QA 보류`를 표시합니다. 거절된 구형 Part/Sphere 모델로 대체하지 않습니다. 이 경우 아트 acceptance는 실패입니다.
+서버 gameplay 판정은 imported mesh 자체가 아니라 별도 invisible Body/Horn hitbox를 사용합니다. imported MeshParts는 collision/query/touch를 끄고 presentation 전용으로 둡니다. Horn break는 `Horn_Intact`를 숨기고 `Horn_Broken`을 표시하며 Horn gameplay query도 즉시 비활성화합니다.
 
-Published는 EditableMesh API가 기본 비활성화될 수 있습니다. [Roblox EditableMesh 공식 문서](https://create.roblox.com/docs/reference/engine/classes/EditableMesh)의 Enable Mesh/Image APIs 및 소유/인증 조건을 확인하거나, 함께 제공한 FBX를 Studio에서 가져와 소유한 MeshParts로 교체합니다. 외부 mesh/AnimationId를 업로드한 것으로 보고하지 않습니다. 이미 가져온 모델에 Root·Joint/HornIntact/HornBroken/Visual Binding을 유지하면 loader는 기존 MeshPart를 사용합니다. 같은 이름의 imported asset으로 교체할 때 rig nodes/Motor6D 계약도 보존해야 합니다.
+원본 Studio-imported `.rbxm` 계약: 76,575 bytes, SHA-256 `df3ef039ba0141c7227cdd560dd64ecd1f59341ed0ba50a3695691f9a4782578`. 이 해시가 다르면 다른 모델로 간주하고 QA를 보류합니다.
 
 ## Setup
 
@@ -66,6 +66,6 @@ Native R6/R15 Motor6D additive poses는 PreAnimation에서 이전 delta를 제�
 
 Body/Horn sound는 현재 짧은 built-in landing sample의 pitch/volume를 구분합니다. 별도 원본 Body/Horn/Heavy WAV를 제작했지만 Roblox에 업로드하지 않았습니다. 소리/모양이 단단한 Horn hit로 읽히는지 확인하고 승인한 audio ID로 교체할 수 있습니다.
 
-MeshPart/EditableMesh 생성 성공·첫 준비 시간·2–4인 mobile frame time/메모리·streaming/respawn을 기록합니다. JSON decode/cache는 시작 시만, mesh는 공통 template 한 세트만 생성합니다. 권한/메모리 실패와 authored FBX imported replacement는 별도 확인합니다.
+Imported MeshPart rig 로드·첫 준비 시간·2–4인 mobile frame time/메모리·streaming/respawn을 기록합니다. 동일 imported template을 clone하여 사용하며 runtime mesh 생성 API는 호출하지 않습니다. Motor6D pose, horn swap, streaming/respawn을 별도 확인합니다.
 
 테스트 날짜/Studio 버전/기기/R6·R15/2·4인/각 PASS·FAIL/Output/영상·스크린샷을 보고합니다. 어떤 필수 항목이라도 미검증·실패면 Phase 1 acceptance를 보류합니다. Phase 2로 넘어가지 않습니다.

@@ -4,6 +4,8 @@ Roblox Studio / Luau 프로젝트입니다. 여러 게임을 담은 `Gameproject
 
 ## 현재 구현 — Phase 1 Correction
 
+최신 [Studio 경량화 보고/가져오기 안내](HORNBOAR_LITE.md): 1,500 triangles / 14 bones, Motor6D용 개별 메시 FBX 90KB(권장), skinned FBX 123KB, 13개 동작은 제작용 파일에 보존했습니다. 공유 브랜치의 기존 Studio imported Motor6D rig를 유지합니다.
+
 최신 [애니메이션/모델 지침](docs/PHASE_1_CORRECTION_Animation_Hornboar_Redesign.md)과 [판정 지침](docs/PHASE_1_CORRECTION_Combat_Hitbox_Range.md)을 반영했습니다. Basic/Heavy의 전방 surface 판정·전신 공격·피격 feedback·Blender Hornboar 메시를 수정했습니다. **새 모델은 Studio 승인 대기 V1 candidate**이며 [CORRECTION_QA.md](CORRECTION_QA.md)의 API 실행 조건과 수동 판정을 먼저 확인합니다.
 
 Foundation PR #1을 사용자 승인으로 main에 병합한 뒤 `integration/hunting`에서 구현했습니다. [사냥 지침](docs/NEXT_CODEX_INSTRUCTION_Phase_1_Hunting_Foundation.md)과 [3D 제작 지침](docs/ADDITIONAL_PHASE_1_3D_ASSET_PRODUCTION.md)을 함께 적용했습니다.
@@ -23,11 +25,13 @@ Phase 0.8 Party HUD·Finder·ReadyCheck·수동 드래그는 유지합니다. �
 
 ## Studio에서 확인
 
+**현재 원본 imported `.rbxm`이 공유 저장소에 빠져 있어 새 플레이 파일 재빌드는 보류했습니다.** 사용자 Studio의 기존 모델은 보존하고 `MON_Hornboar_V1_Studio_Rigid.fbx`를 3D Importer로 별도 가져와 확인합니다. 기존 Motor6D rig를 유지하며 같은 이름의 mesh를 교체해야 합니다. 선택 가능한 `Studio.fbx`는 skinned Bones 구조입니다. 상세 복구/연결 절차는 HORNBOAR_LITE.md에 있습니다.
+
 `MonCook_Phase_1_Correction.rbxlx`를 열고 **Server & Clients 2–4명**으로 실행합니다. 초록 사냥터 표지판 너머에 Hornboar가 생성됩니다. PC는 M1 공격 / Q 강공 / F 회피 / I 가방, Gamepad는 R2 / X / B, Touch는 화면 버튼입니다. 기본 이동·점프·Shift Lock을 유지합니다.
 
 Studio는 기존 메모리 저장소를 사용하고 플레이어마다 HornboarMeat 5개·Salt 5개를 테스트용으로 제공합니다. 실행 중 지급/중복 검증은 가능하지만 Stop 후 저장소가 사라집니다. Published DataStore 검증과 실제 텔레포트는 별도입니다. World/Restaurant Place ID 기본값은 `0`입니다.
 
-[HUNTING_QA.md](HUNTING_QA.md)의 15개 플레이 절차와 멀티플레이·모바일·아트 확인표를 따릅니다. 이 환경에서는 Studio나 Windows C: 드라이브에 직접 접근할 수 없습니다. 이번 지침에 따라 새 전체 소스 설치 ZIP은 만들지 않습니다. PC에서는 Git 저장소의 해당 브랜치를 받아 기존 개인 보관 폴더에도 복사할 수 있습니다.
+[HUNTING_QA.md](HUNTING_QA.md)의 15개 플레이 절차와 멀티플레이·모바일·아트 확인표를 따릅니다. 이 환경에서는 Studio나 Windows C: 드라이브에 직접 접근할 수 없습니다. 후속 요청에 따라 최신 source/export 전체 ZIP을 제공합니다. PC에서는 Git 저장소의 해당 브랜치를 받아 기존 개인 보관 폴더에도 복사할 수 있습니다.
 
 ```sh
 rojo build default.project.json -o MonCook_Phase_1_Correction.rbxlx
@@ -38,12 +42,12 @@ rojo serve default.project.json
 
 ```sh
 python3 tools/run_foundation_tests.py
-python3 tools/validate_hunting_artifacts.py --place MonCook_Phase_1_Correction.rbxlx
+python3 tools/validate_hunting_artifacts.py --art-only
 ```
 
-공식 Luau CLI로 문법·순수 모듈 strict 분석·316개 테스트 그룹을 실행합니다. 검증 도구는 기존 176개 테스트 파일 보존, 네이티브 모델 참조와 빌드된 56개 스크립트 소스 일치를 확인합니다. Roblox 엔진 검증과 구분합니다.
+공식 Luau CLI로 문법·순수 모듈 strict 분석·324개 테스트 그룹을 실행합니다. 검증 도구는 기존 176개 테스트 파일 보존, 네이티브 모델 참조와 원본 imported asset 복구 후 빌드 script 소스 일치를 확인합니다. Roblox 엔진 검증과 구분합니다.
 
-`art/blender/`에 실제 `.blend`, `art/exports/`에 FBX/GLB, `art/runtime/`에 Rojo가 포함하는 `.rbxmx`가 있습니다. **Hornboar는 실제 Blender topology를 EditableMesh MeshParts로 생성하고, 나머지는 기존 Part/WedgePart V1입니다.** 새 runtime API/모델은 실제 Studio에서 미검증이며 업로드된 asset/AnimationId로 보고하지 않습니다. 제작·재가져오기·triangle/리그 수치와 교체 방식은 [art/README.md](art/README.md)를 따릅니다.
+`art/blender/`에 실제 `.blend`, `art/exports/`에 FBX/GLB, `art/runtime/`에 Rojo가 포함하는 `.rbxmx`가 있습니다. **게임 Hornboar는 Studio imported MeshPart/Motor6D 모델을 직접 사용하며 runtime EditableMesh 생성은 제거했습니다.** 이번 새 경량 source의 재업로드와 rig 연결은 미수행입니다. 나머지는 기존 Part/WedgePart V1입니다. 제작·재가져오기·triangle/리그 수치와 교체 방식은 [art/README.md](art/README.md)를 따릅니다.
 
 ```text
 docs/                   설계·지침·계약·과거 보고

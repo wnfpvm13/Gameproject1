@@ -1,7 +1,7 @@
 {
   "MON_Hornboar_V1": {
-    "triangles": 4248,
-    "mesh_objects": 44,
+    "triangles": 1500,
+    "mesh_objects": 14,
     "bones": [
       "Root",
       "Spine",
@@ -33,7 +33,9 @@
       "Rig|Rig|Stagger",
       "Rig|Rig|Walk"
     ],
-    "fbx_reimport": "PASS"
+    "fbx_reimport": "PASS",
+    "studio_fbx_reimport": "PASS",
+    "studio_rigid_fbx_reimport": "PASS"
   },
   "WPN_StarterCleaver_V1": {
     "triangles": 2168,

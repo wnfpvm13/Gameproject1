@@ -1,8 +1,10 @@
 # MonCook 작업 상태 — Phase 1 Correction
 
-기록일: 2026-10-06 (한국 시간). 브랜치 `integration/hunting`, [Draft PR #2](https://github.com/wnfpvm13/Gameproject1/pull/2). **수정 구현·자동 검증 완료 / 실제 Studio acceptance 보류**. 사용자 Studio 확인에서 기존 공격 모션·구형 모델·hit readability가 거절되어 수정합니다. [이전 Phase 1 보고](docs/implementation-reports/Phase_1_Initial_Hunting.md)는 당시 기록으로 보존하며, 현재 아트 승인을 의미하지 않습니다.
+기록일: 2026-10-07 (한국 시간). 브랜치 `integration/hunting`, [Draft PR #2](https://github.com/wnfpvm13/Gameproject1/pull/2). **수정 구현·자동 검증 완료 / 실제 Studio acceptance 보류**. 사용자 Studio 확인에서 기존 공격 모션·구형 모델·hit readability가 거절되어 수정합니다. [이전 Phase 1 보고](docs/implementation-reports/Phase_1_Initial_Hunting.md)는 당시 기록으로 보존하며, 현재 아트 승인을 의미하지 않습니다.
 
 [첨부 재설계/애니메이션 지침](docs/PHASE_1_CORRECTION_Animation_Hornboar_Redesign.md)과 [공격 판정 지침](docs/PHASE_1_CORRECTION_Combat_Hitbox_Range.md)을 함께 적용했습니다. [최신 수동 QA](CORRECTION_QA.md)를 먼저 따릅니다.
+
+최신 추가 작업: [Hornboar 경량화 보고](HORNBOAR_LITE.md). 제작 source는 4,248→1,500 triangles / 2,212→838 vertices이며 권장 Studio Rigid FBX는 92,492 bytes, 선택 가능한 skinned FBX는 125,868 bytes입니다. 원격의 최신 imported-Motor6D 런타임을 보존했습니다. 원본 imported `.rbxm`이 저장소에서 빠져 있어 새 플레이 파일 검증은 보류하며 전체 source/export ZIP을 제공합니다.
 
 ## 1. 구현 내용
 
@@ -35,7 +37,7 @@ Body/Horn/Heavy original WAV도 생성했습니다. 현재 game sound는 업로�
 
 ## 4. Triangle / Rig / Runtime 표현
 
-새 Hornboar **4,248 triangles**, 44 source objects, **14 bones**. Duplicate vertices/zero-area bevel faces를 정리하고 모든 exported face의 면적·index·palette·source SHA를 검증했습니다. 3,000–6,000 budget을 만족합니다. Cleaver는 기존 2,168 triangles입니다.
+새 경량 제작 source **1,500 triangles**, 14 source objects, **14 bones**. Duplicate vertices/zero-area bevel faces를 정리하고 모든 exported face의 면적·index·palette·source SHA를 검증했습니다. 최신 사용자 요청에 따른 1,000–2,000 budget을 만족합니다. Cleaver는 기존 2,168 triangles입니다.
 
 Hornboar source/FBX의 Root/Spine/Neck/Head/4 upper legs/4 shins/Horn/Tail hierarchy를 보존했습니다. Studio-imported Hornboar는 `RootPart + MeshPart + Motor6D + AnimationController` rigid rig입니다. 서버는 이 imported visual rig를 복제하고 별도 invisible Body/Horn gameplay hitbox를 붙입니다. Animation은 imported Motor6D에 semantic mapping으로 직접 적용합니다. `EditableMesh`/`CreateMeshPartAsync` runtime 생성은 제거했습니다. 원본 `.rbxm`의 크기 76,575 bytes, SHA-256 `df3ef039ba0141c7227cdd560dd64ecd1f59341ed0ba50a3695691f9a4782578`를 asset contract로 기록했습니다.
 
@@ -51,36 +53,35 @@ Body는 warm spark·short flinch, Horn은 cyan thin spark·head recoil, Heavy는
 
 ## 6. 테스트 결과
 
-**316개 그룹 PASS = 기존 288개 시나리오 + 신규 28개**. 기존 Foundation 176개 테스트 파일은 merge baseline과 바이트 동일합니다. 기존 Phase 1 보상 통합 8개 시나리오는 유지하고 기존 center-only contact fixture만 실제 box geometry로 갱신했습니다.
+**324개 그룹 PASS**: 기존 316개 + 최신 imported-rig 8개. **79개 Luau syntax compile**, 순수 모듈 strict 분석 PASS. 기존 176개 Foundation 테스트와 경제/전투/보상 계약은 유지합니다.
 
-신규 검증: center가 범위/각도 밖인 surface/shoulder/flank, exact max range/외부, 뒤·옆·수직/diagonal broadphase corner, rotated box/inside/tangent, front/diagonal Horn, Horn priority/파괴 후 Body, Basic/Heavy 차이, Debug default/Release gate, 다수 box의 contact 범위 불변식, bounded mirrored assist/near-surface, rear overlapping target, 뿔 옆 Body, 서버 Heavy window, 3 combo full-body 차이/Heavy 양팔/rest/Dodge, distinct recoil/accepted hit only/duplicate.
+Blender 4.3.2: 16개 실제 FBX reimport PASS, Hornboar source 1,500 triangles / 14 bones / 13 actions. 별도 Studio Rigid FBX 14 meshes / 1,500 triangles / compatible part names PASS; skinned FBX 3 meshes / 14 bones / deform weights / no baked clips PASS. Art-only validation에서 source SHA·triangle index/면적·palette·Body/Horn bounds와 작은 size budget PASS.
 
-Official Luau 0.741: **79개 syntax compile PASS**, 순수 모듈/테스트 strict 분석 PASS. Blender 4.3.2: 실제 16개 FBX reimport PASS, 새 Hornboar 4,248/14 bones/13 actions 확인. Rojo 7.7.1: **56개 runtime script/module 경로·타입·소스 일치**, 16 asset source/export·native skeleton/binding·정확한 topology/index/면적/palette/Body·Horn bounds·원본 회귀 보존 PASS.
-
-실행 중 발견한 퇴화 face와 생성 데이터의 type complexity는 topology 정리/JSON packet으로 해결했습니다. 최종 검증에는 남은 실패가 없습니다. Roblox API의 실제 실행/클라이언트 이벤트·physics는 위 offline 결과와 구분합니다.
+**전체 플레이 파일 검증은 FAIL/보류**: 최신 브랜치가 요구하는 원본 imported `.rbxm`이 저장소에 없습니다. 엄격한 원본 size/hash 검사를 유지하여 누락을 명시합니다. 이전 generation 경로의 .rbxlx 검증을 최신 imported runtime 결과로 간주하지 않습니다. 최신 직접-import 코드에는 CreateEditableMesh/CreateMeshPartAsync가 없습니다.
 
 ## 7. 실제 Studio 미검증 / acceptance
 
-이 환경에서는 Studio 연결이 없습니다. 사용자 피드백은 수정 전 실제 플레이 결과이며, 수정 후 검증으로 간주하지 않습니다. [CORRECTION_QA.md](CORRECTION_QA.md)의 hit 12항목과 animation/art 18항목, 2–4인·R6/R15·Touch/Gamepad·attack timing·EditableMesh 생성/메모리/streaming·새 실루엣·Body/Horn feedback를 실제 실행해야 합니다.
+이 환경에서는 Studio 연결이 없습니다. 사용자 피드백은 수정 전 실제 플레이 결과이며, 수정 후 검증으로 간주하지 않습니다. [CORRECTION_QA.md](CORRECTION_QA.md)의 hit 12항목과 animation/art 18항목, 2–4인·R6/R15·Touch/Gamepad·attack timing·imported model/메모리/streaming·새 실루엣·Body/Horn feedback를 실제 실행해야 합니다.
 
-특히 새 geometry packet/loader의 API 성공 여부, 첨부 재설계 시각 승인, 실제 무기/box 타이밍, built-in Horn sound의 읽힘, mobile 성능은 미검증입니다. **Phase 1 acceptance 완료를 선언하지 않습니다.**
+특히 경량 source의 실제 Studio import/rig 연결과 누락 원본 asset 복구, 첨부 재설계 시각 승인, 실제 무기/box 타이밍, built-in Horn sound의 읽힘, mobile 성능은 미검증입니다. **Phase 1 acceptance 완료를 선언하지 않습니다.**
 
 ## 8. 알려진 문제 / TODO
 
 - Source rig와 runtime rigid MeshPart/Motor6D visual 사이의 변형·R6/R15 retarget 품질은 실제 장면에서 확인합니다. Source imported skinned-animation playback은 별도 후속 작업입니다.
 - Box는 현재 pose의 conservative root-relative approximation입니다. Horn recoil 중 visual 차이를 QA로 측정하고 필요하면 Config/Binder 범위 안에서 조정합니다.
+- 원본 imported asset이 누락되어 새 플레이 파일을 검증하지 못했습니다. 복구 절차는 HORNBOAR_LITE.md를 따릅니다.
 - Basic/Heavy 값은 TODO_BALANCE입니다. 낮은 frame rate/latency에서 window readability·mesh cache/mobile memory·streaming을 확인합니다.
 - Authored WAV/audio IDs 및 최종 Horn impact tone은 추가 Art QA입니다. 현재 작은 소리는 builtin fallback이고 source만 만들어 놓은 무음 상태는 아닙니다.
 - 기존 단순 AI 장애물 정체, 미확정 server-memory loot queue의 강제 종료/장기 저장 장애 유실 가능성, Published IDs/real teleport 미검증은 유지합니다. DataService/Inventory/Loot 경제 계약을 이번 수정으로 바꾸지 않았습니다.
 
 ## 9. 산출물
 
-[Draft PR #2](https://github.com/wnfpvm13/Gameproject1/pull/2)를 갱신합니다. 공유 폴더 `/workspace/shared/MonCook`에 최신 source/art/docs 및 `MonCook_Phase_1_Correction.rbxlx`를 보관합니다. 이전 파일도 보존하되 이번 수동 QA는 Correction 파일을 사용합니다. 전체 소스 PC 설치 ZIP은 만들지 않습니다. Windows C: 직접 복사는 미수행입니다.
+[Draft PR #2](https://github.com/wnfpvm13/Gameproject1/pull/2)를 갱신합니다. 공유 폴더 `/workspace/shared/MonCook`에 최신 source/art/docs 및 경량화 전체 ZIP/Studio FBX를 보관합니다. 기존 플레이 파일은 과거 산출물로 보존하며 최신 imported runtime 검증 파일로 간주하지 않습니다. 사용자의 후속 요청에 따라 전체 source ZIP을 제공합니다. Windows C: 직접 복사는 미수행입니다.
 
-최종 place SHA256은 공유 `.sha256` 파일에 기록합니다. 소스 mirror와 원본 파일 바이트 일치 검증 후 전달합니다.
+최신 ZIP SHA256은 공유 `.sha256` 파일에 기록합니다. 소스 mirror와 원본 파일 바이트 일치 검증 후 전달합니다.
 
 ## 10. 다른 브랜치 / Phase 2 영향
 
 변경은 MonCook/에만 있습니다. DataService·InventoryService·LootService·Party/Session/Expedition·Foundation core와 경제/저장/migration/receipt/remote intent fields는 유지합니다. Monster presentation event/optional hit metadata, Heavy short stagger, action reach/arc와 선택적 geometry injection만 확장합니다. 기존 feature 서비스 snapshot보다 최종 integration/hunting adapter/mesh/animation이 우선합니다.
 
-후속 mesh 교체는 Root/Joint/Visual/HornIntact/HornBroken Binding과 server hitbox 계약을 보존해야 합니다. Cooking/Restaurant·새 몬스터·Expedition 실제 전투·Quick Match/Phase 2는 시작하지 않습니다. **수정 결과와 새 Studio 파일을 제공한 뒤 멈춥니다.**
+후속 mesh 교체는 Root/Joint/Visual/HornIntact/HornBroken Binding과 server hitbox 계약을 보존해야 합니다. Cooking/Restaurant·새 몬스터·Expedition 실제 전투·Quick Match/Phase 2는 시작하지 않습니다. **경량화 결과와 source/export ZIP을 제공한 뒤 멈춥니다.**

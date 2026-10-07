@@ -35,8 +35,10 @@ def index(root):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--place", type=Path, required=True)
+    parser.add_argument("--place", type=Path)
+    parser.add_argument("--art-only", action="store_true", help="Validate source/export geometry without claiming runtime asset availability")
     args = parser.parse_args()
+    if not args.art_only and args.place is None:parser.error("--place is required unless --art-only is used")
     art = PROJECT / "art"
     source = json.loads((art / "asset_manifest.json").read_text())
     native = json.loads((art / "runtime_manifest.json").read_text())["baseparts"]
@@ -47,8 +49,10 @@ def main():
     assert topology["TriangleCount"] == hornboar["blender_triangles"] == sum(len(g["Faces"]) for g in topology["Groups"])
     imported = json.loads((art / "imported_hornboar.json").read_text())
     imported_path = art / "runtime" / "Monsters" / "MON_Hornboar_V1.rbxm"
-    assert imported_path.is_file() and imported_path.stat().st_size == imported["size_bytes"]
-    assert hashlib.sha256(imported_path.read_bytes()).hexdigest() == imported["sha256"]
+    if not args.art_only:
+        assert imported_path.is_file(), "Studio-imported .rbxm is absent; supply the original asset before validating a play file"
+        assert imported_path.stat().st_size == imported["size_bytes"]
+        assert hashlib.sha256(imported_path.read_bytes()).hexdigest() == imported["sha256"]
     bounds = []
     for group in topology["Groups"]:
         assert group["Bone"] in hornboar["bones"]
@@ -67,7 +71,15 @@ def main():
             assert all(abs(v[0]) <= 1.375 and 3.0 <= v[1] <= 5.9 and -7.5 <= v[2] <= -3.0 for v in horn_vertices)
     # Body box intentionally includes the torso/neck, head and leg-gap silhouette.
     assert all(abs(v[0]) <= 2.8 and -.01 <= v[1] <= 5.0 and -5.85 <= v[2] <= 4.75 for v in bounds)
-    assert 3000 <= source["assets"]["MON_Hornboar_V1"]["blender_triangles"] <= 6000
+    assert hornboar["triangle_budget"] == [1000, 2000]
+    assert 1000 <= hornboar["blender_triangles"] <= 2000
+    assert len(topology["Groups"]) == 14 and len(hornboar["bones"]) == 14
+    assert sum(len(g["Vertices"]) for g in topology["Groups"]) <= 1000
+    assert (art / "hornboar_mesh.json").stat().st_size < 50_000
+    assert (art / hornboar["studio_fbx"]).stat().st_size < 250_000
+    assert exports["MON_Hornboar_V1"]["studio_fbx_reimport"] == "PASS"
+    assert (art / hornboar["studio_rigid_fbx"]).stat().st_size < 250_000
+    assert exports["MON_Hornboar_V1"]["studio_rigid_fbx_reimport"] == "PASS"
     assert 1000 <= source["assets"]["WPN_StarterCleaver_V1"]["blender_triangles"] <= 2500
     for asset_id, asset in source["assets"].items():
         for kind in ("source", "fbx", "glb"):
@@ -88,6 +100,11 @@ def main():
             if item.attrib["class"] in ("Part", "WedgePart"):
                 p = props(item)
                 assert p["CanCollide"].text == "false" and p["CanQuery"].text == "false", (asset_id, "visual used as hitbox")
+    source_text = "\n".join(p.read_text() for p in PROJECT.joinpath("src").rglob("*.luau"))
+    assert "CreateEditableMesh" not in source_text and "CreateMeshPartAsync" not in source_text, "runtime EditableMesh path returned"
+    if args.art_only:
+        print(f"PASS ART ONLY: {len(source['assets'])} source/FBX/GLB assets, {topology['TriangleCount']} topology triangles; Studio FBX 3 meshes/14 bones. Runtime .rbxm/place not validated.")
+        return
     place = ET.parse(args.place).getroot()
     entries = index(place)
     imported_prefix = "ReplicatedStorage/Assets/Monsters/MON_Hornboar_V1"

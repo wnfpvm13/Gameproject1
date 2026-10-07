@@ -154,9 +154,13 @@ def build(asset_id, asset):
 def main():
     counts = {}
     for asset_id, asset in catalog().items():
+        # Studio-imported Hornboar is owned separately; never replace its rig with
+        # the obsolete generated invisible skeleton when regenerating other props.
+        if asset_id == "MON_Hornboar_V1" and (ART / "imported_hornboar.json").exists():
+            continue
         counts[asset_id] = build(asset_id, asset)
     path = ART / "runtime_manifest.json"
-    path.write_text(json.dumps({"representation": "native props/weapon; Hornboar authoritative skeleton + embedded Blender topology, runtime MeshParts", "baseparts": counts}, indent=2)+"\n")
+    path.write_text(json.dumps({"representation": "native props/weapon; Studio-imported Hornboar is preserved separately", "baseparts": counts}, indent=2)+"\n")
     print(f"Native Roblox model generation: {len(counts)} assets, {sum(counts.values())} template BaseParts.")
 
 

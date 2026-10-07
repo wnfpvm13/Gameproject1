@@ -1,7 +1,6 @@
 {
-  "representation": "native props/weapon; Hornboar authoritative skeleton + embedded Blender topology, runtime MeshParts",
+  "representation": "native props/weapon; Studio-imported Hornboar is preserved separately",
   "baseparts": {
-    "MON_Hornboar_V1": 14,
     "WPN_StarterCleaver_V1": 22,
     "ING_HornboarMeat_V1": 4,
     "ING_ArcaneFat_V1": 4,

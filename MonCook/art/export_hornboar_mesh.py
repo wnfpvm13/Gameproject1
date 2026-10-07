@@ -1,8 +1,8 @@
-"""Export Blender-authored topology to a static Luau packet for client MeshPart generation."""
+"""Validate authoring topology without restoring the removed runtime mesh loader."""
 from pathlib import Path
-import json
+import json,hashlib
 ART=Path(__file__).resolve().parent
 data=json.loads((ART/'hornboar_mesh.json').read_text())
-p=ART.parent/'src/shared/Assets/HornboarMeshData.luau';p.parent.mkdir(parents=True,exist_ok=True)
-p.write_text('--!strict\n-- Actual Blender topology; run art/export_hornboar_mesh.py.\nreturn { Json = [=['+json.dumps(data,separators=(',',':'))+']=] }\n')
-print('Blender topology packet:',data['TriangleCount'],'triangles,',len(data['Groups']),'bound mesh groups,',p.stat().st_size,'bytes')
+assert data['SourceSHA256']==hashlib.sha256((ART/'blender/Hornboar/MON_Hornboar_V1.blend').read_bytes()).hexdigest()
+assert data['TriangleCount']==sum(len(g['Faces']) for g in data['Groups'])
+print('Authoring topology:',data['TriangleCount'],'triangles,',len(data['Groups']),'mesh groups,',(ART/'hornboar_mesh.json').stat().st_size,'bytes; game uses Studio-imported asset')

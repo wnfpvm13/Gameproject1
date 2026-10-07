@@ -1,6 +1,8 @@
 # Phase 1 Correction Studio QA — 실행 결과 미검증
 
-이번 파일: `MonCook_Phase_1_Correction.rbxlx`. 기존 사냥/보상 검증은 [HUNTING_QA.md](HUNTING_QA.md)를 함께 따릅니다. 자동 316개 테스트와 FBX 재가져오기/빌드 검증은 실제 Studio acceptance를 대신하지 않습니다.
+이번 파일: `MonCook_Phase_1_Correction.rbxlx`. 기존 사냥/보상 검증은 [HUNTING_QA.md](HUNTING_QA.md)를 함께 따릅니다. 자동 324개 테스트와 FBX 재가져오기/빌드 검증은 실제 Studio acceptance를 대신하지 않습니다.
+
+최신 [경량화 보고](HORNBOAR_LITE.md)의 권장 rigid FBX는 1,500 triangles / 14 named meshes / 92,492 bytes이며, 선택 가능한 skinned FBX는 14 bones / 125,868 bytes입니다. 제작 source가 imported 게임 모델의 MeshId를 자동 변경하지는 않습니다. 원본 imported `.rbxm`이 저장소에 없어 새 플레이 파일 재빌드는 현재 보류합니다. 사용자 Studio의 기존 모델을 보존하고 FBX를 별도 Model로 먼저 확인합니다.
 
 ## 모델 실행 조건
 

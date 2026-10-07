@@ -35,7 +35,7 @@ def material(color):
     return m
 
 
-def mesh_part(spec):
+def mesh_part(spec, bevel_segments=2):
     kind = spec["kind"]
     if kind == "Ellipsoid":
         bpy.ops.mesh.primitive_uv_sphere_add(segments=spec["segments"], ring_count=spec["rings"], radius=1)
@@ -64,7 +64,7 @@ def mesh_part(spec):
     if kind == "Box" and spec["bevel"] > 0:
         modifier = obj.modifiers.new("CraftedEdges", "BEVEL")
         modifier.width = spec["bevel"]
-        modifier.segments = 2
+        modifier.segments = bevel_segments
         bpy.ops.object.modifier_apply(modifier=modifier.name)
     triangulate = obj.modifiers.new("GameTriangles", "TRIANGULATE")
     bpy.ops.object.modifier_apply(modifier=triangulate.name)

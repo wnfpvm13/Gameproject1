@@ -4,6 +4,7 @@ build/
 *.rbxm
 *.rbxmx
 !art/runtime/**/*.rbxmx
+!art/runtime/**/*.rbxm
 *.blend1
 .MonCook-docs-backups/
 .MonCook-project-backups/

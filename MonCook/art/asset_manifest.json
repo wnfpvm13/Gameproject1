@@ -4,8 +4,8 @@
     "MON_Hornboar_V1": {
       "family": "Monsters",
       "status": "V1_CANDIDATE",
-      "blender_triangles": 4248,
-      "objects": 44,
+      "blender_triangles": 1500,
+      "objects": 14,
       "bones": [
         "Root",
         "Spine",
@@ -37,10 +37,17 @@
         "Stagger",
         "Death"
       ],
-      "runtime_representation": "actual Blender vertex/triangle data, client EditableMesh MeshParts; Studio execution pending",
+      "runtime_representation": "Studio-imported .rbxm runtime; lightweight exports await separate import/upload",
       "source": "blender/Hornboar/MON_Hornboar_V1.blend",
       "fbx": "exports/Monsters/MON_Hornboar_V1.fbx",
-      "glb": "exports/Monsters/MON_Hornboar_V1.glb"
+      "glb": "exports/Monsters/MON_Hornboar_V1.glb",
+      "triangle_budget": [
+        1000,
+        2000
+      ],
+      "studio_fbx": "exports/Monsters/MON_Hornboar_V1_Studio.fbx",
+      "studio_mesh_objects": 3,
+      "studio_rigid_fbx": "exports/Monsters/MON_Hornboar_V1_Studio_Rigid.fbx"
     },
     "WPN_StarterCleaver_V1": {
       "family": "Weapons",

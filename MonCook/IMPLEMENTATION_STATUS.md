@@ -20,7 +20,7 @@ Basic reach **5.8 studs / 96°**, Heavy **6.8 / 108°**, Heavy PartPower 55를 C
 - `HuntingRuntime`/`CombatDebugView`: volume 접촉/LOS, 서버 확정 feedback, 실제 attack window attrs, Studio flag + IsStudio 이중 debug gate. 기본 false·Published 강제 비표시.
 - `CombatAnimation`/`HuntingAnimation`/`HuntingAnimator`: torso/root·waist·neck·양팔·elbow/wrist·cleaver, 네 다리/하퇴, distinct reactions/Death.
 - `HuntingHitFeedback`/`CombatPresentationConfig`: Body/Horn 다른 spark·pitch/volume, Heavy 강화, death particles. Miss는 server hit event가 없어 효과도 없음.
-- `HornboarMeshVisual`/`shared/Assets/HornboarMeshData`: 실제 Blender topology를 MeshParts로 표시, cache/streaming 재사용, 구형 sphere fallback 제거.
+- `ImportedHornboarRig`/`HuntingAssetBinder`/`HuntingAnimator`: 사용자가 Studio에서 FBX로 가져온 `MeshPart + Motor6D + AnimationController` Hornboar를 직접 바인딩/포즈. 런타임 EditableMesh 생성 경로 제거.
 - `art/blender/redesign_hornboar.py`, `hornboar_design.py`, export/data/runtime/manifest/FBX/GLB/blend/previews/audio: 실제 모델 교체와 재현 pipeline.
 - `CombatReadability.spec` 신규 28그룹; `HuntingIntegration.spec`의 contact fixture를 점에서 실제 box 계산으로 교체. 기존 8개 시나리오/보상 assert는 유지.
 - 최신 QA/지침/README/본 보고/이전 보고 archive, artifact validator 보강.
@@ -37,9 +37,7 @@ Body/Horn/Heavy original WAV도 생성했습니다. 현재 game sound는 업로�
 
 새 Hornboar **4,248 triangles**, 44 source objects, **14 bones**. Duplicate vertices/zero-area bevel faces를 정리하고 모든 exported face의 면적·index·palette·source SHA를 검증했습니다. 3,000–6,000 budget을 만족합니다. Cleaver는 기존 2,168 triangles입니다.
 
-Hornboar source/FBX의 Root/Spine/Neck/Head/4 upper legs/4 shins/Horn/Tail hierarchy를 보존했습니다. 서버 runtime은 14 invisible rig/root BaseParts + 2 gameplay hitboxes입니다. Visual은 client가 생성하는 14 MeshPart groups입니다. 각 group의 vertex/triangle/color는 실제 `.blend`에서 추출했으며 JSON→Luau packet equality/source hash를 확인했습니다. sphere/Part silhouette가 재등장하지 않는 검사도 추가했습니다.
-
-`.rbxlx`는 skeleton과 실제 topology/loader를 포함합니다. **MeshParts는 Play 시 EditableMesh API로 생성하며, 생성된 MeshParts를 이미 Studio에서 검증한 것으로 보고하지 않습니다.** API 메모리/권한/버전 실패 시 prototype로 대체하지 않고 Output과 모델 로드 실패 표시로 QA 보류를 알립니다. Published API는 Roblox의 활성화/소유·인증 조건이 필요하거나 소유한 imported mesh로 교체해야 합니다. 업로드된 mesh IDs는 없습니다.
+Hornboar source/FBX의 Root/Spine/Neck/Head/4 upper legs/4 shins/Horn/Tail hierarchy를 보존했습니다. Studio-imported Hornboar는 `RootPart + MeshPart + Motor6D + AnimationController` rigid rig입니다. 서버는 이 imported visual rig를 복제하고 별도 invisible Body/Horn gameplay hitbox를 붙입니다. Animation은 imported Motor6D에 semantic mapping으로 직접 적용합니다. `EditableMesh`/`CreateMeshPartAsync` runtime 생성은 제거했습니다. 원본 `.rbxm`의 크기 76,575 bytes, SHA-256 `df3ef039ba0141c7227cdd560dd64ecd1f59341ed0ba50a3695691f9a4782578`를 asset contract로 기록했습니다.
 
 ## 5. Animation / Hit feedback
 
@@ -69,7 +67,6 @@ Official Luau 0.741: **79개 syntax compile PASS**, 순수 모듈/테스트 stri
 
 ## 8. 알려진 문제 / TODO
 
-- API 미지원/메모리 부족이면 새 Hornboar visual을 만들 수 없습니다. Source FBX import/owned mesh replacement 또는 API 설정 후 실제 재검증이 필요합니다. 구형 sphere fallback은 없습니다.
 - Source rig와 runtime rigid MeshPart/Motor6D visual 사이의 변형·R6/R15 retarget 품질은 실제 장면에서 확인합니다. Source imported skinned-animation playback은 별도 후속 작업입니다.
 - Box는 현재 pose의 conservative root-relative approximation입니다. Horn recoil 중 visual 차이를 QA로 측정하고 필요하면 Config/Binder 범위 안에서 조정합니다.
 - Basic/Heavy 값은 TODO_BALANCE입니다. 낮은 frame rate/latency에서 window readability·mesh cache/mobile memory·streaming을 확인합니다.

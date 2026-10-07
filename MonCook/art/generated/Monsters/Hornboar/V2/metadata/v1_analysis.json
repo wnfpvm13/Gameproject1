@@ -1,0 +1,669 @@
+{
+  "scene": "MonCook_V1_Audit",
+  "blender": "5.2.2 LTS",
+  "mesh_count": 14,
+  "object_count": 15,
+  "materials": [
+    "Palette_112_59_33",
+    "Palette_135_82_46",
+    "Palette_145_87_41",
+    "Palette_162_98_55",
+    "Palette_199_150_92",
+    "Palette_232_158_51",
+    "Palette_239_181_110",
+    "Palette_245_219_158",
+    "Palette_59_43_28",
+    "Palette_76_217_199",
+    "Palette_79_41_24",
+    "Palette_95_49_29"
+  ],
+  "material_count": 12,
+  "textures": [],
+  "texture_count": 0,
+  "triangles": 1500,
+  "meshes": [
+    {
+      "name": "Mesh_BackLeg_R_Visual",
+      "triangles": 60,
+      "vertices": 32,
+      "materials": 1,
+      "uv_layers": 0,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        1.4000002145767212,
+        1.5199999809265137,
+        1.399999976158142
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    },
+    {
+      "name": "Mesh_FrontLeg_L_Visual",
+      "triangles": 60,
+      "vertices": 32,
+      "materials": 1,
+      "uv_layers": 0,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        1.3999998569488525,
+        1.5199999809265137,
+        1.8000000715255737
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    },
+    {
+      "name": "Mesh_FrontShin_L_Visual",
+      "triangles": 100,
+      "vertices": 56,
+      "materials": 3,
+      "uv_layers": 1,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.8599997758865356,
+        1.1375001668930054,
+        1.2400000095367432
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    },
+    {
+      "name": "Mesh_Head_Visual",
+      "triangles": 380,
+      "vertices": 224,
+      "materials": 8,
+      "uv_layers": 1,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        3.900054454803467,
+        3.105813980102539,
+        2.983156681060791
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    },
+    {
+      "name": "Mesh_Horn_HornBroken",
+      "triangles": 48,
+      "vertices": 28,
+      "materials": 2,
+      "uv_layers": 1,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        1.3799999952316284,
+        0.4799995422363281,
+        1.1687281131744385
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    },
+    {
+      "name": "Mesh_Neck_Visual",
+      "triangles": 56,
+      "vertices": 30,
+      "materials": 1,
+      "uv_layers": 0,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        3.5999999046325684,
+        1.1000001430511475,
+        2.1206936836242676
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    },
+    {
+      "name": "Mesh_Tail_Visual",
+      "triangles": 44,
+      "vertices": 24,
+      "materials": 1,
+      "uv_layers": 0,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.6399999856948853,
+        1.2000000476837158,
+        0.6987037658691406
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    },
+    {
+      "name": "Mesh_BackShin_R_Visual",
+      "triangles": 100,
+      "vertices": 56,
+      "materials": 3,
+      "uv_layers": 1,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.8600002527236938,
+        1.1375000476837158,
+        1.2400000095367432
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    },
+    {
+      "name": "Mesh_BackLeg_L_Visual",
+      "triangles": 60,
+      "vertices": 32,
+      "materials": 1,
+      "uv_layers": 0,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        1.4000002145767212,
+        1.5199999809265137,
+        1.399999976158142
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    },
+    {
+      "name": "Mesh_BackShin_L_Visual",
+      "triangles": 100,
+      "vertices": 56,
+      "materials": 3,
+      "uv_layers": 1,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.8600002527236938,
+        1.1375000476837158,
+        1.2400000095367432
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    },
+    {
+      "name": "Mesh_FrontLeg_R_Visual",
+      "triangles": 60,
+      "vertices": 32,
+      "materials": 1,
+      "uv_layers": 0,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        1.3999998569488525,
+        1.5199999809265137,
+        1.8000000715255737
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    },
+    {
+      "name": "Mesh_FrontShin_R_Visual",
+      "triangles": 100,
+      "vertices": 56,
+      "materials": 3,
+      "uv_layers": 1,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        0.8599997758865356,
+        1.1375001668930054,
+        1.2400000095367432
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    },
+    {
+      "name": "Mesh_Horn_HornIntact",
+      "triangles": 136,
+      "vertices": 72,
+      "materials": 2,
+      "uv_layers": 0,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        1.399999976158142,
+        3.309999704360962,
+        2.1847903728485107
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    },
+    {
+      "name": "Mesh_Spine_Visual",
+      "triangles": 196,
+      "vertices": 108,
+      "materials": 3,
+      "uv_layers": 0,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        5.0,
+        6.800000190734863,
+        3.0668206214904785
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ]
+    }
+  ],
+  "rigs": [
+    {
+      "name": "Rig",
+      "bone_count": 14,
+      "bones": [
+        {
+          "name": "Root",
+          "parent": null,
+          "head": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "tail": [
+            0.0,
+            0.0,
+            2.799999952316284
+          ]
+        },
+        {
+          "name": "Spine",
+          "parent": "Root",
+          "head": [
+            0.0,
+            0.0,
+            2.799999952316284
+          ],
+          "tail": [
+            0.0,
+            0.0,
+            5.723976135253906
+          ]
+        },
+        {
+          "name": "Neck",
+          "parent": "Spine",
+          "head": [
+            0.0,
+            2.5999999046325684,
+            3.0
+          ],
+          "tail": [
+            0.0,
+            2.5999999046325684,
+            3.9000000953674316
+          ]
+        },
+        {
+          "name": "Head",
+          "parent": "Neck",
+          "head": [
+            0.0,
+            3.5,
+            3.0
+          ],
+          "tail": [
+            0.0,
+            3.5,
+            4.060660362243652
+          ]
+        },
+        {
+          "name": "Horn",
+          "parent": "Head",
+          "head": [
+            0.0,
+            3.6499998569488525,
+            4.050000190734863
+          ],
+          "tail": [
+            0.0,
+            3.6499998569488525,
+            5.110660552978516
+          ]
+        },
+        {
+          "name": "FrontLeg_L",
+          "parent": "Spine",
+          "head": [
+            -1.8499999046325684,
+            1.75,
+            2.5999999046325684
+          ],
+          "tail": [
+            -1.8499999046325684,
+            1.75,
+            1.1422619819641113
+          ]
+        },
+        {
+          "name": "FrontShin_L",
+          "parent": "FrontLeg_L",
+          "head": [
+            -1.850000023841858,
+            1.899999976158142,
+            1.149999976158142
+          ],
+          "tail": [
+            -1.850000023841858,
+            1.899999976158142,
+            -0.3077380657196045
+          ]
+        },
+        {
+          "name": "FrontLeg_R",
+          "parent": "Spine",
+          "head": [
+            1.8499999046325684,
+            1.75,
+            2.5999999046325684
+          ],
+          "tail": [
+            1.8499999046325684,
+            1.75,
+            1.1422619819641113
+          ]
+        },
+        {
+          "name": "FrontShin_R",
+          "parent": "FrontLeg_R",
+          "head": [
+            1.8499999046325684,
+            1.899999976158142,
+            1.149999976158142
+          ],
+          "tail": [
+            1.8499999046325684,
+            1.899999976158142,
+            -0.3077380657196045
+          ]
+        },
+        {
+          "name": "BackLeg_L",
+          "parent": "Spine",
+          "head": [
+            -1.6999999284744263,
+            -2.549999952316284,
+            2.25
+          ],
+          "tail": [
+            -1.6999999284744263,
+            -2.549999952316284,
+            1.040661334991455
+          ]
+        },
+        {
+          "name": "BackShin_L",
+          "parent": "BackLeg_L",
+          "head": [
+            -1.6999998092651367,
+            -2.700000047683716,
+            1.0499999523162842
+          ],
+          "tail": [
+            -1.6999998092651367,
+            -2.700000047683716,
+            -0.15933871269226074
+          ]
+        },
+        {
+          "name": "BackLeg_R",
+          "parent": "Spine",
+          "head": [
+            1.6999999284744263,
+            -2.549999952316284,
+            2.25
+          ],
+          "tail": [
+            1.6999999284744263,
+            -2.549999952316284,
+            1.040661334991455
+          ]
+        },
+        {
+          "name": "BackShin_R",
+          "parent": "BackLeg_R",
+          "head": [
+            1.6999998092651367,
+            -2.700000047683716,
+            1.0499999523162842
+          ],
+          "tail": [
+            1.6999998092651367,
+            -2.700000047683716,
+            -0.15933871269226074
+          ]
+        },
+        {
+          "name": "Tail",
+          "parent": "Spine",
+          "head": [
+            0.0,
+            -3.5999999046325684,
+            2.799999952316284
+          ],
+          "tail": [
+            0.0,
+            -3.5999999046325684,
+            5.723976135253906
+          ]
+        }
+      ]
+    }
+  ],
+  "inspection_limits": "Internal/intersecting surfaces require visual inspection; edge metrics do not prove their absence.",
+  "bounds_min": [
+    -2.549999713897705,
+    -4.749999523162842,
+    0.009999562986195087
+  ],
+  "bounds_max": [
+    2.549999713897705,
+    7.060000419616699,
+    5.612989902496338
+  ],
+  "camera_names": [
+    "V1_front",
+    "V1_left",
+    "V1_back",
+    "V1_three_quarter"
+  ],
+  "source_commit": "5fcb8a93d7e9d294a69425b9c54c9016ae74a008",
+  "source_file": "art/exports/Monsters/MON_Hornboar_V1.fbx"
+}

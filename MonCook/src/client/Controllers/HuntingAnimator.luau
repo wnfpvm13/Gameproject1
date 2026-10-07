@@ -5,14 +5,23 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Animation = require(Shared.Utilities.HuntingAnimation)
 local CombatAnimation = require(Shared.Utilities.CombatAnimation)
+local RigMap = require(Shared.Utilities.ImportedHornboarRig)
 local Style = require(Shared.Config.CombatPresentationConfig)
-local MeshVisual = require(script.Parent.HornboarMeshVisual)
 local Feedback = require(script.Parent.HuntingHitFeedback)
 local Animator = {}
 Animator.__index = Animator
+
 local function binding(object: Instance): string?
 	local value = object:FindFirstChild("Binding")
 	return if value and value:IsA("StringValue") then value.Value else nil
+end
+local function monsterJointName(joint: Motor6D): string?
+	local tag = binding(joint)
+	if tag and string.sub(tag, 1, 6) == "Joint:" then return string.sub(tag, 7) end
+	return RigMap.jointSemantic(joint.Name, if joint.Parent then joint.Parent.Name else nil)
+end
+local function visualBinding(part: BasePart): string
+	return binding(part) or RigMap.partBinding(part.Name) or "Visual"
 end
 local function transform(pose: any): CFrame
 	return CFrame.new(pose.X or 0, (pose.Y or 0)+(pose.Lift or 0), pose.Z or 0)*CFrame.Angles(pose.Pitch or 0, pose.Yaw or 0, pose.Roll or 0)
@@ -21,6 +30,7 @@ local function jointName(joint: Motor6D): string
 	local name = string.gsub(joint.Name, " ", "")
 	return if name == "Root" then "RootJoint" elseif name == "CleaverGrip" then "Grip" else name
 end
+
 function Animator.new(folder: Instance): any
 	local self: any = setmetatable({ Monsters = {}, Characters = {}, Applied = {}, LocalAction = nil }, Animator)
 	local function added(model: Instance)
@@ -28,27 +38,31 @@ function Animator.new(folder: Instance): any
 		local entry: any = { Joints = {}, Visual = {}, Ready = false }
 		self.Monsters[model] = entry
 		for _, object in model:GetDescendants() do
-			local tag = binding(object)
-			if object:IsA("Motor6D") and tag and string.sub(tag, 1, 6) == "Joint:" then entry.Joints[string.sub(tag, 7)] = object end
+			if object:IsA("Motor6D") then
+				local name = monsterJointName(object)
+				if name then entry.Joints[name] = object end
+			elseif object:IsA("MeshPart") then
+				table.insert(entry.Visual, { Part = object, Binding = visualBinding(object) })
+			end
 		end
-		task.spawn(function()
-			local ok, visual = pcall(MeshVisual.attach, model)
-			if not model.Parent or self.Monsters[model] ~= entry then return end
-			if ok then entry.Visual, entry.Ready = visual, true
-			else
-				warn("[MonCook Art] Hornboar mesh unavailable: " .. tostring(visual)); model:SetAttribute("LocalMeshUnavailable", true)
+		entry.Ready = #entry.Visual > 0
+		model:SetAttribute("ImportedMeshReady", entry.Ready)
+		if not entry.Ready then
+			warn("[MonCook Art] Imported Hornboar has no MeshPart visuals: " .. model.Name)
+			model:SetAttribute("ImportedMeshUnavailable", true)
+			local root = model.PrimaryPart or model:FindFirstChild("RootPart")
+			if root and root:IsA("BasePart") then
 				local gui = Instance.new("BillboardGui")
-				gui.Name, gui.Adornee, gui.Size, gui.StudsOffset = "MeshLoadFailure", model.PrimaryPart, UDim2.fromOffset(230,35), Vector3.new(0,7.2,0)
+				gui.Name, gui.Adornee, gui.Size, gui.StudsOffset = "ImportedMeshFailure", root, UDim2.fromOffset(250,35), Vector3.new(0,7.2,0)
 				local label = Instance.new("TextLabel")
-				label.Size, label.BackgroundTransparency, label.Text, label.TextColor3 = UDim2.fromScale(1,1), 0.2, "모델 로드 실패 · QA 보류", Color3.fromRGB(255,230,210)
+				label.Size, label.BackgroundTransparency, label.Text, label.TextColor3 = UDim2.fromScale(1,1), 0.2, "Imported Hornboar Asset Missing · QA 보류", Color3.fromRGB(255,230,210)
 				label.BackgroundColor3, label.Parent, gui.Parent = Color3.fromRGB(85,48,35), gui, model
 			end
-		end)
+		end
 	end
 	self.Added = folder.ChildAdded:Connect(added)
 	self.Removed = folder.ChildRemoved:Connect(function(model) self.Monsters[model] = nil end)
 	for _, model in folder:GetChildren() do added(model) end
-	-- Undo our previous additive deltas before Roblox's default Animator evaluates this frame.
 	self.Restore = RunService.PreAnimation:Connect(function()
 		for joint, base in self.Applied do if joint.Parent then joint.Transform = base end end
 		table.clear(self.Applied)
@@ -61,7 +75,9 @@ function Animator.new(folder: Instance): any
 			local elapsed = math.max(0, at-(model:GetAttribute("StateStartedAt") or at))
 			local hitAge = at-(model:GetAttribute("LastHitAt") or -math.huge)
 			local pose = Animation.monster(state, model:GetAttribute("AttackType"), elapsed, at, hitAge, model:GetAttribute("LastHitKind"), model:GetAttribute("LastHitHeavy"))
-			for name, joint in entry.Joints do joint.Transform = transform(pose[name] or {}) end
+			for name, joint in entry.Joints do
+				if pose[name] then joint.Transform = transform(pose[name]) end
+			end
 			local fade = if state == "Dead" then math.clamp((elapsed-Style.DeathFadeStart)/Style.DeathFadeSeconds, 0, 1) else 0
 			if state == "Dead" and not entry.DeathShown then entry.DeathShown = true; Feedback.death(model) end
 			for _, visual in entry.Visual do
@@ -75,7 +91,6 @@ function Animator.new(folder: Instance): any
 			if not character then continue end
 			local entry = self.Characters[character]
 			if not entry then entry = { Joints = {}, Count = 0 }; self.Characters[character] = entry end
-			-- Descendants can arrive after the character/weapon during streaming or respawn.
 			if at >= (entry.ScanAt or 0) then
 				entry.ScanAt = at+0.5; table.clear(entry.Joints)
 				for _, object in character:GetDescendants() do
@@ -100,7 +115,6 @@ function Animator.new(folder: Instance): any
 				if not pose[name] then continue end
 				local base = joint.Transform; self.Applied[joint] = base
 				local delta = transform(pose[name])
-				-- Retarget canonical torso axes through each R6/R15 joint's rest orientation.
 				local axes = joint.C0.Rotation
 				joint.Transform = base*axes:Inverse()*delta*axes
 			end

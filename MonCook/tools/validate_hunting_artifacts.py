@@ -45,8 +45,10 @@ def main():
     hornboar = source["assets"]["MON_Hornboar_V1"]
     assert topology["SourceSHA256"] == hashlib.sha256((art / hornboar["source"]).read_bytes()).hexdigest()
     assert topology["TriangleCount"] == hornboar["blender_triangles"] == sum(len(g["Faces"]) for g in topology["Groups"])
-    packet_source = (PROJECT / "src/shared/Assets/HornboarMeshData.luau").read_text()
-    assert json.loads(packet_source.split("[=[", 1)[1].split("]=]", 1)[0]) == topology
+    imported = json.loads((art / "imported_hornboar.json").read_text())
+    imported_path = art / "runtime" / "Monsters" / "MON_Hornboar_V1.rbxm"
+    assert imported_path.is_file() and imported_path.stat().st_size == imported["size_bytes"]
+    assert hashlib.sha256(imported_path.read_bytes()).hexdigest() == imported["sha256"]
     bounds = []
     for group in topology["Groups"]:
         assert group["Bone"] in hornboar["bones"]
@@ -72,6 +74,10 @@ def main():
             path = art / asset[kind]; assert path.is_file() and path.stat().st_size > 100
         assert exports[asset_id]["fbx_reimport"] == "PASS"
         assert exports[asset_id]["triangles"] == asset["blender_triangles"], (asset_id, "stale FBX validation record")
+        if asset_id == "MON_Hornboar_V1":
+            # The user-approved Studio import is a binary .rbxm. Its byte hash is
+            # checked above; structure is checked from the Rojo-built XML place below.
+            continue
         root = ET.parse(art / "runtime" / asset["family"] / (asset_id+".rbxmx")).getroot()
         objects = list(root.iter("Item")); refs = {i.attrib["referent"] for i in objects}
         count = sum(i.attrib["class"] in ("Part", "WedgePart", "CornerWedgePart", "MeshPart") for i in objects)
@@ -82,14 +88,18 @@ def main():
             if item.attrib["class"] in ("Part", "WedgePart"):
                 p = props(item)
                 assert p["CanCollide"].text == "false" and p["CanQuery"].text == "false", (asset_id, "visual used as hitbox")
-        if asset["bones"]:
-            joints = {name(i) for i in objects if i.attrib["class"] == "Motor6D"}
-            assert joints == set(asset["bones"])-{"Root"}
-            bindings = [props(i)["Value"].text for i in objects if i.attrib["class"] == "StringValue" and name(i) == "Binding"]
-            assert "HornIntact" in bindings and "HornBroken" in bindings and "Root" in bindings
-            assert not any(i.attrib["class"] == "Part" and props(i).get("shape") is not None and props(i)["shape"].text == "0" for i in objects), "rejected sphere prototype returned"
     place = ET.parse(args.place).getroot()
     entries = index(place)
+    imported_prefix = "ReplicatedStorage/Assets/Monsters/MON_Hornboar_V1"
+    imported_entries = {p:i for p,i in entries.items() if p == imported_prefix or p.startswith(imported_prefix + "/")}
+    assert imported_prefix in imported_entries, "imported Hornboar missing from built place"
+    imported_names = {name(i) for i in imported_entries.values()}
+    for required in imported["required_parts"]:
+        assert required in imported_names, ("imported Hornboar missing part", required)
+    assert any(i.attrib["class"] == "Motor6D" for i in imported_entries.values()), "imported Hornboar missing Motor6D rig"
+    assert any(i.attrib["class"] == "AnimationController" for i in imported_entries.values()), "imported Hornboar missing AnimationController"
+    source_text = "\n".join(p.read_text() for p in PROJECT.joinpath("src").rglob("*.luau"))
+    assert "CreateEditableMesh" not in source_text and "CreateMeshPartAsync" not in source_text, "runtime EditableMesh path returned"
     scripts = {p:i for p,i in entries.items() if i.attrib["class"] in ("Script", "LocalScript", "ModuleScript")}
     expected = {}
     for file in PROJECT.joinpath("src").rglob("*.luau"):

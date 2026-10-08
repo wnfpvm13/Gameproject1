@@ -1,0 +1,2 @@
+# Tripo local context/history is tooling state, not a production asset.
+.tripo/

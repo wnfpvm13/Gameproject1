@@ -203,3 +203,11 @@ ExpeditionSession = {
 
 State:
 Preparing / Teleporting / Active / Result / Returning / Closed
+
+## 12. Phase 1 구현 계약
+
+`Inventory.Ingredients[IngredientId]` / `Inventory.Materials[IngredientId]`는 양의 정수 stack map이다. HornCore는 Materials, 나머지 사냥 식재료는 Ingredients이다. 기존 모르는 항목은 보존하며 변경할 stack이 손상된 경우 grant를 거절한다.
+
+선택적 `HuntingReceipts[ReceiptId]`를 기존 schema v1에 추가한다. `GrantedAt`, `Kind`, `MonsterId`, `Items`, `FirstIngredient`, `FirstHornboar`를 저장하고 해당 stack 증가와 같은 DataService.Update에서 commit한다. Restaurant의 SettlementReceipts/SessionId와 독립적이다. 기존 프로필은 필드가 없어도 유효하며 첫 grant에서 추가한다. retry 600초보다 긴 3,600초 보존을 사용하고 만료 entry만 성공한 grant 중 정리한다. 수치는 HuntingConfig의 TODO_BALANCE이다.
+
+기존 `EquippedWeaponId = "StarterCleaver"` 기본값은 내장 starter entitlement로 유지한다. 다른 장비는 소유한 instance의 InstanceId/WeaponConfigId로 해결하며 Weapons 컬렉션을 초기화하지 않는다. `AnalyticsFlags.FirstIngredientObtained`와 `FirstHornboarKilled`는 성공한 개인 grant 시 한 번 기록한다. 첫 처치 flag의 의미는 마지막 타격이 아니라 첫 기여자 처치 보상이다.

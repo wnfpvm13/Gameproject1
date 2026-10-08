@@ -1,0 +1,1177 @@
+<?xml version='1.0' encoding='utf-8'?>
+<roblox version="4">
+  <External>null</External>
+  <External>nil</External>
+  <Item class="Model" referent="RBX1">
+    <Properties>
+      <string name="Name">MON_Hornboar_V1</string>
+      <Ref name="PrimaryPart">RBX5</Ref>
+    </Properties>
+    <Item class="Folder" referent="RBX2">
+      <Properties>
+        <string name="Name">Visual</string>
+      </Properties>
+      <Item class="Folder" referent="RBX61">
+        <Properties>
+          <string name="Name">HornIntact</string>
+        </Properties>
+        <Item class="StringValue" referent="RBX62">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">HornIntact</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Folder" referent="RBX63">
+        <Properties>
+          <string name="Name">HornBroken</string>
+        </Properties>
+        <Item class="StringValue" referent="RBX64">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">HornBroken</string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="RBX3">
+      <Properties>
+        <string name="Name">Gameplay</string>
+      </Properties>
+      <Item class="StringValue" referent="RBX66">
+        <Properties>
+          <string name="Name">Binding</string>
+          <string name="Value">GameplayContainer</string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="RBX4">
+      <Properties>
+        <string name="Name">Rig</string>
+      </Properties>
+      <Item class="Part" referent="RBX7">
+        <Properties>
+          <string name="Name">Bone_Spine</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>0</X>
+            <Y>2.8</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX8">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX9">
+        <Properties>
+          <string name="Name">Spine</string>
+          <Ref name="Part0">RBX5</Ref>
+          <Ref name="Part1">RBX7</Ref>
+          <CoordinateFrame name="C0">
+            <X>0</X>
+            <Y>2.8</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX10">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:Spine</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX11">
+        <Properties>
+          <string name="Name">Bone_Neck</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>0</X>
+            <Y>3</Y>
+            <Z>-2.6</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX12">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX13">
+        <Properties>
+          <string name="Name">Neck</string>
+          <Ref name="Part0">RBX7</Ref>
+          <Ref name="Part1">RBX11</Ref>
+          <CoordinateFrame name="C0">
+            <X>0</X>
+            <Y>0.2</Y>
+            <Z>-2.6</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX14">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:Neck</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX15">
+        <Properties>
+          <string name="Name">Bone_Head</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>0</X>
+            <Y>3</Y>
+            <Z>-3.5</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX16">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX17">
+        <Properties>
+          <string name="Name">Head</string>
+          <Ref name="Part0">RBX11</Ref>
+          <Ref name="Part1">RBX15</Ref>
+          <CoordinateFrame name="C0">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>-0.9</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX18">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:Head</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX19">
+        <Properties>
+          <string name="Name">Bone_FrontLeg_L</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>-1.85</X>
+            <Y>2.6</Y>
+            <Z>-1.75</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX20">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX21">
+        <Properties>
+          <string name="Name">FrontLeg_L</string>
+          <Ref name="Part0">RBX7</Ref>
+          <Ref name="Part1">RBX19</Ref>
+          <CoordinateFrame name="C0">
+            <X>-1.85</X>
+            <Y>-0.2</Y>
+            <Z>-1.75</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX22">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:FrontLeg_L</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX23">
+        <Properties>
+          <string name="Name">Bone_FrontLeg_R</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>1.85</X>
+            <Y>2.6</Y>
+            <Z>-1.75</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX24">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX25">
+        <Properties>
+          <string name="Name">FrontLeg_R</string>
+          <Ref name="Part0">RBX7</Ref>
+          <Ref name="Part1">RBX23</Ref>
+          <CoordinateFrame name="C0">
+            <X>1.85</X>
+            <Y>-0.2</Y>
+            <Z>-1.75</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX26">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:FrontLeg_R</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX27">
+        <Properties>
+          <string name="Name">Bone_BackLeg_L</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>-1.7</X>
+            <Y>2.25</Y>
+            <Z>2.55</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX28">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX29">
+        <Properties>
+          <string name="Name">BackLeg_L</string>
+          <Ref name="Part0">RBX7</Ref>
+          <Ref name="Part1">RBX27</Ref>
+          <CoordinateFrame name="C0">
+            <X>-1.7</X>
+            <Y>-0.55</Y>
+            <Z>2.55</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX30">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:BackLeg_L</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX31">
+        <Properties>
+          <string name="Name">Bone_BackLeg_R</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>1.7</X>
+            <Y>2.25</Y>
+            <Z>2.55</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX32">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX33">
+        <Properties>
+          <string name="Name">BackLeg_R</string>
+          <Ref name="Part0">RBX7</Ref>
+          <Ref name="Part1">RBX31</Ref>
+          <CoordinateFrame name="C0">
+            <X>1.7</X>
+            <Y>-0.55</Y>
+            <Z>2.55</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX34">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:BackLeg_R</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX35">
+        <Properties>
+          <string name="Name">Bone_FrontShin_L</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>-1.85</X>
+            <Y>1.15</Y>
+            <Z>-1.9</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX36">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX37">
+        <Properties>
+          <string name="Name">FrontShin_L</string>
+          <Ref name="Part0">RBX19</Ref>
+          <Ref name="Part1">RBX35</Ref>
+          <CoordinateFrame name="C0">
+            <X>0</X>
+            <Y>-1.45</Y>
+            <Z>-0.15</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX38">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:FrontShin_L</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX39">
+        <Properties>
+          <string name="Name">Bone_FrontShin_R</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>1.85</X>
+            <Y>1.15</Y>
+            <Z>-1.9</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX40">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX41">
+        <Properties>
+          <string name="Name">FrontShin_R</string>
+          <Ref name="Part0">RBX23</Ref>
+          <Ref name="Part1">RBX39</Ref>
+          <CoordinateFrame name="C0">
+            <X>0</X>
+            <Y>-1.45</Y>
+            <Z>-0.15</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX42">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:FrontShin_R</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX43">
+        <Properties>
+          <string name="Name">Bone_BackShin_L</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>-1.7</X>
+            <Y>1.05</Y>
+            <Z>2.7</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX44">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX45">
+        <Properties>
+          <string name="Name">BackShin_L</string>
+          <Ref name="Part0">RBX27</Ref>
+          <Ref name="Part1">RBX43</Ref>
+          <CoordinateFrame name="C0">
+            <X>0</X>
+            <Y>-1.2</Y>
+            <Z>0.15</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX46">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:BackShin_L</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX47">
+        <Properties>
+          <string name="Name">Bone_BackShin_R</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>1.7</X>
+            <Y>1.05</Y>
+            <Z>2.7</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX48">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX49">
+        <Properties>
+          <string name="Name">BackShin_R</string>
+          <Ref name="Part0">RBX31</Ref>
+          <Ref name="Part1">RBX47</Ref>
+          <CoordinateFrame name="C0">
+            <X>0</X>
+            <Y>-1.2</Y>
+            <Z>0.15</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX50">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:BackShin_R</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX51">
+        <Properties>
+          <string name="Name">Bone_Horn</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>0</X>
+            <Y>4.05</Y>
+            <Z>-3.65</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX52">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX53">
+        <Properties>
+          <string name="Name">Horn</string>
+          <Ref name="Part0">RBX15</Ref>
+          <Ref name="Part1">RBX51</Ref>
+          <CoordinateFrame name="C0">
+            <X>0</X>
+            <Y>1.05</Y>
+            <Z>-0.15</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX54">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:Horn</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Part" referent="RBX55">
+        <Properties>
+          <string name="Name">Bone_Tail</string>
+          <Vector3 name="size">
+            <X>0.12</X>
+            <Y>0.12</Y>
+            <Z>0.12</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>0</X>
+            <Y>2.8</Y>
+            <Z>3.6</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">false</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">1</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">1</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX56">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">RigNode</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Motor6D" referent="RBX57">
+        <Properties>
+          <string name="Name">Tail</string>
+          <Ref name="Part0">RBX7</Ref>
+          <Ref name="Part1">RBX55</Ref>
+          <CoordinateFrame name="C0">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>3.6</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <CoordinateFrame name="C1">
+            <X>0</X>
+            <Y>0</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+        </Properties>
+        <Item class="StringValue" referent="RBX58">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Joint:Tail</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="AnimationController" referent="RBX59">
+        <Properties>
+          <string name="Name">AnimationController</string>
+        </Properties>
+        <Item class="Animator" referent="RBX60">
+          <Properties>
+            <string name="Name">Animator</string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+    <Item class="Part" referent="RBX5">
+      <Properties>
+        <string name="Name">Root</string>
+        <Vector3 name="size">
+          <X>0.2</X>
+          <Y>0.2</Y>
+          <Z>0.2</Z>
+        </Vector3>
+        <CoordinateFrame name="CFrame">
+          <X>0</X>
+          <Y>0</Y>
+          <Z>0</Z>
+          <R00>1</R00>
+          <R01>0</R01>
+          <R02>0</R02>
+          <R10>0</R10>
+          <R11>1</R11>
+          <R12>0</R12>
+          <R20>0</R20>
+          <R21>0</R21>
+          <R22>1</R22>
+        </CoordinateFrame>
+        <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+        <token name="Material">272</token>
+        <bool name="Anchored">true</bool>
+        <bool name="CanCollide">false</bool>
+        <bool name="CanTouch">false</bool>
+        <bool name="CanQuery">false</bool>
+        <bool name="Massless">true</bool>
+        <float name="Transparency">1</float>
+        <token name="TopSurface">0</token>
+        <token name="BottomSurface">0</token>
+        <token name="shape">1</token>
+      </Properties>
+      <Item class="StringValue" referent="RBX6">
+        <Properties>
+          <string name="Name">Binding</string>
+          <string name="Value">Root</string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="StringValue" referent="RBX65">
+      <Properties>
+        <string name="Name">VisualSource</string>
+        <string name="Value">BlenderMeshData:MON_Hornboar_V1</string>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>

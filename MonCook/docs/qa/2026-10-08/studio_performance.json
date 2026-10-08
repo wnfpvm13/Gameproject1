@@ -1,0 +1,1409 @@
+{
+  "date_kst": "2026-10-08",
+  "studio_version": "0.741.19.7411056",
+  "device_preset": "Samsung Galaxy A06, 800x360 landscape, resolution scale 2",
+  "hardware": {
+    "Cpu": [
+      {
+        "Name": "Intel(R) Core(TM) Ultra 7 256V",
+        "NumberOfCores": 8,
+        "NumberOfLogicalProcessors": 8
+      }
+    ],
+    "RamBytes": 16687759360,
+    "Gpu": [
+      {
+        "Name": "Intel(R) Arc(TM) 140V GPU (8GB)",
+        "DriverVersion": "32.0.101.8626"
+      }
+    ]
+  },
+  "method": "Each role: 30 seconds warmup + 60 seconds sample, three static camera positions for 20 seconds each. RenderStepped dt on client; Heartbeat dt on server. Single local Studio client/server.",
+  "limits": [
+    "Device emulator runs on the Windows host CPU/GPU; no physical mobile measurements.",
+    "Stats memory includes the Studio execution environment and is not isolated mobile-client memory.",
+    "Inclusive physics/AI/animation/render work could not be captured: profiler snapshot request lost the Studio session. No profiler success claim.",
+    "5-monster run had a 743.53 ms client stall; cause unverified.",
+    "1/5 runs have no periodic network samples because initial Stats item names did not match. The 5-monster separate Stats inspection is recorded."
+  ],
+  "scenarios": [
+    {
+      "count": 1,
+      "client": {
+        "Scene": {
+          "Models": 1,
+          "MeshParts": 5,
+          "Bones": 14,
+          "States": {
+            "Recover": 1
+          }
+        },
+        "RequestedSampleSeconds": 60,
+        "Stages": {
+          "1": {
+            "P95Ms": 18.86660046875477,
+            "Count": 1200,
+            "FPS": 60.005592742658436,
+            "ElapsedSeconds": 19.99813592620194,
+            "P50Ms": 16.665799543261528,
+            "MaxMs": 30.53000010550022,
+            "MeanMs": 16.66511327183495
+          },
+          "3": {
+            "P95Ms": 19.4007009267807,
+            "Count": 1199,
+            "FPS": 59.953348705482604,
+            "ElapsedSeconds": 19.998882896266878,
+            "P50Ms": 16.664499416947365,
+            "MaxMs": 27.615400031208992,
+            "MeanMs": 16.67963544309164
+          },
+          "2": {
+            "P95Ms": 19.181299954652786,
+            "Count": 1198,
+            "FPS": 59.90410526168495,
+            "ElapsedSeconds": 19.998629388865083,
+            "P50Ms": 16.66400022804737,
+            "MaxMs": 52.78339982032776,
+            "MeanMs": 16.693346735279704
+          }
+        },
+        "CompletedAt": 1791392337.645247,
+        "Summary": {
+          "P95Ms": 19.181299954652786,
+          "Count": 3597,
+          "FPS": 59.9543484775698,
+          "ElapsedSeconds": 59.9956482113339,
+          "P50Ms": 16.66560024023056,
+          "MaxMs": 52.78339982032776,
+          "MeanMs": 16.679357300899056
+        },
+        "Role": "Client",
+        "Viewport": "705, 338",
+        "MemorySamples": {
+          "1": {
+            "LuaHeapMb": 703.4779663085938,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84283447265625,
+            "TotalMb": 1729.7734375,
+            "BasePartsMb": 3.9394683837890625,
+            "AtSeconds": 10.011971100000665
+          },
+          "8": {
+            "LuaHeapMb": 707.3370361328125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84004211425781,
+            "TotalMb": 1747.2890625,
+            "BasePartsMb": 3.9608306884765625,
+            "AtSeconds": 80.08877069992013
+          },
+          "3": {
+            "LuaHeapMb": 703.803466796875,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84272766113281,
+            "TotalMb": 1729.8515625,
+            "BasePartsMb": 3.9465179443359375,
+            "AtSeconds": 30.02777069993317
+          },
+          "2": {
+            "LuaHeapMb": 703.847412109375,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84307861328125,
+            "TotalMb": 1729.87890625,
+            "BasePartsMb": 3.9443817138671875,
+            "AtSeconds": 20.02498149999883
+          },
+          "5": {
+            "LuaHeapMb": 708.4637451171875,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84132385253906,
+            "TotalMb": 1746.91796875,
+            "BasePartsMb": 3.952606201171875,
+            "AtSeconds": 50.04290929995477
+          },
+          "4": {
+            "LuaHeapMb": 704.6947021484375,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84584045410156,
+            "TotalMb": 1739.68359375,
+            "BasePartsMb": 3.9488677978515625,
+            "AtSeconds": 40.040820299996994
+          },
+          "7": {
+            "LuaHeapMb": 709.6184692382812,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84078979492188,
+            "TotalMb": 1747.18359375,
+            "BasePartsMb": 3.9559173583984375,
+            "AtSeconds": 70.0740370999556
+          },
+          "6": {
+            "LuaHeapMb": 709.1452026367188,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84217834472656,
+            "TotalMb": 1746.97265625,
+            "BasePartsMb": 3.954742431640625,
+            "AtSeconds": 60.058470199932344
+          }
+        },
+        "WarmupSeconds": 30,
+        "CameraRoute": "near 0,10,15; medium 0,32,45; far 0,50,130 (20 s each), target 0,3,-14"
+      },
+      "server": {
+        "Scene": {
+          "Models": 1,
+          "MeshParts": 5,
+          "Bones": 14,
+          "States": {
+            "Alert": 1
+          }
+        },
+        "RequestedSampleSeconds": 60,
+        "MemorySamples": {
+          "1": {
+            "LuaHeapMb": 703.6392822265625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84295654296875,
+            "TotalMb": 1729.81640625,
+            "BasePartsMb": 3.943206787109375,
+            "AtSeconds": 10.011540300096385
+          },
+          "8": {
+            "LuaHeapMb": 707.0548095703125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84292602539062,
+            "TotalMb": 1747.390625,
+            "BasePartsMb": 3.9617919921875,
+            "AtSeconds": 80.10944420006126
+          },
+          "3": {
+            "LuaHeapMb": 704.227294921875,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84284973144531,
+            "TotalMb": 1739.55078125,
+            "BasePartsMb": 3.94769287109375,
+            "AtSeconds": 30.04460820008535
+          },
+          "2": {
+            "LuaHeapMb": 703.5142822265625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84260559082031,
+            "TotalMb": 1729.81640625,
+            "BasePartsMb": 3.945343017578125,
+            "AtSeconds": 20.02742689999286
+          },
+          "5": {
+            "LuaHeapMb": 709.296875,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84205627441406,
+            "TotalMb": 1746.96875,
+            "BasePartsMb": 3.9535675048828125,
+            "AtSeconds": 50.07683730009012
+          },
+          "4": {
+            "LuaHeapMb": 709.1444091796875,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84120178222656,
+            "TotalMb": 1753.14453125,
+            "BasePartsMb": 3.9514312744140625,
+            "AtSeconds": 40.06104910001159
+          },
+          "7": {
+            "LuaHeapMb": 707.80517578125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.83992004394531,
+            "TotalMb": 1747.2578125,
+            "BasePartsMb": 3.95965576171875,
+            "AtSeconds": 70.093088200083
+          },
+          "6": {
+            "LuaHeapMb": 708.9444580078125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 111.84217834472656,
+            "TotalMb": 1747.08203125,
+            "BasePartsMb": 3.954742431640625,
+            "AtSeconds": 60.09280420001596
+          }
+        },
+        "Summary": {
+          "P95Ms": 18.91413889825344,
+          "Count": 3597,
+          "FPS": 59.95284144851888,
+          "ElapsedSeconds": 59.997156316414475,
+          "P50Ms": 16.91773720085621,
+          "MaxMs": 49.93300884962082,
+          "MeanMs": 16.67977656836655
+        },
+        "CameraRoute": "near 0,10,15; medium 0,32,45; far 0,50,130 (20 s each), target 0,3,-14",
+        "Role": "Server",
+        "CompletedAt": 1791392343.6565,
+        "WarmupSeconds": 30,
+        "Stages": {
+          "1": {
+            "P95Ms": 18.85778456926346,
+            "Count": 1200,
+            "FPS": 59.998293269547055,
+            "ElapsedSeconds": 20.00056892633438,
+            "P50Ms": 16.920695081353188,
+            "MaxMs": 20.488211885094643,
+            "MeanMs": 16.667140771945316
+          },
+          "3": {
+            "P95Ms": 18.94982159137726,
+            "Count": 1200,
+            "FPS": 59.99874882028942,
+            "ElapsedSeconds": 20.000417068600655,
+            "P50Ms": 16.90474897623062,
+            "MaxMs": 26.79336443543434,
+            "MeanMs": 16.667014223833878
+          },
+          "2": {
+            "P95Ms": 18.892327323555946,
+            "Count": 1197,
+            "FPS": 59.86146250785878,
+            "ElapsedSeconds": 19.99617032147944,
+            "P50Ms": 16.92664436995983,
+            "MaxMs": 49.93300884962082,
+            "MeanMs": 16.705238363809055
+          }
+        }
+      }
+    },
+    {
+      "count": 5,
+      "client": {
+        "Scene": {
+          "Models": 5,
+          "MeshParts": 25,
+          "Bones": 70,
+          "States": {
+            "Alert": 5
+          }
+        },
+        "RequestedSampleSeconds": 60,
+        "Stages": {
+          "1": {
+            "P95Ms": 18.648000434041023,
+            "Count": 1156,
+            "FPS": 57.80358951046143,
+            "ElapsedSeconds": 19.998758031986654,
+            "P50Ms": 16.69749990105629,
+            "MaxMs": 743.5256242752075,
+            "MeanMs": 17.299963695490185
+          },
+          "3": {
+            "P95Ms": 18.557900562882423,
+            "Count": 1200,
+            "FPS": 60.00323042808422,
+            "ElapsedSeconds": 19.99892324861139,
+            "P50Ms": 16.65329933166504,
+            "MaxMs": 30.91380000114441,
+            "MeanMs": 16.665769373842824
+          },
+          "2": {
+            "P95Ms": 18.80810037255287,
+            "Count": 1200,
+            "FPS": 60.00135508818597,
+            "ElapsedSeconds": 19.999548314139247,
+            "P50Ms": 16.706200316548347,
+            "MaxMs": 31.933799386024475,
+            "MeanMs": 16.666290261782706
+          }
+        },
+        "CompletedAt": 1791392517.234338,
+        "Summary": {
+          "P95Ms": 18.670599907636642,
+          "Count": 3556,
+          "FPS": 59.26940333778207,
+          "ElapsedSeconds": 59.99722959473729,
+          "P50Ms": 16.689399257302284,
+          "MaxMs": 743.5256242752075,
+          "MeanMs": 16.87211180954367
+        },
+        "Role": "Client",
+        "Viewport": "705, 338",
+        "MemorySamples": {
+          "1": {
+            "LuaHeapMb": 749.2313232421875,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 112.32528686523438,
+            "TotalMb": 1841.38671875,
+            "BasePartsMb": 4.35577392578125,
+            "AtSeconds": 10.01146599999629
+          },
+          "8": {
+            "LuaHeapMb": 752.723876953125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 148.30848693847656,
+            "TotalMb": 1896.921875,
+            "BasePartsMb": 5.2252655029296875,
+            "AtSeconds": 80.10887090000324
+          },
+          "3": {
+            "LuaHeapMb": 749.8898315429688,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 112.32862854003906,
+            "TotalMb": 1841.49609375,
+            "BasePartsMb": 4.3912353515625,
+            "AtSeconds": 30.026791899930686
+          },
+          "2": {
+            "LuaHeapMb": 749.90625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 112.32643127441406,
+            "TotalMb": 1841.578125,
+            "BasePartsMb": 4.375213623046875,
+            "AtSeconds": 20.011640800046735
+          },
+          "5": {
+            "LuaHeapMb": 750.8382568359375,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 148.04501342773438,
+            "TotalMb": 1894.05078125,
+            "BasePartsMb": 4.750274658203125,
+            "AtSeconds": 50.060849700006656
+          },
+          "4": {
+            "LuaHeapMb": 750.0472412109375,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 148.0550994873047,
+            "TotalMb": 1893.87109375,
+            "BasePartsMb": 4.7316436767578125,
+            "AtSeconds": 40.04474719997961
+          },
+          "7": {
+            "LuaHeapMb": 751.5647583007812,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 148.31419372558594,
+            "TotalMb": 1909.46875,
+            "BasePartsMb": 5.218109130859375,
+            "AtSeconds": 70.09260979993269
+          },
+          "6": {
+            "LuaHeapMb": 751.1427001953125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 148.0467987060547,
+            "TotalMb": 1894.57421875,
+            "BasePartsMb": 4.7578582763671875,
+            "AtSeconds": 60.07664660003502
+          }
+        },
+        "WarmupSeconds": 30,
+        "CameraRoute": "near 0,10,15; medium 0,32,45; far 0,50,130 (20 s each), target 0,3,-14"
+      },
+      "server": {
+        "Scene": {
+          "Models": 5,
+          "MeshParts": 25,
+          "Bones": 70,
+          "States": {
+            "Windup": 5
+          }
+        },
+        "RequestedSampleSeconds": 60,
+        "MemorySamples": {
+          "1": {
+            "LuaHeapMb": 749.1861572265625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 112.32521057128906,
+            "TotalMb": 1841.39453125,
+            "BasePartsMb": 4.35577392578125,
+            "AtSeconds": 10.016044299933128
+          },
+          "8": {
+            "LuaHeapMb": 752.0596313476562,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 148.30836486816406,
+            "TotalMb": 1896.92578125,
+            "BasePartsMb": 5.2252655029296875,
+            "AtSeconds": 80.09607839991804
+          },
+          "3": {
+            "LuaHeapMb": 750.2603149414062,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 112.32838439941406,
+            "TotalMb": 1841.5,
+            "BasePartsMb": 4.386322021484375,
+            "AtSeconds": 30.04642129992135
+          },
+          "2": {
+            "LuaHeapMb": 749.8884887695312,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 112.32643127441406,
+            "TotalMb": 1841.578125,
+            "BasePartsMb": 4.380340576171875,
+            "AtSeconds": 20.03006599994842
+          },
+          "5": {
+            "LuaHeapMb": 750.6061401367188,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 148.0460205078125,
+            "TotalMb": 1894.09765625,
+            "BasePartsMb": 4.752197265625,
+            "AtSeconds": 50.07856349996291
+          },
+          "4": {
+            "LuaHeapMb": 750.3245239257812,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 148.05491638183594,
+            "TotalMb": 1893.875,
+            "BasePartsMb": 4.7422637939453125,
+            "AtSeconds": 40.063195499940775
+          },
+          "7": {
+            "LuaHeapMb": 751.6365356445312,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 148.31472778320312,
+            "TotalMb": 1909.46875,
+            "BasePartsMb": 5.2111663818359375,
+            "AtSeconds": 70.09509359998628
+          },
+          "6": {
+            "LuaHeapMb": 750.9146728515625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "InstancesMb": 148.0467987060547,
+            "TotalMb": 1894.63671875,
+            "BasePartsMb": 4.7578582763671875,
+            "AtSeconds": 60.079009099979885
+          }
+        },
+        "Summary": {
+          "P95Ms": 18.674802035093307,
+          "Count": 3556,
+          "FPS": 59.266631717716464,
+          "ElapsedSeconds": 60.00003538141027,
+          "P50Ms": 16.911005601286888,
+          "MaxMs": 658.0896973609924,
+          "MeanMs": 16.872900838416836
+        },
+        "CameraRoute": "near 0,10,15; medium 0,32,45; far 0,50,130 (20 s each), target 0,3,-14",
+        "Role": "Server",
+        "CompletedAt": 1791392517.933043,
+        "WarmupSeconds": 30,
+        "Stages": {
+          "1": {
+            "P95Ms": 18.918927758932114,
+            "Count": 1156,
+            "FPS": 57.79585182018077,
+            "ElapsedSeconds": 20.001435459358618,
+            "P50Ms": 16.911005601286888,
+            "MaxMs": 658.0896973609924,
+            "MeanMs": 17.30227980913375
+          },
+          "3": {
+            "P95Ms": 18.21574755012989,
+            "Count": 1200,
+            "FPS": 60.00325002778908,
+            "ElapsedSeconds": 19.99891671608202,
+            "P50Ms": 16.92127250134945,
+            "MaxMs": 31.79411217570305,
+            "MeanMs": 16.66576393006835
+          },
+          "2": {
+            "P95Ms": 18.864605575799942,
+            "Count": 1200,
+            "FPS": 60.00095039714511,
+            "ElapsedSeconds": 19.99968320596963,
+            "P50Ms": 16.891812905669212,
+            "MaxMs": 41.0471074283123,
+            "MeanMs": 16.66640267164136
+          }
+        }
+      }
+    },
+    {
+      "count": 10,
+      "client": {
+        "Scene": {
+          "Models": 10,
+          "MeshParts": 50,
+          "Bones": 140,
+          "States": {
+            "Roam": 2,
+            "Idle": 1,
+            "Recover": 7
+          }
+        },
+        "RequestedSampleSeconds": 60,
+        "Stages": {
+          "1": {
+            "P95Ms": 18.826600164175034,
+            "Count": 1199,
+            "FPS": 59.95467255238219,
+            "ElapsedSeconds": 19.99844130501151,
+            "P50Ms": 16.616899520158768,
+            "MaxMs": 36.67889907956123,
+            "MeanMs": 16.67926714346248
+          },
+          "3": {
+            "P95Ms": 18.73609982430935,
+            "Count": 1200,
+            "FPS": 60.00616920927993,
+            "ElapsedSeconds": 19.997943808324635,
+            "P50Ms": 16.657700762152672,
+            "MaxMs": 28.205400332808495,
+            "MeanMs": 16.664953173603863
+          },
+          "2": {
+            "P95Ms": 19.026000052690506,
+            "Count": 1196,
+            "FPS": 59.79708043230543,
+            "ElapsedSeconds": 20.000976491719484,
+            "P50Ms": 16.608599573373795,
+            "MaxMs": 78.17450165748596,
+            "MeanMs": 16.723224491404252
+          }
+        },
+        "CompletedAt": 1791392643.128444,
+        "Summary": {
+          "P95Ms": 18.874600529670715,
+          "Count": 3595,
+          "FPS": 59.919301513036366,
+          "ElapsedSeconds": 59.99736160505563,
+          "P50Ms": 16.630100086331367,
+          "MaxMs": 78.17450165748596,
+          "MeanMs": 16.689113102936197
+        },
+        "Role": "Client",
+        "Viewport": "705, 338",
+        "MemorySamples": {
+          "1": {
+            "LuaHeapMb": 709.3668212890625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 5.3994903564453125,
+            "PingMs": 45.19766508249931,
+            "TotalMb": 1836.97265625,
+            "InstancesMb": 112.99432373046875,
+            "AtSeconds": 10.01172440010123,
+            "ReceiveKBps": 3.659415127064249,
+            "SendKBps": 1.346702147119059
+          },
+          "8": {
+            "LuaHeapMb": 710.9020385742188,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 6.638763427734375,
+            "PingMs": 39.78701336955834,
+            "TotalMb": 1874.359375,
+            "InstancesMb": 149.14503479003906,
+            "AtSeconds": 80.10830369999167,
+            "ReceiveKBps": 3.991697054686909,
+            "SendKBps": 0.8613077854887043
+          },
+          "3": {
+            "LuaHeapMb": 709.5963134765625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 5.8941802978515625,
+            "PingMs": 39.24686527930864,
+            "TotalMb": 1872.11328125,
+            "InstancesMb": 148.73846435546875,
+            "AtSeconds": 30.028459000051953,
+            "ReceiveKBps": 2.8527394947862943,
+            "SendKBps": 0.9955878185708729
+          },
+          "2": {
+            "LuaHeapMb": 709.1664428710938,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 5.4794769287109375,
+            "PingMs": 43.720852130346465,
+            "TotalMb": 1837.375,
+            "InstancesMb": 113.01272583007812,
+            "AtSeconds": 20.01273400010541,
+            "ReceiveKBps": 19.595801092261567,
+            "SendKBps": 6.439882583623265
+          },
+          "5": {
+            "LuaHeapMb": 709.8145141601562,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 6.14447021484375,
+            "PingMs": 46.68244530090695,
+            "TotalMb": 1875.2890625,
+            "InstancesMb": 148.88150024414062,
+            "AtSeconds": 50.059011300094426,
+            "ReceiveKBps": 4.961030312429063,
+            "SendKBps": 1.139074120581131
+          },
+          "4": {
+            "LuaHeapMb": 709.1575927734375,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 5.8365020751953125,
+            "PingMs": 41.50606870839878,
+            "TotalMb": 1872.58984375,
+            "InstancesMb": 148.68446350097656,
+            "AtSeconds": 40.04439970001113,
+            "ReceiveKBps": 10.28124651964604,
+            "SendKBps": 12.23724402808619
+          },
+          "7": {
+            "LuaHeapMb": 710.4404296875,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 6.623809814453125,
+            "PingMs": 44.18972814159996,
+            "TotalMb": 1875.16015625,
+            "InstancesMb": 149.14456176757812,
+            "AtSeconds": 70.09318930003792,
+            "ReceiveKBps": 4.91968422642554,
+            "SendKBps": 1.082935462456573
+          },
+          "6": {
+            "LuaHeapMb": 710.1676025390625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 6.204803466796875,
+            "PingMs": 39.54069687071598,
+            "TotalMb": 1873.359375,
+            "InstancesMb": 148.8920440673828,
+            "AtSeconds": 60.07704320002813,
+            "ReceiveKBps": 8.99696573770126,
+            "SendKBps": 7.121337867450071
+          }
+        },
+        "WarmupSeconds": 30,
+        "CameraRoute": "near 0,10,15; medium 0,32,45; far 0,50,130 (20 s each), target 0,3,-14"
+      },
+      "server": {
+        "Scene": {
+          "Models": 10,
+          "MeshParts": 50,
+          "Bones": 140,
+          "States": {
+            "Idle": 9,
+            "Roam": 1
+          }
+        },
+        "RequestedSampleSeconds": 60,
+        "MemorySamples": {
+          "1": {
+            "LuaHeapMb": 709.5626220703125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 5.3990631103515625,
+            "PingMs": 49.54879176217261,
+            "TotalMb": 1836.97265625,
+            "InstancesMb": 112.99465942382812,
+            "AtSeconds": 10.014125699992292,
+            "ReceiveKBps": 1.032280133911221,
+            "SendKBps": 3.8852874422506916
+          },
+          "8": {
+            "LuaHeapMb": 710.96630859375,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 6.6305389404296875,
+            "PingMs": 45.49466596298699,
+            "TotalMb": 1874.36328125,
+            "InstancesMb": 149.14418029785156,
+            "AtSeconds": 80.1107948999852,
+            "ReceiveKBps": 1.134132110686504,
+            "SendKBps": 4.315508162765279
+          },
+          "3": {
+            "LuaHeapMb": 709.6255493164062,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 5.897918701171875,
+            "PingMs": 46.23300923647225,
+            "TotalMb": 1872.1171875,
+            "InstancesMb": 148.7366180419922,
+            "AtSeconds": 30.046039600041695,
+            "ReceiveKBps": 0.994348475045593,
+            "SendKBps": 3.124976547260569
+          },
+          "2": {
+            "LuaHeapMb": 709.326171875,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 5.541778564453125,
+            "PingMs": 41.35033517041734,
+            "TotalMb": 1837.375,
+            "InstancesMb": 113.03164672851562,
+            "AtSeconds": 20.03181830001995,
+            "ReceiveKBps": 8.796781568156614,
+            "SendKBps": 12.434998191583292
+          },
+          "5": {
+            "LuaHeapMb": 709.759765625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 6.141693115234375,
+            "PingMs": 49.402584860407806,
+            "TotalMb": 1875.29296875,
+            "InstancesMb": 148.88211059570312,
+            "AtSeconds": 50.062290200032294,
+            "ReceiveKBps": 1.1843134750895377,
+            "SendKBps": 3.723186955887198
+          },
+          "4": {
+            "LuaHeapMb": 709.6359252929688,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 5.8181610107421875,
+            "PingMs": 50.00485052415391,
+            "TotalMb": 1872.58984375,
+            "InstancesMb": 148.68763732910156,
+            "AtSeconds": 40.047650199965574,
+            "ReceiveKBps": 11.388871501031163,
+            "SendKBps": 13.478194940068263
+          },
+          "7": {
+            "LuaHeapMb": 710.626708984375,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 6.623809814453125,
+            "PingMs": 43.97224213898432,
+            "TotalMb": 1875.16015625,
+            "InstancesMb": 149.14456176757812,
+            "AtSeconds": 70.0945442999946,
+            "ReceiveKBps": 0.9127943759292504,
+            "SendKBps": 3.910152048557767
+          },
+          "6": {
+            "LuaHeapMb": 710.09130859375,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 6.212677001953125,
+            "PingMs": 43.20244349610434,
+            "TotalMb": 1873.375,
+            "InstancesMb": 148.8925018310547,
+            "AtSeconds": 60.07935280003585,
+            "ReceiveKBps": 15.362093396624733,
+            "SendKBps": 13.115881985139339
+          }
+        },
+        "Summary": {
+          "P95Ms": 18.936539068818092,
+          "Count": 3595,
+          "FPS": 59.91665543796278,
+          "ElapsedSeconds": 60.000011244323105,
+          "P50Ms": 16.903933137655258,
+          "MaxMs": 78.89960706233978,
+          "MeanMs": 16.68985013750295
+        },
+        "CameraRoute": "near 0,10,15; medium 0,32,45; far 0,50,130 (20 s each), target 0,3,-14",
+        "Role": "Server",
+        "CompletedAt": 1791392643.897781,
+        "WarmupSeconds": 30,
+        "Stages": {
+          "1": {
+            "P95Ms": 18.94638128578663,
+            "Count": 1199,
+            "FPS": 59.951137071655154,
+            "ElapsedSeconds": 19.999620667193085,
+            "P50Ms": 16.88734069466591,
+            "MaxMs": 33.291883766651154,
+            "MeanMs": 16.68025076496504
+          },
+          "3": {
+            "P95Ms": 18.868425861001015,
+            "Count": 1200,
+            "FPS": 60.00054341208608,
+            "ElapsedSeconds": 19.999818864278495,
+            "P50Ms": 16.912484541535378,
+            "MaxMs": 23.115413263440132,
+            "MeanMs": 16.66651572023208
+          },
+          "2": {
+            "P95Ms": 18.94999109208584,
+            "Count": 1196,
+            "FPS": 59.79829062743745,
+            "ElapsedSeconds": 20.000571712851524,
+            "P50Ms": 16.90383069217205,
+            "MaxMs": 78.89960706233978,
+            "MeanMs": 16.72288604753472
+          }
+        }
+      }
+    },
+    {
+      "count": 25,
+      "client": {
+        "Scene": {
+          "Models": 25,
+          "MeshParts": 125,
+          "Bones": 350,
+          "States": {
+            "Roam": 25
+          }
+        },
+        "RequestedSampleSeconds": 60,
+        "Stages": {
+          "1": {
+            "P95Ms": 18.92630010843277,
+            "Count": 1198,
+            "FPS": 59.898110482633356,
+            "ElapsedSeconds": 20.000630910508335,
+            "P50Ms": 16.649100929498672,
+            "MaxMs": 66.4827972650528,
+            "MeanMs": 16.69501745451447
+          },
+          "3": {
+            "P95Ms": 19.0287996083498,
+            "Count": 1200,
+            "FPS": 60.004930039797365,
+            "ElapsedSeconds": 19.998356788419187,
+            "P50Ms": 16.649799421429634,
+            "MaxMs": 32.18790143728256,
+            "MeanMs": 16.665297323682655
+          },
+          "2": {
+            "P95Ms": 19.404400140047073,
+            "Count": 1197,
+            "FPS": 59.847012828217125,
+            "ElapsedSeconds": 20.000998269300908,
+            "P50Ms": 16.68749935925007,
+            "MaxMs": 77.87609845399857,
+            "MeanMs": 16.70927173709349
+          }
+        },
+        "CompletedAt": 1791392828.321831,
+        "Summary": {
+          "P95Ms": 19.11349967122078,
+          "Count": 3595,
+          "FPS": 59.91668067895294,
+          "ElapsedSeconds": 59.99998596822843,
+          "P50Ms": 16.665300354361534,
+          "MaxMs": 77.87609845399857,
+          "MeanMs": 16.6898431066004
+        },
+        "Role": "Client",
+        "Viewport": "705, 338",
+        "MemorySamples": {
+          "1": {
+            "LuaHeapMb": 745.5596923828125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 7.929412841796875,
+            "PingMs": 41.38628961388919,
+            "TotalMb": 1893.125,
+            "InstancesMb": 114.85537719726562,
+            "AtSeconds": 10.015027299989015,
+            "ReceiveKBps": 6.139032144806764,
+            "SendKBps": 2.438222731186854
+          },
+          "8": {
+            "LuaHeapMb": 743.66064453125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 9.463821411132812,
+            "PingMs": 41.41827116368388,
+            "TotalMb": 1949.2734375,
+            "InstancesMb": 151.15773010253906,
+            "AtSeconds": 80.09519180003554,
+            "ReceiveKBps": 5.267226500476031,
+            "SendKBps": 1.3541810876067453
+          },
+          "3": {
+            "LuaHeapMb": 746.8106689453125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 8.285079956054688,
+            "PingMs": 42.26595122044998,
+            "TotalMb": 1937.734375,
+            "InstancesMb": 150.56576538085938,
+            "AtSeconds": 30.03028229996562,
+            "ReceiveKBps": 5.339081288486395,
+            "SendKBps": 2.1459021260270728
+          },
+          "2": {
+            "LuaHeapMb": 746.1522216796875,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 8.236907958984375,
+            "PingMs": 42.687221442136405,
+            "TotalMb": 1937.0546875,
+            "InstancesMb": 150.5649871826172,
+            "AtSeconds": 20.02999870001804,
+            "ReceiveKBps": 7.309463289093118,
+            "SendKBps": 3.5380881285816157
+          },
+          "5": {
+            "LuaHeapMb": 745.2354736328125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 8.478790283203125,
+            "PingMs": 46.61862872663465,
+            "TotalMb": 1938.69140625,
+            "InstancesMb": 150.66302490234375,
+            "AtSeconds": 50.06200809997972,
+            "ReceiveKBps": 4.3658721611871085,
+            "SendKBps": 1.452070023220643
+          },
+          "4": {
+            "LuaHeapMb": 747.209228515625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 8.58331298828125,
+            "PingMs": 40.761813116202475,
+            "TotalMb": 1951.1953125,
+            "InstancesMb": 150.79603576660156,
+            "AtSeconds": 40.04588310001418,
+            "ReceiveKBps": 7.9619250973367315,
+            "SendKBps": 3.303576309956763
+          },
+          "7": {
+            "LuaHeapMb": 745.609619140625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 9.05487060546875,
+            "PingMs": 42.19070160220848,
+            "TotalMb": 1949.10546875,
+            "InstancesMb": 150.9064483642578,
+            "AtSeconds": 70.07775000005495,
+            "ReceiveKBps": 13.298836883609995,
+            "SendKBps": 2.4723718517236075
+          },
+          "6": {
+            "LuaHeapMb": 745.484619140625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 8.940216064453125,
+            "PingMs": 47.41413264792699,
+            "TotalMb": 1948.94140625,
+            "InstancesMb": 150.89552307128906,
+            "AtSeconds": 60.06246839999221,
+            "ReceiveKBps": 7.177812501346525,
+            "SendKBps": 2.368260313385391
+          }
+        },
+        "WarmupSeconds": 30,
+        "CameraRoute": "near 0,10,15; medium 0,32,45; far 0,50,130 (20 s each), target 0,3,-14"
+      },
+      "server": {
+        "Scene": {
+          "Models": 25,
+          "MeshParts": 125,
+          "Bones": 350,
+          "States": {
+            "Roam": 17,
+            "Idle": 8
+          }
+        },
+        "RequestedSampleSeconds": 60,
+        "MemorySamples": {
+          "1": {
+            "LuaHeapMb": 745.54638671875,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 7.9280242919921875,
+            "PingMs": 47.46727149967235,
+            "TotalMb": 1893.16015625,
+            "InstancesMb": 114.85549926757812,
+            "AtSeconds": 10.014605200034566,
+            "ReceiveKBps": 2.4725284005062744,
+            "SendKBps": 6.817147969284896
+          },
+          "8": {
+            "LuaHeapMb": 743.005615234375,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 9.507400512695312,
+            "PingMs": 45.913360246163606,
+            "TotalMb": 1949.3671875,
+            "InstancesMb": 151.15753173828125,
+            "AtSeconds": 80.07935170002747,
+            "ReceiveKBps": 1.8908877249035858,
+            "SendKBps": 8.650280025320571
+          },
+          "3": {
+            "LuaHeapMb": 746.6278076171875,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 8.28369140625,
+            "PingMs": 44.06101649466098,
+            "TotalMb": 1937.75,
+            "InstancesMb": 150.56430053710938,
+            "AtSeconds": 30.029015799984336,
+            "ReceiveKBps": 1.6664439547916474,
+            "SendKBps": 5.316699286466259
+          },
+          "2": {
+            "LuaHeapMb": 746.7158203125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 8.236907958984375,
+            "PingMs": 44.67753978714498,
+            "TotalMb": 1937.0703125,
+            "InstancesMb": 150.5620880126953,
+            "AtSeconds": 20.01527029997669,
+            "ReceiveKBps": 3.0088759037691464,
+            "SendKBps": 6.590151592700136
+          },
+          "5": {
+            "LuaHeapMb": 744.96044921875,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 8.526123046875,
+            "PingMs": 41.34901239808079,
+            "TotalMb": 1941.6484375,
+            "InstancesMb": 150.74020385742188,
+            "AtSeconds": 50.0462520000292,
+            "ReceiveKBps": 7.569211480361187,
+            "SendKBps": 14.4965655947975
+          },
+          "4": {
+            "LuaHeapMb": 746.9862670898438,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 8.58331298828125,
+            "PingMs": 45.52348215546024,
+            "TotalMb": 1940.3984375,
+            "InstancesMb": 150.79852294921875,
+            "AtSeconds": 40.04535210004542,
+            "ReceiveKBps": 2.573515692785147,
+            "SendKBps": 7.450660171893595
+          },
+          "7": {
+            "LuaHeapMb": 745.8441772460938,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 9.05035400390625,
+            "PingMs": 43.94441291522888,
+            "TotalMb": 1949.10546875,
+            "InstancesMb": 150.90670776367188,
+            "AtSeconds": 70.06366620003246,
+            "ReceiveKBps": 14.548099387245882,
+            "SendKBps": 13.319932077114682
+          },
+          "6": {
+            "LuaHeapMb": 745.3450927734375,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 8.974929809570312,
+            "PingMs": 42.5040058173612,
+            "TotalMb": 1948.953125,
+            "InstancesMb": 150.89486694335938,
+            "AtSeconds": 60.06217569997534,
+            "ReceiveKBps": 1.8424775538972078,
+            "SendKBps": 8.507211703656983
+          }
+        },
+        "Summary": {
+          "P95Ms": 18.93211342394352,
+          "Count": 3595,
+          "FPS": 59.91573890030692,
+          "ElapsedSeconds": 60.00092907110229,
+          "P50Ms": 16.921579837799072,
+          "MaxMs": 82.12972432374954,
+          "MeanMs": 16.690105443978386
+        },
+        "CameraRoute": "near 0,10,15; medium 0,32,45; far 0,50,130 (20 s each), target 0,3,-14",
+        "Role": "Server",
+        "CompletedAt": 1791392829.136711,
+        "WarmupSeconds": 30,
+        "Stages": {
+          "1": {
+            "P95Ms": 18.894188106060028,
+            "Count": 1198,
+            "FPS": 59.88999001054967,
+            "ElapsedSeconds": 20.003342792158946,
+            "P50Ms": 16.915611922740936,
+            "MaxMs": 66.51730090379715,
+            "MeanMs": 16.697281128680256
+          },
+          "3": {
+            "P95Ms": 18.94885115325451,
+            "Count": 1200,
+            "FPS": 60.00329141934528,
+            "ElapsedSeconds": 19.998902920400724,
+            "P50Ms": 16.91974326968193,
+            "MaxMs": 39.0780046582222,
+            "MeanMs": 16.66575243366727
+          },
+          "2": {
+            "P95Ms": 18.927134573459625,
+            "Count": 1197,
+            "FPS": 59.85394030895991,
+            "ElapsedSeconds": 19.99868335854262,
+            "P50Ms": 16.92686602473259,
+            "MaxMs": 82.12972432374954,
+            "MeanMs": 16.707337809977126
+          }
+        }
+      }
+    },
+    {
+      "count": 50,
+      "client": {
+        "Scene": {
+          "Models": 50,
+          "MeshParts": 250,
+          "Bones": 700,
+          "States": {
+            "Idle": 4,
+            "Recover": 6,
+            "Windup": 1,
+            "Roam": 34,
+            "Attack": 5
+          }
+        },
+        "RequestedSampleSeconds": 60,
+        "Stages": {
+          "1": {
+            "P95Ms": 19.742999225854874,
+            "Count": 1196,
+            "FPS": 59.807015401007575,
+            "ElapsedSeconds": 19.997653987258673,
+            "P50Ms": 16.72239974141121,
+            "MaxMs": 71.42239809036255,
+            "MeanMs": 16.72044647764103
+          },
+          "3": {
+            "P95Ms": 19.751999527215958,
+            "Count": 1198,
+            "FPS": 59.902806779587415,
+            "ElapsedSeconds": 19.999062888789922,
+            "P50Ms": 16.666099429130554,
+            "MaxMs": 47.65680059790611,
+            "MeanMs": 16.693708588305444
+          },
+          "2": {
+            "P95Ms": 20.11840045452118,
+            "Count": 1198,
+            "FPS": 59.89397260679592,
+            "ElapsedSeconds": 20.00201268773526,
+            "P50Ms": 16.753999516367912,
+            "MaxMs": 57.798899710178375,
+            "MeanMs": 16.696170857875842
+          }
+        },
+        "CompletedAt": 1791392981.137137,
+        "Summary": {
+          "P95Ms": 19.82180029153824,
+          "Count": 3592,
+          "FPS": 59.86793430653215,
+          "ElapsedSeconds": 59.998729563783854,
+          "P50Ms": 16.702700406312943,
+          "MaxMs": 71.42239809036255,
+          "MeanMs": 16.70343250662134
+        },
+        "Role": "Client",
+        "Viewport": "705, 338",
+        "MemorySamples": {
+          "1": {
+            "LuaHeapMb": 732.8274536132812,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 11.680084228515625,
+            "PingMs": 44.95027159127173,
+            "TotalMb": 1978.5390625,
+            "InstancesMb": 117.47700500488281,
+            "AtSeconds": 10.01457090000622,
+            "ReceiveKBps": 15.738196293441689,
+            "SendKBps": 8.666253718073099
+          },
+          "8": {
+            "LuaHeapMb": 707.48876953125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 13.7235107421875,
+            "PingMs": 47.9243987062408,
+            "TotalMb": 1994.2265625,
+            "InstancesMb": 154.0165557861328,
+            "AtSeconds": 80.09370480000507,
+            "ReceiveKBps": 9.83440235377898,
+            "SendKBps": 3.0415355737754752
+          },
+          "3": {
+            "LuaHeapMb": 733.3756713867188,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 12.231460571289062,
+            "PingMs": 41.50571148131542,
+            "TotalMb": 1991.8359375,
+            "InstancesMb": 153.224609375,
+            "AtSeconds": 30.031472000060603,
+            "ReceiveKBps": 19.208986574550988,
+            "SendKBps": 9.509046082100742
+          },
+          "2": {
+            "LuaHeapMb": 732.7740478515625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 11.991546630859375,
+            "PingMs": 43.35828512805088,
+            "TotalMb": 1978.67578125,
+            "InstancesMb": 117.59126281738281,
+            "AtSeconds": 20.028824500041083,
+            "ReceiveKBps": 17.297447234329457,
+            "SendKBps": 13.414831978948575
+          },
+          "5": {
+            "LuaHeapMb": 733.944580078125,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 12.735015869140625,
+            "PingMs": 37.14054198657825,
+            "TotalMb": 1993.984375,
+            "InstancesMb": 153.49008178710938,
+            "AtSeconds": 50.06170339998789,
+            "ReceiveKBps": 7.167693339453256,
+            "SendKBps": 2.324182189162345
+          },
+          "4": {
+            "LuaHeapMb": 733.5547485351562,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 12.687362670898438,
+            "PingMs": 51.86693881969809,
+            "TotalMb": 1993.9140625,
+            "InstancesMb": 153.496826171875,
+            "AtSeconds": 40.04705080005806,
+            "ReceiveKBps": 17.442091443951718,
+            "SendKBps": 9.679016871490965
+          },
+          "7": {
+            "LuaHeapMb": 735.1392822265625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 13.312545776367188,
+            "PingMs": 35.902453537119044,
+            "TotalMb": 1994.13671875,
+            "InstancesMb": 153.7667694091797,
+            "AtSeconds": 70.09233590005897,
+            "ReceiveKBps": 23.18605578900108,
+            "SendKBps": 11.98803783038388
+          },
+          "6": {
+            "LuaHeapMb": 734.7882690429688,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 13.21551513671875,
+            "PingMs": 37.11347136443645,
+            "TotalMb": 1994.109375,
+            "InstancesMb": 153.75927734375,
+            "AtSeconds": 60.07877330004703,
+            "ReceiveKBps": 17.92505244240878,
+            "SendKBps": 9.709588962611242
+          }
+        },
+        "WarmupSeconds": 30,
+        "CameraRoute": "near 0,10,15; medium 0,32,45; far 0,50,130 (20 s each), target 0,3,-14"
+      },
+      "server": {
+        "Scene": {
+          "Models": 50,
+          "MeshParts": 250,
+          "Bones": 700,
+          "States": {
+            "Idle": 37,
+            "Roam": 7,
+            "Attack": 6
+          }
+        },
+        "RequestedSampleSeconds": 60,
+        "MemorySamples": {
+          "1": {
+            "LuaHeapMb": 732.2886352539062,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 11.67730712890625,
+            "PingMs": 47.06871653085382,
+            "TotalMb": 1978.5390625,
+            "InstancesMb": 117.47686767578125,
+            "AtSeconds": 10.015691600041464,
+            "ReceiveKBps": 9.09687330956622,
+            "SendKBps": 20.075845216219818
+          },
+          "8": {
+            "LuaHeapMb": 707.1900634765625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 13.743377685546875,
+            "PingMs": 52.07660696583237,
+            "TotalMb": 1994.2265625,
+            "InstancesMb": 154.0171356201172,
+            "AtSeconds": 80.395842500031,
+            "ReceiveKBps": 8.257151718373501,
+            "SendKBps": 17.91771939141535
+          },
+          "3": {
+            "LuaHeapMb": 733.1962890625,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 12.23541259765625,
+            "PingMs": 45.4918682806025,
+            "TotalMb": 1991.8359375,
+            "InstancesMb": 153.2251434326172,
+            "AtSeconds": 30.330125499982387,
+            "ReceiveKBps": 3.4890048355087453,
+            "SendKBps": 15.050661849575924
+          },
+          "2": {
+            "LuaHeapMb": 733.04833984375,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 12.285202026367188,
+            "PingMs": 37.977492003137584,
+            "TotalMb": 1991.7890625,
+            "InstancesMb": 153.1831512451172,
+            "AtSeconds": 20.32685109996237,
+            "ReceiveKBps": 16.556471752017746,
+            "SendKBps": 21.576178870994273
+          },
+          "5": {
+            "LuaHeapMb": 733.9417724609375,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 12.772293090820312,
+            "PingMs": 49.26385728885297,
+            "TotalMb": 1993.984375,
+            "InstancesMb": 153.48995971679688,
+            "AtSeconds": 50.34768789994996,
+            "ReceiveKBps": 8.296056539161633,
+            "SendKBps": 19.66642709796613
+          },
+          "4": {
+            "LuaHeapMb": 734.4065551757812,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 12.689407348632812,
+            "PingMs": 56.59623457070407,
+            "TotalMb": 1993.9296875,
+            "InstancesMb": 153.49034118652344,
+            "AtSeconds": 40.33054009999614,
+            "ReceiveKBps": 8.82364850491688,
+            "SendKBps": 15.346286090390148
+          },
+          "7": {
+            "LuaHeapMb": 734.880615234375,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 13.312545776367188,
+            "PingMs": 48.155287839754486,
+            "TotalMb": 1994.15234375,
+            "InstancesMb": 153.7668914794922,
+            "AtSeconds": 70.38110420003068,
+            "ReceiveKBps": 21.903055613831786,
+            "SendKBps": 29.280698431401287
+          },
+          "6": {
+            "LuaHeapMb": 734.7203979492188,
+            "GraphicsTextureMb": 27.723922729492188,
+            "BasePartsMb": 13.220123291015625,
+            "PingMs": 46.8595452287917,
+            "TotalMb": 1994.11328125,
+            "InstancesMb": 153.75538635253906,
+            "AtSeconds": 60.36354249995202,
+            "ReceiveKBps": 3.7944289234592143,
+            "SendKBps": 9.88219386349123
+          }
+        },
+        "Summary": {
+          "P95Ms": 19.069768488407135,
+          "Count": 3592,
+          "FPS": 59.86725975175532,
+          "ElapsedSeconds": 59.99940559989773,
+          "P50Ms": 16.9164277613163,
+          "MaxMs": 65.22808223962784,
+          "MeanMs": 16.703620712666407
+        },
+        "CameraRoute": "near 0,10,15; medium 0,32,45; far 0,50,130 (20 s each), target 0,3,-14",
+        "Role": "Server",
+        "CompletedAt": 1791392981.868528,
+        "WarmupSeconds": 30,
+        "Stages": {
+          "1": {
+            "P95Ms": 19.06486600637436,
+            "Count": 1196,
+            "FPS": 59.80950446687153,
+            "ElapsedSeconds": 19.996821753680706,
+            "P50Ms": 16.91608875989914,
+            "MaxMs": 65.22808223962784,
+            "MeanMs": 16.719750630167816
+          },
+          "3": {
+            "P95Ms": 19.050730392336845,
+            "Count": 1198,
+            "FPS": 59.90258268220965,
+            "ElapsedSeconds": 19.999137705890462,
+            "P50Ms": 16.90942421555519,
+            "MaxMs": 54.544735699892044,
+            "MeanMs": 16.693771039975342
+          },
+          "2": {
+            "P95Ms": 19.1086046397686,
+            "Count": 1198,
+            "FPS": 59.889680587829076,
+            "ElapsedSeconds": 20.00344614032656,
+            "P50Ms": 16.92230999469757,
+            "MaxMs": 50.79594999551773,
+            "MeanMs": 16.69736739593202
+          }
+        }
+      }
+    }
+  ],
+  "network_5_monsters_snapshot": [
+    {
+      "Value": 18.98199476215805,
+      "Path": "Stats.Network.ServerStatsItem.Send kBps"
+    },
+    {
+      "Value": 48.06601631793133,
+      "Path": "Stats.Network.ServerStatsItem.Data Ping"
+    },
+    {
+      "Value": 9.320592721388017,
+      "Path": "Stats.Network.ServerStatsItem.Receive kBps"
+    }
+  ]
+}

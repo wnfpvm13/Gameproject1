@@ -1,0 +1,35 @@
+Luau syntax compilation: 89 files PASS
+Pure Foundation modules type analysis PASS
+CombatPrediction.spec: 7 groups PASS
+CombatReadability.spec: 28 groups PASS
+CombatService.spec: 24 groups PASS
+CombatTrackOwnership.spec: 5 groups PASS
+Coordinator.spec: 12 groups PASS
+DataService.spec: 14 groups PASS
+Expedition.spec: 14 groups PASS
+ExpeditionCoordinator.spec: 14 groups PASS
+Foundation.spec: 12 groups PASS
+Host-only pure AI: 1 monsters / mean 0.0028 ms per tick (no Studio/render/network)
+Host-only pure AI: 5 monsters / mean 0.0066 ms per tick (no Studio/render/network)
+Host-only pure AI: 10 monsters / mean 0.0094 ms per tick (no Studio/render/network)
+Host-only pure AI: 25 monsters / mean 0.0178 ms per tick (no Studio/render/network)
+Host-only pure AI: 50 monsters / mean 0.0564 ms per tick (no Studio/render/network)
+HornboarScale.spec: 5 groups PASS
+HornboarV2.spec: 10 groups PASS
+HuntingContracts.spec: 13 groups PASS
+HuntingIntegration.spec: 8 groups PASS
+HuntingPresentation.spec: 8 groups PASS
+ImportedHornboarRig.spec: 8 groups PASS
+InventoryService.spec: 19 groups PASS
+LootService.spec: 16 groups PASS
+MonsterService.spec: 24 groups PASS
+PartyActivity.spec: 12 groups PASS
+PartyHUDDrag.spec: 7 groups PASS
+PartyHUDGeometry.spec: 19 groups PASS
+PartyHUDLayout.spec: 8 groups PASS
+PartyPresentation.spec: 6 groups PASS
+PartyTeleport.spec: 16 groups PASS
+PartyUIStyle.spec: 9 groups PASS
+PartyUX.spec: 19 groups PASS
+SessionService.spec: 14 groups PASS
+Foundation total: 351 groups PASS

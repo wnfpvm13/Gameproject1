@@ -1,0 +1,16 @@
+{
+  "asset_id": "MON_Hornboar_V1",
+  "source": "user Studio FBX import",
+  "runtime_file": "art/runtime/Monsters/MON_Hornboar_V1.rbxm",
+  "size_bytes": 76575,
+  "sha256": "df3ef039ba0141c7227cdd560dd64ecd1f59341ed0ba50a3695691f9a4782578",
+  "rig_type": "MeshPart + Motor6D custom rigid rig",
+  "required_parts": [
+    "RootPart", "Torso", "Head",
+    "FrontLeg_L_Upper", "FrontLeg_R_Upper",
+    "FrontShin_L_Lower", "FrontShin_R_Lower",
+    "BackLeg_L_Upper", "BackLeg_R_Upper",
+    "BackShin_L_Lower", "BackShin_R_Lower",
+    "Horn_Intact", "Horn_Broken", "Tail"
+  ]
+}

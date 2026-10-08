@@ -185,3 +185,13 @@ Restaurant와 별도 Reserved Server activity.
 
 Teleport transport layer는 Restaurant/Expedition이 재사용.
 세션 검증은 activity별 service가 담당.
+
+## 12. Phase 1 Shared Hunting 구현
+
+`HuntingRuntime`은 Foundation의 인증 actor/profile/location/travel API를 주입받는 World 전용 Roblox 어댑터이다. Party·ReadyCheck·Restaurant·Expedition core API는 그대로 사용한다.
+
+`MonCookHuntingNetwork`를 기존 Foundation network와 별도로 사용한다. Intent는 Sequence/AttackType/선택 Facing·TargetHint만 받는다. State/Changed는 본인 inventory/action snapshot과 성공한 개인 Loot presentation만 전달한다. grant/roll/reward 요청 remote는 없다.
+
+CombatService/MonsterService/LootService/InventoryService는 Roblox 종속성 없는 순수 서비스이며 어댑터가 physics·time·random·DataService를 제공한다. 게임 플레이와 모델은 stable Config AssetId/Binding으로 연결한다. 시각 모델의 collision은 combat에 사용하지 않고 Body/Horn hitbox, range/arc·line-of-sight, 공격 window를 서버에서 검증한다.
+
+몬스터 reward outbox → 개인 roll 고정 → 기존 DataService의 원자 grant/receipt → 개인 cosmetic 순서이다. AI heartbeat와 저장 worker를 분리한다. 정상 PlayerRemoving/BindToClose에서 DataService Release보다 먼저 bounded flush를 시도한다. 미확정 대기열은 서버 메모리이며 강제 종료/장기 저장 장애의 내구성은 후속 항목이다. 실제 Analytics 전송 대신 BindableEvent hook만 제공한다.

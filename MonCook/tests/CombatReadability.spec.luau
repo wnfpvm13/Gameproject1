@@ -1,0 +1,166 @@
+--!strict
+local Geometry = require(script.Parent.Parent.src.shared.Utilities.HuntingHitGeometry)
+local Math = require(script.Parent.Parent.src.shared.Utilities.HuntingMath)
+local Registry = require(script.Parent.Parent.src.shared.Config.Registry)
+local Combat = require(script.Parent.Parent.src.server.Services.CombatService)
+local Contracts = require(script.Parent.Parent.src.shared.Utilities.HuntingContracts)
+local Defaults = require(script.Parent.Parent.src.shared.Utilities.PlayerDataDefaults)
+local Animation = require(script.Parent.Parent.src.shared.Utilities.CombatAnimation)
+local MonsterAnimation = require(script.Parent.Parent.src.shared.Utilities.HuntingAnimation)
+local Monsters = require(script.Parent.Parent.src.server.Services.MonsterService)
+local function p(x: number, y: number, z: number): any return { X = x, Y = y, Z = z } end
+return function(): number
+ local count = 0
+ local function check(_name: string, test: () -> ()) test(); count += 1 end
+ local origin, facing = p(0,3,0), p(0,0,-1)
+ local function contact(center: any, size: any, reach: number?, arc: number?, direction: any?): any
+  return Geometry.contact(origin,facing,center,direction or facing,size,reach or 5.8,arc or 96,6)
+ end
+ check('surface hit even when center is beyond reach',function()
+  local center=p(0,2.65,-8);local hit=contact(center,p(5.6,4.7,9.1))
+  assert(hit and not Math.inArc(origin,facing,center,5.8,96,6) and Math.inArc(origin,facing,hit,5.8,96,6))
+ end)
+ check('shoulder surface outside center-angle is hittable',function()
+  local center=p(5,3,-3);assert(not Math.inArc(origin,facing,center,5.8,96,6))
+  assert(contact(center,p(5.6,4.7,7)))
+ end)
+ check('body center and flanks do not require a tiny ray',function()
+  for _, x in {-3,-1,0,1,3} do assert(contact(p(x,2.6,-5),p(5.6,4.7,9.1))) end
+ end)
+ check('upper shoulder and lower torso share forgiving body volume',function()
+  assert(contact(p(0,4.0,-4),p(5.6,4.7,7)) and contact(p(0,.8,-4),p(5.6,4.7,7)))
+ end)
+ check('maximum reach surface accepted and exterior rejected',function()
+  assert(contact(p(0,3,-6.3),p(1,2,1),5.8))
+  assert(not contact(p(0,3,-6.301),p(1,2,1),5.8))
+ end)
+ check('entirely behind and entirely sideways cannot hit',function()
+  assert(not contact(p(0,3,4),p(3,3,3)))
+  assert(not contact(p(8,3,0),p(2,2,2)))
+ end)
+ check('sector excludes far diagonal broadphase corners',function()
+  assert(not contact(p(5.0,3,-5.0),p(.2,1,.2)))
+ end)
+ check('vertical separation cannot expand attack height indefinitely',function()
+  assert(not contact(p(0,14,-4),p(2,2,2)))
+ end)
+ check('rotated box and world orientations preserve surface range',function()
+  local hit=contact(p(3,3,-5),p(1.5,3,6),5.8,96,Math.direction(p(0,0,0),p(1,0,-1)))
+  assert(hit and Math.inArc(origin,facing,hit,5.8,96,6))
+ end)
+ check('player inside body has a valid zero-distance forward contact',function()
+  local hit=contact(p(0,3,0),p(4,4,8));assert(hit and Math.distance(origin,hit)==0)
+ end)
+ check('degenerate tangent cannot create a far-away origin contact',function()
+  assert(not contact(p(0,3,-40),p(.00001,1,1)))
+ end)
+ check('front and diagonal horn attacks reach real box surface',function()
+  local definition=Registry.Definitions.Monster.Hornboar
+  local center=definition.HornHitbox.Offset
+  for _, actor in {p(0,3,-10),p(4,3,-8)} do
+   local aim=Math.direction(actor,center)
+   local hit=Geometry.contact(actor,aim,center,facing,definition.HornHitbox.Size,6.8,108,6)
+   assert(hit and Math.inArc(actor,aim,hit,6.8,108,6))
+  end
+ end)
+ check('horn overrides body in either contact order with one body damage',function()
+  local body={EncounterId='a',Horn=false,Position=p(0,3,-2),ValidHitbox=true}
+  local horn={EncounterId='a',Horn=true,Position=p(0,3,-3),ValidHitbox=true}
+  local result=Geometry.prefer({body,horn});assert(#result==1 and result[1].Horn and result[1].Position.Z==-3)
+  assert(#Geometry.prefer({horn,body})==1)
+ end)
+ check('no horn candidate after break leaves body contact',function()
+  local result=Geometry.prefer({{EncounterId='a',Horn=false,Position=p(0,3,-2)}});assert(#result==1 and not result[1].Horn)
+ end)
+ check('basic and heavy have distinct forward reach and arc',function()
+  local weapon=Registry.Definitions.Weapon.StarterCleaver
+  assert(weapon.Reach>=5 and weapon.Reach<=6 and weapon.Heavy.Reach>=6 and weapon.Heavy.Reach<=7)
+  assert(weapon.Heavy.Reach>weapon.Reach and weapon.Heavy.ArcDegrees>weapon.ArcDegrees)
+  assert(not contact(p(0,3,-6.7),p(.2,1,.2),weapon.Reach))
+  assert(contact(p(0,3,-6.7),p(.2,1,.2),weapon.Heavy.Reach,weapon.Heavy.ArcDegrees))
+ end)
+ check('debug disabled by default and always absent in release',function()
+  assert(not Registry.Definitions.Testing.ShowCombatHitboxes)
+  assert(Geometry.debugEnabled(true,true) and not Geometry.debugEnabled(false,true) and not Geometry.debugEnabled(true,false))
+ end)
+ check('box contacts stay inside both oriented geometry and server arc',function()
+  for x=-8,8 do for z=-11,4 do
+   local hit=contact(p(x,3,z),p(3,3,4))
+   if hit then assert(Math.inArc(origin,facing,hit,5.8,96,6) and math.abs(hit.X-x)<=1.500001 and math.abs(hit.Z-z)<=2.000001, "contact at box "..tostring(x)..","..tostring(z).." returned "..tostring(hit.X)..","..tostring(hit.Z)) end
+  end end
+ end)
+ check('assist turn is small, mirrored and cannot face rear targets',function()
+  local aim=Math.turnToward(facing,Math.direction(p(0,0,0),p(3,0,-5)),12)
+  assert(aim.X>0 and Math.dot(facing,aim)>=math.cos(math.rad(12))-.000001)
+  local other=Math.turnToward(facing,Math.direction(p(0,0,0),p(-3,0,-5)),12);assert(other.X<0)
+  assert(not Math.inArc(origin,facing,p(0,3,5),6.8,36,6))
+ end)
+ check('server heavy action includes its reach arc and explicit timeline',function()
+  local clock={Now=0}
+  local ctx={Position=origin,Facing=facing,Alive=true,Location='World',Eligible=true,Profile=Defaults.new()}
+  local combat=Combat.new({Definitions=Registry.Definitions,Geometry=Math,Contracts=Contracts,Now=function()return clock.Now end,
+   NewId=function()return 'id' end,GetContext=function()return ctx end,GetTarget=function()return nil end,ResolveContacts=function()return {} end,ApplyHit=function()end})
+  local result=combat:Request(1,{Sequence=1,AttackType='Heavy'})
+  assert(result.Ok and result.Action.Reach==6.8 and result.Action.ArcDegrees==108 and result.Action.WindowStartAt==.42)
+ end)
+ check('player phases are exactly server windup hit and recovery',function()
+  assert(Animation.phase(.1,.12,.16,.14)=='Windup' and Animation.phase(.12,.12,.16,.14)=='Hit')
+  assert(Animation.phase(.20,.12,.16,.14)=='Hit' and Animation.phase(.35,.12,.16,.14)=='Recover')
+  assert(Animation.phase(.43,.12,.16,.14)=='None')
+ end)
+ check('basic combos differ in torso and arm motion',function()
+  local a=Animation.player('Basic',1,.10,.12,.16,.14)
+  local b=Animation.player('Basic',2,.10,.12,.16,.14)
+  local c=Animation.player('Basic',3,.18,.20,.20,.20)
+  assert(a.Waist.Yaw*b.Waist.Yaw<0 and a.RootJoint.Yaw*b.RootJoint.Yaw<0)
+  assert(math.abs(c.RightShoulder.Pitch)>math.abs(a.RightShoulder.Pitch))
+ end)
+ check('heavy moves torso and both arms then restores all joints',function()
+  local heavy=Animation.player('Heavy',0,.40,.42,.20,.38)
+  assert(math.abs(heavy.LeftShoulder.Pitch)>1 and math.abs(heavy.RightShoulder.Pitch)>1 and math.abs(heavy.Waist.Yaw)>.3)
+  local rest=Animation.player('Heavy',0,1.1,.42,.20,.38);assert(next(rest.RootJoint)==nil and next(rest.RightShoulder)==nil)
+ end)
+ check('dodge has readable lean without damage phase',function()
+  local pose=Animation.player('Dodge',0,.12,.24,0,0);assert(pose.RootJoint.Pitch>0 and pose.Waist.Pitch>0)
+ end)
+ check('body horn heavy and broken-horn recoil are distinct',function()
+  local body=MonsterAnimation.monster('Idle',nil,0,0,.08,'LightHit',false)
+  local horn=MonsterAnimation.monster('Idle',nil,0,0,.08,'HornHit',false)
+  local heavy=MonsterAnimation.monster('Idle',nil,0,0,.16,'HeavyHit',true)
+  local broken=MonsterAnimation.monster('Stagger',nil,0,0,.275,'HornBreak',true)
+  assert(horn.Head.Pitch<body.Head.Pitch and math.abs(heavy.Spine.Roll)>math.abs(body.Spine.Roll) and broken.Head.Pitch<-.5)
+ end)
+ check('damage feedback and heavy stagger only follow accepted hit',function()
+  local events={};local id=0
+  local monsters=Monsters.new({Definitions=Registry.Definitions,Geometry=Math,Now=function()return 0 end,NewId=function()id+=1;return tostring(id)end,
+   OnEvent=function(e:any)table.insert(events,e)end})
+  monsters:Tick({},.05)
+  assert(monsters:ApplyHit('1',1,{AttackId='a',Damage=20,PartPower=55,Horn=true,AttackType='Heavy',Position=p(0,3,-4)}))
+  local m=monsters:Get('1');assert(m.LastHitKind=='HornHit' and m.LastHitHeavy and m.State=='Stagger')
+  local n=#events;assert(not monsters:ApplyHit('1',1,{AttackId='a',Damage=20,PartPower=55,Horn=true,AttackType='Heavy'}));assert(#events==n)
+  assert(monsters:ApplyHit('1',1,{AttackId='b',Damage=20,PartPower=55,Horn=true,AttackType='Heavy'}))
+  assert(monsters:Get('1').LastHitKind=='HornBreak' and #monsters:PendingRewards()==1)
+ end)
+ check('assist can target a near surface with a distant monster center',function()
+  local definition=Registry.Definitions.Monster.Hornboar
+  local actor=p(0,3,-10)
+  local m={Position=p(0,0,0),Facing=facing,HornBroken=false}
+  assert(Geometry.aimPoint(actor,p(0,0,1),m,definition,5.8,36,6))
+  assert(not Geometry.aimPoint(actor,facing,m,definition,5.8,36,6))
+ end)
+ check('rear monster is rejected even when its large box encloses the player',function()
+  local hits={}
+  local combat=Combat.new({Definitions=Registry.Definitions,Geometry=Math,Contracts=Contracts,Now=function()return 0 end,
+   NewId=function()return 'rear' end,GetContext=function()return {Position=origin,Facing=facing,Alive=true,Location='World',Profile=Defaults.new()} end,
+   GetTarget=function()return {State='Idle',Position=p(0,3,1)} end,
+   ResolveContacts=function()return {{EncounterId='m',Position=origin,ValidHitbox=true}} end,
+   ApplyHit=function()table.insert(hits,true)end})
+  local response=combat:Request(1,{Sequence=1,AttackType='Basic'})
+  combat.Now=function()return response.Action.WindowStartAt+.01 end;combat:Tick();assert(#hits==0)
+ end)
+ check('body next to horn does not claim the part when horn box is outside the sector',function()
+  local body=contact(p(0,3,-4),p(2,3,4));local horn=contact(p(6,4,-2),p(1,2,1))
+  assert(body and not horn)
+ end)
+ return count
+end

@@ -1,0 +1,11 @@
+{
+  "studio_execution": "Partial actual Studio validation; see docs/qa/2026-10-08/studio_runtime.json",
+  "glb_sha256": "38a0bce1ea4e408123f66497cd1f5ad96f560f42c75e64d10e8da53c709cf411",
+  "fbx_sha256": "092b8c5cdf47db7678d5e78860a45406a900aff19c1e1fe7372f57a62fbed7ab",
+  "fbx_reimport": "Fresh 2026-10-08 Blender readback: 2966 triangles / 5 meshes / 14 bones / 2 materials / 512 PNG atlas",
+  "source_commit": "5fcb8a93d7e9d294a69425b9c54c9016ae74a008",
+  "date_kst": "2026-10-08",
+  "studio_fbx_sha256": "b81040996041b0fe9d5fda7c34137eab8cabb1396ba70d36ef9992b6ae96ff7f",
+  "atlas_sha256": "ffccc1e93a35bc4c2ee926808966d5c32a56d3a5fe588526036a7dfc90d0a2c6",
+  "texture_checks": "Both FBX embedded/sidecar images and GLB embedded image exactly equal final 512 PNG bytes"
+}

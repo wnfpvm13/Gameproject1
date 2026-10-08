@@ -1,0 +1,50 @@
+{
+  "date_kst": "2026-10-07",
+  "baseline": {
+    "commit": "b85c5d8db61e5fd7a4c44f3dfb2f017823e5624d",
+    "triangles": 4248,
+    "vertices": 2212,
+    "groups": 14,
+    "files": {
+      "art/blender/Hornboar/MON_Hornboar_V1.blend": {
+        "bytes": 199557,
+        "sha256": "429b41a43207eb000b1f923eb43f795799c66e9c4d097cd26900d452f8401a7e"
+      },
+      "art/exports/Monsters/MON_Hornboar_V1.fbx": {
+        "bytes": 1815692,
+        "sha256": "c9c04e4e89ee504f41ef60c14c2e25267a2d4017bd8b0e8d15f6ba87be5b3e3f"
+      },
+      "art/exports/Monsters/MON_Hornboar_V1.glb": {
+        "bytes": 570820,
+        "sha256": "24a6d4efa8b54229ded8dfa1dba08f6dbbd69ae6d329c23a81f2f905a133222e"
+      },
+      "art/hornboar_mesh.json": {
+        "bytes": 121662,
+        "sha256": "15795f967b72436bb2e8bcbffbb9c965ed41ea6de583733b122fadb64f1083c0"
+      },
+      "src/shared/Assets/HornboarMeshData.luau": {
+        "bytes": 121757,
+        "sha256": "7b29e28ed18c3c598a8b6eb0a5bb67caaf3329f2333004f41f4e24d3d25c8519"
+      }
+    }
+  },
+  "lightweight": {
+    "triangles": 1500,
+    "studio_import_meshes": 3,
+    "bones": 14,
+    "source_actions": 13,
+    "files": {
+      "art/blender/Hornboar/MON_Hornboar_V1.blend": 165298,
+      "art/exports/Monsters/MON_Hornboar_V1.fbx": 1254140,
+      "art/exports/Monsters/MON_Hornboar_V1.glb": 217184,
+      "art/hornboar_mesh.json": 39932
+    },
+    "source_mesh_groups": 14,
+    "source_vertices": 838
+  },
+  "studio_import_fbx_bytes": 125868,
+  "studio_execution_verified": false,
+  "current_game_runtime": "Studio-imported .rbxm preserved; light geometry must be imported/uploaded separately",
+  "studio_rigid_fbx_bytes": 92492,
+  "studio_rigid_meshes": 14
+}

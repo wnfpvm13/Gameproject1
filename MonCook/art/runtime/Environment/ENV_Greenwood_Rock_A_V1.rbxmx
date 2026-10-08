@@ -1,0 +1,121 @@
+<?xml version='1.0' encoding='utf-8'?>
+<roblox version="4">
+  <External>null</External>
+  <External>nil</External>
+  <Item class="Model" referent="RBX1">
+    <Properties>
+      <string name="Name">ENV_Greenwood_Rock_A_V1</string>
+      <Ref name="PrimaryPart">RBX5</Ref>
+    </Properties>
+    <Item class="Folder" referent="RBX2">
+      <Properties>
+        <string name="Name">Visual</string>
+      </Properties>
+      <Item class="Part" referent="RBX7">
+        <Properties>
+          <string name="Name">Rock</string>
+          <Vector3 name="size">
+            <X>3</X>
+            <Y>2.1</Y>
+            <Z>2.8</Z>
+          </Vector3>
+          <CoordinateFrame name="CFrame">
+            <X>0</X>
+            <Y>1</Y>
+            <Z>0</Z>
+            <R00>1</R00>
+            <R01>0</R01>
+            <R02>0</R02>
+            <R10>0</R10>
+            <R11>1</R11>
+            <R12>0</R12>
+            <R20>0</R20>
+            <R21>0</R21>
+            <R22>1</R22>
+          </CoordinateFrame>
+          <Color3uint8 name="Color3uint8">11381626</Color3uint8>
+          <token name="Material">272</token>
+          <bool name="Anchored">true</bool>
+          <bool name="CanCollide">false</bool>
+          <bool name="CanTouch">false</bool>
+          <bool name="CanQuery">false</bool>
+          <bool name="Massless">true</bool>
+          <float name="Transparency">0</float>
+          <token name="TopSurface">0</token>
+          <token name="BottomSurface">0</token>
+          <token name="shape">0</token>
+        </Properties>
+        <Item class="StringValue" referent="RBX8">
+          <Properties>
+            <string name="Name">Binding</string>
+            <string name="Value">Visual</string>
+          </Properties>
+        </Item>
+        <Item class="WeldConstraint" referent="RBX9">
+          <Properties>
+            <string name="Name">VisualWeld</string>
+            <Ref name="Part0">RBX5</Ref>
+            <Ref name="Part1">RBX7</Ref>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="RBX3">
+      <Properties>
+        <string name="Name">Gameplay</string>
+      </Properties>
+      <Item class="StringValue" referent="RBX10">
+        <Properties>
+          <string name="Name">Binding</string>
+          <string name="Value">GameplayContainer</string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="RBX4">
+      <Properties>
+        <string name="Name">Rig</string>
+      </Properties>
+    </Item>
+    <Item class="Part" referent="RBX5">
+      <Properties>
+        <string name="Name">Root</string>
+        <Vector3 name="size">
+          <X>0.2</X>
+          <Y>0.2</Y>
+          <Z>0.2</Z>
+        </Vector3>
+        <CoordinateFrame name="CFrame">
+          <X>0</X>
+          <Y>0</Y>
+          <Z>0</Z>
+          <R00>1</R00>
+          <R01>0</R01>
+          <R02>0</R02>
+          <R10>0</R10>
+          <R11>1</R11>
+          <R12>0</R12>
+          <R20>0</R20>
+          <R21>0</R21>
+          <R22>1</R22>
+        </CoordinateFrame>
+        <Color3uint8 name="Color3uint8">16777215</Color3uint8>
+        <token name="Material">272</token>
+        <bool name="Anchored">true</bool>
+        <bool name="CanCollide">false</bool>
+        <bool name="CanTouch">false</bool>
+        <bool name="CanQuery">false</bool>
+        <bool name="Massless">true</bool>
+        <float name="Transparency">1</float>
+        <token name="TopSurface">0</token>
+        <token name="BottomSurface">0</token>
+        <token name="shape">1</token>
+      </Properties>
+      <Item class="StringValue" referent="RBX6">
+        <Properties>
+          <string name="Name">Binding</string>
+          <string name="Value">Root</string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+</roblox>

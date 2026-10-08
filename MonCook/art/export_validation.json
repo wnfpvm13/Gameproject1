@@ -1,0 +1,145 @@
+{
+  "MON_Hornboar_V1": {
+    "triangles": 1500,
+    "mesh_objects": 14,
+    "bones": [
+      "Root",
+      "Spine",
+      "Neck",
+      "Head",
+      "Horn",
+      "FrontLeg_L",
+      "FrontShin_L",
+      "FrontLeg_R",
+      "FrontShin_R",
+      "BackLeg_L",
+      "BackShin_L",
+      "BackLeg_R",
+      "BackShin_R",
+      "Tail"
+    ],
+    "imported_actions": [
+      "Rig|Rig|Alert",
+      "Rig|Rig|Charge",
+      "Rig|Rig|ChargeWindup",
+      "Rig|Rig|Death",
+      "Rig|Rig|Headbutt",
+      "Rig|Rig|HeavyHit",
+      "Rig|Rig|HornBreak",
+      "Rig|Rig|HornHit",
+      "Rig|Rig|Idle",
+      "Rig|Rig|LightHit",
+      "Rig|Rig|Run",
+      "Rig|Rig|Stagger",
+      "Rig|Rig|Walk"
+    ],
+    "fbx_reimport": "PASS",
+    "studio_fbx_reimport": "PASS",
+    "studio_rigid_fbx_reimport": "PASS"
+  },
+  "WPN_StarterCleaver_V1": {
+    "triangles": 2168,
+    "mesh_objects": 21,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "ING_HornboarMeat_V1": {
+    "triangles": 504,
+    "mesh_objects": 3,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "ING_ArcaneFat_V1": {
+    "triangles": 504,
+    "mesh_objects": 3,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "ING_MarbledLoin_V1": {
+    "triangles": 1044,
+    "mesh_objects": 8,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "MAT_HornCore_V1": {
+    "triangles": 240,
+    "mesh_objects": 3,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "ENV_Greenwood_Tree_A_V1": {
+    "triangles": 328,
+    "mesh_objects": 4,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "ENV_Greenwood_Tree_B_V1": {
+    "triangles": 328,
+    "mesh_objects": 4,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "ENV_Greenwood_Tree_C_V1": {
+    "triangles": 328,
+    "mesh_objects": 4,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "ENV_Greenwood_Rock_A_V1": {
+    "triangles": 80,
+    "mesh_objects": 1,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "ENV_Greenwood_Rock_B_V1": {
+    "triangles": 80,
+    "mesh_objects": 1,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "ENV_Greenwood_Rock_C_V1": {
+    "triangles": 80,
+    "mesh_objects": 1,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "ENV_Greenwood_Bush_V1": {
+    "triangles": 300,
+    "mesh_objects": 3,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "ENV_Greenwood_Grass_V1": {
+    "triangles": 72,
+    "mesh_objects": 9,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "ENV_Greenwood_Stump_V1": {
+    "triangles": 72,
+    "mesh_objects": 2,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  },
+  "ENV_Greenwood_Sign_V1": {
+    "triangles": 224,
+    "mesh_objects": 3,
+    "bones": [],
+    "imported_actions": [],
+    "fbx_reimport": "PASS"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "Charge": {
+    "duration": 0.9,
+    "frames": 55,
+    "bones": 14,
+    "last_frame": 55
+  },
+  "ChargeTelegraph": {
+    "duration": 1.25,
+    "frames": 76,
+    "bones": 14,
+    "last_frame": 76
+  },
+  "Death": {
+    "duration": 2.2,
+    "frames": 133,
+    "bones": 14,
+    "last_frame": 133
+  },
+  "Headbutt": {
+    "duration": 0.3,
+    "frames": 19,
+    "bones": 14,
+    "last_frame": 19
+  },
+  "Hit": {
+    "duration": 0.19,
+    "frames": 13,
+    "bones": 14,
+    "last_frame": 13
+  },
+  "HornBreak": {
+    "duration": 0.55,
+    "frames": 34,
+    "bones": 14,
+    "last_frame": 34
+  },
+  "Idle": {
+    "duration": 2.8,
+    "frames": 169,
+    "bones": 14,
+    "last_frame": 169
+  },
+  "Recovery": {
+    "duration": 1.3,
+    "frames": 79,
+    "bones": 14,
+    "last_frame": 79
+  },
+  "Run": {
+    "duration": 0.42857142857142855,
+    "frames": 27,
+    "bones": 14,
+    "last_frame": 27
+  },
+  "Walk": {
+    "duration": 1,
+    "frames": 61,
+    "bones": 14,
+    "last_frame": 61
+  }
+}

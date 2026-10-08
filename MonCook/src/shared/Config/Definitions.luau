@@ -1,6 +1,7 @@
 --!strict
 -- Minimal Phase 0 catalog. Unspecified tuning stays absent until the owning system exists.
-return {
+local hunting: any = require(script.Parent.HuntingConfig)
+local definitions: any = {
 	Region = {
 		Greenwood = { DisplayName = "Greenwood Wilds", TravelMode = "Local", ActivityMode = "Shared", StartingRegion = true },
 		GreenwoodDeepRuins = { DisplayName = "Greenwood Deep Ruins", TravelMode = "Teleport", ActivityMode = "Expedition" },
@@ -20,7 +21,7 @@ return {
 		Salt = { DisplayName = "Salt", Category = "Spice", PantryStaple = true },
 	},
 	Drop = {
-		-- Loot probabilities and quantities deliberately await the loot slice: TODO_BALANCE.
+		-- Phase 1 probabilities/quantities below are extended from HuntingConfig: TODO_BALANCE.
 		Hornboar = { Entries = {
 			{ IngredientId = "HornboarMeat", InventoryBucket = "Ingredients", Guaranteed = true },
 			{ IngredientId = "ArcaneFat", InventoryBucket = "Ingredients", Guaranteed = false },
@@ -83,5 +84,19 @@ return {
 		HostRestaurant = { DisplayName = "호스트 식당", Activity = "Restaurant" },
 	},
 	Matchmaking = { Enabled = false, Version = "V1.5" }, -- TODO: cross-server queue interface only.
-	Testing = { UseFakeTeleport = true, ShowFoundationDebugUI = false },
+	Testing = { UseFakeTeleport = true, ShowFoundationDebugUI = false, ShowCombatHitboxes = false },
 }
+-- Extend stable Foundation keys; no parallel item/weapon catalog or data reset.
+for _, family in { "Monster", "Weapon", "Ingredient" } do
+	for id, fields in hunting[family] do
+		for key, value in fields do definitions[family][id][key] = value end
+	end
+end
+for id, drop in definitions.Drop do
+	for _, entry in drop.Entries do
+		for key, value in hunting.Drop[id][entry.IngredientId] do entry[key] = value end
+	end
+end
+definitions.Monster.Hornboar.Parts.Horn.MaxHealth = hunting.Monster.Hornboar.HornHealth
+definitions.Combat, definitions.Spawn, definitions.Hunting = hunting.Combat, hunting.Spawn, hunting.Hunting
+return definitions

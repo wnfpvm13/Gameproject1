@@ -1,0 +1,45 @@
+{
+  "date_kst": "2026-10-08",
+  "creator_type": "User",
+  "creator_id": 9429256309,
+  "source": "Studio importer plus user-saved QA XML, opaque shared skin and mesh data preserved",
+  "runtime_file": "art/runtime/Monsters/MON_Hornboar_V2.rbxmx",
+  "texture_id": "rbxassetid://109860201891046",
+  "texture_resolution": [
+    512,
+    512
+  ],
+  "runtime_sha256": "fcdfd75f210660a5e180320fde000e26813d076598392a94ae437afe3817bd14",
+  "meshes": [
+    {
+      "name": "Body",
+      "mesh_id": "rbxassetid://116448419419509"
+    },
+    {
+      "name": "HeadVisual",
+      "mesh_id": "rbxassetid://101054262171613"
+    },
+    {
+      "name": "Horn_Broken",
+      "mesh_id": "rbxassetid://75770562319115"
+    },
+    {
+      "name": "Horn_Intact",
+      "mesh_id": "rbxassetid://137769287571698"
+    },
+    {
+      "name": "Legs",
+      "mesh_id": "rbxassetid://85830149682076"
+    }
+  ],
+  "bones": 14,
+  "runtime_template_checks": "5 uploaded MeshParts, 14 semantic Bones, readiness marker, RootPart at identity, intact=0/broken=1 transparency, visual CanCollide/CanTouch/CanQuery false",
+  "player_animation_publication": {
+    "Basic3": "rbxassetid://98088572362685",
+    "Basic2": "rbxassetid://80795014037306",
+    "Dodge": "rbxassetid://131747758996934",
+    "Basic1": "rbxassetid://102113588927000",
+    "Heavy": "rbxassetid://130446557294676"
+  },
+  "player_playback_evidence": "docs/qa/2026-10-08/published_animations.json"
+}

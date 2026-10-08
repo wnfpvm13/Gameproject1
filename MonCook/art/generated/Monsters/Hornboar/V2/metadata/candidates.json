@@ -1,0 +1,18 @@
+{
+  "date_kst": "2026-10-07",
+  "generator": "Tripo CLI 0.5.1 / P1-20260311 / multiview_to_model",
+  "references": ["preview/v1_front.png", "preview/v1_left.png", "preview/v1_back.png"],
+  "requested_face_limit": 2800,
+  "pbr": false,
+  "candidates": [
+    {"name":"C1","task_id":"2e3babac-14ff-44aa-a122-ac83d8e3c03b","triangles":2678,"material_count":1,"atlas_resolution":2048,"riggable":false,"assessment":"Clear boar/horn silhouette; soft nose definition and no automatic quadruped rig eligibility."},
+    {"name":"C2","task_id":"848ef369-413b-4906-ae8a-8e9da4b95c2c","triangles":2633,"material_count":1,"atlas_resolution":2048,"riggable":false,"assessment":"Crisp muzzle and symmetrical facial read; rejected for automatic rig eligibility."},
+    {"name":"C3","task_id":"a3728fd1-005a-4573-b360-ca17df5d3311","triangles":2822,"material_count":1,"atlas_resolution":2048,"riggable":true,"assessment":"Strong tusks, recognizable shoulder/horn silhouette, successful quadruped rig precheck; selected for Blender repair."}
+  ],
+  "selected": "C3",
+  "rig_task_id":"0a617965-c126-4d80-b5f1-28b7cbb4c2cb",
+  "generation_credits":150,
+  "rig_credits":25,
+  "final_balance":325,
+  "notes":"Raw glTF seam vertices were welded while preserving loop UVs. Tripo's asymmetric 25-bone rig and Icosphere helper were unsuitable as delivered; useful weights were remapped to a 14-bone canonical Blender rig. Roblox acceptance pending. No credit top-up or recurring generation requests."
+}

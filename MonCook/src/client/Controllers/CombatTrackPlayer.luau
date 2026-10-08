@@ -1,7 +1,9 @@
 --!strict
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 local Config = require(ReplicatedStorage:WaitForChild("Shared").Config.HuntingAnimationConfig)
+local Ownership = require(ReplicatedStorage.Shared.Utilities.CombatTrackOwnership)
 local Tracks = {}
 local JOINT = { LowerTorso = "RootJoint", UpperTorso = "Waist", Head = "Neck",
 	RightUpperArm = "RightShoulder", RightLowerArm = "RightElbow", RightHand = "RightWrist",
@@ -57,6 +59,19 @@ function Tracks.update(character: Model, entry: any, action: any, at: number): b
 	entry.TrackCache = entry.TrackCache or {}
 	if not action or at >= action.EndAt then Tracks.stop(entry); return false end
 	local name = key(action)
+	if not Ownership.createsTrack(character == Players.LocalPlayer.Character, Config.Player[name]) then
+		-- The owner's published track already replicates through the server Animator.
+		-- Observers inspect it; they never load, seek, stop, or own that track.
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
+		if animator then
+			for _, replicated in animator:GetPlayingAnimationTracks() do
+				if replicated.IsPlaying and replicated.Animation.AnimationId == Config.Player[name]
+					and replicated.Priority == Enum.AnimationPriority.Action then return true end
+			end
+		end
+		return false
+	end
 	local track = load(character, entry, name)
 	if not track then Tracks.stop(entry); return false end
 	local stamp = action.AttackId or (name..":"..tostring(action.StartedAt))

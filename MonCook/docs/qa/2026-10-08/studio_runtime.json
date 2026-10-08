@@ -1,0 +1,259 @@
+{
+  "date_kst": "2026-10-08",
+  "temporary_studio_tracks": {
+    "Lengths": {
+      "0.42": {
+        "Id": "9ca5217023813222a2c67c4a6e0bb092",
+        "Length": 0.41999998688697815,
+        "Position": 0.41666650772094727,
+        "Playing": true
+      },
+      "1.00": {
+        "Id": "23b015abbdceafaa0aae3ad3c1271aec",
+        "Length": 1,
+        "Position": 0.9999992847442627,
+        "Playing": true
+      },
+      "0.24": {
+        "Id": "461ef8eaef438e24b534d72bb810744d",
+        "Length": 0.23999999463558197,
+        "Position": 0.23749998211860657,
+        "Playing": true
+      },
+      "0.60": {
+        "Id": "0bdf8a8cb6a31c58059ad0143b5809c6",
+        "Length": 0.6000000238418579,
+        "Position": 0.5999996662139893,
+        "Playing": true
+      },
+      "0.46": {
+        "Id": "5382f861ef4fc0bce9970797a94f94d6",
+        "Length": 0.46000000834465027,
+        "Position": 0.4499996304512024,
+        "Playing": true
+      }
+    },
+    "Attack": "Dodge",
+    "Health": 100,
+    "Position": "0, 3.5075314044952393, -10"
+  },
+  "horn_break": {
+    "1": {
+      "Name": "2228bca9-08a3-48e8-b3bc-92533c9c0bd8",
+      "Attributes": {
+        "AttackType": "Charge",
+        "StateUntil": 1791391923.924722,
+        "LastHitKind": "LightHit",
+        "ImportedRuntimeAsset": true,
+        "BodyHP": 32,
+        "SourceTriangles": 2966,
+        "LastHitHeavy": false,
+        "StudioVisualQA": "Pending",
+        "RBX_ReimportId": "ed538072-a7e8-44fe-823d-856fca3a9cad",
+        "StateStartedAt": 1791391922.624722,
+        "State": "Recover",
+        "EncounterId": "2228bca9-08a3-48e8-b3bc-92533c9c0bd8",
+        "LastHitAt": 1791391295.139819,
+        "HornBroken": true,
+        "HornboarV2Ready": true,
+        "HornHP": 0,
+        "MonsterId": "Hornboar"
+      },
+      "Parts": {
+        "1": {
+          "CanQuery": false,
+          "Transparency": 0,
+          "Name": "Horn_Broken",
+          "Position": "-2.43101167678833, 4.6571245193481445, -4.811311721801758"
+        },
+        "4": {
+          "CanQuery": false,
+          "Transparency": 1,
+          "Name": "HIT_Hornboar_Horn",
+          "Position": "-1.715224027633667, 4.450000286102295, -3.376866340637207"
+        },
+        "3": {
+          "CanQuery": true,
+          "Transparency": 1,
+          "Name": "HIT_Hornboar_Body",
+          "Position": "-3.843681812286377, 2.6500003337860107, -7.567292213439941"
+        },
+        "2": {
+          "CanQuery": false,
+          "Transparency": 1,
+          "Name": "Horn_Intact",
+          "Position": "-1.8561975955963135, 4.913087368011475, -3.6796398162841797"
+        }
+      }
+    }
+  },
+  "death_cleanup_observation": [],
+  "loot_and_inventory": {
+    "Before": {
+      "Ingredients": [
+        {
+          "Quantity": 5,
+          "Rarity": "Common",
+          "Category": "Protein",
+          "IngredientId": "HornboarMeat",
+          "AssetId": "ING_HornboarMeat_V1",
+          "DisplayName": "Hornboar Meat"
+        },
+        {
+          "Quantity": 5,
+          "Rarity": "Common",
+          "Category": "Spice",
+          "IngredientId": "Salt",
+          "DisplayName": "Salt"
+        }
+      ],
+      "Materials": [
+        {
+          "Quantity": 1,
+          "Rarity": "Part",
+          "Category": "Material",
+          "IngredientId": "HornCore",
+          "AssetId": "MAT_HornCore_V1",
+          "DisplayName": "Horn Core"
+        }
+      ]
+    },
+    "Events": [
+      {
+        "Kind": "ActionResult",
+        "Sequence": 11,
+        "Result": {
+          "Ok": true,
+          "Action": {
+            "EndAt": 1791392062.6513863,
+            "AttackType": "Heavy",
+            "WindowEndAt": 1791392062.2713861,
+            "WeaponId": "StarterCleaver",
+            "LastTickAt": 1791392061.651386,
+            "Reach": 6.8,
+            "WindowStartAt": 1791392062.071386,
+            "PartPower": 55,
+            "Facing": {
+              "Y": 0,
+              "X": 0,
+              "Z": -1
+            },
+            "ArcDegrees": 108,
+            "EquippedId": "StarterCleaver",
+            "AttackId": "999ba68d-8dc1-40c9-9ef7-8ff52c92956f:11",
+            "HitTargets": [],
+            "ActorId": 9429256309,
+            "StartedAt": 1791392061.651386,
+            "Damage": 20
+          },
+          "DodgeReadyAt": 1791391298.1733532
+        }
+      },
+      {
+        "Kind": "Loot",
+        "Origin": {
+          "Y": 0,
+          "X": -1.1404237395250645,
+          "Z": -8.044343655997274
+        },
+        "Receipt": {
+          "Items": [
+            {
+              "Quantity": 2,
+              "IngredientId": "HornboarMeat"
+            }
+          ],
+          "FirstHornboar": true,
+          "MonsterId": "Hornboar",
+          "GrantedAt": 1791392062.135215,
+          "Kind": "Dead",
+          "FirstIngredient": true
+        }
+      }
+    ],
+    "MonsterCount": 1,
+    "State": {
+      "Inventory": {
+        "Ingredients": {
+          "1": {
+            "Quantity": 7,
+            "Rarity": "Common",
+            "Category": "Protein",
+            "IngredientId": "HornboarMeat",
+            "AssetId": "ING_HornboarMeat_V1",
+            "DisplayName": "Hornboar Meat"
+          },
+          "2": {
+            "Quantity": 5,
+            "Rarity": "Common",
+            "Category": "Spice",
+            "IngredientId": "Salt",
+            "DisplayName": "Salt"
+          }
+        },
+        "Materials": {
+          "1": {
+            "Quantity": 1,
+            "Rarity": "Part",
+            "Category": "Material",
+            "IngredientId": "HornCore",
+            "AssetId": "MAT_HornCore_V1",
+            "DisplayName": "Horn Core"
+          }
+        }
+      },
+      "Traveling": false,
+      "Health": 100,
+      "WeaponId": "StarterCleaver",
+      "DodgeReadyAt": 1791391298.1733532,
+      "Location": "World",
+      "MaxHealth": 100,
+      "Ready": true
+    },
+    "After": {
+      "Ingredients": [
+        {
+          "Quantity": 7,
+          "Rarity": "Common",
+          "Category": "Protein",
+          "IngredientId": "HornboarMeat",
+          "AssetId": "ING_HornboarMeat_V1",
+          "DisplayName": "Hornboar Meat"
+        },
+        {
+          "Quantity": 5,
+          "Rarity": "Common",
+          "Category": "Spice",
+          "IngredientId": "Salt",
+          "DisplayName": "Salt"
+        }
+      ],
+      "Materials": [
+        {
+          "Quantity": 1,
+          "Rarity": "Part",
+          "Category": "Material",
+          "IngredientId": "HornCore",
+          "AssetId": "MAT_HornCore_V1",
+          "DisplayName": "Horn Core"
+        }
+      ]
+    }
+  },
+  "rojo_roundtrip_template": {
+    "Bones": 14,
+    "Meshes": 5,
+    "Installed": true,
+    "Scale": 1,
+    "Horns": {
+      "Horn_Broken": 1,
+      "Horn_Intact": 0
+    },
+    "Root": "0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1",
+    "Ready": true
+  },
+  "live_limits": [
+    "Single-player verification only. Two-client contribution/replication check remains pending.",
+    "Full visual acceptance, all individual monster states, cleaver contact, network latency and physical device checks remain pending."
+  ]
+}

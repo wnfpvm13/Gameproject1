@@ -4,7 +4,7 @@
 
 - `source/`: 원본 후보 3개, Tripo 생성 task/seed 기록, rig source. 원본을 수정하지 않았다.
 - `blender/MON_Hornboar_V2.blend`: 최종 mesh/skin 및 10개 baked actions. V1 reference blend는 별도다.
-- `export/MON_Hornboar_V2.fbx`: Studio import용, embedded diffuse atlas, 14 bones, 5 meshes.
+- `export/MON_Hornboar_V2.fbx`: canonical interchange FBX. **Studio import는 `MON_Hornboar_V2_Studio.fbx`**를 사용한다. 전용 파일은 scale/forward 및 Head 이름 충돌을 실제 import에 맞춰 교정했다.
 - `export/MON_Hornboar_V2.glb`: 실제 검증한 compact mesh/skin. 다른 분석 Scene을 제외했다.
 - `export/animations/*.fbx`: Idle / Walk / Run / Headbutt / ChargeTelegraph / Charge / Recovery / Hit / HornBreak / Death.
 - `preview/`: Blender 4방향 beauty/wire, 실제 viewport, pose renders. **Studio screenshot은 아니다.**
@@ -18,4 +18,4 @@
 
 최대 단일 파일은 약 6.35 MB로 GitHub 일반 Git 단일 파일 제한 아래다. 현재 repository에는 LFS 정책이 없으며 새 외부 asset storage를 도입하지 않았다.
 
-**Roblox publication / 실제 runtime `.rbxm` / mobile FPS 미검증.** 파일 생성만으로 Phase 1 완료를 선언하지 않는다. `HORNBOAR_STUDIO_QA.md`와 `tools/InstallHornboarV2.studio.luau`를 따른다.
+실제 업로드된 5 MeshParts / 14 Bones를 포함한 `art/runtime/Monsters/MON_Hornboar_V2.rbxmx`를 편입했고 Rojo/Studio readback을 확인했다. 두 FBX embedded/sidecar와 GLB의 이미지 bytes는 동일한 최종 512 PNG다. Player 모션 5개 모두 운영용 ID로 게시하고 실제 입력 재생을 확인했다. Studio single-player horn break/loot 및 1/5/10/25/50 emulator FPS도 기록했다. **실기기 FPS, 2-client 및 전체 시각 acceptance는 남아 있다.** `HORNBOAR_LOCAL_HANDOFF.md`, `HORNBOAR_STUDIO_QA.md`, `docs/qa/2026-10-08/`를 따른다.

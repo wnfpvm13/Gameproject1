@@ -1,0 +1,9 @@
+{
+  "rojo_build": "PASS",
+  "runtime_meshes": 5,
+  "bones": 14,
+  "published_player_ids": 5,
+  "sha256": "2223085213586ac4b9d4005078d3217e07c7592883efc6d0cc7916be52c388e5",
+  "bytes": 3663145,
+  "live_roundtrip": "Earlier Studio build template readback plus latest 0.742 patched-source actual gameplay; latest full build checked offline"
+}

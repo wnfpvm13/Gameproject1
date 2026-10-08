@@ -1,0 +1,124 @@
+{
+  "date_kst": "2026-10-08",
+  "products": {
+    "Basic3": {
+      "AssetTypeId": 24,
+      "CreatorId": 9429256309,
+      "Name": "기본3",
+      "AssetId": 98088572362685,
+      "CreatorType": "User"
+    },
+    "Basic2": {
+      "AssetTypeId": 24,
+      "CreatorId": 9429256309,
+      "Name": "기본2",
+      "AssetId": 80795014037306,
+      "CreatorType": "User"
+    },
+    "Dodge": {
+      "AssetTypeId": 24,
+      "CreatorId": 9429256309,
+      "Name": "Dodge",
+      "AssetId": 131747758996934,
+      "CreatorType": "User"
+    },
+    "Basic1": {
+      "AssetTypeId": 24,
+      "CreatorId": 9429256309,
+      "Name": "기본1",
+      "AssetId": 102113588927000,
+      "CreatorType": "User"
+    },
+    "Heavy": {
+      "AssetTypeId": 24,
+      "CreatorId": 9429256309,
+      "Name": "헤비",
+      "AssetId": 130446557294676,
+      "CreatorType": "User"
+    }
+  },
+  "direct_playback": {
+    "Test": "Actual Play, 5 real published IDs; direct Animator playback, HUD/prediction integration is a separate check",
+    "StudioVersion": "0.742.0.7421053",
+    "Tracks": {
+      "Basic3": {
+        "Position": 0.18333333730697632,
+        "Id": "rbxassetid://98088572362685",
+        "Priority": "Enum.AnimationPriority.Action",
+        "Length": 0.6000000238418579,
+        "Playing": true
+      },
+      "Basic2": {
+        "Position": 0.11666666716337204,
+        "Id": "rbxassetid://80795014037306",
+        "Priority": "Enum.AnimationPriority.Action",
+        "Length": 0.46000000834465027,
+        "Playing": true
+      },
+      "Dodge": {
+        "Position": 0.1041666641831398,
+        "Id": "rbxassetid://131747758996934",
+        "Priority": "Enum.AnimationPriority.Action",
+        "Length": 0.23999999463558197,
+        "Playing": true
+      },
+      "Basic1": {
+        "Position": 0.15000000596046448,
+        "Id": "rbxassetid://102113588927000",
+        "Priority": "Enum.AnimationPriority.Action",
+        "Length": 0.41999998688697815,
+        "Playing": true
+      },
+      "Heavy": {
+        "Position": 0.11249999701976776,
+        "Id": "rbxassetid://130446557294676",
+        "Priority": "Enum.AnimationPriority.Action",
+        "Length": 1,
+        "Playing": true
+      }
+    },
+    "Rig": "Enum.HumanoidRigType.R15"
+  },
+  "gameplay_input_playback": {
+    "Lengths": {
+      "0.42": {
+        "Id": "rbxassetid://102113588927000",
+        "Length": 0.41999998688697815,
+        "Position": 0.41666650772094727,
+        "Playing": true
+      },
+      "1.00": {
+        "Id": "rbxassetid://130446557294676",
+        "Length": 1,
+        "Position": 0.9999992847442627,
+        "Playing": true
+      },
+      "0.24": {
+        "Id": "rbxassetid://131747758996934",
+        "Length": 0.23999999463558197,
+        "Position": 0.23333331942558289,
+        "Playing": true
+      },
+      "0.60": {
+        "Id": "rbxassetid://98088572362685",
+        "Length": 0.6000000238418579,
+        "Position": 0.5999996662139893,
+        "Playing": true
+      },
+      "0.46": {
+        "Id": "rbxassetid://80795014037306",
+        "Length": 0.46000000834465027,
+        "Position": 0.4499996304512024,
+        "Playing": true
+      }
+    },
+    "Attack": "Dodge",
+    "Health": 100,
+    "Position": "-3.9897639751434326, 3.507530450820923, -9.169611930847168"
+  },
+  "input_method": "Actual native ButtonR2 combo inputs, Q Heavy, F Dodge through HuntingInputController/prediction/server approval",
+  "pending": [],
+  "limits": [
+    "Two-client replication/visual acceptance and production experience creator alignment remain to be verified."
+  ]
+}

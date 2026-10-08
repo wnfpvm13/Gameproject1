@@ -81,6 +81,21 @@ def main():
             poses=[item for item in frame.iter('Item') if item.get('class')=='Pose']
             names={item.find("./Properties/string[@name='Name']").text for item in poses}
             assert len(names)==16 and {'RightFoot','LeftFoot','LowerTorso','UpperTorso','RightHand'}<=names
+    runtime=ET.parse(PROJECT/'art/runtime/Monsters/MON_Hornboar_V2.rbxmx').getroot()
+    items=list(runtime.iter('Item'));refs={i.get('referent'):i for i in items}
+    meshes=[i for i in items if i.get('class')=='MeshPart']
+    bones=[i for i in items if i.get('class')=='Bone']
+    assert len(meshes)==5 and len(bones)==14
+    assert {i.find("./Properties/string[@name='Name']").text for i in bones}=={'Root','Spine','Neck','Head','FrontLeg_L','FrontLeg_R','BackLeg_L','BackLeg_R','FrontShin_L','FrontShin_R','BackShin_L','BackShin_R','Tail','Horn'}
+    for mesh in meshes:
+        assert mesh.find("./Properties/bool[@name='HasSkinnedMesh']").text=='true'
+        assert mesh.find("./Properties/Content[@name='TextureID']/url").text=='rbxassetid://109860201891046'
+        for prop in ('CanCollide','CanTouch','CanQuery'):
+            assert mesh.find(f"./Properties/bool[@name='{prop}']").text=='false'
+    for ref in runtime.iter('Ref'):
+        assert ref.text in refs or ref.text in (None,'null','nil')
+    strings={s.get('md5') for s in runtime.findall('./SharedStrings/SharedString')}
+    assert all(s.text in strings for i in items for s in i.findall('./Properties/SharedString'))
     names=subprocess.check_output(['git','ls-tree','-r','--name-only',BASE,'MonCook/tests','MonCook/art/blender','MonCook/art/exports','MonCook/art/runtime/Monsters/MON_Hornboar_V1.rbxmx'],cwd=PROJECT.parent).decode().splitlines()
     for name in names:
         # Compare Git's clean-filter representation: Windows autoCRLF changes only
@@ -92,7 +107,9 @@ def main():
     assert biggest<100_000_000,'GitHub single-file limit risk'
     result={'offline_validation':'PASS','triangles':triangles,'meshes':5,'materials':2,'textures':1,
             'bones':14,'max_skin_influences':maximum_influences,'player_clips':5,'unchanged_baseline_files':len(names),
-            'largest_asset_bytes':biggest,'studio_execution':'미검증','mobile_performance':'미검증'}
+            'largest_asset_bytes':biggest,'runtime_skinned_meshes':len(meshes),'runtime_bones':len(bones),
+            'studio_evidence':'docs/qa/2026-10-08/studio_runtime.json (separate live evidence)',
+            'mobile_evidence':'docs/qa/2026-10-08/studio_performance.json (Windows emulation; physical devices unverified)'}
     (ROOT/'metadata/validation.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps(result,ensure_ascii=False))
 

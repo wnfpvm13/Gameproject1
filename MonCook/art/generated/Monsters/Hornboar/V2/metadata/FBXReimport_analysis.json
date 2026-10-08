@@ -1,5 +1,5 @@
 {
-  "scene": "MonCook_V2_ExportAudit",
+  "scene": "MonCook_V2_FBX_QA_20261008",
   "blender": "5.2.2 LTS",
   "mesh_count": 5,
   "object_count": 6,
@@ -12,8 +12,8 @@
     {
       "name": "Hornboar_BaseColor_512.002",
       "resolution": [
-        2048,
-        2048
+        512,
+        512
       ]
     }
   ],
@@ -21,16 +21,16 @@
   "triangles": 2966,
   "meshes": [
     {
-      "name": "Horn_Broken.001",
-      "triangles": 144,
-      "vertices": 92,
-      "materials": 2,
+      "name": "Horn_Intact.001",
+      "triangles": 190,
+      "vertices": 113,
+      "materials": 1,
       "uv_layers": 1,
       "duplicate_vertices": 0,
       "duplicate_faces": 0,
       "zero_area_faces": 0,
       "boundary_edges": 32,
-      "nonmanifold_edges": 32,
+      "nonmanifold_edges": 33,
       "scale": [
         1.0,
         1.0,
@@ -43,14 +43,14 @@
       ],
       "dimensions": [
         1.6453123092651367,
-        1.506152629852295,
-        1.4076058864593506
+        4.044727325439453,
+        1.9195315837860107
       ],
       "modifiers": [
         "ARMATURE"
       ],
       "unweighted_vertices": 0,
-      "max_weight_sum_error": 4.6333298087120056e-08
+      "max_weight_sum_error": 2.9802322387695312e-08
     },
     {
       "name": "Body.001",
@@ -85,6 +85,38 @@
       "max_weight_sum_error": 4.237517714500427e-08
     },
     {
+      "name": "Horn_Broken.001",
+      "triangles": 144,
+      "vertices": 92,
+      "materials": 2,
+      "uv_layers": 1,
+      "duplicate_vertices": 0,
+      "duplicate_faces": 0,
+      "zero_area_faces": 0,
+      "boundary_edges": 32,
+      "nonmanifold_edges": 32,
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dimensions": [
+        1.6453123092651367,
+        1.506152629852295,
+        1.4076058864593506
+      ],
+      "modifiers": [
+        "ARMATURE"
+      ],
+      "unweighted_vertices": 0,
+      "max_weight_sum_error": 4.6333298087120056e-08
+    },
+    {
       "name": "Head.001",
       "triangles": 547,
       "vertices": 316,
@@ -115,38 +147,6 @@
       ],
       "unweighted_vertices": 0,
       "max_weight_sum_error": 3.67872416973114e-08
-    },
-    {
-      "name": "Horn_Intact.001",
-      "triangles": 190,
-      "vertices": 113,
-      "materials": 1,
-      "uv_layers": 1,
-      "duplicate_vertices": 0,
-      "duplicate_faces": 0,
-      "zero_area_faces": 0,
-      "boundary_edges": 32,
-      "nonmanifold_edges": 33,
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ],
-      "location": [
-        0.0,
-        0.0,
-        0.0
-      ],
-      "dimensions": [
-        1.6453123092651367,
-        4.044727325439453,
-        1.9195315837860107
-      ],
-      "modifiers": [
-        "ARMATURE"
-      ],
-      "unweighted_vertices": 0,
-      "max_weight_sum_error": 2.9802322387695312e-08
     },
     {
       "name": "Legs.001",

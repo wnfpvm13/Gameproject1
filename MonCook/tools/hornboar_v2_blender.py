@@ -151,8 +151,30 @@ def main(operation: str, parameters: Dict):
         for key in ('original_triangles','scale_studs','forward','removed_helper','rig_repair','bounds_min','bounds_max','camera_names'):report[key]=previous[key]
         (OUTPUT/'metadata/v2_analysis.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
         print(json.dumps(report['meshes']))
+    elif operation == 'repack_atlas':
+        assert scene.name=='MonCook_V2_Final'
+        atlas=next(n.image for obj in scene.objects if obj.type=='MESH' for mat in obj.data.materials if mat and mat.use_nodes
+                   for n in mat.node_tree.nodes if n.type=='TEX_IMAGE' and n.image)
+        path=OUTPUT/'export/Hornboar_BaseColor_512.png'
+        data=path.read_bytes()
+        assert data[:8]==b'\x89PNG\r\n\x1a\n'
+        if atlas.packed_file:atlas.unpack(method='REMOVE')
+        atlas.filepath_raw=str(path)
+        # Refresh decoded pixels and file format too: GLTF may re-encode pixels,
+        # whereas FBX copies packed bytes. Both must see the authored PNG palette.
+        atlas.reload()
+        atlas.pack(data=data,data_len=len(data))
+        assert bytes(atlas.packed_file.data)==data
+        # FBX COPY mode keeps an already existing .fbm image; synchronize that
+        # sidecar explicitly so Studio cannot prefer the old JPEG over embedded PNG.
+        for stem in ('MON_Hornboar_V2','MON_Hornboar_V2_Studio'):
+            directory=OUTPUT/'export'/(stem+'.fbm');directory.mkdir(exist_ok=True)
+            (directory/'Hornboar_BaseColor_512.png').write_bytes(data)
+        bpy.data.libraries.write(str(OUTPUT/'blender/MON_Hornboar_V2.blend'),{scene},fake_user=True)
+        print('Packed image now equals authored 512 PNG, not stale Tripo JPEG')
     elif operation == 'prepare_export':
         assert scene.name == 'MonCook_V2_Final'
+        if parameters.get('camera'):scene.camera=scene.objects[parameters['camera']]
         rig=next(o for o in scene.objects if o.type=='ARMATURE')
         for track in rig.animation_data.nla_tracks:track.mute=True
         rig.animation_data.action=bpy.data.actions.get('HBV2_'+parameters.get('clip',''))

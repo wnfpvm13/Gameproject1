@@ -8,7 +8,9 @@
   "max_skin_influences": 4,
   "player_clips": 5,
   "unchanged_baseline_files": 81,
-  "largest_asset_bytes": 6349284,
-  "studio_execution": "미검증",
-  "mobile_performance": "미검증"
+  "largest_asset_bytes": 6054437,
+  "runtime_skinned_meshes": 5,
+  "runtime_bones": 14,
+  "studio_evidence": "docs/qa/2026-10-08/studio_runtime.json (separate live evidence)",
+  "mobile_evidence": "docs/qa/2026-10-08/studio_performance.json (Windows emulation; physical devices unverified)"
 }

@@ -386,7 +386,8 @@ local function runRound()
 		local j = rng:NextInteger(1, i)
 		players[i], players[j] = players[j], players[i]
 	end
-	while #players > Config.MAX_PLAYERS + 1 do
+	-- At most MAX_PLAYERS take part in either mode (talk show = guest + up to MAX_PLAYERS - 1 panelists).
+	while #players > Config.MAX_PLAYERS do
 		table.remove(players)
 	end
 	mode = chooseMode(#players)

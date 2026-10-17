@@ -165,6 +165,10 @@ cameraPoint.CanCollide = false
 cameraPoint.CanQuery = false
 cameraPoint.CanTouch = false
 cameraPoint:SetAttribute("FieldOfView", CAMERA_FOV)
+-- Clients widen the FOV on narrow screens so the whole row (plus a margin) always fits horizontally.
+local rowTarget = Vector3.new(0, 3.5, ROW_Z)
+cameraPoint:SetAttribute("HalfWidth", (CHAIR_COUNT - 1) * ROW_SPACING / 2 + 2.5)
+cameraPoint:SetAttribute("Distance", (CAMERA_POS - rowTarget).Magnitude)
 
 local spawn = Instance.new("SpawnLocation")
 spawn.Name = "Spawn"

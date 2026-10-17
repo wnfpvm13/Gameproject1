@@ -65,17 +65,22 @@ local function setText(player: Player, text: string, mine: boolean)
 	label.TextColor3 = if mine then Color3.fromRGB(120, 120, 130) else Color3.fromRGB(30, 30, 36)
 end
 
--- words: userId string -> word. Participants missing from the table are the local player (own word hidden).
-function Billboards.show(words: { [string]: string }, participantIds: { number })
+-- words: userId string -> word. A participant missing from the table is the local player (own word hidden),
+-- the talk-show guest (labelled "게스트"), or, when I am the guest, a panelist whose word I may not know ("?").
+function Billboards.show(words: { [string]: string }, participantIds: { number }, guestId: number?)
 	local me = Players.LocalPlayer
 	for _, userId in participantIds do
 		local player = Players:GetPlayerByUserId(userId)
 		if player then
 			local word = words[tostring(userId)]
-			if word then
+			if userId == guestId then
+				setText(player, "게스트", player == me)
+			elseif word then
 				setText(player, word, player == me)
 			elseif player == me then
 				setText(player, "???", true)
+			else
+				setText(player, "?", false)
 			end
 		end
 	end

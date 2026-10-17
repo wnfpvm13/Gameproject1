@@ -43,6 +43,10 @@ return {
 	ASSIST_WINDOW = 10,
 	SCORE_ASSIST = 1,
 	SCORE_SURVIVE = 3,
+	SCORE_GUEST_HIT = 1, -- talk show: per panelist the guest launches
+
+	-- Talk show needs one guest plus two panelists.
+	TALKSHOW_MIN_PLAYERS = 3,
 
 	-- Roblox-licensed Pro Sound Effects (public, free).
 	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)
@@ -251,11 +255,38 @@ local function watch(seat: Seat)
 	end)
 end
 
+local function guestSeat(): Seat?
+	local raft = poolMap():FindFirstChild("GuestRaft")
+	return raft and raft:FindFirstChild("GuestSeat") :: Seat?
+end
+
 function SeatService.init()
 	for _, seat in SeatService.getSeats() do
 		seat.Disabled = true
 		watch(seat)
 	end
+	local guest = guestSeat()
+	if guest then
+		guest.Disabled = true
+		watch(guest)
+	end
+end
+
+-- Talk-show mode: the guest sits on the raft facing the panel.
+function SeatService.seatGuest(player: Player): boolean
+	local seat = guestSeat()
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not (seat and humanoid and humanoid.Health > 0) then
+		return false
+	end
+	assigned[seat] = humanoid
+	seat.Disabled = false
+	humanoid.UseJumpPower = false
+	humanoid.JumpHeight = 0
+	sit(seat, humanoid)
+	locked = true
+	return true
 end
 
 -- Returns the seat per player (players beyond the chair count are left out by the caller).
@@ -345,9 +376,16 @@ end)
 return SeatService
 ]====]; s.Parent = server end
 do local s = Instance.new("ModuleScript"); s.Name = "RoundService"; s.Source = [====[--!strict
--- Round state machine: Lobby -> Countdown -> Assign -> Talk -> Result -> Lobby.
+-- Round state machine: Lobby -> Countdown (mode vote) -> Assign -> Talk -> Result -> Lobby.
 -- Transcripts come from each client's own AudioSpeechToText (the server cannot process audio) and are judged here.
--- During Talk, question cards force quiet players to speak; eliminated players stay in as "ghosts" whose speech
+--
+-- Modes
+--   classic  : saying your own word launches you (v2 word bank).
+--   talkshow : KBS 위험한 초대 style. One guest on the raft knows no words and has none; when the guest says a
+--              panelist's word that panelist flies (several at once if one sentence has several words). Panelists
+--              still fly for their own word, and saying another panelist's word yourself is a foul (you fly).
+--
+-- During Talk, question cards force quiet panelists to speak; eliminated panelists stay in as "ghosts" whose speech
 -- still counts toward assists (the last other speaker before an elimination scores).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -363,6 +401,7 @@ local RoundService = {}
 
 type Participant = {
 	player: Player,
+	role: string, -- "panel" | "guest"
 	word: string,
 	aliases: { string },
 	alive: boolean,
@@ -376,9 +415,14 @@ local remotes: Folder
 local phase = "Lobby"
 local phaseEndsAt = 0
 local message = ""
+local mode = "classic"
+local guest: Player? = nil
 local participants: { [Player]: Participant } = {}
 local startedWith = 0
 local roundId = 0
+local votes: { [Player]: string } = {}
+local guestCounts: { [Player]: number } = {}
+local guestHits = 0
 local lastTranscript: { [Player]: { at: number, text: string } } = {}
 local speechLog: { { player: Player, at: number } } = {}
 local roundAssists: { [Player]: number } = {}
@@ -389,14 +433,23 @@ local function remote(name: string): RemoteEvent
 	return remotes:FindFirstChild(name) :: RemoteEvent
 end
 
+-- Panelists still in the game (the guest is never part of this list).
 local function aliveList(): { Player }
 	local list = {}
 	for player, p in participants do
-		if p.alive then
+		if p.alive and p.role == "panel" then
 			table.insert(list, player)
 		end
 	end
 	return list
+end
+
+local function voteCounts(): { classic: number, talkshow: number }
+	local counts = { classic = 0, talkshow = 0 }
+	for _, choice in votes do
+		counts[choice] += 1
+	end
+	return counts
 end
 
 local function broadcastState()
@@ -411,8 +464,13 @@ local function broadcastState()
 		phase = phase,
 		endsAt = phaseEndsAt,
 		message = message,
+		mode = mode,
+		guestId = if guest then guest.UserId else nil,
 		participants = ids,
 		alive = alive,
+		panelAlive = #aliveList(),
+		panelTotal = startedWith,
+		votes = voteCounts(),
 	})
 end
 
@@ -423,12 +481,14 @@ local function setPhase(name: string, duration: number, text: string)
 	broadcastState()
 end
 
--- Each client gets every participant's word except its own (own word never leaves the server).
+-- Each panelist sees every other panelist's word; nobody gets their own, and the guest gets none.
 local function sendWords(target: Player)
 	local words = {}
-	for player, p in participants do
-		if player ~= target then
-			words[tostring(player.UserId)] = p.word
+	if not (participants[target] and participants[target].role == "guest") then
+		for player, p in participants do
+			if player ~= target and p.role == "panel" then
+				words[tostring(player.UserId)] = p.word
+			end
 		end
 	end
 	remote("Words"):FireClient(target, words)
@@ -442,7 +502,7 @@ local function addScore(player: Player, amount: number)
 	end
 end
 
--- The most recent other participant (alive or ghost) who spoke within the assist window.
+-- The most recent other participant (alive or ghost, never the guest) who spoke within the assist window.
 local function assistFor(victim: Player): Player?
 	local now = os.clock()
 	for i = #speechLog, 1, -1 do
@@ -450,32 +510,40 @@ local function assistFor(victim: Player): Player?
 		if now - entry.at > Config.ASSIST_WINDOW then
 			break
 		end
-		if entry.player ~= victim and participants[entry.player] then
+		local p = participants[entry.player]
+		if entry.player ~= victim and p and p.role == "panel" then
 			return entry.player
 		end
 	end
 	return nil
 end
 
-local function eliminate(player: Player, reason: string)
+-- reason: "said" (own word) | "guest" (the guest said it) | "foul" (said another panelist's word) | "silent" | "died" | "left"
+local function eliminate(player: Player, reason: string, saidWord: string?)
 	local p = participants[player]
-	if not p or not p.alive then
+	if not p or not p.alive or p.role ~= "panel" then
 		return
 	end
 	p.alive = false
-	local helper = if reason == "said" then assistFor(player) else nil
+	local helper = if reason == "said" or reason == "guest" then assistFor(player) else nil
 	if helper then
 		roundAssists[helper] = (roundAssists[helper] or 0) + Config.SCORE_ASSIST
 		addScore(helper, Config.SCORE_ASSIST)
+	end
+	if reason == "guest" and guest then
+		guestHits += 1
+		addScore(guest, Config.SCORE_GUEST_HIT)
 	end
 	remote("Eliminated"):FireAllClients({
 		userId = player.UserId,
 		name = player.DisplayName,
 		word = p.word,
+		saidWord = saidWord,
 		reason = reason,
 		assistName = if helper then helper.DisplayName else nil,
+		guestName = if reason == "guest" and guest then guest.DisplayName else nil,
 	})
-	if reason == "said" or reason == "silent" then
+	if reason == "said" or reason == "silent" or reason == "guest" or reason == "foul" then
 		SeatService.launch(player)
 	end
 	broadcastState()
@@ -483,6 +551,39 @@ end
 
 local function isValidAnswer(p: Participant, text: string): boolean
 	return #Judge.eojeols(text) >= 2 and text ~= p.lastAnswer
+end
+
+local function judgeGuest(text: string)
+	-- One sentence can launch several panelists at once.
+	local hits = {}
+	for player, p in participants do
+		if p.alive and p.role == "panel" and Judge.isConfirmed(p.word, text, p.aliases) then
+			table.insert(hits, player)
+		end
+	end
+	for _, player in hits do
+		eliminate(player, "guest", participants[player].word)
+	end
+end
+
+local function judgePanel(player: Player, p: Participant, text: string): boolean
+	local verdict = Judge.classify(p.word, text, p.aliases)
+	if verdict == "CONFIRMED" then
+		eliminate(player, "said", p.word)
+		return true
+	end
+	if mode == "talkshow" then
+		for other, o in participants do
+			if other ~= player and o.alive and o.role == "panel" and Judge.isConfirmed(o.word, text, o.aliases) then
+				eliminate(player, "foul", o.word)
+				return true
+			end
+		end
+	end
+	if verdict == "SUSPECT" then
+		remote("Suspect"):FireAllClients({ userId = player.UserId, name = player.DisplayName })
+	end
+	return false
 end
 
 local function onTranscript(player: Player, text: any)
@@ -503,6 +604,10 @@ local function onTranscript(player: Player, text: any)
 		return
 	end
 	lastTranscript[player] = { at = now, text = text }
+	if p.role == "guest" then
+		judgeGuest(text)
+		return
+	end
 	table.insert(speechLog, { player = player, at = now })
 	if #speechLog > 64 then
 		table.remove(speechLog, 1)
@@ -511,13 +616,8 @@ local function onTranscript(player: Player, text: any)
 	if not p.alive then
 		return -- ghosts only feed the assist log
 	end
-
-	local verdict = Judge.classify(p.word, text, p.aliases)
-	if verdict == "CONFIRMED" then
-		eliminate(player, "said")
+	if judgePanel(player, p, text) then
 		return
-	elseif verdict == "SUSPECT" then
-		remote("Suspect"):FireAllClients({ userId = player.UserId, name = player.DisplayName })
 	end
 
 	local card = activeCard
@@ -528,16 +628,24 @@ local function onTranscript(player: Player, text: any)
 	end
 end
 
+local function onVote(player: Player, choice: any)
+	if phase ~= "Countdown" or (choice ~= "classic" and choice ~= "talkshow") then
+		return
+	end
+	votes[player] = choice
+	broadcastState()
+end
+
 local function roundOver(): boolean
 	local alive = #aliveList()
-	return alive == 0 or (startedWith >= 2 and alive <= 1)
+	return alive == 0 or (startedWith >= 2 and alive <= 1) or (mode == "talkshow" and guest == nil)
 end
 
 local function talking(myRound: number): boolean
 	return phase == "Talk" and roundId == myRound and not roundOver()
 end
 
--- Question cards: the quietest alive player gets a question and must answer in two or more words.
+-- Question cards: the quietest alive panelist gets a question and must answer in two or more words.
 local function runCards(myRound: number)
 	local lastTarget: Player? = nil
 	while talking(myRound) do
@@ -604,9 +712,43 @@ local function eligiblePlayers(): { Player }
 	return list
 end
 
+-- Majority vote; ties are random. Talk show needs a guest plus at least two panelists.
+local function chooseMode(playerCount: number): string
+	if playerCount < Config.TALKSHOW_MIN_PLAYERS then
+		return "classic"
+	end
+	local counts = voteCounts()
+	if counts.talkshow > counts.classic then
+		return "talkshow"
+	elseif counts.classic > counts.talkshow then
+		return "classic"
+	end
+	return if rng:NextInteger(0, 1) == 0 then "classic" else "talkshow"
+end
+
+-- The player who has been guest the fewest times (random among ties).
+local function chooseGuest(players: { Player }): Player
+	local best: { Player } = {}
+	local fewest = math.huge
+	for _, player in players do
+		local count = guestCounts[player] or 0
+		if count < fewest then
+			fewest, best = count, { player }
+		elseif count == fewest then
+			table.insert(best, player)
+		end
+	end
+	local chosen = best[rng:NextInteger(1, #best)]
+	guestCounts[chosen] = fewest + 1
+	return chosen
+end
+
 local function runRound()
-	-- Countdown (cancelled if players drop below the minimum).
-	setPhase("Countdown", Config.LOBBY_COUNTDOWN, "곧 시작해요")
+	-- Countdown + mode vote (cancelled if players drop below the minimum).
+	table.clear(votes)
+	guest = nil
+	mode = "classic"
+	setPhase("Countdown", Config.LOBBY_COUNTDOWN, "곧 시작해요 · 모드를 투표하세요")
 	waitPhase(function()
 		return #eligiblePlayers() < Config.MIN_PLAYERS
 	end)
@@ -615,31 +757,52 @@ local function runRound()
 		return
 	end
 
-	-- Assign seats and words.
+	-- Mode, seats and words.
 	roundId += 1
 	for i = #players, 2, -1 do
 		local j = rng:NextInteger(1, i)
 		players[i], players[j] = players[j], players[i]
 	end
-	while #players > Config.MAX_PLAYERS do
+	while #players > Config.MAX_PLAYERS + 1 do
 		table.remove(players)
 	end
-	local seated = SeatService.seatPlayers(players)
-	local seatedPlayers = {}
-	for _, player in players do
-		if seated[player] then
-			table.insert(seatedPlayers, player)
+	mode = chooseMode(#players)
+	local panelCandidates = players
+	if mode == "talkshow" then
+		local chosen = chooseGuest(players)
+		if SeatService.seatGuest(chosen) then
+			guest = chosen
+			panelCandidates = {}
+			for _, player in players do
+				if player ~= chosen then
+					table.insert(panelCandidates, player)
+				end
+			end
+		else
+			mode = "classic"
 		end
 	end
-	local entries = WordBank.draw(#seatedPlayers, rng)
+	while #panelCandidates > Config.MAX_PLAYERS do
+		table.remove(panelCandidates)
+	end
+	local seated = SeatService.seatPlayers(panelCandidates)
+	local panel = {}
+	for _, player in panelCandidates do
+		if seated[player] then
+			table.insert(panel, player)
+		end
+	end
+	local entries = WordBank.draw(#panel, rng)
 	table.clear(participants)
 	table.clear(lastTranscript)
 	table.clear(speechLog)
 	table.clear(roundAssists)
-	for i, player in seatedPlayers do
+	guestHits = 0
+	for i, player in panel do
 		local entry = entries[i]
 		participants[player] = {
 			player = player,
+			role = "panel",
 			word = entry.word,
 			aliases = entry.aliases,
 			alive = true,
@@ -651,8 +814,14 @@ local function runRound()
 			eliminate(player, "died")
 		end)
 	end
-	startedWith = #seatedPlayers
-	setPhase("Assign", Config.ASSIGN_TIME, "내 금칙어는 나만 몰라요! 다른 사람이 말하게 만드세요")
+	if guest then
+		participants[guest] = { player = guest, role = "guest", word = "", aliases = {}, alive = true, lastSpokeAt = 0, strikes = 0 }
+	end
+	startedWith = #panel
+	local assignText = if guest
+		then string.format("토크쇼! 게스트 %s님이 패널의 금칙어를 말하게 만드세요 (남의 금칙어를 직접 말하면 반칙)", guest.DisplayName)
+		else "내 금칙어는 나만 몰라요! 다른 사람이 말하게 만드세요"
+	setPhase("Assign", Config.ASSIGN_TIME, assignText)
 	for _, player in Players:GetPlayers() do
 		sendWords(player)
 	end
@@ -667,15 +836,18 @@ local function runRound()
 	task.spawn(runCards, roundId)
 	waitPhase(roundOver)
 
-	-- Result: survivors score, the round's best assister is named.
+	-- Result: surviving panelists score, the guest's launches and the best assister are named.
 	local winners = {}
 	for player, p in participants do
-		if p.alive then
+		if p.alive and p.role == "panel" then
 			table.insert(winners, player.DisplayName)
 			addScore(player, Config.SCORE_SURVIVE)
 		end
 	end
-	local result = if #winners == 0 then "모두 탈락! 무승부" else table.concat(winners, ", ") .. " 승리!"
+	local result = if #winners == 0 then "모두 탈락!" else table.concat(winners, ", ") .. " 생존!"
+	if guest then
+		result ..= string.format(" · 게스트 %s %d명 날림", guest.DisplayName, guestHits)
+	end
 	local best, bestScore = nil, 0
 	for player, score in roundAssists do
 		if score > bestScore then
@@ -690,11 +862,14 @@ local function runRound()
 	setPhase("Result", Config.RESULT_TIME, result)
 	local reveal = {}
 	for player, p in participants do
-		reveal[tostring(player.UserId)] = p.word
+		if p.role == "panel" then
+			reveal[tostring(player.UserId)] = p.word
+		end
 	end
 	remote("Words"):FireAllClients(reveal)
 	waitPhase()
 	table.clear(participants)
+	guest = nil
 end
 
 local function setupLeaderstats(player: Player)
@@ -710,6 +885,7 @@ function RoundService.start(remoteFolder: Folder)
 	remotes = remoteFolder
 	SeatService.init()
 	remote("Transcript").OnServerEvent:Connect(onTranscript)
+	remote("Vote").OnServerEvent:Connect(onVote)
 
 	for _, player in Players:GetPlayers() do
 		setupLeaderstats(player)
@@ -724,12 +900,17 @@ function RoundService.start(remoteFolder: Folder)
 		end)
 	end)
 	Players.PlayerRemoving:Connect(function(player)
-		if participants[player] then
+		local p = participants[player]
+		if p and p.role == "guest" then
+			guest = nil -- the talk show cannot go on without its guest; roundOver() ends the round
+		elseif p then
 			eliminate(player, "left")
-			participants[player] = nil
 		end
+		participants[player] = nil
 		lastTranscript[player] = nil
 		roundAssists[player] = nil
+		votes[player] = nil
+		guestCounts[player] = nil
 	end)
 
 	task.spawn(function()
@@ -843,7 +1024,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
 local remotes = shared:FindFirstChild("Remotes") or Instance.new("Folder")
 remotes.Name = "Remotes"
-for _, name in { "RoundState", "Words", "Transcript", "Eliminated", "Suspect", "QuestionCard", "CardResult" } do
+for _, name in { "RoundState", "Words", "Transcript", "Eliminated", "Suspect", "QuestionCard", "CardResult", "Vote" } do
 	if not remotes:FindFirstChild(name) then
 		local event = Instance.new("RemoteEvent")
 		event.Name = name
@@ -913,6 +1094,9 @@ local function applySeatLock()
 end
 
 Hud.build()
+Hud.buildVote(function(choice)
+	remotes.Vote:FireServer(choice)
+end)
 Fx.init()
 FlatVoice.start()
 Speech.onStatus(Hud.setVoice)
@@ -929,18 +1113,30 @@ remotes.RoundState.OnClientEvent:Connect(function(newState)
 	local previous = state.phase
 	state = newState
 	Hud.setStatus(PHASE_TITLE[state.phase] .. " · " .. state.message)
-	Hud.setAlive(#state.alive, #state.participants)
+	Hud.setAlive(state.panelAlive, state.panelTotal)
+	Hud.setVote(state.phase == "Countdown", state.votes)
 	if state.phase == "Lobby" or (state.phase == "Countdown" and previous == "Result") then
 		Billboards.clear()
 	end
 	if state.phase == "Talk" and previous ~= "Talk" then
 		Hud.toast("대화 시작!", "info")
 	end
-	if state.phase == "Assign" or state.phase == "Talk" then
-		Billboards.show(lastWords, state.alive)
+	local inRound = state.phase == "Assign" or state.phase == "Talk"
+	if inRound then
+		Billboards.show(lastWords, state.alive, state.guestId)
 	end
-	ShowCamera.set(state.phase == "Assign" or state.phase == "Talk")
-	Hud.setGhost(state.phase == "Talk" and isParticipant(player.UserId) and not isAlive(player.UserId))
+	ShowCamera.set(inRound)
+
+	local me = player.UserId
+	local role = ""
+	if inRound and me == state.guestId then
+		role = "게스트 · 대화하며 패널의 금칙어를 말해 보세요. 날릴수록 점수!"
+	elseif state.phase == "Talk" and isParticipant(me) and not isAlive(me) then
+		role = "유령 모드 · 계속 말해서 다른 사람을 날리면 점수!"
+	elseif inRound and state.mode == "talkshow" and isAlive(me) then
+		role = "패널 · 힌트로 게스트가 남의 금칙어를 말하게! 직접 말하면 반칙"
+	end
+	Hud.setRole(role)
 	if state.phase ~= "Talk" then
 		Hud.hideCard()
 	end
@@ -949,17 +1145,27 @@ end)
 
 remotes.Words.OnClientEvent:Connect(function(words)
 	lastWords = words
-	Billboards.show(words, state.participants)
+	Billboards.show(words, state.participants, state.guestId)
 end)
 
 remotes.Eliminated.OnClientEvent:Connect(function(info)
 	local who = if info.userId == player.UserId then "내가" else info.name .. "님이"
-	if info.reason == "said" or info.reason == "silent" then
+	local whom = if info.userId == player.UserId then "내가" else info.name .. "님"
+	local launched = info.reason == "said" or info.reason == "silent" or info.reason == "guest" or info.reason == "foul"
+	if launched then
 		Billboards.alarm(info.userId)
 		Fx.elimination(Players:GetPlayerByUserId(info.userId))
-		local text = if info.reason == "said"
-			then string.format("삐! %s 금칙어 \"%s\"%s 말했어요", who, info.word, Judge.josa(info.word, "을", "를"))
-			else string.format("삐! %s 질문에 대답하지 않았어요 (금칙어 \"%s\")", who, info.word)
+		local text
+		if info.reason == "said" then
+			text = string.format("삐! %s 금칙어 \"%s\"%s 말했어요", who, info.word, Judge.josa(info.word, "을", "를"))
+		elseif info.reason == "guest" then
+			text = string.format("삐! 게스트 %s님이 \"%s\"%s 말해서 %s 날아가요", info.guestName or "", info.word, Judge.josa(info.word, "을", "를"), whom)
+		elseif info.reason == "foul" then
+			local said = info.saidWord or ""
+			text = string.format("반칙! %s 남의 금칙어 \"%s\"%s 직접 말했어요", who, said, Judge.josa(said, "을", "를"))
+		else
+			text = string.format("삐! %s 질문에 대답하지 않았어요 (금칙어 \"%s\")", who, info.word)
+		end
 		if info.assistName then
 			text ..= string.format("\n유도: %s +%d점", info.assistName, Config.SCORE_ASSIST)
 		end
@@ -1146,8 +1352,66 @@ function Hud.tickCard(now: number, total: number)
 	cardBar.Size = UDim2.fromScale(math.clamp(left / total, 0, 1), 1)
 end
 
-function Hud.setGhost(on: boolean)
-	ghostL.Text = if on then "유령 모드 · 계속 말해서 다른 사람을 날리면 점수!" else ""
+-- One line under the status board explaining what I should be doing (ghost / guest / panelist).
+function Hud.setRole(text: string)
+	ghostL.Text = text
+end
+
+-- Mode vote during the countdown.
+local voteFrame: Frame? = nil
+local voteButtons: { [string]: TextButton } = {}
+local VOTE_LABELS = { classic = "클래식", talkshow = "토크쇼 (3명+)" }
+
+function Hud.buildVote(onVote: (string) -> ())
+	local frame = Instance.new("Frame")
+	frame.AnchorPoint = Vector2.new(0.5, 1)
+	frame.Position = UDim2.new(0.5, 0, 1, -24)
+	frame.Size = UDim2.new(0, 420, 0, 64)
+	frame.BackgroundTransparency = 1
+	frame.Visible = false
+	frame.Parent = gui
+	for i, choice in { "classic", "talkshow" } do
+		local b = Instance.new("TextButton")
+		b.Position = UDim2.new((i - 1) * 0.52, 0, 0, 0)
+		b.Size = UDim2.new(0.48, 0, 1, 0)
+		b.BackgroundColor3 = Color3.fromRGB(40, 48, 64)
+		b.FontFace = BOLD
+		b.TextColor3 = WHITE
+		b.TextScaled = true
+		b.Text = VOTE_LABELS[choice]
+		Instance.new("UICorner", b).CornerRadius = UDim.new(0, 14)
+		local c = Instance.new("UITextSizeConstraint", b)
+		c.MaxTextSize = 24
+		local pad = Instance.new("UIPadding", b)
+		pad.PaddingLeft = UDim.new(0, 10)
+		pad.PaddingRight = UDim.new(0, 10)
+		b.Activated:Connect(function()
+			onVote(choice)
+			for other, button in voteButtons do
+				button.BackgroundColor3 = if other == choice then Color3.fromRGB(240, 140, 60) else Color3.fromRGB(40, 48, 64)
+			end
+		end)
+		b.Parent = frame
+		voteButtons[choice] = b
+	end
+	voteFrame = frame
+end
+
+function Hud.setVote(visible: boolean, counts: { classic: number, talkshow: number }?)
+	if not voteFrame then
+		return
+	end
+	voteFrame.Visible = visible
+	if not visible then
+		for _, button in voteButtons do
+			button.BackgroundColor3 = Color3.fromRGB(40, 48, 64)
+		end
+		return
+	end
+	if counts then
+		voteButtons.classic.Text = string.format("%s · %d표", VOTE_LABELS.classic, counts.classic)
+		voteButtons.talkshow.Text = string.format("%s · %d표", VOTE_LABELS.talkshow, counts.talkshow)
+	end
 end
 
 function Hud.setStatus(text: string)
@@ -1258,17 +1522,22 @@ local function setText(player: Player, text: string, mine: boolean)
 	label.TextColor3 = if mine then Color3.fromRGB(120, 120, 130) else Color3.fromRGB(30, 30, 36)
 end
 
--- words: userId string -> word. Participants missing from the table are the local player (own word hidden).
-function Billboards.show(words: { [string]: string }, participantIds: { number })
+-- words: userId string -> word. A participant missing from the table is the local player (own word hidden),
+-- the talk-show guest (labelled "게스트"), or, when I am the guest, a panelist whose word I may not know ("?").
+function Billboards.show(words: { [string]: string }, participantIds: { number }, guestId: number?)
 	local me = Players.LocalPlayer
 	for _, userId in participantIds do
 		local player = Players:GetPlayerByUserId(userId)
 		if player then
 			local word = words[tostring(userId)]
-			if word then
+			if userId == guestId then
+				setText(player, "게스트", player == me)
+			elseif word then
 				setText(player, word, player == me)
 			elseif player == me then
 				setText(player, "???", true)
+			else
+				setText(player, "?", false)
 			end
 		end
 	end

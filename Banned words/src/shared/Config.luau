@@ -31,6 +31,10 @@ return {
 	ASSIST_WINDOW = 10,
 	SCORE_ASSIST = 1,
 	SCORE_SURVIVE = 3,
+	SCORE_GUEST_HIT = 1, -- talk show: per panelist the guest launches
+
+	-- Talk show needs one guest plus two panelists.
+	TALKSHOW_MIN_PLAYERS = 3,
 
 	-- Roblox-licensed Pro Sound Effects (public, free).
 	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)

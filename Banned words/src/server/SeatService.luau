@@ -64,11 +64,38 @@ local function watch(seat: Seat)
 	end)
 end
 
+local function guestSeat(): Seat?
+	local raft = poolMap():FindFirstChild("GuestRaft")
+	return raft and raft:FindFirstChild("GuestSeat") :: Seat?
+end
+
 function SeatService.init()
 	for _, seat in SeatService.getSeats() do
 		seat.Disabled = true
 		watch(seat)
 	end
+	local guest = guestSeat()
+	if guest then
+		guest.Disabled = true
+		watch(guest)
+	end
+end
+
+-- Talk-show mode: the guest sits on the raft facing the panel.
+function SeatService.seatGuest(player: Player): boolean
+	local seat = guestSeat()
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not (seat and humanoid and humanoid.Health > 0) then
+		return false
+	end
+	assigned[seat] = humanoid
+	seat.Disabled = false
+	humanoid.UseJumpPower = false
+	humanoid.JumpHeight = 0
+	sit(seat, humanoid)
+	locked = true
+	return true
 end
 
 -- Returns the seat per player (players beyond the chair count are left out by the caller).

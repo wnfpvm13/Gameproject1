@@ -55,6 +55,9 @@ local function applySeatLock()
 end
 
 Hud.build()
+Hud.buildVote(function(choice)
+	remotes.Vote:FireServer(choice)
+end)
 Fx.init()
 FlatVoice.start()
 Speech.onStatus(Hud.setVoice)
@@ -71,18 +74,30 @@ remotes.RoundState.OnClientEvent:Connect(function(newState)
 	local previous = state.phase
 	state = newState
 	Hud.setStatus(PHASE_TITLE[state.phase] .. " · " .. state.message)
-	Hud.setAlive(#state.alive, #state.participants)
+	Hud.setAlive(state.panelAlive, state.panelTotal)
+	Hud.setVote(state.phase == "Countdown", state.votes)
 	if state.phase == "Lobby" or (state.phase == "Countdown" and previous == "Result") then
 		Billboards.clear()
 	end
 	if state.phase == "Talk" and previous ~= "Talk" then
 		Hud.toast("대화 시작!", "info")
 	end
-	if state.phase == "Assign" or state.phase == "Talk" then
-		Billboards.show(lastWords, state.alive)
+	local inRound = state.phase == "Assign" or state.phase == "Talk"
+	if inRound then
+		Billboards.show(lastWords, state.alive, state.guestId)
 	end
-	ShowCamera.set(state.phase == "Assign" or state.phase == "Talk")
-	Hud.setGhost(state.phase == "Talk" and isParticipant(player.UserId) and not isAlive(player.UserId))
+	ShowCamera.set(inRound)
+
+	local me = player.UserId
+	local role = ""
+	if inRound and me == state.guestId then
+		role = "게스트 · 대화하며 패널의 금칙어를 말해 보세요. 날릴수록 점수!"
+	elseif state.phase == "Talk" and isParticipant(me) and not isAlive(me) then
+		role = "유령 모드 · 계속 말해서 다른 사람을 날리면 점수!"
+	elseif inRound and state.mode == "talkshow" and isAlive(me) then
+		role = "패널 · 힌트로 게스트가 남의 금칙어를 말하게! 직접 말하면 반칙"
+	end
+	Hud.setRole(role)
 	if state.phase ~= "Talk" then
 		Hud.hideCard()
 	end
@@ -91,17 +106,27 @@ end)
 
 remotes.Words.OnClientEvent:Connect(function(words)
 	lastWords = words
-	Billboards.show(words, state.participants)
+	Billboards.show(words, state.participants, state.guestId)
 end)
 
 remotes.Eliminated.OnClientEvent:Connect(function(info)
 	local who = if info.userId == player.UserId then "내가" else info.name .. "님이"
-	if info.reason == "said" or info.reason == "silent" then
+	local whom = if info.userId == player.UserId then "내가" else info.name .. "님"
+	local launched = info.reason == "said" or info.reason == "silent" or info.reason == "guest" or info.reason == "foul"
+	if launched then
 		Billboards.alarm(info.userId)
 		Fx.elimination(Players:GetPlayerByUserId(info.userId))
-		local text = if info.reason == "said"
-			then string.format("삐! %s 금칙어 \"%s\"%s 말했어요", who, info.word, Judge.josa(info.word, "을", "를"))
-			else string.format("삐! %s 질문에 대답하지 않았어요 (금칙어 \"%s\")", who, info.word)
+		local text
+		if info.reason == "said" then
+			text = string.format("삐! %s 금칙어 \"%s\"%s 말했어요", who, info.word, Judge.josa(info.word, "을", "를"))
+		elseif info.reason == "guest" then
+			text = string.format("삐! 게스트 %s님이 \"%s\"%s 말해서 %s 날아가요", info.guestName or "", info.word, Judge.josa(info.word, "을", "를"), whom)
+		elseif info.reason == "foul" then
+			local said = info.saidWord or ""
+			text = string.format("반칙! %s 남의 금칙어 \"%s\"%s 직접 말했어요", who, said, Judge.josa(said, "을", "를"))
+		else
+			text = string.format("삐! %s 질문에 대답하지 않았어요 (금칙어 \"%s\")", who, info.word)
+		end
 		if info.assistName then
 			text ..= string.format("\n유도: %s +%d점", info.assistName, Config.SCORE_ASSIST)
 		end

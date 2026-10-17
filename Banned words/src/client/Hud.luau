@@ -143,8 +143,66 @@ function Hud.tickCard(now: number, total: number)
 	cardBar.Size = UDim2.fromScale(math.clamp(left / total, 0, 1), 1)
 end
 
-function Hud.setGhost(on: boolean)
-	ghostL.Text = if on then "유령 모드 · 계속 말해서 다른 사람을 날리면 점수!" else ""
+-- One line under the status board explaining what I should be doing (ghost / guest / panelist).
+function Hud.setRole(text: string)
+	ghostL.Text = text
+end
+
+-- Mode vote during the countdown.
+local voteFrame: Frame? = nil
+local voteButtons: { [string]: TextButton } = {}
+local VOTE_LABELS = { classic = "클래식", talkshow = "토크쇼 (3명+)" }
+
+function Hud.buildVote(onVote: (string) -> ())
+	local frame = Instance.new("Frame")
+	frame.AnchorPoint = Vector2.new(0.5, 1)
+	frame.Position = UDim2.new(0.5, 0, 1, -24)
+	frame.Size = UDim2.new(0, 420, 0, 64)
+	frame.BackgroundTransparency = 1
+	frame.Visible = false
+	frame.Parent = gui
+	for i, choice in { "classic", "talkshow" } do
+		local b = Instance.new("TextButton")
+		b.Position = UDim2.new((i - 1) * 0.52, 0, 0, 0)
+		b.Size = UDim2.new(0.48, 0, 1, 0)
+		b.BackgroundColor3 = Color3.fromRGB(40, 48, 64)
+		b.FontFace = BOLD
+		b.TextColor3 = WHITE
+		b.TextScaled = true
+		b.Text = VOTE_LABELS[choice]
+		Instance.new("UICorner", b).CornerRadius = UDim.new(0, 14)
+		local c = Instance.new("UITextSizeConstraint", b)
+		c.MaxTextSize = 24
+		local pad = Instance.new("UIPadding", b)
+		pad.PaddingLeft = UDim.new(0, 10)
+		pad.PaddingRight = UDim.new(0, 10)
+		b.Activated:Connect(function()
+			onVote(choice)
+			for other, button in voteButtons do
+				button.BackgroundColor3 = if other == choice then Color3.fromRGB(240, 140, 60) else Color3.fromRGB(40, 48, 64)
+			end
+		end)
+		b.Parent = frame
+		voteButtons[choice] = b
+	end
+	voteFrame = frame
+end
+
+function Hud.setVote(visible: boolean, counts: { classic: number, talkshow: number }?)
+	if not voteFrame then
+		return
+	end
+	voteFrame.Visible = visible
+	if not visible then
+		for _, button in voteButtons do
+			button.BackgroundColor3 = Color3.fromRGB(40, 48, 64)
+		end
+		return
+	end
+	if counts then
+		voteButtons.classic.Text = string.format("%s · %d표", VOTE_LABELS.classic, counts.classic)
+		voteButtons.talkshow.Text = string.format("%s · %d표", VOTE_LABELS.talkshow, counts.talkshow)
+	end
 end
 
 function Hud.setStatus(text: string)

@@ -137,6 +137,27 @@ for _, p in { Vector3.new(-50, 0, -36), Vector3.new(50, 0, -36), Vector3.new(-50
 	top.Shape = Enum.PartType.Cylinder
 end
 
+-- Talk-show guest seat: a raft floating in the pool, facing the panel row (back to the show camera, low enough
+-- to stay under the camera's sight line to the panel's heads).
+local GUEST_POS = Vector3.new(0, -1.1, -4)
+local raftModel = Instance.new("Model")
+raftModel.Name = "GuestRaft"
+local raftFacing = CFrame.lookAt(GUEST_POS, GUEST_POS + Vector3.new(0, 0, -1))
+part(raftModel, "Raft", Vector3.new(6, 0.8, 6), raftFacing, Color3.fromRGB(255, 190, 80), Enum.Material.SmoothPlastic)
+local guestSeat = Instance.new("Seat")
+guestSeat.Name = "GuestSeat"
+guestSeat.Anchored = true
+guestSeat.Size = Vector3.new(2.8, 0.5, 2.8)
+guestSeat.CFrame = raftFacing * CFrame.new(0, 0.65, 0)
+guestSeat.Color = Color3.fromRGB(230, 70, 90)
+guestSeat.Material = Enum.Material.SmoothPlastic
+guestSeat.TopSurface = Enum.SurfaceType.Smooth
+guestSeat.Disabled = true
+guestSeat.Parent = raftModel
+part(raftModel, "Back", Vector3.new(2.8, 2.6, 0.5), raftFacing * CFrame.new(0, 2, 1.5) * CFrame.Angles(math.rad(-12), 0, 0), Color3.fromRGB(230, 70, 90))
+raftModel.PrimaryPart = guestSeat
+raftModel.Parent = map
+
 -- Show camera: clients use this CFrame (and FieldOfView attribute) while a round is running.
 local cameraPoint = part(map, "ShowCamera", Vector3.new(1, 1, 1), CFrame.lookAt(CAMERA_POS, Vector3.new(0, 3.5, ROW_Z)), FRAME_COLOR)
 cameraPoint.Transparency = 1

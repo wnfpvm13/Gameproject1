@@ -69,6 +69,21 @@ local function guestSeat(): Seat?
 	return raft and raft:FindFirstChild("GuestSeat") :: Seat?
 end
 
+-- The guest raft only shows up in talk-show rounds (in classic it would block the show camera's lower centre).
+function SeatService.setGuestRaftVisible(visible: boolean)
+	local raft = poolMap():FindFirstChild("GuestRaft")
+	if not raft then
+		return
+	end
+	for _, part in raft:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.Transparency = if visible then 0 else 1
+			part.CanCollide = visible
+			part.CanQuery = visible
+		end
+	end
+end
+
 function SeatService.init()
 	for _, seat in SeatService.getSeats() do
 		seat.Disabled = true
@@ -79,6 +94,7 @@ function SeatService.init()
 		guest.Disabled = true
 		watch(guest)
 	end
+	SeatService.setGuestRaftVisible(false)
 end
 
 -- Talk-show mode: the guest sits on the raft facing the panel.
@@ -89,6 +105,7 @@ function SeatService.seatGuest(player: Player): boolean
 	if not (seat and humanoid and humanoid.Health > 0) then
 		return false
 	end
+	SeatService.setGuestRaftVisible(true)
 	assigned[seat] = humanoid
 	seat.Disabled = false
 	humanoid.UseJumpPower = false
@@ -129,6 +146,7 @@ function SeatService.releaseAll()
 		seat.Disabled = true
 	end
 	table.clear(assigned)
+	SeatService.setGuestRaftVisible(false)
 end
 
 -- Throws the player from their chair in an arc into the pool, then kills them.

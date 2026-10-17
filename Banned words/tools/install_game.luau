@@ -260,6 +260,21 @@ local function guestSeat(): Seat?
 	return raft and raft:FindFirstChild("GuestSeat") :: Seat?
 end
 
+-- The guest raft only shows up in talk-show rounds (in classic it would block the show camera's lower centre).
+function SeatService.setGuestRaftVisible(visible: boolean)
+	local raft = poolMap():FindFirstChild("GuestRaft")
+	if not raft then
+		return
+	end
+	for _, part in raft:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.Transparency = if visible then 0 else 1
+			part.CanCollide = visible
+			part.CanQuery = visible
+		end
+	end
+end
+
 function SeatService.init()
 	for _, seat in SeatService.getSeats() do
 		seat.Disabled = true
@@ -270,6 +285,7 @@ function SeatService.init()
 		guest.Disabled = true
 		watch(guest)
 	end
+	SeatService.setGuestRaftVisible(false)
 end
 
 -- Talk-show mode: the guest sits on the raft facing the panel.
@@ -280,6 +296,7 @@ function SeatService.seatGuest(player: Player): boolean
 	if not (seat and humanoid and humanoid.Health > 0) then
 		return false
 	end
+	SeatService.setGuestRaftVisible(true)
 	assigned[seat] = humanoid
 	seat.Disabled = false
 	humanoid.UseJumpPower = false
@@ -320,6 +337,7 @@ function SeatService.releaseAll()
 		seat.Disabled = true
 	end
 	table.clear(assigned)
+	SeatService.setGuestRaftVisible(false)
 end
 
 -- Throws the player from their chair in an arc into the pool, then kills them.
@@ -1482,14 +1500,30 @@ local function bubbleFor(player: Player): BillboardGui?
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "WordBubble"
 	-- Sized in studs (not pixels) so ten bubbles in the 5-stud chair row never overlap on the show camera.
-	gui.Size = UDim2.fromScale(4.4, 1.3)
-	gui.StudsOffset = Vector3.new(0, 2.4, 0)
+	-- Top 62 %: the word card. Bottom 34 %: the player's name (the default name tag is hidden during rounds).
+	gui.Size = UDim2.fromScale(4.4, 2.2)
+	gui.StudsOffset = Vector3.new(0, 2.6, 0)
 	gui.AlwaysOnTop = true
 	gui.MaxDistance = 120
 	local frame = Instance.new("Frame")
-	frame.Size = UDim2.fromScale(1, 1)
+	frame.Size = UDim2.fromScale(1, 0.62)
 	frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	frame.Parent = gui
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "PlayerName"
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Position = UDim2.fromScale(0, 0.66)
+	nameLabel.Size = UDim2.fromScale(1, 0.34)
+	nameLabel.FontFace = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold)
+	nameLabel.TextScaled = true
+	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	nameLabel.TextStrokeTransparency = 0.4
+	nameLabel.Text = player.DisplayName
+	nameLabel.Parent = gui
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	end
 	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 14)
 	local stroke = Instance.new("UIStroke", frame)
 	stroke.Thickness = 3
@@ -1555,7 +1589,7 @@ function Billboards.alarm(userId: number)
 	frame.BackgroundColor3 = Color3.fromRGB(230, 40, 40)
 	label.TextColor3 = Color3.fromRGB(255, 255, 255)
 	TweenService:Create(gui, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Size = UDim2.fromScale(6.6, 2),
+		Size = UDim2.fromScale(6.6, 3.3),
 	}):Play()
 	task.delay(1.6, function()
 		if bubbles[userId] == gui then
@@ -1567,6 +1601,11 @@ end
 function Billboards.remove(userId: number)
 	local gui = bubbles[userId]
 	if gui then
+		-- Give the default name tag back once the bubble (which carried the name) is gone.
+		local humanoid = gui.Parent and gui.Parent.Parent and gui.Parent.Parent:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+		end
 		gui:Destroy()
 		bubbles[userId] = nil
 	end

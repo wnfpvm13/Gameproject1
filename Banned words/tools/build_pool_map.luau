@@ -154,7 +154,8 @@ guestSeat.Material = Enum.Material.SmoothPlastic
 guestSeat.TopSurface = Enum.SurfaceType.Smooth
 guestSeat.Disabled = true
 guestSeat.Parent = raftModel
-part(raftModel, "Back", Vector3.new(2.8, 2.6, 0.5), raftFacing * CFrame.new(0, 2, 1.5) * CFrame.Angles(math.rad(-12), 0, 0), Color3.fromRGB(230, 70, 90))
+-- Low backrest so the guest's head (and the panel behind) stays visible from the show camera.
+part(raftModel, "Back", Vector3.new(2.8, 1.4, 0.4), raftFacing * CFrame.new(0, 1.4, 1.5) * CFrame.Angles(math.rad(-12), 0, 0), Color3.fromRGB(230, 70, 90))
 raftModel.PrimaryPart = guestSeat
 raftModel.Parent = map
 

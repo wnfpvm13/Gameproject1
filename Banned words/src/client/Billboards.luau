@@ -1,6 +1,7 @@
 --!strict
 -- Word bubbles above heads: other participants show their forbidden word, the local player sees "???".
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 
 local Billboards = {}
 
@@ -78,6 +79,26 @@ function Billboards.show(words: { [string]: string }, participantIds: { number }
 			end
 		end
 	end
+end
+
+-- Elimination: the bubble turns red and swells (위험한 초대's red name card), then disappears.
+function Billboards.alarm(userId: number)
+	local gui = bubbles[userId]
+	if not gui then
+		return
+	end
+	local frame = gui:FindFirstChildOfClass("Frame") :: Frame
+	local label = frame:FindFirstChild("Word") :: TextLabel
+	frame.BackgroundColor3 = Color3.fromRGB(230, 40, 40)
+	label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	TweenService:Create(gui, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Size = UDim2.fromScale(6.6, 2),
+	}):Play()
+	task.delay(1.6, function()
+		if bubbles[userId] == gui then
+			Billboards.remove(userId)
+		end
+	end)
 end
 
 function Billboards.remove(userId: number)

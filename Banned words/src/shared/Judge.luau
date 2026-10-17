@@ -65,6 +65,16 @@ function Judge.isSuspect(word: string, text: string): boolean
 	return string.find(noSpace, word, 1, true) ~= nil
 end
 
+-- Picks the particle by the last syllable's final consonant: josa("영화관", "을", "를") -> "을".
+function Judge.josa(word: string, withFinal: string, withoutFinal: string): string
+	local last = 0
+	for _, code in utf8.codes(word) do
+		last = code
+	end
+	local hasFinal = last >= 0xAC00 and last <= 0xD7A3 and (last - 0xAC00) % 28 ~= 0
+	return if hasFinal then withFinal else withoutFinal
+end
+
 -- "CONFIRMED" | "SUSPECT" | "NONE"
 function Judge.classify(word: string, text: string, aliases: { string }?): string
 	if Judge.isConfirmed(word, text, aliases) then

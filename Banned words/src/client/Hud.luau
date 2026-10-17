@@ -19,6 +19,12 @@ local timerL: TextLabel
 local aliveL: TextLabel
 local voiceL: TextLabel
 local toastL: TextLabel
+local ghostL: TextLabel
+local card: Frame
+local cardTitleL: TextLabel
+local cardQuestionL: TextLabel
+local cardBar: Frame
+local cardDeadline = 0
 
 local function label(parent: Instance, font: Font, size: number, color: Color3): TextLabel
 	local l = Instance.new("TextLabel")
@@ -76,6 +82,69 @@ function Hud.build()
 	toastL.TextStrokeTransparency = 0.3
 	toastL.TextTransparency = 1
 	toastL.TextStrokeTransparency = 1
+
+	ghostL = label(gui, BOLD, 20, Color3.fromRGB(170, 200, 255))
+	ghostL.AnchorPoint = Vector2.new(0.5, 0)
+	ghostL.Position = UDim2.new(0.5, 0, 0, 132)
+	ghostL.Size = UDim2.new(0.6, 0, 0, 28)
+
+	-- Question card: bottom centre, with a draining time bar.
+	card = Instance.new("Frame")
+	card.AnchorPoint = Vector2.new(0.5, 1)
+	card.Position = UDim2.new(0.5, 0, 1, -24)
+	card.Size = UDim2.new(0.55, 0, 0, 110)
+	card.BackgroundColor3 = Color3.fromRGB(255, 248, 225)
+	card.Visible = false
+	card.Parent = gui
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 16)
+	local cardLimit = Instance.new("UISizeConstraint", card)
+	cardLimit.MinSize = Vector2.new(320, 0)
+	cardLimit.MaxSize = Vector2.new(640, 200)
+	cardTitleL = label(card, BOLD, 22, Color3.fromRGB(200, 90, 40))
+	cardTitleL.Position = UDim2.fromScale(0.04, 0.08)
+	cardTitleL.Size = UDim2.fromScale(0.92, 0.3)
+	cardQuestionL = label(card, BOLD, 30, Color3.fromRGB(40, 40, 50))
+	cardQuestionL.Position = UDim2.fromScale(0.04, 0.38)
+	cardQuestionL.Size = UDim2.fromScale(0.92, 0.38)
+	local barBack = Instance.new("Frame")
+	barBack.Position = UDim2.fromScale(0.04, 0.82)
+	barBack.Size = UDim2.fromScale(0.92, 0.08)
+	barBack.BackgroundColor3 = Color3.fromRGB(230, 220, 195)
+	barBack.Parent = card
+	Instance.new("UICorner", barBack).CornerRadius = UDim.new(1, 0)
+	cardBar = Instance.new("Frame")
+	cardBar.Size = UDim2.fromScale(1, 1)
+	cardBar.BackgroundColor3 = Color3.fromRGB(240, 140, 60)
+	cardBar.Parent = barBack
+	Instance.new("UICorner", cardBar).CornerRadius = UDim.new(1, 0)
+end
+
+function Hud.showCard(targetName: string, isMe: boolean, question: string, deadline: number)
+	cardTitleL.Text = if isMe then "나에게 질문! 두 마디 이상으로 대답하세요" else targetName .. "님에게 질문!"
+	cardQuestionL.Text = question
+	cardDeadline = deadline
+	card.Visible = true
+end
+
+function Hud.hideCard()
+	card.Visible = false
+end
+
+-- Called every frame: drains the card's time bar.
+function Hud.tickCard(now: number, total: number)
+	if not card.Visible then
+		return
+	end
+	local left = cardDeadline - now
+	if left <= 0 then
+		card.Visible = false
+		return
+	end
+	cardBar.Size = UDim2.fromScale(math.clamp(left / total, 0, 1), 1)
+end
+
+function Hud.setGhost(on: boolean)
+	ghostL.Text = if on then "유령 모드 · 계속 말해서 다른 사람을 날리면 점수!" else ""
 end
 
 function Hud.setStatus(text: string)

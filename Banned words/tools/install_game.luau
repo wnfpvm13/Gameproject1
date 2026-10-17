@@ -32,6 +32,21 @@ return {
 	TRANSCRIPT_MIN_INTERVAL = 0.25,
 	TRANSCRIPT_MAX_LEN = 200,
 	DUPLICATE_WINDOW = 2,
+
+	-- Question cards (silence breaker): everyone gets about two cards per round.
+	QUESTION_ANSWER_TIME = 10,
+	QUESTION_MIN_INTERVAL = 10,
+	QUESTION_MAX_INTERVAL = 30,
+	QUESTION_STRIKES = 2, -- missed cards before elimination (first one is a warning)
+
+	-- Scoring (session leaderstats): the last other speaker before an elimination gets the assist.
+	ASSIST_WINDOW = 10,
+	SCORE_ASSIST = 1,
+	SCORE_SURVIVE = 3,
+
+	-- Roblox-licensed Pro Sound Effects (public, free).
+	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)
+	SOUND_SPLASH = "rbxassetid://9120585252", -- Water Splash Big Water Splash Dive In 1 (SFX)
 }
 ]====]; s.Parent = shared end
 do local s = Instance.new("ModuleScript"); s.Name = "Judge"; s.Source = [====[--!strict
@@ -99,6 +114,16 @@ function Judge.isSuspect(word: string, text: string): boolean
 	end
 	local noSpace = string.gsub(Judge.normalize(text), "%s", "")
 	return string.find(noSpace, word, 1, true) ~= nil
+end
+
+-- Picks the particle by the last syllable's final consonant: josa("영화관", "을", "를") -> "을".
+function Judge.josa(word: string, withFinal: string, withoutFinal: string): string
+	local last = 0
+	for _, code in utf8.codes(word) do
+		last = code
+	end
+	local hasFinal = last >= 0xAC00 and last <= 0xD7A3 and (last - 0xAC00) % 28 ~= 0
+	return if hasFinal then withFinal else withoutFinal
 end
 
 -- "CONFIRMED" | "SUSPECT" | "NONE"
@@ -322,6 +347,8 @@ return SeatService
 do local s = Instance.new("ModuleScript"); s.Name = "RoundService"; s.Source = [====[--!strict
 -- Round state machine: Lobby -> Countdown -> Assign -> Talk -> Result -> Lobby.
 -- Transcripts come from each client's own AudioSpeechToText (the server cannot process audio) and are judged here.
+-- During Talk, question cards force quiet players to speak; eliminated players stay in as "ghosts" whose speech
+-- still counts toward assists (the last other speaker before an elimination scores).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -330,10 +357,20 @@ local Config = require(shared:WaitForChild("Config"))
 local Judge = require(shared:WaitForChild("Judge"))
 local WordBank = require(script.Parent:WaitForChild("WordBank"))
 local SeatService = require(script.Parent:WaitForChild("SeatService"))
+local Prompts = require(script.Parent:WaitForChild("Prompts"))
 
 local RoundService = {}
 
-type Participant = { player: Player, word: string, aliases: { string }, alive: boolean, eliminatedAt: number? }
+type Participant = {
+	player: Player,
+	word: string,
+	aliases: { string },
+	alive: boolean,
+	lastSpokeAt: number,
+	strikes: number,
+	lastAnswer: string?,
+}
+type Card = { player: Player, answered: boolean }
 
 local remotes: Folder
 local phase = "Lobby"
@@ -341,21 +378,25 @@ local phaseEndsAt = 0
 local message = ""
 local participants: { [Player]: Participant } = {}
 local startedWith = 0
+local roundId = 0
 local lastTranscript: { [Player]: { at: number, text: string } } = {}
+local speechLog: { { player: Player, at: number } } = {}
+local roundAssists: { [Player]: number } = {}
+local activeCard: Card? = nil
 local rng = Random.new()
 
 local function remote(name: string): RemoteEvent
 	return remotes:FindFirstChild(name) :: RemoteEvent
 end
 
-local function aliveCount(): number
-	local n = 0
-	for _, p in participants do
+local function aliveList(): { Player }
+	local list = {}
+	for player, p in participants do
 		if p.alive then
-			n += 1
+			table.insert(list, player)
 		end
 	end
-	return n
+	return list
 end
 
 local function broadcastState()
@@ -393,18 +434,55 @@ local function sendWords(target: Player)
 	remote("Words"):FireClient(target, words)
 end
 
+local function addScore(player: Player, amount: number)
+	local stats = player:FindFirstChild("leaderstats")
+	local value = stats and stats:FindFirstChild("점수") :: IntValue?
+	if value then
+		value.Value += amount
+	end
+end
+
+-- The most recent other participant (alive or ghost) who spoke within the assist window.
+local function assistFor(victim: Player): Player?
+	local now = os.clock()
+	for i = #speechLog, 1, -1 do
+		local entry = speechLog[i]
+		if now - entry.at > Config.ASSIST_WINDOW then
+			break
+		end
+		if entry.player ~= victim and participants[entry.player] then
+			return entry.player
+		end
+	end
+	return nil
+end
+
 local function eliminate(player: Player, reason: string)
 	local p = participants[player]
 	if not p or not p.alive then
 		return
 	end
 	p.alive = false
-	p.eliminatedAt = os.clock()
-	remote("Eliminated"):FireAllClients({ userId = player.UserId, name = player.DisplayName, word = p.word, reason = reason })
-	if reason == "said" then
+	local helper = if reason == "said" then assistFor(player) else nil
+	if helper then
+		roundAssists[helper] = (roundAssists[helper] or 0) + Config.SCORE_ASSIST
+		addScore(helper, Config.SCORE_ASSIST)
+	end
+	remote("Eliminated"):FireAllClients({
+		userId = player.UserId,
+		name = player.DisplayName,
+		word = p.word,
+		reason = reason,
+		assistName = if helper then helper.DisplayName else nil,
+	})
+	if reason == "said" or reason == "silent" then
 		SeatService.launch(player)
 	end
 	broadcastState()
+end
+
+local function isValidAnswer(p: Participant, text: string): boolean
+	return #Judge.eojeols(text) >= 2 and text ~= p.lastAnswer
 end
 
 local function onTranscript(player: Player, text: any)
@@ -412,7 +490,7 @@ local function onTranscript(player: Player, text: any)
 		return
 	end
 	local p = participants[player]
-	if not p or not p.alive then
+	if not p then
 		return
 	end
 	text = string.sub(text, 1, Config.TRANSCRIPT_MAX_LEN)
@@ -425,12 +503,84 @@ local function onTranscript(player: Player, text: any)
 		return
 	end
 	lastTranscript[player] = { at = now, text = text }
+	table.insert(speechLog, { player = player, at = now })
+	if #speechLog > 64 then
+		table.remove(speechLog, 1)
+	end
+	p.lastSpokeAt = now
+	if not p.alive then
+		return -- ghosts only feed the assist log
+	end
 
 	local verdict = Judge.classify(p.word, text, p.aliases)
 	if verdict == "CONFIRMED" then
 		eliminate(player, "said")
+		return
 	elseif verdict == "SUSPECT" then
 		remote("Suspect"):FireAllClients({ userId = player.UserId, name = player.DisplayName })
+	end
+
+	local card = activeCard
+	if card and card.player == player and not card.answered and isValidAnswer(p, text) then
+		card.answered = true
+		p.lastAnswer = text
+		remote("CardResult"):FireAllClients({ userId = player.UserId, name = player.DisplayName, outcome = "ok" })
+	end
+end
+
+local function roundOver(): boolean
+	local alive = #aliveList()
+	return alive == 0 or (startedWith >= 2 and alive <= 1)
+end
+
+local function talking(myRound: number): boolean
+	return phase == "Talk" and roundId == myRound and not roundOver()
+end
+
+-- Question cards: the quietest alive player gets a question and must answer in two or more words.
+local function runCards(myRound: number)
+	local lastTarget: Player? = nil
+	while talking(myRound) do
+		local interval = math.clamp(Config.TALK_TIME / math.max(#aliveList() * 2, 1), Config.QUESTION_MIN_INTERVAL, Config.QUESTION_MAX_INTERVAL)
+		task.wait(interval)
+		if not talking(myRound) then
+			return
+		end
+		local alive = aliveList()
+		table.sort(alive, function(a, b)
+			return participants[a].lastSpokeAt < participants[b].lastSpokeAt
+		end)
+		local target = alive[1]
+		if target == lastTarget and #alive > 1 then
+			target = alive[2]
+		end
+		lastTarget = target
+		local card: Card = { player = target, answered = false }
+		activeCard = card
+		remote("QuestionCard"):FireAllClients({
+			userId = target.UserId,
+			name = target.DisplayName,
+			question = Prompts.question(rng),
+			deadline = workspace:GetServerTimeNow() + Config.QUESTION_ANSWER_TIME,
+		})
+		local started = os.clock()
+		while os.clock() - started < Config.QUESTION_ANSWER_TIME and not card.answered and talking(myRound) do
+			local p = participants[target]
+			if not (p and p.alive) then
+				break
+			end
+			task.wait(0.1)
+		end
+		activeCard = nil
+		local p = participants[target]
+		if p and p.alive and not card.answered and talking(myRound) then
+			p.strikes += 1
+			local out = p.strikes >= Config.QUESTION_STRIKES
+			remote("CardResult"):FireAllClients({ userId = target.UserId, name = target.DisplayName, outcome = if out then "out" else "warn" })
+			if out then
+				eliminate(target, "silent")
+			end
+		end
 	end
 end
 
@@ -454,11 +604,6 @@ local function eligiblePlayers(): { Player }
 	return list
 end
 
-local function roundOver(): boolean
-	local alive = aliveCount()
-	return alive == 0 or (startedWith >= 2 and alive <= 1)
-end
-
 local function runRound()
 	-- Countdown (cancelled if players drop below the minimum).
 	setPhase("Countdown", Config.LOBBY_COUNTDOWN, "곧 시작해요")
@@ -471,6 +616,7 @@ local function runRound()
 	end
 
 	-- Assign seats and words.
+	roundId += 1
 	for i = #players, 2, -1 do
 		local j = rng:NextInteger(1, i)
 		players[i], players[j] = players[j], players[i]
@@ -488,9 +634,18 @@ local function runRound()
 	local entries = WordBank.draw(#seatedPlayers, rng)
 	table.clear(participants)
 	table.clear(lastTranscript)
+	table.clear(speechLog)
+	table.clear(roundAssists)
 	for i, player in seatedPlayers do
 		local entry = entries[i]
-		participants[player] = { player = player, word = entry.word, aliases = entry.aliases, alive = true }
+		participants[player] = {
+			player = player,
+			word = entry.word,
+			aliases = entry.aliases,
+			alive = true,
+			lastSpokeAt = 0,
+			strikes = 0,
+		}
 		local humanoid = (player.Character :: Model):FindFirstChildOfClass("Humanoid") :: Humanoid
 		humanoid.Died:Once(function()
 			eliminate(player, "died")
@@ -503,18 +658,34 @@ local function runRound()
 	end
 	waitPhase()
 
-	-- Talk.
-	setPhase("Talk", Config.TALK_TIME, "대화 시작!")
+	-- Talk (question cards run alongside).
+	local now = os.clock()
+	for _, p in participants do
+		p.lastSpokeAt = now + rng:NextNumber() -- random tie-break for the first card
+	end
+	setPhase("Talk", Config.TALK_TIME, "대화 주제: " .. Prompts.topic(rng))
+	task.spawn(runCards, roundId)
 	waitPhase(roundOver)
 
-	-- Result.
+	-- Result: survivors score, the round's best assister is named.
 	local winners = {}
 	for player, p in participants do
 		if p.alive then
 			table.insert(winners, player.DisplayName)
+			addScore(player, Config.SCORE_SURVIVE)
 		end
 	end
 	local result = if #winners == 0 then "모두 탈락! 무승부" else table.concat(winners, ", ") .. " 승리!"
+	local best, bestScore = nil, 0
+	for player, score in roundAssists do
+		if score > bestScore then
+			best, bestScore = player, score
+		end
+	end
+	if best then
+		result ..= string.format(" · 유도왕 %s (%d점)", best.DisplayName, bestScore)
+	end
+	activeCard = nil
 	SeatService.releaseAll()
 	setPhase("Result", Config.RESULT_TIME, result)
 	local reveal = {}
@@ -526,12 +697,25 @@ local function runRound()
 	table.clear(participants)
 end
 
+local function setupLeaderstats(player: Player)
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	local score = Instance.new("IntValue")
+	score.Name = "점수"
+	score.Parent = stats
+	stats.Parent = player
+end
+
 function RoundService.start(remoteFolder: Folder)
 	remotes = remoteFolder
 	SeatService.init()
 	remote("Transcript").OnServerEvent:Connect(onTranscript)
 
+	for _, player in Players:GetPlayers() do
+		setupLeaderstats(player)
+	end
 	Players.PlayerAdded:Connect(function(player)
+		setupLeaderstats(player)
 		task.defer(function()
 			broadcastState()
 			if phase == "Assign" or phase == "Talk" then
@@ -545,6 +729,7 @@ function RoundService.start(remoteFolder: Folder)
 			participants[player] = nil
 		end
 		lastTranscript[player] = nil
+		roundAssists[player] = nil
 	end)
 
 	task.spawn(function()
@@ -600,13 +785,65 @@ end
 
 return VoiceService
 ]====]; s.Parent = server end
+do local s = Instance.new("ModuleScript"); s.Name = "Prompts"; s.Source = [====[--!strict
+-- Round topics and question cards: give strangers something to talk about, and break silence
+-- (staying quiet is the safest strategy in a forbidden-word game, so the cards force everyone to speak).
+
+local Prompts = {}
+
+local TOPICS = {
+	"여름방학에 꼭 하고 싶은 것",
+	"요즘 제일 맛있게 먹은 음식",
+	"학교나 학원에서 있었던 웃긴 일",
+	"무인도에 가져갈 물건 세 가지",
+	"키우고 싶은 동물과 이름",
+	"주말에 친구랑 가고 싶은 곳",
+	"최근에 본 재밌는 영상",
+	"내가 만약 하루 동안 투명인간이라면",
+	"제일 좋아하는 계절과 이유",
+	"로블록스에서 제일 좋아하는 게임",
+}
+
+local QUESTIONS = {
+	"어제 저녁에 뭐 먹었어요?",
+	"요즘 제일 좋아하는 노래는?",
+	"아침에 일어나서 제일 먼저 하는 일은?",
+	"가장 가 보고 싶은 나라와 이유는?",
+	"용돈이 생기면 뭐부터 살 거예요?",
+	"제일 무서웠던 경험을 말해 주세요",
+	"좋아하는 과목과 싫어하는 과목은?",
+	"지금 방에 있는 물건 세 가지를 말해 주세요",
+	"초능력 하나를 고른다면?",
+	"오늘 하루를 한 문장으로 말해 주세요",
+	"좋아하는 간식을 설명해 주세요",
+	"친구에게 받고 싶은 선물은?",
+	"비 오는 날 하면 좋은 것은?",
+	"어렸을 때 꿈은 뭐였어요?",
+	"최근에 웃었던 일은?",
+	"가장 좋아하는 캐릭터와 이유는?",
+}
+
+local function pick<T>(list: { T }, rng: Random): T
+	return list[rng:NextInteger(1, #list)]
+end
+
+function Prompts.topic(rng: Random): string
+	return pick(TOPICS, rng)
+end
+
+function Prompts.question(rng: Random): string
+	return pick(QUESTIONS, rng)
+end
+
+return Prompts
+]====]; s.Parent = server end
 do local s = Instance.new("Script"); s.Name = "Main"; s.Source = [====[-- 금칙어 게임 Korean server entry point: creates the remotes, then runs rounds forever.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
 local remotes = shared:FindFirstChild("Remotes") or Instance.new("Folder")
 remotes.Name = "Remotes"
-for _, name in { "RoundState", "Words", "Transcript", "Eliminated", "Suspect" } do
+for _, name in { "RoundState", "Words", "Transcript", "Eliminated", "Suspect", "QuestionCard", "CardResult" } do
 	if not remotes:FindFirstChild(name) then
 		local event = Instance.new("RemoteEvent")
 		event.Name = name
@@ -625,8 +862,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
 
-local remotes = ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Remotes")
+local shared = ReplicatedStorage:WaitForChild("BannedWords")
+local remotes = shared:WaitForChild("Remotes")
+local Config = require(shared:WaitForChild("Config"))
+local Judge = require(shared:WaitForChild("Judge"))
 local Hud = require(script:WaitForChild("Hud"))
+local Fx = require(script:WaitForChild("Fx"))
 local Billboards = require(script:WaitForChild("Billboards"))
 local Speech = require(script:WaitForChild("Speech"))
 local ShowCamera = require(script:WaitForChild("ShowCamera"))
@@ -649,6 +890,10 @@ local function isAlive(userId: number): boolean
 	return table.find(state.alive, userId) ~= nil
 end
 
+local function isParticipant(userId: number): boolean
+	return table.find(state.participants, userId) ~= nil
+end
+
 local function setResetAllowed(allowed: boolean)
 	pcall(function()
 		StarterGui:SetCore("ResetButtonCallback", allowed)
@@ -668,12 +913,14 @@ local function applySeatLock()
 end
 
 Hud.build()
+Fx.init()
 FlatVoice.start()
 Speech.onStatus(Hud.setVoice)
 task.spawn(Speech.start, player:WaitForChild("PlayerGui"))
 
+-- Eliminated participants keep sending too: as ghosts their speech counts toward assists.
 Speech.onText(function(text)
-	if state.phase == "Talk" and isAlive(player.UserId) then
+	if state.phase == "Talk" and isParticipant(player.UserId) then
 		remotes.Transcript:FireServer(text)
 	end
 end)
@@ -693,6 +940,10 @@ remotes.RoundState.OnClientEvent:Connect(function(newState)
 		Billboards.show(lastWords, state.alive)
 	end
 	ShowCamera.set(state.phase == "Assign" or state.phase == "Talk")
+	Hud.setGhost(state.phase == "Talk" and isParticipant(player.UserId) and not isAlive(player.UserId))
+	if state.phase ~= "Talk" then
+		Hud.hideCard()
+	end
 	applySeatLock()
 end)
 
@@ -702,15 +953,36 @@ remotes.Words.OnClientEvent:Connect(function(words)
 end)
 
 remotes.Eliminated.OnClientEvent:Connect(function(info)
-	Billboards.remove(info.userId)
-	if info.reason == "said" then
-		local who = if info.userId == player.UserId then "내가" else info.name .. "님이"
-		Hud.toast(string.format("삐! %s 금칙어 \"%s\"를 말했어요", who, info.word), "elim")
+	local who = if info.userId == player.UserId then "내가" else info.name .. "님이"
+	if info.reason == "said" or info.reason == "silent" then
+		Billboards.alarm(info.userId)
+		Fx.elimination(Players:GetPlayerByUserId(info.userId))
+		local text = if info.reason == "said"
+			then string.format("삐! %s 금칙어 \"%s\"%s 말했어요", who, info.word, Judge.josa(info.word, "을", "를"))
+			else string.format("삐! %s 질문에 대답하지 않았어요 (금칙어 \"%s\")", who, info.word)
+		if info.assistName then
+			text ..= string.format("\n유도: %s +%d점", info.assistName, Config.SCORE_ASSIST)
+		end
+		Hud.toast(text, "elim")
+	else
+		Billboards.remove(info.userId)
 	end
 end)
 
 remotes.Suspect.OnClientEvent:Connect(function(info)
 	Hud.toast(string.format("아슬아슬! %s", info.name), "near")
+end)
+
+remotes.QuestionCard.OnClientEvent:Connect(function(info)
+	Hud.showCard(info.name, info.userId == player.UserId, info.question, info.deadline)
+end)
+
+remotes.CardResult.OnClientEvent:Connect(function(info)
+	Hud.hideCard()
+	if info.outcome == "warn" then
+		local who = if info.userId == player.UserId then "나" else info.name
+		Hud.toast(string.format("경고! %s · 한 번 더 대답 안 하면 탈락", who), "near")
+	end
 end)
 
 player.CharacterAdded:Connect(function()
@@ -723,8 +995,10 @@ player.CharacterAdded:Connect(function()
 end)
 
 RunService.Heartbeat:Connect(function()
-	local remaining = state.endsAt - workspace:GetServerTimeNow()
+	local now = workspace:GetServerTimeNow()
+	local remaining = state.endsAt - now
 	Hud.setTimer(if state.phase ~= "Lobby" and remaining > 0 then remaining else nil)
+	Hud.tickCard(now, Config.QUESTION_ANSWER_TIME)
 end)
 ]====]
 do local s = Instance.new("ModuleScript"); s.Name = "Hud"; s.Source = [====[--!strict
@@ -748,6 +1022,12 @@ local timerL: TextLabel
 local aliveL: TextLabel
 local voiceL: TextLabel
 local toastL: TextLabel
+local ghostL: TextLabel
+local card: Frame
+local cardTitleL: TextLabel
+local cardQuestionL: TextLabel
+local cardBar: Frame
+local cardDeadline = 0
 
 local function label(parent: Instance, font: Font, size: number, color: Color3): TextLabel
 	local l = Instance.new("TextLabel")
@@ -805,6 +1085,69 @@ function Hud.build()
 	toastL.TextStrokeTransparency = 0.3
 	toastL.TextTransparency = 1
 	toastL.TextStrokeTransparency = 1
+
+	ghostL = label(gui, BOLD, 20, Color3.fromRGB(170, 200, 255))
+	ghostL.AnchorPoint = Vector2.new(0.5, 0)
+	ghostL.Position = UDim2.new(0.5, 0, 0, 132)
+	ghostL.Size = UDim2.new(0.6, 0, 0, 28)
+
+	-- Question card: bottom centre, with a draining time bar.
+	card = Instance.new("Frame")
+	card.AnchorPoint = Vector2.new(0.5, 1)
+	card.Position = UDim2.new(0.5, 0, 1, -24)
+	card.Size = UDim2.new(0.55, 0, 0, 110)
+	card.BackgroundColor3 = Color3.fromRGB(255, 248, 225)
+	card.Visible = false
+	card.Parent = gui
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 16)
+	local cardLimit = Instance.new("UISizeConstraint", card)
+	cardLimit.MinSize = Vector2.new(320, 0)
+	cardLimit.MaxSize = Vector2.new(640, 200)
+	cardTitleL = label(card, BOLD, 22, Color3.fromRGB(200, 90, 40))
+	cardTitleL.Position = UDim2.fromScale(0.04, 0.08)
+	cardTitleL.Size = UDim2.fromScale(0.92, 0.3)
+	cardQuestionL = label(card, BOLD, 30, Color3.fromRGB(40, 40, 50))
+	cardQuestionL.Position = UDim2.fromScale(0.04, 0.38)
+	cardQuestionL.Size = UDim2.fromScale(0.92, 0.38)
+	local barBack = Instance.new("Frame")
+	barBack.Position = UDim2.fromScale(0.04, 0.82)
+	barBack.Size = UDim2.fromScale(0.92, 0.08)
+	barBack.BackgroundColor3 = Color3.fromRGB(230, 220, 195)
+	barBack.Parent = card
+	Instance.new("UICorner", barBack).CornerRadius = UDim.new(1, 0)
+	cardBar = Instance.new("Frame")
+	cardBar.Size = UDim2.fromScale(1, 1)
+	cardBar.BackgroundColor3 = Color3.fromRGB(240, 140, 60)
+	cardBar.Parent = barBack
+	Instance.new("UICorner", cardBar).CornerRadius = UDim.new(1, 0)
+end
+
+function Hud.showCard(targetName: string, isMe: boolean, question: string, deadline: number)
+	cardTitleL.Text = if isMe then "나에게 질문! 두 마디 이상으로 대답하세요" else targetName .. "님에게 질문!"
+	cardQuestionL.Text = question
+	cardDeadline = deadline
+	card.Visible = true
+end
+
+function Hud.hideCard()
+	card.Visible = false
+end
+
+-- Called every frame: drains the card's time bar.
+function Hud.tickCard(now: number, total: number)
+	if not card.Visible then
+		return
+	end
+	local left = cardDeadline - now
+	if left <= 0 then
+		card.Visible = false
+		return
+	end
+	cardBar.Size = UDim2.fromScale(math.clamp(left / total, 0, 1), 1)
+end
+
+function Hud.setGhost(on: boolean)
+	ghostL.Text = if on then "유령 모드 · 계속 말해서 다른 사람을 날리면 점수!" else ""
 end
 
 function Hud.setStatus(text: string)
@@ -851,6 +1194,7 @@ return Hud
 do local s = Instance.new("ModuleScript"); s.Name = "Billboards"; s.Source = [====[--!strict
 -- Word bubbles above heads: other participants show their forbidden word, the local player sees "???".
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 
 local Billboards = {}
 
@@ -928,6 +1272,26 @@ function Billboards.show(words: { [string]: string }, participantIds: { number }
 			end
 		end
 	end
+end
+
+-- Elimination: the bubble turns red and swells (위험한 초대's red name card), then disappears.
+function Billboards.alarm(userId: number)
+	local gui = bubbles[userId]
+	if not gui then
+		return
+	end
+	local frame = gui:FindFirstChildOfClass("Frame") :: Frame
+	local label = frame:FindFirstChild("Word") :: TextLabel
+	frame.BackgroundColor3 = Color3.fromRGB(230, 40, 40)
+	label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	TweenService:Create(gui, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Size = UDim2.fromScale(6.6, 2),
+	}):Play()
+	task.delay(1.6, function()
+		if bubbles[userId] == gui then
+			Billboards.remove(userId)
+		end
+	end)
 end
 
 function Billboards.remove(userId: number)
@@ -1097,6 +1461,102 @@ function FlatVoice.start()
 end
 
 return FlatVoice
+]====]; s.Parent = client end
+do local s = Instance.new("ModuleScript"); s.Name = "Fx"; s.Source = [====[--!strict
+-- Elimination effects (KBS 위험한 초대 flying-chair style): buzzer, red screen flash, splash when the body hits the water.
+local Players = game:GetService("Players")
+local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
+
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("BannedWords"):WaitForChild("Config"))
+
+local Fx = {}
+
+local flash: Frame
+local buzzer: Sound
+
+function Fx.init()
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "BannedWordsFx"
+	gui.IgnoreGuiInset = true
+	gui.ResetOnSpawn = false
+	gui.DisplayOrder = 10
+	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	flash = Instance.new("Frame")
+	flash.Size = UDim2.fromScale(1, 1)
+	flash.BackgroundColor3 = Color3.fromRGB(255, 40, 40)
+	flash.BackgroundTransparency = 1
+	flash.BorderSizePixel = 0
+	flash.Parent = gui
+
+	buzzer = Instance.new("Sound")
+	buzzer.Name = "Buzzer"
+	buzzer.SoundId = Config.SOUND_BUZZER
+	buzzer.Volume = 0.6
+	buzzer.Parent = SoundService
+end
+
+local function redFlash()
+	flash.BackgroundTransparency = 0.55
+	TweenService:Create(flash, TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
+end
+
+local function splashAt(position: Vector3)
+	local anchor = Instance.new("Part")
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanQuery = false
+	anchor.CanTouch = false
+	anchor.Transparency = 1
+	anchor.Size = Vector3.new(1, 1, 1)
+	anchor.Position = position
+	anchor.Parent = workspace
+
+	local drops = Instance.new("ParticleEmitter")
+	drops.Color = ColorSequence.new(Color3.fromRGB(220, 245, 255))
+	drops.LightEmission = 0.3
+	drops.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.6), NumberSequenceKeypoint.new(1, 0) })
+	drops.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) })
+	drops.Lifetime = NumberRange.new(0.7, 1.2)
+	drops.Speed = NumberRange.new(22, 38)
+	drops.SpreadAngle = Vector2.new(28, 28)
+	drops.Acceleration = Vector3.new(0, -70, 0)
+	drops.EmissionDirection = Enum.NormalId.Top
+	drops.Rate = 0
+	drops.Parent = anchor
+	drops:Emit(70)
+
+	local sound = Instance.new("Sound")
+	sound.SoundId = Config.SOUND_SPLASH
+	sound.Volume = 0.9
+	sound.RollOffMaxDistance = 400
+	sound.Parent = anchor
+	sound:Play()
+
+	task.delay(4, function()
+		anchor:Destroy()
+	end)
+end
+
+-- Called when anyone is launched: buzzer + red flash now, splash where the body lands.
+function Fx.elimination(player: Player?)
+	buzzer:Play()
+	redFlash()
+	local character = player and player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root then
+		return
+	end
+	local map = workspace:FindFirstChild("PoolMap")
+	local center = map and map:FindFirstChild("PoolCenter") :: BasePart?
+	local waterY = if center then center.Position.Y else -1.5
+	task.delay(Config.LAUNCH_FLIGHT_TIME, function()
+		local p = if root.Parent then root.Position else Vector3.zero
+		splashAt(Vector3.new(p.X, waterY, p.Z))
+	end)
+end
+
+return Fx
 ]====]; s.Parent = client end
 shared.Parent = RS
 server.Parent = SSS

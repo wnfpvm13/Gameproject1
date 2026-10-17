@@ -4,8 +4,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
 
-local remotes = ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Remotes")
+local shared = ReplicatedStorage:WaitForChild("BannedWords")
+local remotes = shared:WaitForChild("Remotes")
+local Config = require(shared:WaitForChild("Config"))
+local Judge = require(shared:WaitForChild("Judge"))
 local Hud = require(script:WaitForChild("Hud"))
+local Fx = require(script:WaitForChild("Fx"))
 local Billboards = require(script:WaitForChild("Billboards"))
 local Speech = require(script:WaitForChild("Speech"))
 local ShowCamera = require(script:WaitForChild("ShowCamera"))
@@ -28,6 +32,10 @@ local function isAlive(userId: number): boolean
 	return table.find(state.alive, userId) ~= nil
 end
 
+local function isParticipant(userId: number): boolean
+	return table.find(state.participants, userId) ~= nil
+end
+
 local function setResetAllowed(allowed: boolean)
 	pcall(function()
 		StarterGui:SetCore("ResetButtonCallback", allowed)
@@ -47,12 +55,14 @@ local function applySeatLock()
 end
 
 Hud.build()
+Fx.init()
 FlatVoice.start()
 Speech.onStatus(Hud.setVoice)
 task.spawn(Speech.start, player:WaitForChild("PlayerGui"))
 
+-- Eliminated participants keep sending too: as ghosts their speech counts toward assists.
 Speech.onText(function(text)
-	if state.phase == "Talk" and isAlive(player.UserId) then
+	if state.phase == "Talk" and isParticipant(player.UserId) then
 		remotes.Transcript:FireServer(text)
 	end
 end)
@@ -72,6 +82,10 @@ remotes.RoundState.OnClientEvent:Connect(function(newState)
 		Billboards.show(lastWords, state.alive)
 	end
 	ShowCamera.set(state.phase == "Assign" or state.phase == "Talk")
+	Hud.setGhost(state.phase == "Talk" and isParticipant(player.UserId) and not isAlive(player.UserId))
+	if state.phase ~= "Talk" then
+		Hud.hideCard()
+	end
 	applySeatLock()
 end)
 
@@ -81,15 +95,36 @@ remotes.Words.OnClientEvent:Connect(function(words)
 end)
 
 remotes.Eliminated.OnClientEvent:Connect(function(info)
-	Billboards.remove(info.userId)
-	if info.reason == "said" then
-		local who = if info.userId == player.UserId then "내가" else info.name .. "님이"
-		Hud.toast(string.format("삐! %s 금칙어 \"%s\"를 말했어요", who, info.word), "elim")
+	local who = if info.userId == player.UserId then "내가" else info.name .. "님이"
+	if info.reason == "said" or info.reason == "silent" then
+		Billboards.alarm(info.userId)
+		Fx.elimination(Players:GetPlayerByUserId(info.userId))
+		local text = if info.reason == "said"
+			then string.format("삐! %s 금칙어 \"%s\"%s 말했어요", who, info.word, Judge.josa(info.word, "을", "를"))
+			else string.format("삐! %s 질문에 대답하지 않았어요 (금칙어 \"%s\")", who, info.word)
+		if info.assistName then
+			text ..= string.format("\n유도: %s +%d점", info.assistName, Config.SCORE_ASSIST)
+		end
+		Hud.toast(text, "elim")
+	else
+		Billboards.remove(info.userId)
 	end
 end)
 
 remotes.Suspect.OnClientEvent:Connect(function(info)
 	Hud.toast(string.format("아슬아슬! %s", info.name), "near")
+end)
+
+remotes.QuestionCard.OnClientEvent:Connect(function(info)
+	Hud.showCard(info.name, info.userId == player.UserId, info.question, info.deadline)
+end)
+
+remotes.CardResult.OnClientEvent:Connect(function(info)
+	Hud.hideCard()
+	if info.outcome == "warn" then
+		local who = if info.userId == player.UserId then "나" else info.name
+		Hud.toast(string.format("경고! %s · 한 번 더 대답 안 하면 탈락", who), "near")
+	end
 end)
 
 player.CharacterAdded:Connect(function()
@@ -102,6 +137,8 @@ player.CharacterAdded:Connect(function()
 end)
 
 RunService.Heartbeat:Connect(function()
-	local remaining = state.endsAt - workspace:GetServerTimeNow()
+	local now = workspace:GetServerTimeNow()
+	local remaining = state.endsAt - now
 	Hud.setTimer(if state.phase ~= "Lobby" and remaining > 0 then remaining else nil)
+	Hud.tickCard(now, Config.QUESTION_ANSWER_TIME)
 end)

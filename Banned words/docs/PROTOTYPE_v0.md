@@ -53,3 +53,17 @@
 클라이언트(`src/client/FlatVoice.luau`) 양쪽에서 곡선을 `{0 = 1, 2000 = 1}`로 바꿨다.
 확인(실계정 1인): 곡선 `{0=1,2000=1}`, 120스터드 떨어진 리스너 기준 audibility 1.
 스튜디오 다인 테스트 계정(Player1~3)은 음성 자격이 없어 Emitter가 안 생기므로 다인 확인은 실제 서버에서 해야 함.
+
+## 추가: 질문 카드 · 발동 연출 · 유령 훼방꾼 (2026-10-17)
+
+- 질문·주제 카드(`src/server/Prompts.luau`, `RoundService.runCards`): 대화 시작 때 "대화 주제"를 띄우고, 간격
+  clamp(240 / (생존 × 2), 10, 30)초마다 가장 오래 말 안 한 생존자에게 질문. 10초 안에 두 어절 이상 + 직전 답과 다른 문장이면 통과,
+  못 하면 1번째 경고 / 2번째 탈락(reason "silent", 발사).
+- 발동 연출(`src/client/Fx.luau`, `Billboards.alarm`): 버저(Pro Sound Effects "Alarm Buzzer 5", 9113085764) + 화면 빨간 번쩍임,
+  말풍선이 빨간 바탕으로 커졌다가 사라짐, 1.2초 뒤 착수 지점에 물보라 파티클 + "Water Splash Big Dive In 1"(9120585252).
+- 유령 훼방꾼: 탈락자도 대화 중 받아쓰기를 계속 보냄(판정은 안 함). 탈락 직전 10초 안에 마지막으로 말한 다른 사람(생존자·유령)이
+  유도 +1. 생존 +3. 점수판 `leaderstats.점수`(세션 누적). 결과 화면에 "유도왕".
+- 확인: 1인(주제 표시, 30초 카드 → 경고 → 탈락, 효과음 로드 OK), 2인 로컬(카드 통과 — 한 단어 "네"는 불통과,
+  유도 Player1 +1 → 점수 4, "Player1 승리! · 유도왕 Player1 (1점)").
+- 주의: 클라우드 플레이스에서 `ExecuteMultiplayerTestAsync`는 **Roblox에 저장된 버전**으로 돈다(편집 중인 코드가 아님).
+  다인 테스트는 `rojo build default.project.json -o .qa/game_check.rbxlx` → 로컬 파일 열기 → 맵 빌드 → 다인 테스트.

@@ -19,7 +19,8 @@
         "RoundService": { "$path": "src/server/RoundService.luau" },
         "SeatService": { "$path": "src/server/SeatService.luau" },
         "WordBank": { "$path": "src/server/WordBank.luau" },
-        "VoiceService": { "$path": "src/server/VoiceService.luau" }
+        "VoiceService": { "$path": "src/server/VoiceService.luau" },
+        "Prompts": { "$path": "src/server/Prompts.luau" }
       }
     },
     "StarterPlayer": {
@@ -31,7 +32,8 @@
           "Billboards": { "$path": "src/client/Billboards.luau" },
           "Speech": { "$path": "src/client/Speech.luau" },
           "ShowCamera": { "$path": "src/client/ShowCamera.luau" },
-          "FlatVoice": { "$path": "src/client/FlatVoice.luau" }
+          "FlatVoice": { "$path": "src/client/FlatVoice.luau" },
+          "Fx": { "$path": "src/client/Fx.luau" }
         }
       }
     },

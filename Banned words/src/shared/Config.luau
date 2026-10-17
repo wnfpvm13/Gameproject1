@@ -20,4 +20,19 @@ return {
 	TRANSCRIPT_MIN_INTERVAL = 0.25,
 	TRANSCRIPT_MAX_LEN = 200,
 	DUPLICATE_WINDOW = 2,
+
+	-- Question cards (silence breaker): everyone gets about two cards per round.
+	QUESTION_ANSWER_TIME = 10,
+	QUESTION_MIN_INTERVAL = 10,
+	QUESTION_MAX_INTERVAL = 30,
+	QUESTION_STRIKES = 2, -- missed cards before elimination (first one is a warning)
+
+	-- Scoring (session leaderstats): the last other speaker before an elimination gets the assist.
+	ASSIST_WINDOW = 10,
+	SCORE_ASSIST = 1,
+	SCORE_SURVIVE = 3,
+
+	-- Roblox-licensed Pro Sound Effects (public, free).
+	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)
+	SOUND_SPLASH = "rbxassetid://9120585252", -- Water Splash Big Water Splash Dive In 1 (SFX)
 }

@@ -102,6 +102,32 @@ wire.SourceInstance = input
 wire.TargetInstance = stt
 wire.Parent = stt
 
+-- Diagnostics: tells "no mic audio at all" (voice not connected) apart from "audio arrives but no text".
+local diagL = label("Diag", 0.945, 0.045, 16, grey, false)
+local analyzer = Instance.new("AudioAnalyzer")
+analyzer.Parent = gui
+local analyzerWire = Instance.new("Wire")
+analyzerWire.SourceInstance = input
+analyzerWire.TargetInstance = analyzer
+analyzerWire.Parent = analyzer
+local voiceAllowed = "확인 중"
+task.spawn(function()
+	local ok, allowed = pcall(function()
+		return game:GetService("VoiceChatService"):IsVoiceEnabledForUserIdAsync(player.UserId)
+	end)
+	voiceAllowed = if not ok then "오류" elseif allowed then "O" else "X"
+end)
+local peak = 0
+task.spawn(function()
+	while gui.Parent do
+		peak = math.max(peak * 0.9, analyzer.PeakLevel)
+		local bars = string.rep("■", math.clamp(math.floor(peak * 20 + 0.5), 0, 10))
+		diagL.Text = string.format("진단 · 음성 허용 %s · 입력 %s · 음소거 %s · 마이크 레벨 %s %.2f",
+			voiceAllowed, if input.Active then "O" else "X", if input.Muted then "O" else "X", bars, peak)
+		task.wait(0.1)
+	end
+end)
+
 -- Flow -------------------------------------------------------------------------
 local idx = 1
 local state = "listening" -- listening | judged | waiting_choice | finished
@@ -113,7 +139,11 @@ local token = 0
 local counts = { CONFIRMED = 0, SUSPECT = 0, NONE = 0, EMPTY = 0 }
 
 local function refreshMic()
-	if input.Muted then
+	-- Since 2026-01 voice starts disconnected and its controls live in the in-experience settings menu.
+	if not input.Active then
+		micL.Text = "음성 채팅이 연결 안 됨 · 왼쪽 위 ≡ 메뉴(또는 ESC) → 설정 → 음성 채팅 연결"
+		micL.TextColor3 = red
+	elseif input.Muted then
 		micL.Text = "마이크 꺼짐 · 왼쪽 위 마이크 아이콘을 눌러 켜 주세요"
 		micL.TextColor3 = red
 	elseif stt.VoiceDetected then
@@ -255,6 +285,7 @@ stt:GetPropertyChangedSignal("VoiceDetected"):Connect(function()
 	end)
 end)
 input:GetPropertyChangedSignal("Muted"):Connect(refreshMic)
+input:GetPropertyChangedSignal("Active"):Connect(refreshMic)
 
 retryB.Activated:Connect(function()
 	if state ~= "finished" then

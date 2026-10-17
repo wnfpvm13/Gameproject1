@@ -24,8 +24,14 @@ function SeatService.getSeats(): { Seat }
 			table.insert(seats, seat)
 		end
 	end
+	-- Middle chairs first, so a small group still sits in the centre of the show camera.
+	local middle = (#seats + 1) / 2
+	local function rank(seat: Seat): number
+		local index = seat:GetAttribute("SeatIndex") or 0
+		return math.abs(index - middle) * 2 + (if index < middle then 0 else 1)
+	end
 	table.sort(seats, function(a, b)
-		return (a:GetAttribute("SeatIndex") or 0) < (b:GetAttribute("SeatIndex") or 0)
+		return rank(a) < rank(b)
 	end)
 	return seats
 end
@@ -98,7 +104,7 @@ function SeatService.releaseAll()
 	table.clear(assigned)
 end
 
--- Throws the player from their chair in an arc that lands near the pool centre, then kills them.
+-- Throws the player from their chair in an arc into the pool, then kills them.
 function SeatService.launch(player: Player)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -123,8 +129,10 @@ function SeatService.launch(player: Player)
 
 	task.spawn(function()
 		RunService.Heartbeat:Wait()
+		-- Straight ahead from the chair row into the pool, so the show camera sees the whole flight.
 		local start = root.Position
-		local target = SeatService.poolCenter() + Vector3.new(math.random(-6, 6), 0, math.random(-4, 4))
+		local center = SeatService.poolCenter()
+		local target = Vector3.new(start.X + math.random(-3, 3), center.Y, center.Z + math.random(-4, 4))
 		local t = Config.LAUNCH_FLIGHT_TIME
 		local g = workspace.Gravity
 		local horizontal = Vector3.new(target.X - start.X, 0, target.Z - start.Z) / t

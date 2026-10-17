@@ -22,8 +22,9 @@ local function bubbleFor(player: Player): BillboardGui?
 	end
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "WordBubble"
-	gui.Size = UDim2.fromOffset(200, 56)
-	gui.StudsOffset = Vector3.new(0, 2.6, 0)
+	-- Sized in studs (not pixels) so ten bubbles in the 5-stud chair row never overlap on the show camera.
+	gui.Size = UDim2.fromScale(4.4, 1.3)
+	gui.StudsOffset = Vector3.new(0, 2.4, 0)
 	gui.AlwaysOnTop = true
 	gui.MaxDistance = 120
 	local frame = Instance.new("Frame")

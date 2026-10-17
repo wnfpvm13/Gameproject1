@@ -28,7 +28,8 @@
           "$path": "src/client/Main.client.luau",
           "Hud": { "$path": "src/client/Hud.luau" },
           "Billboards": { "$path": "src/client/Billboards.luau" },
-          "Speech": { "$path": "src/client/Speech.luau" }
+          "Speech": { "$path": "src/client/Speech.luau" },
+          "ShowCamera": { "$path": "src/client/ShowCamera.luau" }
         }
       }
     },

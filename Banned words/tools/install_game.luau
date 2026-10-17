@@ -186,8 +186,14 @@ function SeatService.getSeats(): { Seat }
 			table.insert(seats, seat)
 		end
 	end
+	-- Middle chairs first, so a small group still sits in the centre of the show camera.
+	local middle = (#seats + 1) / 2
+	local function rank(seat: Seat): number
+		local index = seat:GetAttribute("SeatIndex") or 0
+		return math.abs(index - middle) * 2 + (if index < middle then 0 else 1)
+	end
 	table.sort(seats, function(a, b)
-		return (a:GetAttribute("SeatIndex") or 0) < (b:GetAttribute("SeatIndex") or 0)
+		return rank(a) < rank(b)
 	end)
 	return seats
 end
@@ -260,7 +266,7 @@ function SeatService.releaseAll()
 	table.clear(assigned)
 end
 
--- Throws the player from their chair in an arc that lands near the pool centre, then kills them.
+-- Throws the player from their chair in an arc into the pool, then kills them.
 function SeatService.launch(player: Player)
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -285,8 +291,10 @@ function SeatService.launch(player: Player)
 
 	task.spawn(function()
 		RunService.Heartbeat:Wait()
+		-- Straight ahead from the chair row into the pool, so the show camera sees the whole flight.
 		local start = root.Position
-		local target = SeatService.poolCenter() + Vector3.new(math.random(-6, 6), 0, math.random(-4, 4))
+		local center = SeatService.poolCenter()
+		local target = Vector3.new(start.X + math.random(-3, 3), center.Y, center.Z + math.random(-4, 4))
 		local t = Config.LAUNCH_FLIGHT_TIME
 		local g = workspace.Gravity
 		local horizontal = Vector3.new(target.X - start.X, 0, target.Z - start.Z) / t
@@ -583,6 +591,7 @@ local remotes = ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Remo
 local Hud = require(script:WaitForChild("Hud"))
 local Billboards = require(script:WaitForChild("Billboards"))
 local Speech = require(script:WaitForChild("Speech"))
+local ShowCamera = require(script:WaitForChild("ShowCamera"))
 
 local player = Players.LocalPlayer
 
@@ -643,6 +652,7 @@ remotes.RoundState.OnClientEvent:Connect(function(newState)
 	if state.phase == "Assign" or state.phase == "Talk" then
 		Billboards.show(lastWords, state.alive)
 	end
+	ShowCamera.set(state.phase == "Assign" or state.phase == "Talk")
 	applySeatLock()
 end)
 
@@ -666,6 +676,7 @@ end)
 player.CharacterAdded:Connect(function()
 	task.wait(0.5)
 	applySeatLock()
+	ShowCamera.reapply()
 	if state.phase == "Assign" or state.phase == "Talk" then
 		Billboards.show(lastWords, state.alive)
 	end
@@ -821,8 +832,9 @@ local function bubbleFor(player: Player): BillboardGui?
 	end
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "WordBubble"
-	gui.Size = UDim2.fromOffset(200, 56)
-	gui.StudsOffset = Vector3.new(0, 2.6, 0)
+	-- Sized in studs (not pixels) so ten bubbles in the 5-stud chair row never overlap on the show camera.
+	gui.Size = UDim2.fromScale(4.4, 1.3)
+	gui.StudsOffset = Vector3.new(0, 2.4, 0)
 	gui.AlwaysOnTop = true
 	gui.MaxDistance = 120
 	local frame = Instance.new("Frame")
@@ -971,6 +983,41 @@ function Speech.start(parent: Instance)
 end
 
 return Speech
+]====]; s.Parent = client end
+do local s = Instance.new("ModuleScript"); s.Name = "ShowCamera"; s.Source = [====[--!strict
+-- Fixed panel-show camera: while a round runs, everyone looks at the chair row from over the pool,
+-- so every face and forbidden word is on one screen.
+local ShowCamera = {}
+
+local DEFAULT_FOV = 70
+local active = false
+
+local function point(): BasePart?
+	local map = workspace:FindFirstChild("PoolMap")
+	return map and map:FindFirstChild("ShowCamera") :: BasePart?
+end
+
+function ShowCamera.set(on: boolean)
+	local camera = workspace.CurrentCamera
+	local marker = point()
+	if on and marker then
+		camera.CameraType = Enum.CameraType.Scriptable
+		camera.CFrame = marker.CFrame
+		camera.FieldOfView = marker:GetAttribute("FieldOfView") or DEFAULT_FOV
+	elseif active then
+		camera.CameraType = Enum.CameraType.Custom
+		camera.FieldOfView = DEFAULT_FOV
+	end
+	active = on and marker ~= nil
+end
+
+function ShowCamera.reapply()
+	if active then
+		ShowCamera.set(true)
+	end
+end
+
+return ShowCamera
 ]====]; s.Parent = client end
 shared.Parent = RS
 server.Parent = SSS

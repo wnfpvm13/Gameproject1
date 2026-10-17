@@ -8,6 +8,7 @@ local remotes = ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Remo
 local Hud = require(script:WaitForChild("Hud"))
 local Billboards = require(script:WaitForChild("Billboards"))
 local Speech = require(script:WaitForChild("Speech"))
+local ShowCamera = require(script:WaitForChild("ShowCamera"))
 
 local player = Players.LocalPlayer
 
@@ -68,6 +69,7 @@ remotes.RoundState.OnClientEvent:Connect(function(newState)
 	if state.phase == "Assign" or state.phase == "Talk" then
 		Billboards.show(lastWords, state.alive)
 	end
+	ShowCamera.set(state.phase == "Assign" or state.phase == "Talk")
 	applySeatLock()
 end)
 
@@ -91,6 +93,7 @@ end)
 player.CharacterAdded:Connect(function()
 	task.wait(0.5)
 	applySeatLock()
+	ShowCamera.reapply()
 	if state.phase == "Assign" or state.phase == "Talk" then
 		Billboards.show(lastWords, state.alive)
 	end

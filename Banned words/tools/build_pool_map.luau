@@ -1,12 +1,16 @@
 -- Grey-box pool map for 금칙어 게임 Korean. Run in Studio's Edit datamodel; rebuilds workspace.PoolMap from scratch.
 -- Layout (studs): deck 120 x 90 with top at y = 0, pool hole 44 x 28 at the centre, water surface at y = -1.5,
--- 10 lounge chairs on an ellipse (34 x 24) facing the pool, spawn on the north deck.
+-- 10 lounge chairs in one row along the north edge facing the pool (panel-show seating, 5 studs apart),
+-- a fixed show camera over the pool looking back at the row, spawn behind the row.
 
 local DECK = Vector2.new(120, 90)
 local HOLE = Vector2.new(44, 28)
 local POOL_DEPTH = 9
 local CHAIR_COUNT = 10
-local RING = Vector2.new(34, 24)
+local ROW_SPACING = 5
+local ROW_Z = -HOLE.Y / 2 - 4.5
+local CAMERA_POS = Vector3.new(0, 7, 10)
+local CAMERA_FOV = 55
 
 local DECK_COLOR = Color3.fromRGB(226, 214, 190)
 local COPING_COLOR = Color3.fromRGB(245, 245, 240)
@@ -92,14 +96,13 @@ for _, spec in {
 	f.Transparency = 1
 end
 
--- Lounge chairs on an ellipse, each facing the pool centre.
+-- Lounge chairs in a row on the north deck, all facing the pool (+Z), numbered left to right as seen from the camera.
 local chairs = Instance.new("Folder")
 chairs.Name = "Chairs"
 chairs.Parent = map
 for i = 1, CHAIR_COUNT do
-	local angle = (i - 1) / CHAIR_COUNT * math.pi * 2 + math.pi / CHAIR_COUNT
-	local pos = Vector3.new(math.cos(angle) * RING.X, 0, math.sin(angle) * RING.Y)
-	local facing = CFrame.lookAt(pos, Vector3.new(0, 0, 0))
+	local pos = Vector3.new((i - (CHAIR_COUNT + 1) / 2) * ROW_SPACING, 0, ROW_Z)
+	local facing = CFrame.lookAt(pos, pos + Vector3.new(0, 0, 1))
 	local model = Instance.new("Model")
 	model.Name = string.format("Chair%02d", i)
 	local cushion = CUSHIONS[(i - 1) % #CUSHIONS + 1]
@@ -133,6 +136,14 @@ for _, p in { Vector3.new(-50, 0, -36), Vector3.new(50, 0, -36), Vector3.new(-50
 	local top = part(deco, "Canopy", Vector3.new(1, 10, 10), CFrame.new(p + Vector3.new(0, 9, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(255, 120, 110), Enum.Material.Fabric)
 	top.Shape = Enum.PartType.Cylinder
 end
+
+-- Show camera: clients use this CFrame (and FieldOfView attribute) while a round is running.
+local cameraPoint = part(map, "ShowCamera", Vector3.new(1, 1, 1), CFrame.lookAt(CAMERA_POS, Vector3.new(0, 3.5, ROW_Z)), FRAME_COLOR)
+cameraPoint.Transparency = 1
+cameraPoint.CanCollide = false
+cameraPoint.CanQuery = false
+cameraPoint.CanTouch = false
+cameraPoint:SetAttribute("FieldOfView", CAMERA_FOV)
 
 local spawn = Instance.new("SpawnLocation")
 spawn.Name = "Spawn"

@@ -44,6 +44,7 @@ code += f'client.Source = {long_string("client/Main.client.luau")}\n'
 code += module("", "client", "Hud", "client/Hud.luau")
 code += module("", "client", "Billboards", "client/Billboards.luau")
 code += module("", "client", "Speech", "client/Speech.luau")
+code += module("", "client", "ShowCamera", "client/ShowCamera.luau")
 code += """shared.Parent = RS
 server.Parent = SSS
 client.Parent = SPS

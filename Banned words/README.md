@@ -5,7 +5,7 @@ MonCook과 별개인 로블록스 음성 파티 게임. 마이크 음성을 로�
 
 - 설계 원본(Claude Docs, 그림 포함): https://claude.ai/code/artifact/36208a40-0e2b-49e8-becf-d77f1b3fef31
 - 저장소 사본: [docs/DESIGN.md](docs/DESIGN.md)
-- 상태: 설계 단계 + 1단계 STT 자동 검증 1차 완료(2026-10-17, `tools/stt_probe/`). 게임 코드 없음.
+- 상태: 프로토타입 v0(수영장·의자·금칙어 탈락) — `docs/PROTOTYPE_v0.md`. STT 검증 기록은 `tools/stt_probe/`, `tools/stt_live_test/`.
 
 ## 오너 결정 사항 (2026-10-17)
 

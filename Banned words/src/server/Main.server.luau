@@ -13,4 +13,5 @@ for _, name in { "RoundState", "Words", "Transcript", "Eliminated", "Suspect" } 
 end
 remotes.Parent = shared
 
+require(script.Parent:WaitForChild("VoiceService")).start()
 require(script.Parent:WaitForChild("RoundService")).start(remotes)

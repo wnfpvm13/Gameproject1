@@ -563,6 +563,43 @@ end
 
 return RoundService
 ]====]; s.Parent = server end
+do local s = Instance.new("ModuleScript"); s.Name = "VoiceService"; s.Source = [====[--!strict
+-- Flat voice volume on the server side: default voice creates each character's AudioEmitter on the server,
+-- so the flat curve set here replicates to every listener (src/client/FlatVoice.luau covers client-made emitters).
+local Players = game:GetService("Players")
+
+local VoiceService = {}
+
+local FLAT_CURVE = { [0] = 1, [2000] = 1 }
+
+local function flatten(child: Instance)
+	if child:IsA("AudioEmitter") then
+		child:SetDistanceAttenuation(FLAT_CURVE)
+	end
+end
+
+local function watchCharacter(character: Model)
+	for _, child in character:GetChildren() do
+		flatten(child)
+	end
+	character.ChildAdded:Connect(flatten)
+end
+
+function VoiceService.start()
+	local function watchPlayer(player: Player)
+		if player.Character then
+			watchCharacter(player.Character)
+		end
+		player.CharacterAdded:Connect(watchCharacter)
+	end
+	for _, player in Players:GetPlayers() do
+		watchPlayer(player)
+	end
+	Players.PlayerAdded:Connect(watchPlayer)
+end
+
+return VoiceService
+]====]; s.Parent = server end
 do local s = Instance.new("Script"); s.Name = "Main"; s.Source = [====[-- 금칙어 게임 Korean server entry point: creates the remotes, then runs rounds forever.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -578,6 +615,7 @@ for _, name in { "RoundState", "Words", "Transcript", "Eliminated", "Suspect" } 
 end
 remotes.Parent = shared
 
+require(script.Parent:WaitForChild("VoiceService")).start()
 require(script.Parent:WaitForChild("RoundService")).start(remotes)
 ]====]; s.Parent = server end
 local client = Instance.new("LocalScript"); client.Name = "BannedWordsClient"
@@ -592,6 +630,7 @@ local Hud = require(script:WaitForChild("Hud"))
 local Billboards = require(script:WaitForChild("Billboards"))
 local Speech = require(script:WaitForChild("Speech"))
 local ShowCamera = require(script:WaitForChild("ShowCamera"))
+local FlatVoice = require(script:WaitForChild("FlatVoice"))
 
 local player = Players.LocalPlayer
 
@@ -629,6 +668,7 @@ local function applySeatLock()
 end
 
 Hud.build()
+FlatVoice.start()
 Speech.onStatus(Hud.setVoice)
 task.spawn(Speech.start, player:WaitForChild("PlayerGui"))
 
@@ -1018,6 +1058,45 @@ function ShowCamera.reapply()
 end
 
 return ShowCamera
+]====]; s.Parent = client end
+do local s = Instance.new("ModuleScript"); s.Name = "FlatVoice"; s.Source = [====[--!strict
+-- Everyone hears everyone at the same volume, wherever they are on the map (owner decision 2026-10-17).
+-- Default voice (UseAudioApi) wires each AudioDeviceInput into an AudioEmitter inside the character with a
+-- quadratic 7-80 stud rolloff; audibility is computed on the listening client, so flattening the curve here is enough.
+local Players = game:GetService("Players")
+
+local FlatVoice = {}
+
+local FLAT_CURVE = { [0] = 1, [2000] = 1 }
+
+local function flatten(emitter: Instance)
+	if emitter:IsA("AudioEmitter") then
+		emitter:SetDistanceAttenuation(FLAT_CURVE)
+	end
+end
+
+local function watchCharacter(character: Model)
+	for _, child in character:GetChildren() do
+		flatten(child)
+	end
+	character.ChildAdded:Connect(flatten)
+end
+
+local function watchPlayer(player: Player)
+	if player.Character then
+		watchCharacter(player.Character)
+	end
+	player.CharacterAdded:Connect(watchCharacter)
+end
+
+function FlatVoice.start()
+	for _, player in Players:GetPlayers() do
+		watchPlayer(player)
+	end
+	Players.PlayerAdded:Connect(watchPlayer)
+end
+
+return FlatVoice
 ]====]; s.Parent = client end
 shared.Parent = RS
 server.Parent = SSS

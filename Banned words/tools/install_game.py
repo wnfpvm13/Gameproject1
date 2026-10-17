@@ -37,6 +37,7 @@ code += module("", "shared", "Judge", "shared/Judge.luau")
 code += module("", "server", "WordBank", "server/WordBank.luau")
 code += module("", "server", "SeatService", "server/SeatService.luau")
 code += module("", "server", "RoundService", "server/RoundService.luau")
+code += module("", "server", "VoiceService", "server/VoiceService.luau")
 code += module("", "server", "Main", "server/Main.server.luau", cls="Script")
 code += """local client = Instance.new("LocalScript"); client.Name = "BannedWordsClient"
 """
@@ -45,6 +46,7 @@ code += module("", "client", "Hud", "client/Hud.luau")
 code += module("", "client", "Billboards", "client/Billboards.luau")
 code += module("", "client", "Speech", "client/Speech.luau")
 code += module("", "client", "ShowCamera", "client/ShowCamera.luau")
+code += module("", "client", "FlatVoice", "client/FlatVoice.luau")
 code += """shared.Parent = RS
 server.Parent = SSS
 client.Parent = SPS

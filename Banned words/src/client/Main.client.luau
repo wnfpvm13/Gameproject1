@@ -9,6 +9,7 @@ local Hud = require(script:WaitForChild("Hud"))
 local Billboards = require(script:WaitForChild("Billboards"))
 local Speech = require(script:WaitForChild("Speech"))
 local ShowCamera = require(script:WaitForChild("ShowCamera"))
+local FlatVoice = require(script:WaitForChild("FlatVoice"))
 
 local player = Players.LocalPlayer
 
@@ -46,6 +47,7 @@ local function applySeatLock()
 end
 
 Hud.build()
+FlatVoice.start()
 Speech.onStatus(Hud.setVoice)
 task.spawn(Speech.start, player:WaitForChild("PlayerGui"))
 

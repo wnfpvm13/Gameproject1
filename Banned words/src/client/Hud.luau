@@ -3,6 +3,8 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("BannedWords"):WaitForChild("Config"))
+
 local Hud = {}
 
 local BOLD = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold)
@@ -148,19 +150,26 @@ function Hud.setRole(text: string)
 	ghostL.Text = text
 end
 
--- Mode vote during the countdown.
+-- Mode vote during the countdown. Talk show is locked until enough ready players are in the server.
 local voteFrame: Frame? = nil
 local voteButtons: { [string]: TextButton } = {}
-local VOTE_LABELS = { classic = "클래식", talkshow = "토크쇼 (3명+)" }
+local talkshowAllowed = true
+local IDLE_COLOR = Color3.fromRGB(40, 48, 64)
+local PICKED_COLOR = Color3.fromRGB(240, 140, 60)
+local LOCKED_COLOR = Color3.fromRGB(70, 72, 78)
+local VOTE_LABELS = { classic = "클래식", talkshow = string.format("토크쇼 (%d명+)", Config.TALKSHOW_MIN_PLAYERS) }
 
 function Hud.buildVote(onVote: (string) -> ())
 	local frame = Instance.new("Frame")
 	frame.AnchorPoint = Vector2.new(0.5, 1)
 	frame.Position = UDim2.new(0.5, 0, 1, -24)
-	frame.Size = UDim2.new(0, 420, 0, 64)
+	frame.Size = UDim2.new(0.5, 0, 0, 64)
 	frame.BackgroundTransparency = 1
 	frame.Visible = false
 	frame.Parent = gui
+	local limit = Instance.new("UISizeConstraint", frame)
+	limit.MinSize = Vector2.new(300, 0)
+	limit.MaxSize = Vector2.new(460, 64)
 	for i, choice in { "classic", "talkshow" } do
 		local b = Instance.new("TextButton")
 		b.Position = UDim2.new((i - 1) * 0.52, 0, 0, 0)
@@ -177,9 +186,15 @@ function Hud.buildVote(onVote: (string) -> ())
 		pad.PaddingLeft = UDim.new(0, 10)
 		pad.PaddingRight = UDim.new(0, 10)
 		b.Activated:Connect(function()
+			if choice == "talkshow" and not talkshowAllowed then
+				return
+			end
 			onVote(choice)
 			for other, button in voteButtons do
-				button.BackgroundColor3 = if other == choice then Color3.fromRGB(240, 140, 60) else Color3.fromRGB(40, 48, 64)
+				if other == "talkshow" and not talkshowAllowed then
+					continue
+				end
+				button.BackgroundColor3 = if other == choice then PICKED_COLOR else IDLE_COLOR
 			end
 		end)
 		b.Parent = frame
@@ -188,21 +203,44 @@ function Hud.buildVote(onVote: (string) -> ())
 	voteFrame = frame
 end
 
-function Hud.setVote(visible: boolean, counts: { classic: number, talkshow: number }?)
+function Hud.setVote(visible: boolean, counts: { classic: number, talkshow: number }?, readyCount: number?)
 	if not voteFrame then
 		return
 	end
 	voteFrame.Visible = visible
 	if not visible then
 		for _, button in voteButtons do
-			button.BackgroundColor3 = Color3.fromRGB(40, 48, 64)
+			button.BackgroundColor3 = IDLE_COLOR
 		end
 		return
 	end
+	talkshowAllowed = (readyCount or 0) >= Config.TALKSHOW_MIN_PLAYERS
 	if counts then
 		voteButtons.classic.Text = string.format("%s · %d표", VOTE_LABELS.classic, counts.classic)
-		voteButtons.talkshow.Text = string.format("%s · %d표", VOTE_LABELS.talkshow, counts.talkshow)
+		voteButtons.talkshow.Text = if talkshowAllowed
+			then string.format("%s · %d표", VOTE_LABELS.talkshow, counts.talkshow)
+			else string.format("토크쇼 · %d명부터", Config.TALKSHOW_MIN_PLAYERS)
 	end
+	if not talkshowAllowed then
+		voteButtons.talkshow.BackgroundColor3 = LOCKED_COLOR
+	end
+	voteButtons.talkshow.AutoButtonColor = talkshowAllowed
+end
+
+-- Mic test in the lobby: what the player should do next to become ready.
+local micTestL: TextLabel? = nil
+
+function Hud.setMicTest(text: string, done: boolean)
+	if not micTestL then
+		local l = label(gui, BOLD, 20, AMBER)
+		l.AnchorPoint = Vector2.new(0.5, 0)
+		l.Position = UDim2.new(0.5, 0, 0, 164)
+		l.Size = UDim2.new(0.6, 0, 0, 28)
+		micTestL = l
+	end
+	local l = micTestL :: TextLabel
+	l.Text = text
+	l.TextColor3 = if done then GREEN else AMBER
 end
 
 function Hud.setStatus(text: string)

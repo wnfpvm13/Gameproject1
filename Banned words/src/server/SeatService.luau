@@ -177,7 +177,9 @@ function SeatService.launch(player: Player)
 		-- Straight ahead from the chair row into the pool, so the show camera sees the whole flight.
 		local start = root.Position
 		local center = SeatService.poolCenter()
-		local target = Vector3.new(start.X + math.random(-3, 3), center.Y, center.Z + math.random(-4, 4))
+		-- Keep the landing well inside the water (pool half-width 22, end chairs sit at x = +-22.5).
+		local landingX = math.clamp(start.X + math.random(-3, 3), center.X - 17, center.X + 17)
+		local target = Vector3.new(landingX, center.Y, center.Z + math.random(-4, 4))
 		local t = Config.LAUNCH_FLIGHT_TIME
 		local g = workspace.Gravity
 		local horizontal = Vector3.new(target.X - start.X, 0, target.Z - start.Z) / t

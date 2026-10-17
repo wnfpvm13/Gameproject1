@@ -42,6 +42,11 @@ function Speech.onText(fn: (string) -> ())
 	table.insert(textListeners, fn)
 end
 
+-- True while the mic currently hears speech (used to tell "silent" from "spoke but recognition failed").
+function Speech.isSpeaking(): boolean
+	return stt ~= nil and stt.VoiceDetected
+end
+
 function Speech.start(parent: Instance)
 	local player = Players.LocalPlayer
 	input = player:WaitForChild("AudioDeviceInput", 30) :: AudioDeviceInput?

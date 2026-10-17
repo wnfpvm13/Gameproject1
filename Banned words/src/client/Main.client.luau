@@ -54,18 +54,58 @@ local function applySeatLock()
 	setResetAllowed(not locked)
 end
 
+-- Voice readiness: connect voice, say anything once (mic test), then you can take a seat next round.
+local micTested = false
+local readySent: boolean? = nil
+
+local function inMyRound(): boolean
+	return (state.phase == "Assign" or state.phase == "Talk") and isParticipant(player.UserId)
+end
+
+local function updateReady()
+	local status = Speech.status()
+	local voiceOk = status == "Listening" or status == "Speaking"
+	local isReady = micTested and voiceOk
+	if isReady ~= readySent then
+		readySent = isReady
+		remotes.Ready:FireServer(isReady)
+	end
+	if inMyRound() then
+		Hud.setMicTest("", true)
+	elseif status == "NoVoice" then
+		Hud.setMicTest("음성 채팅을 쓸 수 없는 계정이라 관전만 할 수 있어요", false)
+	elseif status == "Disconnected" then
+		Hud.setMicTest("음성을 연결하면 다음 판부터 참가할 수 있어요", false)
+	elseif status == "Muted" then
+		Hud.setMicTest("마이크를 켜 주세요", false)
+	elseif not micTested then
+		Hud.setMicTest("마이크 테스트 · 아무 말이나 해 보세요", false)
+	else
+		local count = state.readyCount
+		Hud.setMicTest(if count then string.format("준비 완료! (준비된 사람 %d명)", count) else "준비 완료!", true)
+	end
+end
+
 Hud.build()
 Hud.buildVote(function(choice)
 	remotes.Vote:FireServer(choice)
 end)
 Fx.init()
 FlatVoice.start()
-Speech.onStatus(Hud.setVoice)
+Speech.onStatus(function(status)
+	Hud.setVoice(status)
+	updateReady()
+end)
 task.spawn(Speech.start, player:WaitForChild("PlayerGui"))
 
--- Eliminated participants keep sending too: as ghosts their speech counts toward assists.
+-- Only alive participants (panelists and the guest) are judged; eliminated players and spectators just watch.
 Speech.onText(function(text)
-	if state.phase == "Talk" and isParticipant(player.UserId) then
+	if not micTested then
+		micTested = true
+		Hud.toast("마이크 확인 완료!", "info")
+		updateReady()
+	end
+	if state.phase == "Talk" and isParticipant(player.UserId) and isAlive(player.UserId) then
 		remotes.Transcript:FireServer(text)
 	end
 end)
@@ -75,7 +115,8 @@ remotes.RoundState.OnClientEvent:Connect(function(newState)
 	state = newState
 	Hud.setStatus(PHASE_TITLE[state.phase] .. " · " .. state.message)
 	Hud.setAlive(state.panelAlive, state.panelTotal)
-	Hud.setVote(state.phase == "Countdown", state.votes)
+	Hud.setVote(state.phase == "Countdown", state.votes, state.readyCount)
+	updateReady()
 	if state.phase == "Lobby" or (state.phase == "Countdown" and previous == "Result") then
 		Billboards.clear()
 	end
@@ -91,10 +132,12 @@ remotes.RoundState.OnClientEvent:Connect(function(newState)
 	local me = player.UserId
 	local role = ""
 	if inRound and me == state.guestId then
-		role = "게스트 · 대화하며 패널의 금칙어를 말해 보세요. 날릴수록 점수!"
-	elseif state.phase == "Talk" and isParticipant(me) and not isAlive(me) then
-		role = "유령 모드 · 계속 말해서 다른 사람을 날리면 점수!"
-	elseif inRound and state.mode == "talkshow" and isAlive(me) then
+		role = "게스트 · 대화하며 패널의 금칙어를 말해 보세요. 날릴수록 점수! (단어 나열은 금지)"
+	elseif inRound and isParticipant(me) and not isAlive(me) then
+		role = "탈락 · 관전 중이에요 (내 목소리는 관전자끼리만 들려요)"
+	elseif inRound and not isParticipant(me) then
+		role = "관전 중 · 다음 판에 참가해요 (내 목소리는 관전자끼리만 들려요)"
+	elseif inRound and state.mode == "talkshow" then
 		role = "패널 · 힌트로 게스트가 남의 금칙어를 말하게! 직접 말하면 반칙"
 	end
 	Hud.setRole(role)
@@ -146,10 +189,16 @@ end)
 
 remotes.CardResult.OnClientEvent:Connect(function(info)
 	Hud.hideCard()
+	local who = if info.userId == player.UserId then "나" else info.name
 	if info.outcome == "warn" then
-		local who = if info.userId == player.UserId then "나" else info.name
 		Hud.toast(string.format("경고! %s · 한 번 더 대답 안 하면 탈락", who), "near")
+	elseif info.outcome == "unheard" then
+		Hud.toast(string.format("%s · 목소리는 들렸는데 인식이 안 됐어요. 이번엔 넘어가요", who), "near")
 	end
+end)
+
+remotes.Notice.OnClientEvent:Connect(function(info)
+	Hud.toast(info.text, "near")
 end)
 
 player.CharacterAdded:Connect(function()
@@ -157,13 +206,22 @@ player.CharacterAdded:Connect(function()
 	applySeatLock()
 	ShowCamera.reapply()
 	if state.phase == "Assign" or state.phase == "Talk" then
-		Billboards.show(lastWords, state.alive)
+		Billboards.show(lastWords, state.alive, state.guestId)
 	end
 end)
 
+local lastPing = 0
 RunService.Heartbeat:Connect(function()
 	local now = workspace:GetServerTimeNow()
 	local remaining = state.endsAt - now
 	Hud.setTimer(if state.phase ~= "Lobby" and remaining > 0 then remaining else nil)
 	Hud.tickCard(now, Config.QUESTION_ANSWER_TIME)
+	-- Tell the server the mic hears speech, so a card missed by the recognizer is not counted as silence.
+	if state.phase == "Talk" and isAlive(player.UserId) and Speech.isSpeaking() and now - lastPing >= Config.VOICE_PING_INTERVAL then
+		lastPing = now
+		remotes.VoicePing:FireServer()
+	end
 end)
+
+-- Ask for the current state now that every handler is connected (late joiners miss earlier broadcasts).
+remotes.Sync:FireServer()

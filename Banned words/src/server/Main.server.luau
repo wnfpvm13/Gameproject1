@@ -4,7 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
 local remotes = shared:FindFirstChild("Remotes") or Instance.new("Folder")
 remotes.Name = "Remotes"
-for _, name in { "RoundState", "Words", "Transcript", "Eliminated", "Suspect", "QuestionCard", "CardResult", "Vote" } do
+for _, name in { "RoundState", "Words", "Transcript", "Eliminated", "Suspect", "QuestionCard", "CardResult", "Vote", "Ready", "VoicePing", "Sync", "Notice" } do
 	if not remotes:FindFirstChild(name) then
 		local event = Instance.new("RemoteEvent")
 		event.Name = name

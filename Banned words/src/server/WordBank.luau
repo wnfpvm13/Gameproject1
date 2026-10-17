@@ -20,6 +20,15 @@ add("물건", { "컴퓨터", "핸드폰", "의자", "책상", "우산", "냉장�
 add("장소", { "수영장", "놀이터", "병원", "편의점", "도서관", "바다", "공원", "영화관", "학원", "지하철" })
 add("날씨", { "무지개", "눈사람", "장마", "태풍", "여름", "겨울", "봄비", "구름", "번개", "단풍" })
 
+-- Every word in the bank (talk show uses it to spot a guest reading the list out).
+function WordBank.all(): { string }
+	local list = {}
+	for _, entry in WORDS do
+		table.insert(list, entry.word)
+	end
+	return list
+end
+
 -- Draws `count` distinct words, spreading categories so hints do not overlap.
 function WordBank.draw(count: number, rng: Random): { Entry }
 	local pool = table.clone(WORDS)

@@ -6,39 +6,27 @@
     "ReplicatedStorage": {
       "$ignoreUnknownInstances": true,
       "BannedWords": {
-        "$className": "Folder",
-        "Config": { "$path": "src/shared/Config.luau" },
-        "Judge": { "$path": "src/shared/Judge.luau" }
+        "$path": "src/shared"
       }
     },
     "ServerScriptService": {
       "$ignoreUnknownInstances": true,
       "BannedWords": {
-        "$className": "Folder",
-        "Main": { "$path": "src/server/Main.server.luau" },
-        "RoundService": { "$path": "src/server/RoundService.luau" },
-        "SeatService": { "$path": "src/server/SeatService.luau" },
-        "WordBank": { "$path": "src/server/WordBank.luau" },
-        "VoiceService": { "$path": "src/server/VoiceService.luau" },
-        "Prompts": { "$path": "src/server/Prompts.luau" }
+        "$path": "src/server"
       }
     },
     "StarterPlayer": {
       "StarterPlayerScripts": {
         "$ignoreUnknownInstances": true,
         "BannedWordsClient": {
-          "$path": "src/client/Main.client.luau",
-          "Hud": { "$path": "src/client/Hud.luau" },
-          "Billboards": { "$path": "src/client/Billboards.luau" },
-          "Speech": { "$path": "src/client/Speech.luau" },
-          "ShowCamera": { "$path": "src/client/ShowCamera.luau" },
-          "FlatVoice": { "$path": "src/client/FlatVoice.luau" },
-          "Fx": { "$path": "src/client/Fx.luau" }
+          "$path": "src/client"
         }
       }
     },
     "VoiceChatService": {
-      "$properties": { "UseAudioApi": "Enabled" }
+      "$properties": {
+        "UseAudioApi": "Enabled"
+      }
     },
     "Workspace": {
       "$ignoreUnknownInstances": true

@@ -1,143 +1,204 @@
 --!strict
--- Word bubbles above heads: other participants show their forbidden word, the local player sees "???".
+-- Word bubbles above heads: each other alive participant's words (up to 3, newest flashes), name and role.
+-- My own bubble is never drawn while I play (the HUD shows "??? × n"); in the result everyone's words show.
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
 local Billboards = {}
 
-local FONT = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Heavy)
-local bubbles: { [number]: BillboardGui } = {}
+local WORD_FONT = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Heavy)
+local NAME_FONT = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold)
+local WIDTH = 4.6 -- studs; chairs on the ring are ~6.3 studs apart
+local ROW = 1.0 -- studs per word row
+local NAME_ROW = 0.9
+local CARD_COLOR = Color3.fromRGB(255, 255, 255)
+local NEW_COLOR = Color3.fromRGB(255, 225, 90)
 
-local function bubbleFor(player: Player): BillboardGui?
-	local character = player.Character
-	local head = character and character:FindFirstChild("Head") :: BasePart?
+local ALARM_SECONDS = 1.2
+
+type Bubble = { gui: BillboardGui, words: { string }, signature: string }
+local bubbles: { [number]: Bubble } = {}
+local dying: { [number]: boolean } = {} -- red alarm playing; render() leaves these alone
+
+local function removeBubble(userId: number)
+	local bubble = bubbles[userId]
+	if not bubble then
+		return
+	end
+	-- Give the default name tag back once the bubble (which carried the name) is gone.
+	local character = bubble.gui.Parent and bubble.gui.Parent.Parent
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+	end
+	bubble.gui:Destroy()
+	bubbles[userId] = nil
+end
+
+local function wordRow(parent: Instance, text: string, order: number, fresh: boolean): Frame
+	local row = Instance.new("Frame")
+	row.Name = "Word" .. order
+	row.LayoutOrder = order
+	row.Size = UDim2.new(1, 0, 1, 0) -- resized by the caller
+	row.BackgroundColor3 = if fresh then NEW_COLOR else CARD_COLOR
+	row.Parent = parent
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.25, 0)
+	corner.Parent = row
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 2.5
+	stroke.Color = Color3.fromRGB(40, 40, 48)
+	stroke.Parent = row
+	local label = Instance.new("TextLabel")
+	label.Name = "Text"
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.FontFace = WORD_FONT
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(30, 30, 36)
+	label.Text = text
+	label.Parent = row
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0.1, 0)
+	pad.PaddingBottom = UDim.new(0.1, 0)
+	pad.PaddingLeft = UDim.new(0.05, 0)
+	pad.PaddingRight = UDim.new(0.05, 0)
+	pad.Parent = label
+	if fresh then
+		task.delay(3, function()
+			if row.Parent then
+				TweenService:Create(row, TweenInfo.new(0.6), { BackgroundColor3 = CARD_COLOR }):Play()
+			end
+		end)
+	end
+	return row
+end
+
+-- (Re)builds one bubble. `previous` = the words shown before, so a newly added word flashes.
+local function build(player: Player, words: { string }, caption: string, previous: { string }?): Bubble?
+	local head = player.Character and player.Character:FindFirstChild("Head") :: BasePart?
 	if not head then
 		return nil
 	end
-	local existing = bubbles[player.UserId]
-	if existing and existing.Parent == head then
-		return existing
-	end
-	if existing then
-		existing:Destroy()
-	end
+	local rows = math.max(#words, 1)
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "WordBubble"
-	-- Sized in studs (not pixels) so ten bubbles in the 5-stud chair row never overlap on the show camera.
-	-- Top 62 %: the word card. Bottom 34 %: the player's name (the default name tag is hidden during rounds).
-	gui.Size = UDim2.fromScale(4.4, 2.2)
-	gui.StudsOffset = Vector3.new(0, 2.6, 0)
+	gui.Size = UDim2.fromScale(WIDTH, rows * ROW + NAME_ROW)
+	gui.StudsOffsetWorldSpace = Vector3.new(0, 1.6 + (rows * ROW + NAME_ROW) / 2, 0)
 	gui.AlwaysOnTop = true
-	gui.MaxDistance = 120
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.fromScale(1, 0.62)
-	frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	frame.Parent = gui
+	gui.MaxDistance = 150
+	gui.LightInfluence = 0
+
+	local list = Instance.new("Frame")
+	list.Name = "Words"
+	list.BackgroundTransparency = 1
+	list.Size = UDim2.fromScale(1, (rows * ROW) / (rows * ROW + NAME_ROW))
+	list.Parent = gui
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0.04, 0)
+	layout.Parent = list
+	local shown = if #words > 0 then words else { "?" }
+	for i, text in shown do
+		local fresh = previous ~= nil and #words > 0 and not table.find(previous, text)
+		local row = wordRow(list, text, i, fresh)
+		row.Size = UDim2.new(1, 0, 1 / rows, -2)
+	end
+
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Name = "PlayerName"
+	nameLabel.Name = "Caption"
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Position = UDim2.fromScale(0, 0.66)
-	nameLabel.Size = UDim2.fromScale(1, 0.34)
-	nameLabel.FontFace = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold)
+	nameLabel.Position = UDim2.fromScale(0, list.Size.Y.Scale + 0.02)
+	nameLabel.Size = UDim2.fromScale(1, 1 - list.Size.Y.Scale - 0.02)
+	nameLabel.FontFace = NAME_FONT
 	nameLabel.TextScaled = true
 	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	nameLabel.TextStrokeTransparency = 0.4
-	nameLabel.Text = player.DisplayName
+	nameLabel.TextStrokeTransparency = 0.3
+	nameLabel.Text = caption
 	nameLabel.Parent = gui
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	end
-	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 14)
-	local stroke = Instance.new("UIStroke", frame)
-	stroke.Thickness = 3
-	stroke.Color = Color3.fromRGB(40, 40, 48)
-	local label = Instance.new("TextLabel")
-	label.Name = "Word"
-	label.BackgroundTransparency = 1
-	label.Size = UDim2.fromScale(1, 1)
-	label.FontFace = FONT
-	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(30, 30, 36)
-	label.Parent = frame
-	local pad = Instance.new("UIPadding", label)
-	pad.PaddingTop = UDim.new(0, 6)
-	pad.PaddingBottom = UDim.new(0, 6)
-	pad.PaddingLeft = UDim.new(0, 10)
-	pad.PaddingRight = UDim.new(0, 10)
 	gui.Adornee = head
 	gui.Parent = head
-	bubbles[player.UserId] = gui
-	return gui
+	return { gui = gui, words = table.clone(words), signature = "" }
 end
 
-local function setText(player: Player, text: string, mine: boolean)
-	local gui = bubbleFor(player)
-	if not gui then
-		return
+export type View = {
+	show: { number }, -- userIds that get a bubble
+	words: { [string]: { words: { string }?, count: number } },
+	roleOf: (number) -> string?,
+}
+
+-- Draws exactly the bubbles in view.show; rebuilds a bubble only when its content changed.
+function Billboards.render(view: View)
+	local keep: { [number]: boolean } = {}
+	for userId in dying do
+		keep[userId] = true
 	end
-	local label = gui:FindFirstChild("Word", true) :: TextLabel
-	label.Text = text
-	label.TextColor3 = if mine then Color3.fromRGB(120, 120, 130) else Color3.fromRGB(30, 30, 36)
-end
-
--- words: userId string -> word. A participant missing from the table is the local player (own word hidden),
--- the talk-show guest (labelled "게스트"), or, when I am the guest, a panelist whose word I may not know ("?").
-function Billboards.show(words: { [string]: string }, participantIds: { number }, guestId: number?)
-	local me = Players.LocalPlayer
-	for _, userId in participantIds do
+	for _, userId in view.show do
+		if dying[userId] then
+			continue
+		end
 		local player = Players:GetPlayerByUserId(userId)
-		if player then
-			local word = words[tostring(userId)]
-			if userId == guestId then
-				setText(player, "게스트", player == me)
-			elseif word then
-				setText(player, word, player == me)
-			elseif player == me then
-				setText(player, "???", true)
-			else
-				setText(player, "?", false)
+		local entry = view.words[tostring(userId)]
+		if player and entry and entry.words then
+			keep[userId] = true
+			local role = view.roleOf(userId)
+			local caption = if role then player.DisplayName .. " · " .. role else player.DisplayName
+			local signature = table.concat(entry.words, "|") .. "#" .. caption
+			local existing = bubbles[userId]
+			local head = player.Character and player.Character:FindFirstChild("Head")
+			if not existing or existing.signature ~= signature or existing.gui.Parent ~= head then
+				local previous = if existing then existing.words else nil
+				removeBubble(userId)
+				local bubble = build(player, entry.words, caption, previous)
+				if bubble then
+					bubble.signature = signature
+					bubbles[userId] = bubble
+				end
 			end
 		end
 	end
+	for userId in bubbles do
+		if not keep[userId] then
+			removeBubble(userId)
+		end
+	end
 end
 
--- Elimination: the bubble turns red and swells (위험한 초대's red name card), then disappears.
+-- Elimination: the bubble turns red and swells for ALARM_SECONDS, then disappears.
 function Billboards.alarm(userId: number)
-	local gui = bubbles[userId]
-	if not gui then
+	local bubble = bubbles[userId]
+	if not bubble then
 		return
 	end
-	local frame = gui:FindFirstChildOfClass("Frame") :: Frame
-	local label = frame:FindFirstChild("Word") :: TextLabel
-	frame.BackgroundColor3 = Color3.fromRGB(230, 40, 40)
-	label.TextColor3 = Color3.fromRGB(255, 255, 255)
-	TweenService:Create(gui, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Size = UDim2.fromScale(6.6, 3.3),
-	}):Play()
-	task.delay(1.6, function()
-		if bubbles[userId] == gui then
-			Billboards.remove(userId)
+	dying[userId] = true
+	task.delay(ALARM_SECONDS, function()
+		dying[userId] = nil
+		if bubbles[userId] == bubble then
+			removeBubble(userId)
 		end
 	end)
-end
-
-function Billboards.remove(userId: number)
-	local gui = bubbles[userId]
-	if gui then
-		-- Give the default name tag back once the bubble (which carried the name) is gone.
-		local humanoid = gui.Parent and gui.Parent.Parent and gui.Parent.Parent:FindFirstChildOfClass("Humanoid")
-		if humanoid then
-			humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+	for _, row in (bubble.gui:FindFirstChild("Words") :: Frame):GetChildren() do
+		if row:IsA("Frame") then
+			row.BackgroundColor3 = Color3.fromRGB(230, 40, 40)
+			local label = row:FindFirstChild("Text") :: TextLabel
+			label.TextColor3 = Color3.fromRGB(255, 255, 255)
 		end
-		gui:Destroy()
-		bubbles[userId] = nil
 	end
+	local size = bubble.gui.Size
+	TweenService:Create(bubble.gui, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Size = UDim2.fromScale(size.X.Scale * 1.5, size.Y.Scale * 1.5),
+	}):Play()
 end
 
 function Billboards.clear()
+	table.clear(dying)
 	for userId in bubbles do
-		Billboards.remove(userId)
+		removeBubble(userId)
 	end
 end
 

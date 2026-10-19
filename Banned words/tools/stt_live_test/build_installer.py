@@ -11,7 +11,7 @@ def src(path):
 
 parts = {
     "judge": src(os.path.join(ROOT, "src/shared/Judge.luau")),
-    "items": src(os.path.join(ROOT, "src/shared/LiveTestItems.luau")),
+    "items": src(os.path.join(ROOT, "tools/stt_live_test/LiveTestItems.luau")),
     "server": src(os.path.join(HERE, "LiveTestServer.server.luau")),
     "client": src(os.path.join(HERE, "LiveTestClient.client.luau")),
 }

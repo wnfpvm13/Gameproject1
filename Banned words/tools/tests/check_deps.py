@@ -2,10 +2,11 @@
 
   python -I tools/tests/check_deps.py        (also run by tools/tests/run_tests.py)
 
-Reads every `require(...)` in src/ (standard library only, no Roblox or luau needed). A small scanner blanks out
+Reads every `require` in src/ (standard library only, no Roblox or luau needed). A small scanner blanks out
 comments and string contents first, so requires inside comments or strings are ignored and `---[[` toggles stay
-live code. The target is the last `WaitForChild("Name")` / `FindFirstChild("Name")` inside the call, so module
-names must stay unique in src/. Every module belongs to a layer by its path, and a layer may only require the
+live code. The only supported form is `require(<path>:WaitForChild("Name"))` (or FindFirstChild, either quote):
+the argument must END with that lookup, and any other use of `require` fails, since its target cannot be named.
+Module names must stay unique in src/. Every module belongs to a layer by its path, and a layer may only require the
 layers listed in ALLOWED: services never require each other (RoundService wires them with callbacks), UI panels
 share only Style, client parts and data (content) see only shared code, and nothing on one side requires the other.
 A new folder has no layer until layer_of knows it (the check fails and says so).
@@ -31,9 +32,17 @@ ALLOWED = {
     "client_entry": {"shared", "client_part", "client_ui", "client_style"},
 }
 
-CHILD = re.compile(r'(?:WaitForChild|FindFirstChild)\(\s*"([^"]+)"')
-REQUIRE_CALL = re.compile(r"\brequire\s*\(")
-REQUIRE_NO_PARENS = re.compile(r"\brequire\s*[\"'`\[]")  # require"X" / require[[X]]: cannot be named, so it fails
+# The only supported form: require(<plain path>), where the whole argument is a root (a variable or
+# game:GetService("X")), then any .Field / :WaitForChild("X") / :FindFirstChild("X") steps, ending in a lookup.
+# Anything else (`a or b`, other calls, brackets, a path that goes on after the lookup) cannot be named, so it fails.
+_STRING = r"""(?:"[^"\n]*"|'[^'\n]*')"""
+_LOOKUP = r"""\s*:\s*(?:WaitForChild|FindFirstChild)\s*\(\s*"""
+TARGET = re.compile(
+    r"^\s*(?:[A-Za-z_]\w*|game\s*:\s*GetService\s*\(\s*" + _STRING + r"\s*\))"
+    + r"(?:\s*\.\s*[A-Za-z_]\w*|" + _LOOKUP + _STRING + r"\s*\))*"
+    + _LOOKUP + r"""(?:"([^"\n]+)"|'([^'\n]+)')\s*\)\s*$"""
+)
+REQUIRE_WORD = re.compile(r"\brequire\b")
 SUFFIXES = (".server.luau", ".client.luau", ".luau", ".server.lua", ".client.lua", ".lua")
 
 
@@ -97,9 +106,10 @@ def mask(source):
         end = source.find(close, at + level + 2)
         return n if end < 0 else end + len(close)
 
-    def string_end(at, quote):
-        """Index just past the string opened at `at`, plus its literal parts (backtick {expressions} stay code)."""
-        literal, j, start = [], at + 1, at + 1
+    def scan_string(at, quote):
+        """Blanks the literal parts of the string opened at `at`; a backtick {expression} is scanned as code, with
+        the same rules as the rest of the file (comments, long strings, nested strings). Returns the index past it."""
+        j, start = at + 1, at + 1
         while j < n and source[j] != quote and source[j] != "\n":
             if source[j] == "\\":
                 if source.startswith("\\z", j):  # \z skips the following whitespace, line breaks included
@@ -109,54 +119,65 @@ def mask(source):
                 else:
                     j += 2
             elif quote == "`" and source[j] == "{":
-                literal.append((start, j))
-                depth, j = 1, j + 1
-                while j < n and depth > 0:
-                    if source[j] in "\"'":
-                        j = string_end(j, source[j])[0]
-                        continue
-                    depth += {"{": 1, "}": -1}.get(source[j], 0)
-                    j += 1
+                blank(masked, start, j)
+                j = scan_code(j + 1, inside_braces=True)
                 start = j
             else:
                 j += 1
-        literal.append((start, min(j, n)))
-        return min(j + 1, n), literal
+        blank(masked, start, min(j, n))
+        return min(j + 1, n)
 
-    i = 0
-    while i < n:
-        c = source[i]
-        if source.startswith("--", i):
-            level = bracket_level(i + 2)
-            if level >= 0:
-                end = bracket_end(i + 2, level)
+    def scan_code(i, inside_braces=False):
+        """Blanks comments and string contents from `i`; inside a {expression} it stops past the closing brace."""
+        depth = 0
+        while i < n:
+            c = source[i]
+            if source.startswith("--", i):
+                level = bracket_level(i + 2)
+                if level >= 0:
+                    end = bracket_end(i + 2, level)
+                else:
+                    end = source.find("\n", i)
+                    end = n if end < 0 else end
+                blank(code, i, end)
+                blank(masked, i, end)
+                i = end
+            elif c in "\"'`":
+                i = scan_string(i, c)
+            elif bracket_level(i) >= 0:
+                level = bracket_level(i)
+                end = bracket_end(i, level)
+                blank(masked, i + level + 2, max(i + level + 2, end - level - 2))
+                i = end
+            elif inside_braces and c == "{":
+                depth += 1
+                i += 1
+            elif inside_braces and c == "}":
+                if depth == 0:
+                    return i + 1
+                depth -= 1
+                i += 1
             else:
-                end = source.find("\n", i)
-                end = n if end < 0 else end
-            blank(code, i, end)
-            blank(masked, i, end)
-            i = end
-        elif c in "\"'`":
-            end, literal = string_end(i, c)
-            for a, b in literal:
-                blank(masked, a, b)
-            i = end
-        elif bracket_level(i) >= 0:
-            level = bracket_level(i)
-            end = bracket_end(i, level)
-            blank(masked, i + level + 2, max(i + level + 2, end - level - 2))
-            i = end
-        else:
-            i += 1
+                i += 1
+        return n
+
+    scan_code(0)
     return "".join(code), "".join(masked)
 
 
 def require_targets(source):
-    """Names required by `source`, plus the raw text of any require whose target cannot be named."""
+    """Names required by `source`, plus messages for any require that cannot be named (unsupported forms such as
+    `(require)(x)`, `local r = require`, `pcall(require, x)`, `require"X"` or a path that does not end in the lookup)."""
     code, masked = mask(source)
     names, unresolved = [], []
-    for match in REQUIRE_CALL.finditer(masked):
-        open_at = match.end() - 1
+    for match in REQUIRE_WORD.finditer(masked):
+        open_at = match.end()
+        while open_at < len(masked) and masked[open_at] in " \t\r\n":
+            open_at += 1
+        if open_at >= len(masked) or masked[open_at] != "(":
+            snippet = " ".join(code[max(0, match.start() - 12) : match.end() + 24].split())
+            unresolved.append("unsupported use of require (%s); call it as require(<path>:WaitForChild(\"Name\"))" % snippet)
+            continue
         depth, j = 0, open_at
         while j < len(masked):
             if masked[j] == "(":
@@ -167,13 +188,11 @@ def require_targets(source):
                     break
             j += 1
         arg = code[open_at + 1 : j]
-        found = CHILD.findall(arg)
+        found = TARGET.match(arg)
         if found:
-            names.append(found[-1])
+            names.append(found.group(1) or found.group(2))
         else:
-            unresolved.append(" ".join(arg.split()))
-    for match in REQUIRE_NO_PARENS.finditer(masked):
-        unresolved.append(" ".join(code[match.start() : match.end() + 30].split()))
+            unresolved.append("require(%s) is not a plain path ending in :WaitForChild(\"Name\")" % " ".join(arg.split()))
     return names, unresolved
 
 
@@ -195,8 +214,8 @@ def check(files):
             problems.append("%s: no layer for this path (add the folder to layer_of)" % rel)
             continue
         targets, unresolved = require_targets(source)
-        for raw in unresolved:
-            problems.append("%s: require(%s) has no WaitForChild(\"Name\") target" % (rel, raw))
+        for message in unresolved:
+            problems.append("%s: %s" % (rel, message))
         for target in targets:
             if target not in names:
                 problems.append("%s: requires unknown module %s" % (rel, target))
@@ -229,13 +248,22 @@ def find_cycles(graph):
     return problems
 
 
-def load_src():
+def load_src(src=SRC):
+    """Every .luau/.lua under `src`. A missing, unreadable or empty folder is an error, never "0 modules, pass"."""
+    if not os.path.isdir(src):
+        raise ValueError("source folder not found: %s" % src)
+
+    def walk_error(error):
+        raise ValueError("cannot read %s: %s" % (error.filename, error))
+
     files = {}
-    for root, _, names in os.walk(SRC):
+    for root, _, names in os.walk(src, onerror=walk_error):
         for n in names:
             if n.endswith(".luau") or n.endswith(".lua"):
                 path = os.path.join(root, n)
-                files[os.path.relpath(path, SRC).replace(os.sep, "/")] = io.open(path, encoding="utf-8").read()
+                files[os.path.relpath(path, src).replace(os.sep, "/")] = io.open(path, encoding="utf-8").read()
+    if not files:
+        raise ValueError("no .luau/.lua files under %s" % src)
     return files
 
 
@@ -260,7 +288,7 @@ def selftest():
         ("UI panel requires UI panel", "client/UI/Other.luau", 'local P = require(x:WaitForChild("Panel"))', "must not require"),
         ("client requires server", "client/State.luau", 'local M = require(x:WaitForChild("Match"))', "must not require"),
         ("content requires Match", "server/content/Data.luau", 'local M = require(x:WaitForChild("Match"))', "must not require"),
-        ("unnamed require", "server/services/B.luau", "local A = require(someVariable)", "no WaitForChild"),
+        ("unnamed require", "server/services/B.luau", "local A = require(someVariable)", "not a plain path"),
         ("duplicate name", "client/UI/Net.luau", "return {}", "duplicate module name"),
         ("unknown folder", "client/Effects/Spark.luau", "return {}", "no layer"),
         ("require with a space", "server/services/B.luau", 'local A = require (script.Parent:WaitForChild("A"))', "must not require"),
@@ -268,7 +296,20 @@ def selftest():
         ("after a string holding --", "server/services/B.luau", 'local s = "--" ' + bad_require, "must not require"),
         ("after a \\z line continuation", "server/services/B.luau", 'local s = "a\\z\n   b" ' + bad_require, "must not require"),
         ("inside a backtick {expression}", "server/services/B.luau", 'local s = `x{' + bad_require[10:] + '.y}`', "must not require"),
-        ("require without parentheses", "server/services/B.luau", 'local A = require"A"', "no WaitForChild"),
+        ("after a nested backtick holding }", "server/services/B.luau", 'local s = `a{ `}` }` ' + bad_require, "must not require"),
+        ("after a long string holding } in a {expression}", "server/services/B.luau",
+         'local s = `a{ [[}]] .. ' + bad_require[10:] + '.x }`', "must not require"),
+        ("require text inside a string in a {expression}", "server/services/B.luau",
+         'local s = `a{ `' + bad_require[10:] + '` }`', None),
+        ("require without parentheses", "server/services/B.luau", 'local A = require"A"', "unsupported use of require"),
+        ("(require)(...)", "server/services/B.luau", '(require)(script.Parent:WaitForChild("A"))', "unsupported use of require"),
+        ("alias of require", "server/services/B.luau", 'local r = require\nlocal A = r(script.Parent:WaitForChild("A"))', "unsupported use of require"),
+        ("pcall(require, ...)", "server/services/B.luau", 'local ok, A = pcall(require, script.Parent:WaitForChild("A"))', "unsupported use of require"),
+        ("path continues after the lookup", "server/services/B.luau", 'local X = require(x:WaitForChild("Match").Parent)', "not a plain path"),
+        ("a or b inside require", "server/services/B.luau", 'local A = require(script.Parent:WaitForChild("A") or shared:WaitForChild("Config"))', "not a plain path"),
+        ("look-alike method name", "server/services/B.luau", 'local C = require(x:NotWaitForChild("Config"))', "not a plain path"),
+        ("game:GetService root is fine", "server/services/B.luau", 'local C = require(game:GetService("ReplicatedStorage"):WaitForChild("BannedWords"):WaitForChild("Config"))', None),
+        ("single quotes are fine", "server/services/B.luau", "local M = require(script.Parent.Parent:WaitForChild('Match'))", None),
         ("inside a block comment", "server/services/B.luau", "--[[\n" + bad_require + "\n]]\nreturn {}", None),
         ("inside a line comment", "server/services/B.luau", "-- " + bad_require + "\nreturn {}", None),
         ("inside a string", "server/services/B.luau", 'local s = [[' + bad_require + ']] local t = "--[["', None),
@@ -286,7 +327,12 @@ def selftest():
             failures.append("%s: expected '%s', got %s" % (label, expected, problems))
     if not any("cycle" in p for p in find_cycles({"a": {"b"}, "b": {"a"}})):
         failures.append("cycle: missed")
-    return failures, len(cases) + 1
+    try:
+        load_src(os.path.join(HERE, "no_such_folder"))
+        failures.append("missing source folder: passed silently")
+    except ValueError:
+        pass
+    return failures, len(cases) + 2
 
 
 def main():
@@ -295,7 +341,11 @@ def main():
     if failures:
         print("FAIL checker self-test: " + "; ".join(failures))
         sys.exit(1)
-    files = load_src()
+    try:
+        files = load_src()
+    except ValueError as error:
+        print("FAIL %s" % error)
+        sys.exit(1)
     problems = check(files)
     requires = sum(len(require_targets(s)[0]) for s in files.values())
     if problems:

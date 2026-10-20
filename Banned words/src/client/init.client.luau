@@ -98,7 +98,7 @@ FlatVoice.start()
 Speech.onStatus(function()
 	refreshVoice()
 end)
-Speech.onText(function(text, earliest, latest, ended, segmentId)
+Speech.onText(function(text, earliest, latest, ended, textId)
 	if not State.micTested then
 		State.micTested = true
 		Toast.show("마이크 확인 완료!", "info")
@@ -106,7 +106,7 @@ Speech.onText(function(text, earliest, latest, ended, segmentId)
 		return
 	end
 	if State.round.phase == "Talk" and State.meAlive() then
-		remotes.Transcript:FireServer(text, earliest, latest, ended, segmentId)
+		remotes.Transcript:FireServer(text, earliest, latest, ended, textId)
 	end
 end)
 Speech.onUnstable(function()

@@ -3,7 +3,7 @@
 -- (no turns). The client cannot prove a transcript is real speech; these checks only stop spam and mix-ups.
 --
 -- Boundaries: the client sends the server-time range its speech began in, the latest time it may have ended (and
--- a segment id), see Speech.luau.
+-- a text id), see Speech.luau.
 --   - speech that may have begun before the talk, or after the round was decided (Match.cutoffAt, at the latest
 --     the talk's end), is ignored;
 --   - so is speech that may have gone on past cutoffAt + END_TOLERANCE (its words may come after the end);
@@ -25,7 +25,7 @@ local open = false
 local onHit: (Player, string) -> () = function() end
 local onSpeech: (Player) -> () = function() end
 local recent: { [Player]: { number } } = {} -- os.clock() of recent transcripts (spam guard)
-local seenSegments: { [Player]: { [number]: boolean } } = {}
+local seenTexts: { [Player]: { [number]: boolean } } = {}
 local lastPing: { [Player]: number } = {}
 local minuteCount, minuteStart, warnedThisMinute = 0, os.clock(), false
 local settleKey = 0
@@ -81,7 +81,7 @@ local function countRequest()
 	end
 end
 
-local function onTranscript(player: Player, text: any, earliest: any, latest: any, ended: any, segmentId: any)
+local function onTranscript(player: Player, text: any, earliest: any, latest: any, ended: any, textId: any)
 	if not open or typeof(text) ~= "string" or not Match.isAlive(player) then
 		return
 	end
@@ -90,13 +90,13 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 		return
 	end
 	countRequest()
-	if typeof(segmentId) == "number" then
-		local seen = seenSegments[player] or {}
-		seenSegments[player] = seen
-		if seen[segmentId] then
-			return -- the same segment twice
+	if typeof(textId) == "number" then
+		local seen = seenTexts[player] or {}
+		seenTexts[player] = seen
+		if seen[textId] then
+			return -- the same transcript twice
 		end
-		seen[segmentId] = true
+		seen[textId] = true
 	end
 	markActive()
 
@@ -148,7 +148,7 @@ function JudgeService.start(hit: (Player, string) -> (), speech: (Player) -> ())
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		recent[player] = nil
-		seenSegments[player] = nil
+		seenTexts[player] = nil
 		lastPing[player] = nil
 		settled[player] = nil
 	end)

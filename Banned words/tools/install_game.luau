@@ -322,7 +322,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 -- Remote events: the only place that creates them. Every server module talks to clients through these helpers.
 --
 -- Server -> client                         Client -> server
---   RoundState  round snapshot (Match)       Transcript  (text, earliest + latest start, latest end, segment id)
+--   RoundState  round snapshot (Match)       Transcript  (text, earliest + latest start, latest end, text id)
 --   Words       visible words per player     VoicePing   mic hears speech (activity only)
 --   WordWarn    a new word is coming         Ready       mic test passed + voice connected
 --   Eliminated  someone was launched / left  Sync        "send me the current state"
@@ -1336,7 +1336,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "JudgeService"; s.Source = [
 -- (no turns). The client cannot prove a transcript is real speech; these checks only stop spam and mix-ups.
 --
 -- Boundaries: the client sends the server-time range its speech began in, the latest time it may have ended (and
--- a segment id), see Speech.luau.
+-- a text id), see Speech.luau.
 --   - speech that may have begun before the talk, or after the round was decided (Match.cutoffAt, at the latest
 --     the talk's end), is ignored;
 --   - so is speech that may have gone on past cutoffAt + END_TOLERANCE (its words may come after the end);
@@ -1358,7 +1358,7 @@ local open = false
 local onHit: (Player, string) -> () = function() end
 local onSpeech: (Player) -> () = function() end
 local recent: { [Player]: { number } } = {} -- os.clock() of recent transcripts (spam guard)
-local seenSegments: { [Player]: { [number]: boolean } } = {}
+local seenTexts: { [Player]: { [number]: boolean } } = {}
 local lastPing: { [Player]: number } = {}
 local minuteCount, minuteStart, warnedThisMinute = 0, os.clock(), false
 local settleKey = 0
@@ -1414,7 +1414,7 @@ local function countRequest()
 	end
 end
 
-local function onTranscript(player: Player, text: any, earliest: any, latest: any, ended: any, segmentId: any)
+local function onTranscript(player: Player, text: any, earliest: any, latest: any, ended: any, textId: any)
 	if not open or typeof(text) ~= "string" or not Match.isAlive(player) then
 		return
 	end
@@ -1423,13 +1423,13 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 		return
 	end
 	countRequest()
-	if typeof(segmentId) == "number" then
-		local seen = seenSegments[player] or {}
-		seenSegments[player] = seen
-		if seen[segmentId] then
-			return -- the same segment twice
+	if typeof(textId) == "number" then
+		local seen = seenTexts[player] or {}
+		seenTexts[player] = seen
+		if seen[textId] then
+			return -- the same transcript twice
 		end
-		seen[segmentId] = true
+		seen[textId] = true
 	end
 	markActive()
 
@@ -1481,7 +1481,7 @@ function JudgeService.start(hit: (Player, string) -> (), speech: (Player) -> ())
 	end)
 	Players.PlayerRemoving:Connect(function(player)
 		recent[player] = nil
-		seenSegments[player] = nil
+		seenTexts[player] = nil
 		lastPing[player] = nil
 		settled[player] = nil
 	end)
@@ -2450,7 +2450,7 @@ FlatVoice.start()
 Speech.onStatus(function()
 	refreshVoice()
 end)
-Speech.onText(function(text, earliest, latest, ended, segmentId)
+Speech.onText(function(text, earliest, latest, ended, textId)
 	if not State.micTested then
 		State.micTested = true
 		Toast.show("마이크 확인 완료!", "info")
@@ -2458,7 +2458,7 @@ Speech.onText(function(text, earliest, latest, ended, segmentId)
 		return
 	end
 	if State.round.phase == "Talk" and State.meAlive() then
-		remotes.Transcript:FireServer(text, earliest, latest, ended, segmentId)
+		remotes.Transcript:FireServer(text, earliest, latest, ended, textId)
 	end
 end)
 Speech.onUnstable(function()
@@ -3085,27 +3085,27 @@ local startedAt = os.clock()
 local INPUT_GRACE = 15 -- seconds to wait for the AudioDeviceInput before calling the account voice-less
 local UNSTABLE_SEGMENTS = 3 -- speech segments in a row that produced no text -> "recognition looks unstable"
 
--- Speech segments: the open one (voice detected now), finished ones still waiting for their text, expired ones
--- (no text within WAIT_LIMIT) whose text may still turn up late, and `lost`: expired ones older than LATE_KEEP,
--- merged into one, kept for the next text (results arrive in order: after one more text theirs can never come).
+-- Speech segments: the open one (voice detected now), finished ones still waiting for their text, and expired ones
+-- (no text within WAIT_LIMIT) whose text may still turn up late, each kept on its own for EXPIRED_KEEP seconds.
+-- Results arrive in order, so a text belongs to the oldest unanswered segment or a later one. One utterance stays
+-- one segment from voice-on to voice-off even when Roblox cuts it (~10 s pieces, each its own text): `used` counts
+-- the texts it already got, and when it ends it is owed one text per possible piece (`slots`, from its full length).
 -- Which segment a transcript belongs to is not always certain, so every transcript carries a start RANGE (the
 -- earliest and latest server time its speech may have begun) and the latest time it may have ended. The server
 -- uses a word against it only if the word was in effect for the whole range, and drops it if the speech may have
 -- begun after the round was decided or went on past it
 -- (unsure -> lenient: a missed word is better than an unfair launch).
--- [from, to]: when the speech began. An open piece after a ~10 s cut keeps the monologue's start as `from`
--- (`to` = when the piece began), so a long monologue never looks younger than it is.
-type Segment = { id: number, from: number, to: number, endedAt: number? }
+-- The first text of a segment began at `from`; a later piece began somewhere after it, up to now / the end.
+type Segment = { from: number, endedAt: number?, slots: number, used: number, lastCut: number }
 local openSegment: Segment? = nil
 local waiting: { Segment } = {}
 local expired: { Segment } = {}
-local lost: Segment? = nil
-local nextSegmentId = 0
+local nextTextId = 0 -- one id per transcript, so the server's duplicate check never drops a later piece
+local lastTextAt = -math.huge -- server time of the latest transcript (a segment ended before it was not a miss)
 local silentSegments = 0
 local WAIT_LIMIT = 3 -- seconds a finished segment waits for its text (Roblox: usually < 0.5 s) before it expires
-local LATE_KEEP = 5 -- seconds an expired segment stays a candidate on its own before it is merged into `lost`
-local LOST_KEEP = 60 -- `lost` is dropped this long after its last end (no result is a minute late)
-local CUT_MIN = 8 -- an open piece younger than this cannot have been cut (~10 s) yet
+local EXPIRED_KEEP = 30 -- an expired segment may still claim a late text until this long after its end
+local CUT_MIN = 8 -- speech shorter than this cannot have been cut (~10 s); longer speech gets a slot per CUT_MIN
 local UNKNOWN_SPAN = 12 -- a text with no segment at all: its speech began within this many seconds
 
 function Speech.status(): Status
@@ -3133,9 +3133,9 @@ function Speech.onStatus(fn: (Status) -> ())
 	fn(Speech.status())
 end
 
--- fn(text, earliest, latest, ended, segmentId): the server-time range the speech began in and the latest time it
--- may have ended (word-boundary fairness, see the Segment comment); segmentId lets the server drop a duplicate
--- without dropping a repeated sentence.
+-- fn(text, earliest, latest, ended, textId): the server-time range the speech began in and the latest time it
+-- may have ended (word-boundary fairness, see the Segment comment); textId (one per transcript) lets the server drop
+-- a duplicate without dropping a repeated sentence or a later piece of the same utterance.
 function Speech.onText(fn: (string, number, number, number, number) -> ())
 	table.insert(textListeners, fn)
 end
@@ -3154,53 +3154,46 @@ function Speech.setEnabled(on: boolean)
 		openSegment = nil
 		table.clear(waiting)
 		table.clear(expired)
-		lost = nil
+		lastTextAt = -math.huge
 		silentSegments = 0
 		emitStatus()
 	end
 end
 
-local function newSegment(from: number, to: number): Segment
-	nextSegmentId += 1
-	return { id = nextSegmentId, from = from, to = to }
+local function newSegment(from: number): Segment
+	return { from = from, slots = 1, used = 0, lastCut = from }
 end
 
--- Finished segments without a text after WAIT_LIMIT expire (each one counts as a recognition miss); expired ones
--- older than LATE_KEEP merge into `lost`.
+-- Finished segments without (all) their texts after WAIT_LIMIT expire. One counts as a recognition miss only if no
+-- text at all came after it ended (a spare slot of an earlier long segment may have taken its text).
+-- Expired ones are forgotten EXPIRED_KEEP seconds after their end.
 local function expire(now: number)
 	while waiting[1] and now - (waiting[1].endedAt :: number) > WAIT_LIMIT do
-		table.insert(expired, table.remove(waiting, 1) :: Segment)
-		silentSegments += 1
-		if silentSegments == UNSTABLE_SEGMENTS then
-			for _, fn in unstableListeners do
-				fn()
+		local segment = table.remove(waiting, 1) :: Segment
+		table.insert(expired, segment)
+		if segment.used == 0 and lastTextAt < (segment.endedAt :: number) then
+			silentSegments += 1
+			if silentSegments == UNSTABLE_SEGMENTS then
+				for _, fn in unstableListeners do
+					fn()
+				end
 			end
 		end
 	end
-	while expired[1] and now - (expired[1].endedAt :: number) > WAIT_LIMIT + LATE_KEEP do
-		local old = table.remove(expired, 1) :: Segment
-		local merged = lost
-		if merged then
-			merged.from = math.min(merged.from, old.from)
-			merged.to = math.max(merged.to, old.to)
-			merged.endedAt = math.max(merged.endedAt :: number, old.endedAt :: number)
-		else
-			lost = old
-		end
-	end
-	local merged = lost
-	if merged and now - (merged.endedAt :: number) > LOST_KEEP then
-		lost = nil
+	while expired[1] and now - (expired[1].endedAt :: number) > EXPIRED_KEEP do
+		table.remove(expired, 1)
 	end
 end
 
 local function onVoiceDetected(recognizer: AudioSpeechToText)
 	local now = workspace:GetServerTimeNow()
 	if recognizer.VoiceDetected then
-		openSegment = newSegment(now, now)
+		openSegment = newSegment(now)
 	elseif openSegment then
 		local finished = openSegment
 		finished.endedAt = now
+		-- one text per possible ~10 s piece of the whole utterance, and always at least one more after the cuts
+		finished.slots = math.max(finished.used + 1, 1 + math.floor((now - finished.from) / CUT_MIN))
 		openSegment = nil
 		table.insert(waiting, finished)
 		task.delay(WAIT_LIMIT + 0.1, function()
@@ -3211,46 +3204,61 @@ local function onVoiceDetected(recognizer: AudioSpeechToText)
 end
 
 -- The segment a transcript belongs to, when its speech began (a range) and the latest it may have ended:
---   1. finished segments without a text yet, the oldest first (lost, expired, waiting): results arrive in order,
---      so a text belongs to the oldest unanswered segment or a later one, never to an earlier one;
---   2. none: the open segment (a ~10 s cut of a long monologue); the rest of it keeps the monologue's start;
+--   1. finished segments with a slot left, the oldest first (expired before waiting): results arrive in order, so a
+--      text belongs to the oldest unanswered segment or a later one, never to an earlier one;
+--   2. none: the open segment (a ~10 s cut of a long monologue, counted on the same segment);
 --   3. nothing at all: within the last UNKNOWN_SPAN seconds.
+-- Every text began no earlier than its segment's start. The latest start is exact only for a one-piece segment;
+-- a piece of a longer one (which piece is unsure once spare slots exist) gets its end, an open one now.
 -- The result also covers every other segment the text might belong to (the other unanswered ones, an open one
 -- that may have been cut), so a wrong guess can only make the judging more lenient.
-local function claim(): (number, number, number, number) -- segment id, earliest start, latest start, latest end
+local function claim(): (number, number, number, number) -- text id, earliest start, latest start, latest end
 	local now = workspace:GetServerTimeNow()
 	expire(now)
+	nextTextId += 1
+	lastTextAt = now
 	local open = openSegment
+	local list = if expired[1] then expired elseif waiting[1] then waiting else nil
 	local taken: Segment
-	if lost then
-		taken = lost :: Segment
-		lost = nil
-	elseif expired[1] then
-		taken = table.remove(expired, 1) :: Segment
-	elseif waiting[1] then
-		taken = table.remove(waiting, 1) :: Segment
+	local earliest, latest, ended
+	if list then
+		taken = list[1]
+		taken.used += 1
+		if taken.used >= taken.slots then
+			table.remove(list, 1)
+		end
+		earliest, ended = taken.from, taken.endedAt :: number
+		latest = if taken.slots == 1 then taken.from else ended
 	elseif open then
 		taken = open
-		openSegment = newSegment(open.from, now)
+		open.used += 1
+		open.lastCut = now
+		earliest, latest, ended = open.from, now, now
 	else
-		taken = newSegment(now - UNKNOWN_SPAN, now)
+		taken = newSegment(now - UNKNOWN_SPAN)
+		earliest, latest, ended = now - UNKNOWN_SPAN, now, now
 	end
-	local earliest, latest, ended = taken.from, taken.to, taken.endedAt or now
 	local function cover(segment: Segment)
+		-- the text may be any piece of `segment`: only a finished one-piece segment surely began at its start
+		local surelyAtStart = segment.used == 0 and segment.slots == 1 and segment.endedAt ~= nil
 		earliest = math.min(earliest, segment.from)
-		latest = math.max(latest, segment.to)
+		latest = math.max(latest, if surelyAtStart then segment.from else segment.endedAt or now)
 		ended = math.max(ended, segment.endedAt or now)
 	end
 	for _, segment in expired do
-		cover(segment)
+		if segment ~= taken then
+			cover(segment)
+		end
 	end
 	for _, segment in waiting do
-		cover(segment)
+		if segment ~= taken then
+			cover(segment)
+		end
 	end
-	if open and taken ~= open and now - open.to >= CUT_MIN then
+	if open and taken ~= open and now - open.lastCut >= CUT_MIN then
 		cover(open) -- it may have been cut already
 	end
-	return taken.id, earliest, latest, ended
+	return nextTextId, earliest, latest, ended
 end
 
 -- True while speech that the server may still judge has no text yet: begun by `cutoff` and ended (or, if still

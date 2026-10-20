@@ -7,6 +7,11 @@ MonCook과 별개인 로블록스 음성 파티 게임. 마이크 음성을 로�
 - 제작 내역 전체(처음부터 V2.1.1까지): [docs/HISTORY_2026-10-20.md](docs/HISTORY_2026-10-20.md)
 - 가상 시계 테스트 + 의존 방향 검사(Studio 없이): `python -I tools/tests/run_tests.py` (luau CLI 필요)
 - 정적 검사(Roblox API 타입 + 린트): `python -I tools/lint/run_lint.py` (luau-lsp·selene·rojo 필요)
+
+**코드 규칙(이 게임)** — 전역 규칙(`~/.claude/CLAUDE.md` 3번)의 구체 사항
+- 서비스끼리는 require하지 않는다. 연결은 `RoundService`가 콜백으로 한다. UI 패널끼리도 require하지 않고, 클라이언트 연결은 `init.client`만 한다.
+- 조정할 숫자(시간·확률·한도)는 `src/shared/Config.luau`에 둔다. 대화 중 플레이어가 소리 내 읽을 수 있는 새 고정 문구는 `Config.TEXT`에 넣는다(`tools/check_content.luau`가 단어장 전체와 대조한다). 예전 문구 일부는 아직 각 모듈 안에 있다.
+- 바꾼 동작은 `tools/tests/run_tests.py`(가상 시계 테스트 + 의존 방향 검사)와 `tools/lint/run_lint.py`로 확인한다. 층 규칙의 표는 `docs/DESIGN_V2.md`의 "개발 도구" 절에 있다.
 아래 2026-10-17 결정 중 수영장·버전1 동시 출시는 V2 결정으로 바뀌었다.
 
 - 설계 원본(Claude Docs, 그림 포함): https://claude.ai/code/artifact/36208a40-0e2b-49e8-becf-d77f1b3fef31

@@ -70,39 +70,86 @@ def run(args, cwd):
     return subprocess.run(args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
+# luau-lsp writes logs, findings and its own errors all to stderr. A finding (src/AnalyzeCli.cpp `report`) is
+# "<path>(line,col): <Kind>: <message>" - type errors carry the mirror path, lint warnings (LocalUnused, ...) a path
+# relative to it, and a message may continue on the next lines. The run's own errors start with:
+TOOL_ERRORS = ("[ERROR]", "Error opening ", "Cannot get ", "Failed to ", "error: ", "WARNING: ", "warning: ")
+MIRROR = re.compile(r"[A-Za-z]:\\[^'\"\n]*?bw-lint-[^\\/]+[\\/]")  # the temp copy's folder (spaces allowed), anywhere
+FINDING = re.compile(r"^(src[\\/][^\[(\n]*?)(?: \[game/[^\]]*\])?\((\d+),(\d+)\): ([A-Za-z]\w*): (.*)$")
+
+
+def classify_luau_lsp(output):
+    """(findings with repo-relative paths, lines that show the run itself went wrong). The temp folder is cut out of
+    every line first (messages can name other modules by path), so findings match known_findings.txt every run."""
+    findings, problems = [], []
+    for line in output.splitlines():
+        if line.startswith("[INFO]") or line.startswith("[WARN]") or not line.strip():
+            continue
+        starts_with_mirror = MIRROR.match(line) is not None
+        clean = MIRROR.sub("", line)
+        match = FINDING.match(clean)
+        if match:
+            path, row, col, kind, message = match.groups()
+            findings.append("%s(%s,%s): %s: %s" % (path.replace("\\", "/").rstrip(), row, col, kind, message))
+        elif line.startswith(TOOL_ERRORS) or starts_with_mirror or not findings:
+            problems.append(line)  # a tool error, or a path line that is not a finding (e.g. "<path>: <error>")
+        else:
+            findings[-1] += " " + clean.strip()  # the rest of a multi-line message
+    return findings, problems
+
+
+def selftest():
+    """The output classifier must keep findings and catch tool errors; a broken classifier must not pass."""
+    mirror = r"c:\Users\x\AppData\Local\Temp\bw-lint-ab12\src"
+    finding = mirror + r"\client\A.luau [game/StarterPlayer/A](3,5): TypeError: Expected this to be"
+    cases = [  # (output, findings expected, problems expected)
+        (finding + "\n\t'Model'\nbut got\n\t'Model?'", 1, 0),
+        (r"src\client\A.luau [game/StarterPlayer/A](7,1): LocalUnused: Variable 'x' is never used", 1, 0),
+        ("[INFO] Loading definitions\n" + finding + "\nError opening src/server/Match.luau", 1, 1),
+        ("[ERROR] Failed to read definitions file defs.d.luau", 0, 1),
+        (finding + "\n" + mirror + r"\server\B.luau: cannot resolve", 1, 1),
+        (r"Cannot get c:\x\src: path does not exist", 0, 1),
+        (finding + "\ncaused by:\n  'T' from '" + mirror + r"\shared\TB.luau' is not 'T' from '" + mirror + r"\shared\TA.luau'", 1, 0),
+        (r"c:\Users\Jane Doe\AppData\Local\Temp\bw-lint-ab12\src\client\A.luau [game/X](3,5): TypeError: x", 1, 0),
+    ]
+    failures = []
+    for output, want_findings, want_problems in cases:
+        found, problems = classify_luau_lsp(output)
+        if len(found) != want_findings or len(problems) != want_problems:
+            failures.append("%r -> %d finding(s), %d problem(s)" % (output[:60], len(found), len(problems)))
+        elif any("bw-lint-" in f for f in found):
+            failures.append("%r -> the temp folder stayed in a finding" % output[:60])
+    return failures
+
+
 def luau_lsp_findings():
     """Runs luau-lsp analyze on an ASCII-path copy; returns unique findings with repo-relative paths."""
-    with tempfile.TemporaryDirectory(prefix="bw-lint-", dir=ascii_temp_root()) as mirror:
-        shutil.copytree(os.path.join(ROOT, "src"), os.path.join(mirror, "src"))
-        shutil.copy(os.path.join(ROOT, "default.project.json"), mirror)
-        shutil.copy(DEFS, os.path.join(mirror, "defs.d.luau"))
-        sourcemap = run(["rojo", "sourcemap", "default.project.json", "-o", "sourcemap.json"], mirror)
-        if sourcemap.returncode != 0:
-            fail("rojo sourcemap failed", sourcemap.stdout + sourcemap.stderr)
-        result = run(["luau-lsp", "analyze", "--platform=roblox", "--sourcemap=sourcemap.json",
-                      "--definitions:@roblox=defs.d.luau", "src"], mirror)
+    try:
+        with tempfile.TemporaryDirectory(prefix="bw-lint-", dir=ascii_temp_root()) as mirror:
+            shutil.copytree(os.path.join(ROOT, "src"), os.path.join(mirror, "src"))
+            shutil.copy(os.path.join(ROOT, "default.project.json"), mirror)
+            shutil.copy(DEFS, os.path.join(mirror, "defs.d.luau"))
+            sourcemap = run(["rojo", "sourcemap", "default.project.json", "-o", "sourcemap.json"], mirror)
+            if sourcemap.returncode != 0:
+                fail("rojo sourcemap failed", sourcemap.stdout + sourcemap.stderr)
+            result = run(["luau-lsp", "analyze", "--platform=roblox", "--sourcemap=sourcemap.json",
+                          "--definitions:@roblox=defs.d.luau", "src"], mirror)
+    except (OSError, shutil.Error) as error:
+        fail("could not prepare the ASCII copy for luau-lsp: %s" % error)
     output = result.stdout + result.stderr
-    findings = []
-    for line in output.splitlines():
-        if line.startswith("[INFO]") or line.startswith("[WARN]"):
-            continue
-        start = re.search(r"bw-lint-[^\\/]+[\\/](src[\\/].*)$", line)
-        if start:  # a new finding: "<mirror>\src\x.luau [game/...](line,col): TypeError: ..."
-            findings.append(re.sub(r" \[game/[^\]]*\]", "", start.group(1)).replace("\\", "/"))
-        elif findings and line.strip():
-            findings[-1] += " " + line.strip()
-    broken = "[ERROR]" in output or "path does not exist" in output
-    if broken or result.returncode not in (0, 1) or (result.returncode == 1 and not findings):
-        fail("luau-lsp did not analyze src/", output)
+    findings, problems = classify_luau_lsp(output)
+    if problems or result.returncode not in (0, 1) or (result.returncode == 1 and not findings):
+        fail("luau-lsp did not analyze src/ cleanly", "\n".join(problems) + "\n" + output)
     return sorted(set(findings))
 
 
 def selene_findings():
+    """selene prints findings on stdout; anything on stderr (e.g. the Roblox std cannot be built) is a failure."""
     result = run(["selene", "--display-style=quiet", "src"], ROOT)
     findings = sorted(line.replace("\\", "/") for line in result.stdout.splitlines()
                       if re.match(r"^src[\\/].*: (error|warning)\[", line))
-    if result.returncode not in (0, 1) or (result.returncode != 0 and not findings):
-        fail("selene did not lint src/", result.stdout + result.stderr)
+    if result.stderr.strip() or result.returncode not in (0, 1) or (result.returncode != 0 and not findings):
+        fail("selene did not lint src/ cleanly", result.stderr + "\n" + result.stdout)
     return findings
 
 
@@ -126,6 +173,9 @@ def write_known(findings):
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
+    broken = selftest()
+    if broken:
+        fail("the luau-lsp output classifier failed its self-test: " + "; ".join(broken))
     need_tools()
     ensure_definitions()
     findings = luau_lsp_findings() + selene_findings()

@@ -2,7 +2,7 @@
 -- Remote events: the only place that creates them. Every server module talks to clients through these helpers.
 --
 -- Server -> client                         Client -> server
---   RoundState  round snapshot (Match)       Transcript  (text, earliest + latest start, latest end, segment id)
+--   RoundState  round snapshot (Match)       Transcript  (text, earliest + latest start, latest end, text id)
 --   Words       visible words per player     VoicePing   mic hears speech (activity only)
 --   WordWarn    a new word is coming         Ready       mic test passed + voice connected
 --   Eliminated  someone was launched / left  Sync        "send me the current state"

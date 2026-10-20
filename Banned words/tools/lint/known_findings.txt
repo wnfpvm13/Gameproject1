@@ -1,0 +1,18 @@
+# Known static-check findings, reviewed and accepted until a cleanup the owner schedules.
+# Written by tools/lint/run_lint.py --update-known; line numbers are left out on purpose.
+src/client/Billboards.luau: TypeError: Cannot call a value of type {string} in union: {string} | {string}
+src/client/Speech.luau: TypeError: Expected this to be '"Disconnected" | "Listening" | "Muted" | "NoVoice" | "Speaking"' but got 'string | string | string | string | string' caused by: Not all union options are compatible. Expected this to be '"Disconnected" | "Listening" | "Muted" | "NoVoice" | "Speaking"', but got 'string'; none of the union options are compatible
+src/server/RoundService.luau: TypeError: Function only returns 1 value, but 2 are required here
+src/server/services/GhostService.luau: TypeError: Expected this to be 'Model', but got 'Model?'
+src/client/Billboards.luau: warning[roblox_manual_fromscale_or_fromoffset]: this UDim2.new call only sets scale, and can be simplified using UDim2.fromScale
+src/client/UI/MissionPanel.luau: warning[roblox_manual_fromscale_or_fromoffset]: this UDim2.new call only sets scale, and can be simplified using UDim2.fromScale
+src/client/UI/MissionPanel.luau: warning[roblox_manual_fromscale_or_fromoffset]: this UDim2.new call only sets scale, and can be simplified using UDim2.fromScale
+src/client/UI/ReactionBar.luau: warning[roblox_manual_fromscale_or_fromoffset]: this UDim2.new call only sets offset, and can be simplified using UDim2.fromOffset
+src/client/UI/ReactionBar.luau: warning[roblox_manual_fromscale_or_fromoffset]: this UDim2.new call only sets offset, and can be simplified using UDim2.fromOffset
+src/client/UI/Style.luau: warning[roblox_manual_fromscale_or_fromoffset]: this UDim2.new call only sets scale, and can be simplified using UDim2.fromScale
+src/client/UI/VotePanel.luau: warning[roblox_manual_fromscale_or_fromoffset]: this UDim2.new call only sets offset, and can be simplified using UDim2.fromOffset
+src/client/UI/VotePanel.luau: error[mismatched_arg_count]: this function takes 0 arguments but 2 arguments were supplied
+src/client/init.client.luau: error[if_same_then_else]: this has the same block as a previous if
+src/server/services/JudgeService.luau: error[mismatched_arg_count]: this function takes 0 arguments but 1 arguments were supplied
+src/server/services/JudgeService.luau: error[mismatched_arg_count]: this function takes 0 arguments but 2 arguments were supplied
+src/server/services/SeatService.luau: error[if_same_then_else]: this has the same block as a previous if

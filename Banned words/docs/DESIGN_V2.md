@@ -61,17 +61,18 @@
 ## 코드 구조 (오너 지시: 파트별, 단방향 의존)
 
 ```
-src/shared/            Config(숫자), Judge(정규화·포함 판정·겹침·조사)
+src/shared/            Config(숫자·고정 문구), Judge(정규화·포함 판정·겹침·조사)
 src/server/
-  Main.server          시작점: Net.init → VoiceService → RoundService
+  Main.server          시작점: Net.init → RoundService.start
   Net                  리모트 생성·송신 도우미 (유일한 리모트 생성 지점)
   Match                판 상태 데이터 + 작은 조회 함수 (규칙 없음)
-  RoundService         판 흐름. 서비스들을 연결하는 유일한 모듈
-  content/             데이터만: WordBank(명사 91·말버릇 14), Themes(테마 4 + 공통 주제 15)
-  services/            서로 require 하지 않음 (Match·Net·content만), 필요한 연결은 RoundService가 콜백으로
+  RoundService         판 흐름. 서비스들을 시작·연결하는 유일한 모듈
+  content/             데이터만: WordBank(명사 91·말버릇 14), Themes(테마 4 · 미션 12 · 공통 주제)
+  services/            서로 require 하지 않음 (shared·Match·Net·content만), 필요한 연결은 RoundService가 콜백으로
     WordService        첫 단어·누적 일정·보이는 단어 payload
     JudgeService       발화 접수·경계·판정 → hit 콜백, 판 종료 정리(settle)
-    HostService        테마·역할·주제·사건
+    MissionService     테마·미션 카드·조용할 때 이야깃거리/사건 (구 HostService)
+    VoteService        미션 투표·마감 집계·발표
     GhostService       Outsiders 충돌 그룹·유령 외형·리액션
     SeatService        링 의자 착석·발사·"펑"
     VoiceService       평탄 볼륨·유령/관전자 음성 분리
@@ -80,10 +81,11 @@ src/client/
   init.client          연결만: 서버 이벤트 → State 갱신 → refresh()가 모든 부품을 다시 그림
   State                클라이언트가 아는 판 상태
   Speech               마이크 → STT (켜기/끄기, 발화 시작 시각 범위, 판 종료 대기, 인식 불안정 감지)
-  RingCamera, Billboards(말풍선 최대 3단어+이름·역할), Fx(펑·리액션), FlatVoice
-  UI/                  Style(공용), Hud(상단판), Toast, MicPanel, HostPanel, ReactionBar
+  RingCamera, Billboards(말풍선 최대 3단어+이름), Fx(펑·리액션), FlatVoice
+  UI/                  Style(공용), Hud(상단판), Toast, MicPanel, HostPanel(사건·예고), MissionPanel, VotePanel, ReactionBar
 ```
 
+- 이 의존 규칙은 `tools/tests/check_deps.py`가 검사한다(아래 "개발 도구" 절의 표).
 - Rojo는 폴더를 통째로 매핑한다(`default.project.json`).
 - `tools/install_game.py`는 같은 규칙으로 폴더를 걸어서 설치기(`tools/install_game.luau`)를 만든다. 새 파일을 빠뜨릴 수 없다.
 - 맵은 `tools/build_lounge_map.luau`(Edit에서 실행)로 만든다.
@@ -250,3 +252,63 @@ GPT가 놓친 판정 문제 3건을 고치고, 긴 판에서 미션이 모자라
   - 1차: 높음 1건(구간 소비 순서 — 새 대기 구간을 먼저 소비하면, 뒤이어 온 새 문장의 결과가 옛 구간의 시작 시각을 받아 종료 후 금칙어로 탈락; 재현됨) → 가장 오래된 구간부터 소비. 낮음 1건(콜백 배열 타입 인자 수) → 고침. 말버릇·하한 보정 제거·미션 간격·모듈 구조는 문제없음.
   - 재확인 1: 위 두 건 해소 확인. 새로 높음 3건 → 모두 반영. (8초 넘게 늦은 결과가 새 문장의 시작을 빌림 → lost, 늦은 컷 결과 때 나머지의 시작 하한 → 독백 시작 유지, 1.5초 허용이 종료 뒤의 말을 허용 → 0.) 중간 1건(시간 종료를 0.2초 늦게 반영) → cutoff 사전 설정. 미래 끝 시각을 당기지 않는 것과 판 종료 때 만료 구간을 기다리지 않는 것에는 동의.
   - 재확인 2: Codex 사용 한도(22:42까지)로 실행하지 못했다. Claude가 대신 확인했다. 가장 오래된 구간부터 소비하고 남은 후보를 모두 범위에 넣으므로, 결과가 순서대로 오는 한 범위가 실제 시작을 늘 포함한다(엄격해질 수 없음). cutoff 사전 설정은 탈락·settle·초기화·늦은 입장과 충돌하지 않는다. 한도가 풀리면 Codex 재확인을 다시 받는다.
+
+## 개발 도구 — 의존 방향 검사 · 정적 검사 · 공용 스킬 (2026-10-20)
+
+오너가 고른 추천 3가지를 적용했다(규칙: `~/.claude/CLAUDE.md` — 한국어, Codex·다른 리뷰어 교차검증, 모듈화).
+
+**의존 방향 검사 (`tools/tests/check_deps.py`, `run_tests.py`에 포함)**
+- src/의 `require(...)`를 모두 읽어(대상 = 호출 안의 마지막 `WaitForChild("이름")`) 모듈마다 층을 정하고, 층마다 require할 수 있는 층만 허용한다.
+
+  | 층 | require 가능 |
+  |---|---|
+  | shared(Config, Judge), Net | shared |
+  | Match | shared, Net |
+  | content(WordBank, Themes) | shared |
+  | services/* | shared, Net, Match, content — **서비스끼리는 금지** |
+  | RoundService(연결 담당) | shared, Net, Match, content, services |
+  | Main.server | shared, Net, Match, RoundService |
+  | UI/Style | shared |
+  | UI의 패널들 | shared, Style — **패널끼리 금지** |
+  | 클라이언트 부품(State, Speech, Billboards, Fx, RingCamera, FlatVoice) | shared |
+  | init.client(연결만) | shared, 클라이언트 부품, UI |
+
+- 순환도 찾는다. 서버와 클라이언트는 서로 require할 수 없다(shared만 공유).
+- 모듈 이름은 src/ 안에서 겹치면 안 된다(이름으로 대상을 찾으므로 검사기가 잡는다). 이름을 찾을 수 없는 require(변수 등)도 실패로 처리한다.
+- 새 폴더는 `layer_of`에 넣기 전까지 "층 없음"으로 실패한다. 조용히 통과하지 않는다. `.lua` 파일도 읽는다.
+- 주석과 문자열을 먼저 지우고 읽는다. 그래서 주석·문자열 안의 require는 세지 않는다. 반대로 `---[[` 토글 안의 코드, `require (x)`(공백), 문자열 `\z` 줄 이어짐 뒤의 코드, 백틱 문자열 `{…}` 안의 require는 센다. 괄호 없는 `require"X"`는 이름을 알 수 없어 실패로 처리한다.
+- 검사기 자체가 틀리지 않도록 자체 시험 17가지를 먼저 돌린다. 위반 13가지는 각각 기대한 이유로 잡혀야 하고, 주석·문자열 3가지는 무시돼야 하며, 순환 1가지도 확인한다.
+- 현재 31개 모듈·require 64개가 규칙을 지킨다. luau-lsp `require-graph`로 같은 소스의 그래프를 뽑아 비교했더니 64개 간선이 정확히 같았다(파서 검증).
+
+**정적 검사 (`tools/lint/run_lint.py`, `selene.toml`)**
+- 도구: luau-lsp 1.70.1(Roblox API 타입 검사), selene 0.32.0(린트, `std = "roblox"`).
+  - 공식 GitHub 릴리스에서 받아 GitHub API가 주는 SHA-256과 일치하는 것을 확인한 뒤 `~/.local/bin`에 넣었다.
+  - selene은 Roblox 표준 라이브러리 기능이 빠진 "light" 판이 아닌 전체 판이다.
+- Roblox 타입 정의는 게임 스크립트용 보안 수준 "None"(`globalTypes.None.d.luau`)을 공식 CDN에서 받아 `.lint/`(git 제외)에 두고, 1주가 지나면 다시 받는다.
+- luau-lsp는 한글 폴더명이 든 경로를 열지 못한다("path does not exist"). 그래서 src/를 영문 경로의 임시 폴더에 복사해 Rojo sourcemap을 만들고 검사한 뒤, 결과 경로를 저장소 기준으로 바꾸고 중복을 지운다. selene은 그대로 돈다.
+  - 사용자 임시 폴더 경로에 한글이 있으면(한글 Windows 사용자 이름 등) `C:\Users\Public\Temp`를 쓴다.
+- 도구가 실패하면(경로를 못 엶, sourcemap 실패, selene 표준 라이브러리 생성 실패 등) 원문을 보여 주고 종료 코드 2로 끝난다. 실패가 "0건"처럼 보이지 않게 하려는 장치다(리뷰어 에이전트가 재현한 문제를 고침).
+- 이미 검토한 결과는 `tools/lint/known_findings.txt`에 줄 번호 없이 적어 두고, **새로 생긴 것만** 종료 코드 1로 알린다. 정리 뒤에는 `--update-known`으로 목록을 줄인다.
+- 첫 실행 결과 16건이고, **실제 버그는 없었다**(리뷰어 에이전트도 각 위치의 코드를 읽고 같은 판단). 정리는 게임 코드를 고치는 일이라 오너와 시점을 정한다.
+  - 타입 4건(Luau 검사기 한계·엄격함):
+    - `if` 식 결과를 순회(Billboards:102)
+    - 상태 문자열 타입이 넓어짐(Speech:63)
+    - nil일 수 있는 Character 저장(GhostService:168)
+    - `xpcall` 반환 개수(RoundService:272)
+  - selene 오류 5건:
+    - 빈 자리표시 콜백 `function() end`를 나중에 진짜 함수로 바꾸는데 자리표시만 보고 인자 수를 셈(3건)
+    - 같은 동작을 하는 if/else 가지(2건)
+  - selene 경고 7건: `UDim2.new` → `fromScale`·`fromOffset` 서식 제안.
+
+**공용 스킬**: Roblox 스킬 11개(roblox-brain 10 + roblox-dev-skill)를 git에 올라가지 않은 `moncook-claude/MonCook/.claude/skills/`에서 저장소 루트 `.claude/skills/`로 **복사**해 커밋한다(내용 동일, THIRD_PARTY.md의 위치·우선순위·주의 문구만 수정). 원본은 moncook-claude에 그대로 있다. 이 커밋이 그 브랜치나 메인 체크아웃에 들어가면 같은 스킬이 두 벌이 되므로 원본을 지운다(루트에 스킬이 없는 워크트리는 메인 체크아웃의 것을 대신 읽는다).
+- Claude Code는 시작 폴더부터 저장소(워크트리) 루트까지의 `.claude/skills/`를 읽는다. 그래서 금칙어·MonCook 어느 하위 폴더에서 시작해도 보인다.
+- 다른 워크트리는 이 커밋이 그 브랜치에 합쳐지거나, 루트에 스킬이 없을 때 대신 읽는 메인 체크아웃(integration/hunting)에 들어가야 보인다.
+- 최신판(roblox-brain v2.3.1, roblox-dev-skill v2.18.1)은 새 서드파티 코드라 검토·승인 뒤 반영한다.
+- 이번 세션에서 루트 스킬 11개가 실제로 사용 가능 목록에 나타났다(Claude Code 2.1.304).
+
+**교차검증**
+- 리뷰어 에이전트(Claude, 새 컨텍스트): 높음 0 · 중간 1 · 낮음 8.
+  - 작성자 주장(테스트 통과, 간선 64개 일치, 16건 오탐 분류, SHA-256 일치, "None" 보안 수준)은 모두 직접 재현했다.
+  - 중간 1건(도구 실패가 0건으로 보임)과 낮음 8건(파서 경계, 자체 시험 기대 이유, shared·Net 허용 범위, 모르는 폴더·`.lua`, 이 문서의 코드 구조 불일치, "옮겨 커밋" 문구, `__pycache__`, 알려진 결과 목록)을 모두 반영했다.
+- 리뷰어 재확인: 9건 반영을 직접 다시 실행해 확인했다. 실패 상황 6가지(한글 TEMP·PUBLIC, 잘못된 std, 깨진 project.json, 깨진 정의 파일, 새 결과 심기, 줄만 밀림)를 재현했다. 새로 낮음 3건(실패 출력에서 원인 줄이 잘림, `\z`·백틱 `{}`·괄호 없는 require 사각지대, 스킬 두 벌 조건)이 나와 모두 반영했다.
+- Codex: 사용 한도(22:42까지)로 예약 실행(22:47) 대기 중이다.

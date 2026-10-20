@@ -8,6 +8,7 @@ the REAL module sources from src/ + the test file. The modules run unchanged; on
   speech  src/client/Speech.luau: transcript start ranges, late texts, ~10 s cuts, waitSettled, unstable notice
   server  Config, Judge, WordBank, Themes, Match, JudgeService, WordService, MissionService: range judging,
           settle at the end of a round, per-player habit words, mission spacing with the real word schedule
+  deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
 """
 import io, os, subprocess, sys, tempfile
 
@@ -64,6 +65,11 @@ def main():
                 print(result.stderr.rstrip())
             if result.returncode != 0 or "ALL PASS" not in result.stdout:
                 failed = True
+    deps = subprocess.run([sys.executable, "-I", os.path.join(HERE, "check_deps.py")], capture_output=True, text=True, encoding="utf-8")
+    print("== deps")
+    print((deps.stdout + deps.stderr).rstrip())
+    if deps.returncode != 0 or "ALL PASS" not in deps.stdout:
+        failed = True
     print("RESULT: " + ("FAILED" if failed else "ALL SUITES PASS"))
     sys.exit(1 if failed else 0)
 

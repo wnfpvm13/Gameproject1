@@ -5,7 +5,8 @@ MonCook과 별개인 로블록스 음성 파티 게임. 마이크 음성을 로�
 
 **현재 기준: V2.1.2 (2026-10-20) — [docs/DESIGN_V2.md](docs/DESIGN_V2.md)** (규칙, 코드 구조, 테스트 기록).
 - 제작 내역 전체(처음부터 V2.1.1까지): [docs/HISTORY_2026-10-20.md](docs/HISTORY_2026-10-20.md)
-- 가상 시계 테스트(Studio 없이): `python -I tools/tests/run_tests.py` (luau CLI 필요)
+- 가상 시계 테스트 + 의존 방향 검사(Studio 없이): `python -I tools/tests/run_tests.py` (luau CLI 필요)
+- 정적 검사(Roblox API 타입 + 린트): `python -I tools/lint/run_lint.py` (luau-lsp·selene·rojo 필요)
 아래 2026-10-17 결정 중 수영장·버전1 동시 출시는 V2 결정으로 바뀌었다.
 
 - 설계 원본(Claude Docs, 그림 포함): https://claude.ai/code/artifact/36208a40-0e2b-49e8-becf-d77f1b3fef31

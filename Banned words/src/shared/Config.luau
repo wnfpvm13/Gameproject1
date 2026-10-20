@@ -31,14 +31,16 @@ return {
 	-- Two or more launches in the last WORD_DELAY_WINDOW seconds push the next word back (at most WORD_DELAY_MAX).
 	WORD_DELAY_WINDOW = 30, -- counts eliminations except players leaving
 	WORD_DELAY_MAX = 30,
-	HABIT_WORD_CHANCE = 0.5, -- chance that the third word is a speech habit (진짜, 대박 ...) instead of a noun
+	HABIT_WORD_CHANCE = 0.5, -- per player: chance that their third word is a speech habit (진짜, 대박 ...) instead of a noun
 
-	-- A transcript covers at most this many seconds of speech (Roblox cuts STT segments at about 10 s).
-	-- Words that took effect inside that window are not used against the transcript.
-	CHUNK_MAX = 12,
-
-	-- After the last elimination / time-out: keep accepting late transcripts, and let the last launch finish.
-	END_GRACE = 1.2,
+	-- When the round is decided (last elimination / time-out), speech still counts if it began before that moment
+	-- and ended no later than END_TOLERANCE seconds after it. 0 = only speech that was over by then: a transcript has
+	-- no word times, so speech running past the end may hold words said after it (not judged; raise only once
+	-- word times exist). Judging stays open until every alive player's client says that speech has been sent
+	-- (at most SETTLE_MAX seconds; a notice after SETTLE_NOTICE_AFTER).
+	END_TOLERANCE = 0,
+	SETTLE_MAX = 5,
+	SETTLE_NOTICE_AFTER = 1.2,
 	LAUNCH_POP_TIME = 0.5, -- seconds from launch to the "펑" (the body vanishes there)
 	RESPAWN_TIME = 3,
 
@@ -49,12 +51,12 @@ return {
 	VOICE_PING_INTERVAL = 1,
 
 	-- Mission cards (V2.1): card -> notice -> short vote -> follow-up, then the next mission. Nobody dies for them.
+	-- The theme's missions are spread evenly over the talk (330/450/570 s with 3 missions -> 110/150/190 s each).
 	MISSION_NOTICE_AT = 25, -- seconds after the card: a notice raises the stakes
 	VOTE_OPEN_AFTER = 40, -- seconds after the card: the vote opens (talk first)
 	VOTE_SECONDS = 12,
 	VOTE_RESULT_SECONDS = 4, -- the result stays on screen this long (late joiners get it too)
 	EVENT_SHOW_SECONDS = 7, -- a quiet-time event banner stays this long
-	MISSION_LENGTH = 120, -- seconds per mission before the next card
 
 	-- Quiet-time help next to the missions (no forced speaking, nobody dies for silence).
 	QUIET_TOPIC = 30, -- seconds without speech -> a topic card on the left
@@ -69,6 +71,7 @@ return {
 	TEXT = {
 		FREE_TALK = "선택하지 않아도 자유롭게 이야기할 수 있어요",
 		VOTE_FREE = "투표는 자유예요 · 계속 이야기해도 돼요",
+		SETTLING = "마지막 말을 확인하고 있어요…",
 	},
 
 	-- Scoring (session leaderstats, casual only): the last other alive speaker before a launch gets the assist.

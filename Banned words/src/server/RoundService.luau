@@ -198,16 +198,18 @@ local function runRound()
 	Match.talkStartedAt = Match.now()
 	JudgeService.setOpen(true)
 	Match.setPhase("Talk", seconds, Match.theme or "대화 시작")
+	Match.cutoffAt = Match.endsAt -- decided at the latest when the time runs out (no polling gap at the end)
 	local stillTalking = talking(myRound)
 	task.spawn(WordService.runSchedule, seconds, stillTalking, rng)
-	task.spawn(MissionService.run, stillTalking, Random.new(), function(spec)
+	task.spawn(MissionService.run, seconds, stillTalking, Random.new(), function(spec)
 		return VoteService.run(spec, stillTalking) -- (outcome, announce)
 	end)
 	waitPhase(roundOver)
 
-	-- Grace: transcripts of speech that started before the round was decided still count, then judging closes.
+	-- Settle: speech that began before the round was decided still counts once its text arrives, then judging
+	-- closes. The phase stays Talk meanwhile, so the clients keep their recognizers on.
 	Match.cutoffAt = math.min(Match.cutoffAt, Match.now(), Match.endsAt)
-	task.wait(Config.END_GRACE)
+	JudgeService.settle(Match.cutoffAt)
 	JudgeService.setOpen(false)
 	while os.clock() - lastLaunchAt < Config.LAUNCH_POP_TIME + 0.6 do
 		task.wait(0.1)

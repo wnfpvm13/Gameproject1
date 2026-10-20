@@ -2,22 +2,23 @@
 -- Remote events: the only place that creates them. Every server module talks to clients through these helpers.
 --
 -- Server -> client                         Client -> server
---   RoundState  round snapshot (Match)       Transcript  (text, segment start in server time)
+--   RoundState  round snapshot (Match)       Transcript  (text, earliest + latest start, latest end, segment id)
 --   Words       visible words per player     VoicePing   mic hears speech (activity only)
 --   WordWarn    a new word is coming         Ready       mic test passed + voice connected
 --   Eliminated  someone was launched / left  Sync        "send me the current state"
 --   Host        theme, mission card, topic,  Reaction    ghost/spectator emoji
 --               event                        Vote        (voteKey, option id) mission vote
---   VoteState   vote opened / closed
+--   VoteState   vote opened / closed         Settled     (key) my speech from before the cutoff is sent
 --   Notice      short toast text
 --   Reaction    emoji shown above a player
+--   Settle      round decided: { key, cutoff }
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = {}
 
 local NAMES = {
-	"RoundState", "Words", "WordWarn", "Eliminated", "Host", "VoteState", "Notice", "Reaction",
-	"Transcript", "VoicePing", "Ready", "Sync", "Vote",
+	"RoundState", "Words", "WordWarn", "Eliminated", "Host", "VoteState", "Notice", "Reaction", "Settle",
+	"Transcript", "VoicePing", "Ready", "Sync", "Vote", "Settled",
 }
 
 local folder: Folder

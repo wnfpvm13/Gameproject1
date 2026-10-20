@@ -44,14 +44,16 @@ return {
 	-- Two or more launches in the last WORD_DELAY_WINDOW seconds push the next word back (at most WORD_DELAY_MAX).
 	WORD_DELAY_WINDOW = 30, -- counts eliminations except players leaving
 	WORD_DELAY_MAX = 30,
-	HABIT_WORD_CHANCE = 0.5, -- chance that the third word is a speech habit (진짜, 대박 ...) instead of a noun
+	HABIT_WORD_CHANCE = 0.5, -- per player: chance that their third word is a speech habit (진짜, 대박 ...) instead of a noun
 
-	-- A transcript covers at most this many seconds of speech (Roblox cuts STT segments at about 10 s).
-	-- Words that took effect inside that window are not used against the transcript.
-	CHUNK_MAX = 12,
-
-	-- After the last elimination / time-out: keep accepting late transcripts, and let the last launch finish.
-	END_GRACE = 1.2,
+	-- When the round is decided (last elimination / time-out), speech still counts if it began before that moment
+	-- and ended no later than END_TOLERANCE seconds after it. 0 = only speech that was over by then: a transcript has
+	-- no word times, so speech running past the end may hold words said after it (not judged; raise only once
+	-- word times exist). Judging stays open until every alive player's client says that speech has been sent
+	-- (at most SETTLE_MAX seconds; a notice after SETTLE_NOTICE_AFTER).
+	END_TOLERANCE = 0,
+	SETTLE_MAX = 5,
+	SETTLE_NOTICE_AFTER = 1.2,
 	LAUNCH_POP_TIME = 0.5, -- seconds from launch to the "펑" (the body vanishes there)
 	RESPAWN_TIME = 3,
 
@@ -62,12 +64,12 @@ return {
 	VOICE_PING_INTERVAL = 1,
 
 	-- Mission cards (V2.1): card -> notice -> short vote -> follow-up, then the next mission. Nobody dies for them.
+	-- The theme's missions are spread evenly over the talk (330/450/570 s with 3 missions -> 110/150/190 s each).
 	MISSION_NOTICE_AT = 25, -- seconds after the card: a notice raises the stakes
 	VOTE_OPEN_AFTER = 40, -- seconds after the card: the vote opens (talk first)
 	VOTE_SECONDS = 12,
 	VOTE_RESULT_SECONDS = 4, -- the result stays on screen this long (late joiners get it too)
 	EVENT_SHOW_SECONDS = 7, -- a quiet-time event banner stays this long
-	MISSION_LENGTH = 120, -- seconds per mission before the next card
 
 	-- Quiet-time help next to the missions (no forced speaking, nobody dies for silence).
 	QUIET_TOPIC = 30, -- seconds without speech -> a topic card on the left
@@ -82,6 +84,7 @@ return {
 	TEXT = {
 		FREE_TALK = "선택하지 않아도 자유롭게 이야기할 수 있어요",
 		VOTE_FREE = "투표는 자유예요 · 계속 이야기해도 돼요",
+		SETTLING = "마지막 말을 확인하고 있어요…",
 	},
 
 	-- Scoring (session leaderstats, casual only): the last other alive speaker before a launch gets the assist.
@@ -195,7 +198,7 @@ local Match = {
 	participants = {} :: { [Player]: Participant },
 	startedWith = 0,
 	talkStartedAt = math.huge, -- Match.now() when Talk began; speech from before it is ignored
-	cutoffAt = math.huge, -- Match.now() when the round was decided; speech that started later is ignored
+	cutoffAt = math.huge, -- Match.now() when the round is decided (the talk's end, or earlier); later speech is ignored
 	lastActivityAt = 0, -- os.clock() of the last speech heard from an alive participant
 	launches = {} :: { number }, -- os.clock() of each launch this round
 	saidCount = 0, -- launches for saying a word (tells a real win from a walkover)
@@ -319,22 +322,23 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 -- Remote events: the only place that creates them. Every server module talks to clients through these helpers.
 --
 -- Server -> client                         Client -> server
---   RoundState  round snapshot (Match)       Transcript  (text, segment start in server time)
+--   RoundState  round snapshot (Match)       Transcript  (text, earliest + latest start, latest end, segment id)
 --   Words       visible words per player     VoicePing   mic hears speech (activity only)
 --   WordWarn    a new word is coming         Ready       mic test passed + voice connected
 --   Eliminated  someone was launched / left  Sync        "send me the current state"
 --   Host        theme, mission card, topic,  Reaction    ghost/spectator emoji
 --               event                        Vote        (voteKey, option id) mission vote
---   VoteState   vote opened / closed
+--   VoteState   vote opened / closed         Settled     (key) my speech from before the cutoff is sent
 --   Notice      short toast text
 --   Reaction    emoji shown above a player
+--   Settle      round decided: { key, cutoff }
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = {}
 
 local NAMES = {
-	"RoundState", "Words", "WordWarn", "Eliminated", "Host", "VoteState", "Notice", "Reaction",
-	"Transcript", "VoicePing", "Ready", "Sync", "Vote",
+	"RoundState", "Words", "WordWarn", "Eliminated", "Host", "VoteState", "Notice", "Reaction", "Settle",
+	"Transcript", "VoicePing", "Ready", "Sync", "Vote", "Settled",
 }
 
 local folder: Folder
@@ -583,16 +587,18 @@ local function runRound()
 	Match.talkStartedAt = Match.now()
 	JudgeService.setOpen(true)
 	Match.setPhase("Talk", seconds, Match.theme or "대화 시작")
+	Match.cutoffAt = Match.endsAt -- decided at the latest when the time runs out (no polling gap at the end)
 	local stillTalking = talking(myRound)
 	task.spawn(WordService.runSchedule, seconds, stillTalking, rng)
-	task.spawn(MissionService.run, stillTalking, Random.new(), function(spec)
+	task.spawn(MissionService.run, seconds, stillTalking, Random.new(), function(spec)
 		return VoteService.run(spec, stillTalking) -- (outcome, announce)
 	end)
 	waitPhase(roundOver)
 
-	-- Grace: transcripts of speech that started before the round was decided still count, then judging closes.
+	-- Settle: speech that began before the round was decided still counts once its text arrives, then judging
+	-- closes. The phase stays Talk meanwhile, so the clients keep their recognizers on.
 	Match.cutoffAt = math.min(Match.cutoffAt, Match.now(), Match.endsAt)
-	task.wait(Config.END_GRACE)
+	JudgeService.settle(Match.cutoffAt)
 	JudgeService.setOpen(false)
 	while os.clock() - lastLaunchAt < Config.LAUNCH_POP_TIME + 0.6 do
 		task.wait(0.1)
@@ -1329,10 +1335,14 @@ do local s = Instance.new("ModuleScript"); s.Name = "JudgeService"; s.Source = [
 -- Transcript intake and judging. Every alive participant is judged on everything they say during the talk
 -- (no turns). The client cannot prove a transcript is real speech; these checks only stop spam and mix-ups.
 --
--- Boundaries: the client sends the server time its speech segment started (and a segment id).
---   - speech that started before the talk began, or after the round ended (Match.cutoffAt), is ignored;
---   - a word only counts against speech that started after the word took effect.
--- The claimed start is clamped to the last CHUNK_MAX seconds, so it can only make judging more lenient.
+-- Boundaries: the client sends the server-time range its speech began in, the latest time it may have ended (and
+-- a segment id), see Speech.luau.
+--   - speech that may have begun before the talk, or after the round was decided (Match.cutoffAt, at the latest
+--     the talk's end), is ignored;
+--   - so is speech that may have gone on past cutoffAt + END_TOLERANCE (its words may come after the end);
+--   - a word only counts if it was in effect for the whole range (unsure -> no launch).
+-- End of the round: settle() keeps judging open until every alive player's client says that its speech which may
+-- still count has been sent (or SETTLE_MAX passes), so a sentence finished right at the end still counts.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
@@ -1351,6 +1361,8 @@ local recent: { [Player]: { number } } = {} -- os.clock() of recent transcripts 
 local seenSegments: { [Player]: { [number]: boolean } } = {}
 local lastPing: { [Player]: number } = {}
 local minuteCount, minuteStart, warnedThisMinute = 0, os.clock(), false
+local settleKey = 0
+local settled: { [Player]: boolean } = {}
 
 local function markActive()
 	Match.lastActivityAt = os.clock()
@@ -1402,7 +1414,7 @@ local function countRequest()
 	end
 end
 
-local function onTranscript(player: Player, text: any, startedAt: any, segmentId: any)
+local function onTranscript(player: Player, text: any, earliest: any, latest: any, ended: any, segmentId: any)
 	if not open or typeof(text) ~= "string" or not Match.isAlive(player) then
 		return
 	end
@@ -1421,16 +1433,23 @@ local function onTranscript(player: Player, text: any, startedAt: any, segmentId
 	end
 	markActive()
 
+	-- The speech began somewhere in [from, to] and ended by endedBy. Nothing is clamped in the harsher direction:
+	-- an earlier start or a later end can only make judging more lenient (a client could just as well not send it).
+	if typeof(earliest) ~= "number" or typeof(latest) ~= "number" or typeof(ended) ~= "number"
+		or earliest ~= earliest or latest ~= latest or ended ~= ended then
+		return
+	end
 	local now = Match.now()
-	local segmentStart = if typeof(startedAt) == "number" and startedAt == startedAt then startedAt else now - Config.CHUNK_MAX
-	segmentStart = math.clamp(segmentStart, now - Config.CHUNK_MAX, now)
-	if segmentStart < Match.talkStartedAt or segmentStart > Match.cutoffAt then
-		return -- spoken before the talk began or after the round was decided
+	local from = math.min(earliest, now)
+	local to = math.clamp(latest, from, now)
+	local endedBy = math.max(ended, to)
+	if from < Match.talkStartedAt or to > Match.cutoffAt or endedBy > Match.cutoffAt + Config.END_TOLERANCE then
+		return -- may have been spoken before the talk, after the round was decided, or well past that moment
 	end
 	onSpeech(player)
 	local p = Match.participants[player]
 	for _, word in p.words do
-		if word.effectiveAt <= segmentStart and Judge.isConfirmed(word.text, cleaned, word.aliases) then
+		if word.effectiveAt <= from and Judge.isConfirmed(word.text, cleaned, word.aliases) then
 			onHit(player, word.text)
 			return
 		end
@@ -1455,11 +1474,44 @@ function JudgeService.start(hit: (Player, string) -> (), speech: (Player) -> ())
 	onSpeech = speech
 	Net.listen("Transcript", onTranscript)
 	Net.listen("VoicePing", onVoicePing)
+	Net.listen("Settled", function(player, key)
+		if key == settleKey then
+			settled[player] = true
+		end
+	end)
 	Players.PlayerRemoving:Connect(function(player)
 		recent[player] = nil
 		seenSegments[player] = nil
 		lastPing[player] = nil
+		settled[player] = nil
 	end)
+end
+
+-- The round was decided at `cutoff`: blocks until every alive participant's client has sent its speech from
+-- before it (at most SETTLE_MAX seconds; a notice if it takes a moment). Judging stays open meanwhile.
+function JudgeService.settle(cutoff: number)
+	settleKey += 1
+	table.clear(settled)
+	Net.toAll("Settle", { key = settleKey, cutoff = cutoff })
+	local started = os.clock()
+	local noticed = false
+	while os.clock() - started < Config.SETTLE_MAX do
+		local pending = false
+		for _, player in Match.aliveList() do
+			if not settled[player] then
+				pending = true
+				break
+			end
+		end
+		if not pending then
+			return
+		end
+		if not noticed and os.clock() - started >= Config.SETTLE_NOTICE_AFTER then
+			noticed = true
+			Net.notice(Config.TEXT.SETTLING)
+		end
+		task.wait(0.1)
+	end
 end
 
 function JudgeService.setOpen(isOpen: boolean)
@@ -1474,7 +1526,8 @@ return JudgeService
 ]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "MissionService"; s.Source = [====[--!strict
 -- Assistant host (V2.1): the round's theme, then the theme's mission cards one after another on a fixed timetable
--- (card -> notice -> short vote -> follow-up), plus topic cards / small events only when the table goes quiet.
+-- (card -> notice -> short vote -> follow-up, the missions spread evenly over the talk), plus topic cards / small
+-- events only when the table goes quiet.
 -- Nobody dies for a mission, there are no personal roles, and nothing here ever looks at the secret words:
 -- theme, missions and their timing depend only on a fresh RNG, public votes, public events and time, so they can
 -- never hint at anyone's word. Card texts are kept word-free ahead of time by tools/check_content.luau.
@@ -1619,13 +1672,14 @@ end
 
 -- Runs alongside the talk. `runVote(spec)` (wired by RoundService to VoteService) blocks until the vote closes
 -- and returns the winning option id (or "undecided") plus a function that shows the result to everyone.
-function MissionService.run(stillTalking: () -> boolean, rng: Random, runVote: (VoteSpec) -> (string, () -> ()))
+function MissionService.run(talkSeconds: number, stillTalking: () -> boolean, rng: Random, runVote: (VoteSpec) -> (string, () -> ()))
 	local t = theme
 	if not t then
 		return
 	end
 	task.spawn(runQuietHelp, stillTalking, rng)
 	local missions = t.missions -- in order: each theme's missions tell a small story
+	local missionLength = talkSeconds / #missions -- spread over the whole talk, however long it is
 	for index, mission in missions do
 		if not waitUntil(os.clock(), Config.CARD_OPEN_SECONDS, stillTalking) then
 			return
@@ -1661,7 +1715,7 @@ function MissionService.run(stillTalking: () -> boolean, rng: Random, runVote: (
 		end
 		showMission(index, #missions, mission, "after", mission.followups[outcome] or mission.followups.undecided, decision)
 		Match.holdHost(Config.STAGE_HOLD)
-		if not waitUntil(started + Config.MISSION_LENGTH, 0, stillTalking) then
+		if not waitUntil(started + missionLength, 0, stillTalking) then
 			return
 		end
 	end
@@ -2280,9 +2334,10 @@ function WordService.runSchedule(talkSeconds: number, stillTalking: () -> boolea
 			task.wait(0.25)
 		end
 		Match.nextWordWarnAt = math.huge
-		local kind: "noun" | "habit" = if wordCount == 3 and rng:NextNumber() < Config.HABIT_WORD_CHANCE then "habit" else "noun"
 		for _, p in Match.participants do
 			if p.alive then
+				-- Drawn per player: one kind for everyone would let anyone read theirs off the others' heads.
+				local kind: "noun" | "habit" = if wordCount == 3 and rng:NextNumber() < Config.HABIT_WORD_CHANCE then "habit" else "noun"
 				addWord(p, kind, effectiveAt, rng)
 			end
 		end
@@ -2395,7 +2450,7 @@ FlatVoice.start()
 Speech.onStatus(function()
 	refreshVoice()
 end)
-Speech.onText(function(text, startedAt, segmentId)
+Speech.onText(function(text, earliest, latest, ended, segmentId)
 	if not State.micTested then
 		State.micTested = true
 		Toast.show("마이크 확인 완료!", "info")
@@ -2403,7 +2458,7 @@ Speech.onText(function(text, startedAt, segmentId)
 		return
 	end
 	if State.round.phase == "Talk" and State.meAlive() then
-		remotes.Transcript:FireServer(text, startedAt, segmentId)
+		remotes.Transcript:FireServer(text, earliest, latest, ended, segmentId)
 	end
 end)
 Speech.onUnstable(function()
@@ -2493,6 +2548,14 @@ end)
 
 remotes.Notice.OnClientEvent:Connect(function(info)
 	Toast.show(info.text, "near")
+end)
+
+-- The round was decided: once my speech that may still count has been sent, say so (judging waits for it).
+remotes.Settle.OnClientEvent:Connect(function(info)
+	task.spawn(function()
+		Speech.waitSettled(info.cutoff, info.cutoff + Config.END_TOLERANCE, Config.SETTLE_MAX)
+		remotes.Settled:FireServer(info.key)
+	end)
 end)
 
 remotes.Reaction.OnClientEvent:Connect(function(info)
@@ -3015,23 +3078,35 @@ export type Status = "NoVoice" | "Disconnected" | "Muted" | "Listening" | "Speak
 local input: AudioDeviceInput? = nil
 local stt: AudioSpeechToText? = nil
 local statusListeners: { (Status) -> () } = {}
-local textListeners: { (string, number, number) -> () } = {}
+local textListeners: { (string, number, number, number, number) -> () } = {}
 local unstableListeners: { () -> () } = {}
 
 local startedAt = os.clock()
 local INPUT_GRACE = 15 -- seconds to wait for the AudioDeviceInput before calling the account voice-less
 local UNSTABLE_SEGMENTS = 3 -- speech segments in a row that produced no text -> "recognition looks unstable"
 
--- Speech segments: the open one (voice detected now) and finished ones still waiting for their text.
--- Each transcript takes the oldest waiting segment's start time, so a late result never borrows the start
--- of the next sentence. A monologue cut at ~10 s gets a new open segment from the cut.
-type Segment = { id: number, startedAt: number, endedAt: number? }
+-- Speech segments: the open one (voice detected now), finished ones still waiting for their text, expired ones
+-- (no text within WAIT_LIMIT) whose text may still turn up late, and `lost`: expired ones older than LATE_KEEP,
+-- merged into one, kept for the next text (results arrive in order: after one more text theirs can never come).
+-- Which segment a transcript belongs to is not always certain, so every transcript carries a start RANGE (the
+-- earliest and latest server time its speech may have begun) and the latest time it may have ended. The server
+-- uses a word against it only if the word was in effect for the whole range, and drops it if the speech may have
+-- begun after the round was decided or went on past it
+-- (unsure -> lenient: a missed word is better than an unfair launch).
+-- [from, to]: when the speech began. An open piece after a ~10 s cut keeps the monologue's start as `from`
+-- (`to` = when the piece began), so a long monologue never looks younger than it is.
+type Segment = { id: number, from: number, to: number, endedAt: number? }
 local openSegment: Segment? = nil
 local waiting: { Segment } = {}
+local expired: { Segment } = {}
+local lost: Segment? = nil
 local nextSegmentId = 0
 local silentSegments = 0
-local WAIT_LIMIT = 3 -- seconds a finished segment may wait for its text (Roblox: usually < 0.5 s) before it is dropped
-local CUT_ALLOWANCE = 1 -- a ~10 s cut is noticed when its text arrives; start the next piece this much earlier
+local WAIT_LIMIT = 3 -- seconds a finished segment waits for its text (Roblox: usually < 0.5 s) before it expires
+local LATE_KEEP = 5 -- seconds an expired segment stays a candidate on its own before it is merged into `lost`
+local LOST_KEEP = 60 -- `lost` is dropped this long after its last end (no result is a minute late)
+local CUT_MIN = 8 -- an open piece younger than this cannot have been cut (~10 s) yet
+local UNKNOWN_SPAN = 12 -- a text with no segment at all: its speech began within this many seconds
 
 function Speech.status(): Status
 	if not input then
@@ -3058,9 +3133,10 @@ function Speech.onStatus(fn: (Status) -> ())
 	fn(Speech.status())
 end
 
--- fn(text, segmentStart, segmentId): segmentStart is the server time the speech began (word-boundary fairness),
--- segmentId lets the server drop a duplicate without dropping a repeated sentence.
-function Speech.onText(fn: (string, number, number) -> ())
+-- fn(text, earliest, latest, ended, segmentId): the server-time range the speech began in and the latest time it
+-- may have ended (word-boundary fairness, see the Segment comment); segmentId lets the server drop a duplicate
+-- without dropping a repeated sentence.
+function Speech.onText(fn: (string, number, number, number, number) -> ())
 	table.insert(textListeners, fn)
 end
 
@@ -3077,59 +3153,129 @@ function Speech.setEnabled(on: boolean)
 		stt.Enabled = on
 		openSegment = nil
 		table.clear(waiting)
+		table.clear(expired)
+		lost = nil
 		silentSegments = 0
 		emitStatus()
 	end
 end
 
-local function newSegment(startedAt: number): Segment
+local function newSegment(from: number, to: number): Segment
 	nextSegmentId += 1
-	return { id = nextSegmentId, startedAt = startedAt }
+	return { id = nextSegmentId, from = from, to = to }
+end
+
+-- Finished segments without a text after WAIT_LIMIT expire (each one counts as a recognition miss); expired ones
+-- older than LATE_KEEP merge into `lost`.
+local function expire(now: number)
+	while waiting[1] and now - (waiting[1].endedAt :: number) > WAIT_LIMIT do
+		table.insert(expired, table.remove(waiting, 1) :: Segment)
+		silentSegments += 1
+		if silentSegments == UNSTABLE_SEGMENTS then
+			for _, fn in unstableListeners do
+				fn()
+			end
+		end
+	end
+	while expired[1] and now - (expired[1].endedAt :: number) > WAIT_LIMIT + LATE_KEEP do
+		local old = table.remove(expired, 1) :: Segment
+		local merged = lost
+		if merged then
+			merged.from = math.min(merged.from, old.from)
+			merged.to = math.max(merged.to, old.to)
+			merged.endedAt = math.max(merged.endedAt :: number, old.endedAt :: number)
+		else
+			lost = old
+		end
+	end
+	local merged = lost
+	if merged and now - (merged.endedAt :: number) > LOST_KEEP then
+		lost = nil
+	end
 end
 
 local function onVoiceDetected(recognizer: AudioSpeechToText)
 	local now = workspace:GetServerTimeNow()
 	if recognizer.VoiceDetected then
-		openSegment = newSegment(now)
+		openSegment = newSegment(now, now)
 	elseif openSegment then
 		local finished = openSegment
 		finished.endedAt = now
 		openSegment = nil
 		table.insert(waiting, finished)
-		-- If no text shows up shortly, it was a recognition miss: drop it and count it.
-		task.delay(WAIT_LIMIT, function()
-			local index = table.find(waiting, finished)
-			if index then
-				table.remove(waiting, index)
-			end
-			if index and recognizer.Enabled then
-				silentSegments += 1
-				if silentSegments == UNSTABLE_SEGMENTS then
-					for _, fn in unstableListeners do
-						fn()
-					end
-				end
-			end
+		task.delay(WAIT_LIMIT + 0.1, function()
+			expire(workspace:GetServerTimeNow())
 		end)
 	end
 	emitStatus()
 end
 
--- The segment a transcript belongs to: the oldest finished one still waiting, else the open one (a ~10 s cut).
-local function takeSegment(): Segment
+-- The segment a transcript belongs to, when its speech began (a range) and the latest it may have ended:
+--   1. finished segments without a text yet, the oldest first (lost, expired, waiting): results arrive in order,
+--      so a text belongs to the oldest unanswered segment or a later one, never to an earlier one;
+--   2. none: the open segment (a ~10 s cut of a long monologue); the rest of it keeps the monologue's start;
+--   3. nothing at all: within the last UNKNOWN_SPAN seconds.
+-- The result also covers every other segment the text might belong to (the other unanswered ones, an open one
+-- that may have been cut), so a wrong guess can only make the judging more lenient.
+local function claim(): (number, number, number, number) -- segment id, earliest start, latest start, latest end
 	local now = workspace:GetServerTimeNow()
-	while waiting[1] and now - (waiting[1].endedAt or now) > WAIT_LIMIT do
-		table.remove(waiting, 1)
-	end
-	if waiting[1] then
-		return table.remove(waiting, 1) :: Segment
-	end
+	expire(now)
 	local open = openSegment
-	if open then
-		openSegment = newSegment(now - CUT_ALLOWANCE) -- the rest of the monologue starts at the cut
-		return open
+	local taken: Segment
+	if lost then
+		taken = lost :: Segment
+		lost = nil
+	elseif expired[1] then
+		taken = table.remove(expired, 1) :: Segment
+	elseif waiting[1] then
+		taken = table.remove(waiting, 1) :: Segment
+	elseif open then
+		taken = open
+		openSegment = newSegment(open.from, now)
+	else
+		taken = newSegment(now - UNKNOWN_SPAN, now)
 	end
-	return newSegment(now - 10) -- unknown: assume the longest segment (lenient for new words)
+	local earliest, latest, ended = taken.from, taken.to, taken.endedAt or now
+	local function cover(segment: Segment)
+		earliest = math.min(earliest, segment.from)
+		latest = math.max(latest, segment.to)
+		ended = math.max(ended, segment.endedAt or now)
+	end
+	for _, segment in expired do
+		cover(segment)
+	end
+	for _, segment in waiting do
+		cover(segment)
+	end
+	if open and taken ~= open and now - open.to >= CUT_MIN then
+		cover(open) -- it may have been cut already
+	end
+	return taken.id, earliest, latest, ended
+end
+
+-- True while speech that the server may still judge has no text yet: begun by `cutoff` and ended (or, if still
+-- going, not past) `endBy`. Speech going on longer is not judged anyway (see JudgeService).
+local function hasPendingBefore(cutoff: number, endBy: number): boolean
+	local now = workspace:GetServerTimeNow()
+	expire(now)
+	if openSegment and openSegment.from <= cutoff and now <= endBy then
+		return true
+	end
+	for _, segment in waiting do
+		if segment.from <= cutoff and (segment.endedAt :: number) <= endBy then
+			return true
+		end
+	end
+	return false
+end
+
+-- After the round is decided: returns once my speech that may still count (begun by `cutoff`, ended by `endBy`)
+-- has its text or timed out, at most `maxWait` seconds, so the server can judge it before closing.
+function Speech.waitSettled(cutoff: number, endBy: number, maxWait: number)
+	local deadline = os.clock() + maxWait
+	while os.clock() < deadline and stt ~= nil and stt.Enabled and hasPendingBefore(cutoff, endBy) do
+		task.wait(0.1)
+	end
 end
 
 -- `parent` must survive respawns (the client entry LocalScript in PlayerScripts does; PlayerGui may not).
@@ -3147,9 +3293,9 @@ function Speech.start(parent: Instance)
 		end
 		recognizer.Text = ""
 		silentSegments = 0
-		local segment = takeSegment()
+		local id, earliest, latest, ended = claim()
 		for _, fn in textListeners do
-			fn(text, segment.startedAt, segment.id)
+			fn(text, earliest, latest, ended, id)
 		end
 	end)
 	recognizer:GetPropertyChangedSignal("VoiceDetected"):Connect(function()

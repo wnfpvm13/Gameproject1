@@ -98,7 +98,7 @@ FlatVoice.start()
 Speech.onStatus(function()
 	refreshVoice()
 end)
-Speech.onText(function(text, startedAt, segmentId)
+Speech.onText(function(text, earliest, latest, ended, segmentId)
 	if not State.micTested then
 		State.micTested = true
 		Toast.show("마이크 확인 완료!", "info")
@@ -106,7 +106,7 @@ Speech.onText(function(text, startedAt, segmentId)
 		return
 	end
 	if State.round.phase == "Talk" and State.meAlive() then
-		remotes.Transcript:FireServer(text, startedAt, segmentId)
+		remotes.Transcript:FireServer(text, earliest, latest, ended, segmentId)
 	end
 end)
 Speech.onUnstable(function()
@@ -196,6 +196,14 @@ end)
 
 remotes.Notice.OnClientEvent:Connect(function(info)
 	Toast.show(info.text, "near")
+end)
+
+-- The round was decided: once my speech that may still count has been sent, say so (judging waits for it).
+remotes.Settle.OnClientEvent:Connect(function(info)
+	task.spawn(function()
+		Speech.waitSettled(info.cutoff, info.cutoff + Config.END_TOLERANCE, Config.SETTLE_MAX)
+		remotes.Settled:FireServer(info.key)
+	end)
 end)
 
 remotes.Reaction.OnClientEvent:Connect(function(info)

@@ -101,9 +101,10 @@ function WordService.runSchedule(talkSeconds: number, stillTalking: () -> boolea
 			task.wait(0.25)
 		end
 		Match.nextWordWarnAt = math.huge
-		local kind: "noun" | "habit" = if wordCount == 3 and rng:NextNumber() < Config.HABIT_WORD_CHANCE then "habit" else "noun"
 		for _, p in Match.participants do
 			if p.alive then
+				-- Drawn per player: one kind for everyone would let anyone read theirs off the others' heads.
+				local kind: "noun" | "habit" = if wordCount == 3 and rng:NextNumber() < Config.HABIT_WORD_CHANCE then "habit" else "noun"
 				addWord(p, kind, effectiveAt, rng)
 			end
 		end

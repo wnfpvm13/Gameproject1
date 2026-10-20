@@ -1,6 +1,7 @@
 --!strict
 -- Assistant host (V2.1): the round's theme, then the theme's mission cards one after another on a fixed timetable
--- (card -> notice -> short vote -> follow-up), plus topic cards / small events only when the table goes quiet.
+-- (card -> notice -> short vote -> follow-up, the missions spread evenly over the talk), plus topic cards / small
+-- events only when the table goes quiet.
 -- Nobody dies for a mission, there are no personal roles, and nothing here ever looks at the secret words:
 -- theme, missions and their timing depend only on a fresh RNG, public votes, public events and time, so they can
 -- never hint at anyone's word. Card texts are kept word-free ahead of time by tools/check_content.luau.
@@ -145,13 +146,14 @@ end
 
 -- Runs alongside the talk. `runVote(spec)` (wired by RoundService to VoteService) blocks until the vote closes
 -- and returns the winning option id (or "undecided") plus a function that shows the result to everyone.
-function MissionService.run(stillTalking: () -> boolean, rng: Random, runVote: (VoteSpec) -> (string, () -> ()))
+function MissionService.run(talkSeconds: number, stillTalking: () -> boolean, rng: Random, runVote: (VoteSpec) -> (string, () -> ()))
 	local t = theme
 	if not t then
 		return
 	end
 	task.spawn(runQuietHelp, stillTalking, rng)
 	local missions = t.missions -- in order: each theme's missions tell a small story
+	local missionLength = talkSeconds / #missions -- spread over the whole talk, however long it is
 	for index, mission in missions do
 		if not waitUntil(os.clock(), Config.CARD_OPEN_SECONDS, stillTalking) then
 			return
@@ -187,7 +189,7 @@ function MissionService.run(stillTalking: () -> boolean, rng: Random, runVote: (
 		end
 		showMission(index, #missions, mission, "after", mission.followups[outcome] or mission.followups.undecided, decision)
 		Match.holdHost(Config.STAGE_HOLD)
-		if not waitUntil(started + Config.MISSION_LENGTH, 0, stillTalking) then
+		if not waitUntil(started + missionLength, 0, stillTalking) then
 			return
 		end
 	end

@@ -16,6 +16,7 @@ type Ballot = { voteKey: string, options: { Option }, endsAt: number, votes: { [
 
 local current: Ballot? = nil
 local lastClosed: any = nil -- { payload, at = os.clock() } for late joiners
+local pendingKey: string? = nil -- closed and counted, result not shown yet
 local serial = 0
 
 local function isOption(ballot: Ballot, id: any): boolean
@@ -55,8 +56,11 @@ function VoteService.start()
 	end)
 end
 
--- Blocks until the vote closes (or the talk ends) and returns the winning option id or "undecided".
-function VoteService.run(spec: { id: string, options: { Option }, seconds: number }, stillTalking: () -> boolean): string
+local function noop() end
+
+-- Blocks until the vote closes (or the talk ends). Returns the winning option id (or "undecided") and a function
+-- that shows the result to everyone (the host calls it when nothing else is on screen; counts are fixed already).
+function VoteService.run(spec: { id: string, options: { Option }, seconds: number }, stillTalking: () -> boolean): (string, () -> ())
 	serial += 1
 	local ballot: Ballot = {
 		voteKey = string.format("%d:%d:%s", Match.roundId, serial, spec.id),
@@ -76,9 +80,11 @@ function VoteService.run(spec: { id: string, options: { Option }, seconds: numbe
 			current = nil
 			Net.toAll("VoteState", { kind = "cancel", voteKey = ballot.voteKey })
 		end
-		return "undecided"
+		return "undecided", noop
 	end
 	current = nil
+	pendingKey = ballot.voteKey
+	Net.toAll("VoteState", { kind = "pending", voteKey = ballot.voteKey })
 
 	-- Counted right at the close: only votes of players alive at this moment.
 	local counts: { [string]: number } = {}
@@ -106,17 +112,25 @@ function VoteService.run(spec: { id: string, options: { Option }, seconds: numbe
 		outcome = outcome,
 		counts = counts,
 		options = openPayload(ballot).options,
-		expiresAt = Match.now() + Config.VOTE_RESULT_SECONDS,
 	}
-	lastClosed = { payload = result, at = os.clock() }
-	Net.toAll("VoteState", result)
-	return outcome
+	local function announce()
+		if pendingKey ~= ballot.voteKey then
+			return -- cleared meanwhile (round over)
+		end
+		pendingKey = nil
+		result.expiresAt = Match.now() + Config.VOTE_RESULT_SECONDS
+		lastClosed = { payload = result, at = os.clock() }
+		Net.toAll("VoteState", result)
+	end
+	return outcome, announce
 end
 
--- Late joiners: the open vote, or a result that is still on everyone's screen.
+-- Late joiners: the open vote, a vote waiting for its result, or a result that is still on everyone's screen.
 function VoteService.send(player: Player)
 	if current then
 		Net.to(player, "VoteState", openPayload(current))
+	elseif pendingKey then
+		Net.to(player, "VoteState", { kind = "pending", voteKey = pendingKey })
 	elseif lastClosed and os.clock() - lastClosed.at < Config.VOTE_RESULT_SECONDS then
 		Net.to(player, "VoteState", lastClosed.payload)
 	end
@@ -124,6 +138,7 @@ end
 
 function VoteService.clear()
 	current = nil
+	pendingKey = nil
 	lastClosed = nil
 	Net.toAll("VoteState", { kind = "clear" })
 end

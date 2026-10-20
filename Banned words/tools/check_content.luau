@@ -1,13 +1,14 @@
 -- Content check (V2.1): run in Studio's Edit datamodel after installing the game (tools/install_game.luau).
 -- Cards never adapt to the secret words, so every text a player may read aloud must be safe for EVERY word:
---   1. no word-bank word (or alias) appears in any theme name, role, mission text, option, notice, follow-up,
---      quiet-time event or topic (same rule as the judge: contiguous substring after normalisation);
+--   1. no word-bank word (or alias) appears in any theme name, mission title/text, option, notice, follow-up,
+--      quiet-time event, topic or fixed UI text (Config.TEXT) (same rule as the judge: substring after normalisation);
 --   2. every mission has its fields, 2-3 options, unique option ids, and a follow-up for each option + "undecided".
 -- Returns "OK ..." or the list of problems. Re-run whenever Themes.luau or WordBank.luau changes.
 local SSS = game:GetService("ServerScriptService")
 local RS = game:GetService("ReplicatedStorage")
 
 local Judge = require(RS.BannedWords.Judge)
+local Config = require(RS.BannedWords.Config)
 local WordBank = require(SSS.BannedWords.content.WordBank)
 local Themes = require(SSS.BannedWords.content.Themes)
 
@@ -17,9 +18,8 @@ local words = WordBank.allEntries()
 
 local function checkText(where: string, text: string)
 	checked += 1
-	local plain = string.gsub(text, "{name}", "")
 	for _, entry in words do
-		if Judge.isConfirmed(entry.word, plain, entry.aliases) then
+		if Judge.isConfirmed(entry.word, text, entry.aliases) then
 			table.insert(problems, string.format("%s: \"%s\" contains word \"%s\"", where, text, entry.word))
 		end
 	end
@@ -34,10 +34,6 @@ end
 for _, theme in Themes.list do
 	local t = theme.name
 	checkText(t .. " name", theme.name)
-	for _, role in theme.roles do
-		checkText(t .. " role", role)
-	end
-	need(t, #theme.roles >= 10, "needs at least 10 roles (10 players)")
 	for _, text in theme.events do
 		checkText(t .. " event", text)
 	end
@@ -47,7 +43,7 @@ for _, theme in Themes.list do
 	need(t, #theme.missions >= 1, "has no missions")
 	for _, mission in theme.missions do
 		local m = t .. "/" .. tostring(mission.id)
-		for _, field in { "situation", "problem", "goal", "notice" } do
+		for _, field in { "title", "situation", "problem", "goal", "notice" } do
 			local value = (mission :: any)[field]
 			need(m, type(value) == "string" and value ~= "", "missing " .. field)
 			if type(value) == "string" then
@@ -72,6 +68,9 @@ for _, theme in Themes.list do
 end
 for _, text in Themes.general do
 	checkText("general topic", text)
+end
+for key, text in Config.TEXT do
+	checkText("Config.TEXT." .. key, text)
 end
 
 if #problems == 0 then

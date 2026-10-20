@@ -73,7 +73,16 @@ return {
 	QUIET_TOPIC = 30, -- seconds without speech -> a topic card on the left
 	QUIET_EVENT = 60, -- seconds without speech -> a small situation event
 	EVENT_COOLDOWN = 40,
-	AFTER_LAUNCH_QUIET = 12, -- no new event right after a launch, let people react
+	AFTER_LAUNCH_QUIET = 12, -- after a launch, no new stage / vote / event for this long (let people react)
+	HOLD_AFTER_WORD = 8, -- after a new word takes effect, no new stage / vote / event for this long
+	CARD_OPEN_SECONDS = 8, -- a new mission card is shown big this long, then folds to one line
+	STAGE_HOLD = 5, -- after a notice or a vote result, no quiet-time event for this long
+
+	-- Fixed UI texts players may read aloud (checked against the word bank by tools/check_content.luau).
+	TEXT = {
+		FREE_TALK = "선택하지 않아도 자유롭게 이야기할 수 있어요",
+		VOTE_FREE = "투표는 자유예요 · 계속 이야기해도 돼요",
+	},
 
 	-- Scoring (session leaderstats, casual only): the last other alive speaker before a launch gets the assist.
 	ASSIST_WINDOW = 10,
@@ -175,7 +184,6 @@ export type Word = {
 export type Participant = {
 	player: Player,
 	words: { Word },
-	role: string?,
 	alive: boolean,
 }
 
@@ -194,6 +202,8 @@ local Match = {
 	lastEndedAt = -math.huge, -- os.clock() when the last result finished (rematch countdown)
 	ready = {} :: { [Player]: boolean },
 	loading = {} :: { [Player]: boolean }, -- character being reloaded (not eligible until it is in place)
+	hostHeldUntil = 0, -- os.clock(): no new mission stage / vote / event before this (one big thing at a time)
+	nextWordWarnAt = math.huge, -- os.clock() of the next (public, scheduled) word warning
 	theme = nil :: string?,
 }
 
@@ -238,6 +248,12 @@ function Match.eligiblePlayers(): { Player }
 		end
 	end
 	return list
+end
+
+-- Something big is on screen (a word warning/addition, a launch): the host waits `seconds` before its next step.
+-- Only public events call this, so the host's timing never depends on the secret words.
+function Match.holdHost(seconds: number)
+	Match.hostHeldUntil = math.max(Match.hostHeldUntil, os.clock() + seconds)
 end
 
 -- Launches in the last `seconds` (the word schedule waits after a burst of eliminations).
@@ -292,6 +308,8 @@ function Match.resetRound()
 	Match.saidCount = 0
 	Match.talkStartedAt = math.huge
 	Match.cutoffAt = math.huge
+	Match.hostHeldUntil = 0
+	Match.nextWordWarnAt = math.huge
 	Match.theme = nil
 end
 
@@ -441,7 +459,7 @@ local function eliminate(player: Player, reason: string, word: string?)
 	if reason == "said" then
 		Match.saidCount += 1
 		lastLaunchAt = os.clock()
-		MissionService.noteLaunch()
+		Match.holdHost(Config.AFTER_LAUNCH_QUIET)
 		SeatService.launch(player)
 	end
 	GhostService.markGhost(player)
@@ -536,7 +554,7 @@ local function runRound()
 		table.remove(candidates)
 	end
 
-	-- Assign: seats, first word, theme and roles.
+	-- Assign: seats, first word, theme.
 	Match.roundId += 1
 	local myRound = Match.roundId
 	Match.resetRound()
@@ -544,7 +562,7 @@ local function runRound()
 	local seated = SeatService.seatPlayers(candidates)
 	for _, player in candidates do
 		if seated[player] then
-			Match.participants[player] = { player = player, words = {}, role = nil, alive = true }
+			Match.participants[player] = { player = player, words = {}, alive = true }
 			local humanoid = (player.Character :: Model):FindFirstChildOfClass("Humanoid") :: Humanoid
 			humanoid.Died:Once(function()
 				eliminate(player, "died")
@@ -553,7 +571,7 @@ local function runRound()
 	end
 	Match.startedWith = #Match.aliveList()
 	WordService.assignFirst(rng)
-	MissionService.setup(Random.new()) -- theme + roles: never depends on the words or on earlier rounds
+	MissionService.setup(Random.new()) -- theme: never depends on the words or on earlier rounds
 	GhostService.beginRound()
 	refreshSpeakers()
 	Match.setPhase("Assign", Config.ASSIGN_TIME, "내 금칙어는 나만 몰라요! 다른 사람이 말하게 만드세요")
@@ -568,7 +586,7 @@ local function runRound()
 	local stillTalking = talking(myRound)
 	task.spawn(WordService.runSchedule, seconds, stillTalking, rng)
 	task.spawn(MissionService.run, stillTalking, Random.new(), function(spec)
-		return VoteService.run(spec, stillTalking)
+		return VoteService.run(spec, stillTalking) -- (outcome, announce)
 	end)
 	waitPhase(roundOver)
 
@@ -584,6 +602,7 @@ local function runRound()
 	local text = resultText()
 	SeatService.releaseAll()
 	VoiceService.setSpeakers(nil)
+	VoteService.clear() -- a vote cut off by the end of the talk leaves no window behind
 	Match.setPhase("Result", Config.RESULT_TIME, text)
 	WordService.sendAll()
 	waitPhase()
@@ -649,24 +668,24 @@ return RoundService
 local n3 = Instance.new("Folder"); n3.Name = "content"
 do local s = Instance.new("ModuleScript"); s.Name = "Themes"; s.Source = [====[--!strict
 -- Round themes and their mission cards (data only, V2.1). A theme gives the table a reason to talk:
--- loose roles (acting is optional), three missions played in this order (a little story), quiet-time events and
--- topic cards. Every place and group in a card is imaginary, so it works with 2 or 10 players.
+-- three missions played in this order (a little story), quiet-time events and topic cards. No personal roles
+-- (owner 2026-10-20): everyone shares the same scene. Every place and group in a card is imaginary, so it works
+-- with 2 or 10 players.
 --
--- Mission card = situation, problem, goal, 2-3 options. Stages: a notice after a while, a short vote, then a
--- follow-up that depends on the vote (or "undecided" on a tie / no votes). Nobody dies for a mission result.
+-- Mission card = title, situation, problem, goal, 2-3 options. Stages: a notice after a while, a short vote, then
+-- a follow-up that depends on the vote (or "undecided" on a tie / no votes). Nobody dies for a mission result.
 --
 -- Writing rules (docs/DESIGN_V2.md, V2.1):
 --   - never tell anyone to say a specific word; every card must be answerable in many ways;
 --   - NO text here may contain any word-bank word (or alias): the game never adapts cards to the secret words,
 --     so the text itself must be safe for every word. tools/check_content.luau checks this — run it after edits;
---   - nothing aggressive, nothing asking for real personal info.
--- "{name}" in an event is replaced by a random alive player's ROLE (role texts are checked like everything else;
--- display names are not, so they never go into a card); "{이가}" becomes 이/가 to fit that role.
+--   - nothing aggressive, nothing asking for real personal info, nobody singled out.
 
 export type Option = { id: string, text: string }
 
 export type Mission = {
 	id: string,
+	title: string, -- short event name shown on the collapsed card
 	situation: string,
 	problem: string,
 	goal: string,
@@ -677,7 +696,6 @@ export type Mission = {
 
 export type Theme = {
 	name: string,
-	roles: { string },
 	missions: { Mission },
 	events: { string },
 	topics: { string },
@@ -688,10 +706,10 @@ local Themes = {}
 Themes.list = {
 	{
 		name = "회식 자리",
-		roles = { "사장", "부장", "과장", "대리", "신입", "인턴", "총무", "막내", "경리", "거래처 손님", "영업왕", "야근왕" },
 		missions = {
 			{
 				id = "dinner_seats",
+				title = "좁은 방 대작전",
 				situation = "예약한 방이 생각보다 좁아요.",
 				problem = "다 같이 앉으려면 누군가는 불편해져요.",
 				goal = "모두가 납득할 자리 배치를 정해 보세요.",
@@ -710,6 +728,7 @@ Themes.list = {
 			},
 			{
 				id = "dinner_menu",
+				title = "주문 눈치싸움",
 				situation = "정해진 금액 안에서 다 같이 먹을 것을 골라야 해요.",
 				problem = "종류를 늘리면 양이 줄고, 나눠 고르면 오래 기다려야 해요.",
 				goal = "양, 종류, 기다리는 시간 중 무엇을 먼저 챙길지 정해 보세요.",
@@ -728,31 +747,32 @@ Themes.list = {
 			},
 			{
 				id = "dinner_bill",
-				situation = "식사가 끝나고 영수증이 나왔어요.",
-				problem = "생각보다 금액이 훨씬 커요.",
-				goal = "어떻게 낼지 정해 보세요.",
+				title = "영수증 대소동",
+				situation = "예산은 20만 원인데 영수증에는 42만 원이 적혀 있어요.",
+				problem = "누가 얼마나 더 내야 할지 아무도 몰라요.",
+				goal = "어떻게 해결할지 정해 보세요.",
 				options = {
-					{ id = "equal", text = "똑같이 나눠 내기" },
-					{ id = "eaten", text = "먹은 만큼 내기" },
-					{ id = "boss", text = "제일 높은 사람이 내기" },
+					{ id = "check", text = "주문 내역 확인" },
+					{ id = "pool", text = "돈 더 모으기" },
+					{ id = "ask", text = "직원에게 문의" },
 				},
-				notice = "가게에서 할인 쿠폰을 준대요.",
+				notice = "같은 메뉴가 영수증에 두 번 적혀 있대요.",
 				followups = {
-					equal = "적게 먹은 사람이 억울하대요. 뭐라고 설득할까요?",
-					eaten = "누가 뭘 먹었는지 기억이 안 나요. 어떻게 따질까요?",
-					boss = "높은 사람이 카드를 두고 왔대요. 이제 어떡하죠?",
+					check = "중복을 빼니 총액이 20만 원으로 줄었어요. 남은 할인은 어디에 쓸까요?",
+					pool = "모자란 돈을 모으기로 했어요. 어떤 기준으로 나눌까요?",
+					ask = "직원이 실수를 인정하고 디저트를 준대요. 무엇으로 받을까요?",
 					undecided = "가게가 오늘만 여러 번 나눠 결제해 준대요. 어떤 기준으로 나눌까요?",
 				},
 			},
 		},
 		events = {
 			"갑자기 정전이 됐다가 다시 불이 들어왔어요",
-			"{name} 앞에 처음 보는 메뉴가 나왔어요",
+			"처음 보는 메뉴가 테이블에 올라왔어요",
 			"옆 테이블에서 축하 노래가 들려요",
 			"내일 아침 모임이 갑자기 잡혔어요",
 			"2차를 갈지 말지 의견이 갈려요",
-			"{name}{이가} 건배사를 맡게 됐어요",
-			"{name} 휴대폰으로 급한 연락이 왔어요",
+			"건배사를 할 사람이 필요해요",
+			"누군가의 휴대폰이 계속 울려요",
 		},
 		topics = {
 			"회식 메뉴로 최악은?",
@@ -764,10 +784,10 @@ Themes.list = {
 	},
 	{
 		name = "방과 후 우리 반",
-		roles = { "반장 후보", "부반장", "전학생", "운동부장", "청소 당번", "지각 대장", "수학 천재", "미술부", "방송부", "학생회장", "잠꾸러기", "축구부" },
 		missions = {
 			{
 				id = "class_election",
+				title = "공약 고르기",
 				situation = "가상의 후보 셋이 서로 다른 공약을 냈어요.",
 				problem = "이번에는 한 가지 일에만 힘을 쓸 수 있어요.",
 				goal = "우리 반에 먼저 필요한 일을 골라 보세요.",
@@ -786,6 +806,7 @@ Themes.list = {
 			},
 			{
 				id = "class_outing",
+				title = "나들이 장소 정하기",
 				situation = "반 단체 나들이 장소를 정해야 해요.",
 				problem = "돈은 적고 가고 싶은 곳은 제각각이에요.",
 				goal = "모두 갈 만한 곳을 정해 보세요.",
@@ -804,6 +825,7 @@ Themes.list = {
 			},
 			{
 				id = "class_festival",
+				title = "축제 부스 준비",
 				situation = "학교 축제에서 반 부스를 맡았어요.",
 				problem = "준비할 시간이 이틀뿐이에요.",
 				goal = "무슨 부스를 열지 정해 보세요.",
@@ -823,10 +845,10 @@ Themes.list = {
 		},
 		events = {
 			"담임이 갑자기 문을 열었어요",
-			"{name} 서랍에서 쪽지가 나왔어요",
+			"서랍에서 주인 없는 쪽지가 나왔어요",
 			"내일 깜짝 퀴즈가 있다는 공지가 떴어요",
 			"점심 메뉴가 바뀌었다는 소문이 돌아요",
-			"{name}{이가} 반장 후보로 추천됐어요",
+			"후보가 한 명 더 나왔대요",
 			"창밖에 갑자기 비가 쏟아져요",
 			"에어컨이 고장 났어요",
 		},
@@ -840,10 +862,10 @@ Themes.list = {
 	},
 	{
 		name = "단체 나들이 계획",
-		roles = { "총무", "운전 담당", "기록 담당", "맛집 탐정", "길치", "짐꾼", "일정 담당", "늦잠 대장", "분위기 메이커", "안전 요원", "기념품 수집가", "캠핑 고수" },
 		missions = {
 			{
 				id = "outing_place",
+				title = "어디로 갈까",
 				situation = "다 같이 1박 2일로 놀러 가기로 했어요.",
 				problem = "산파, 계곡파, 도시파로 의견이 갈렸어요.",
 				goal = "어디로 갈지 정해 보세요.",
@@ -862,6 +884,7 @@ Themes.list = {
 			},
 			{
 				id = "outing_ride",
+				title = "이동 작전",
 				situation = "이동 수단을 정해야 해요.",
 				problem = "차는 한 대뿐이고 사람은 많아요.",
 				goal = "어떻게 갈지 정해 보세요.",
@@ -880,31 +903,32 @@ Themes.list = {
 			},
 			{
 				id = "outing_stay",
-				situation = "묵을 곳을 골라야 해요.",
-				problem = "좋은 곳은 비싸고 싼 곳은 멀어요.",
-				goal = "어디서 잘지 정해 보세요.",
+				title = "숙소 예약 사고",
+				situation = "단체로 묵을 호텔을 예약했는데 날짜가 하루 어긋났어요.",
+				problem = "바꾸면 돈이 들고, 그대로 두면 일정이 꼬여요.",
+				goal = "비용과 일정을 어떻게 맞출지 정해 보세요.",
 				options = {
-					{ id = "cheap", text = "싸고 먼 곳" },
-					{ id = "nice", text = "비싸고 가까운 곳" },
-					{ id = "tent", text = "텐트 치기" },
+					{ id = "change", text = "날짜 바꾸기" },
+					{ id = "other", text = "다른 숙소 찾기" },
+					{ id = "plan", text = "일정 바꾸기" },
 				},
-				notice = "한 곳이 갑자기 반값이 됐대요.",
+				notice = "날짜를 바꾸면 추가 요금을 내야 한대요.",
 				followups = {
-					cheap = "돌아오는 길이 너무 멀어요. 어떻게 버틸까요?",
-					nice = "누가 돈을 더 낼지 정해야 해요. 어떻게 나눌까요?",
-					tent = "텐트 치는 법을 아무도 몰라요. 어떤 순서로 해 볼까요?",
-					undecided = "두 곳 중 한 곳만 남았대요. 어느 쪽을 포기할까요?",
+					change = "예약을 바꿨어요. 추가 요금 3만 원은 어떻게 나눌까요?",
+					other = "근처에 방이 하나 남았대요. 좁아도 갈까요, 더 찾아볼까요?",
+					plan = "하루 늦게 출발하기로 했어요. 남는 하루엔 뭘 할까요?",
+					undecided = "호텔이 한 시간만 기다려 준대요. 무엇부터 확인할까요?",
 				},
 			},
 		},
 		events = {
 			"쓸 수 있는 돈이 절반으로 줄었어요",
-			"{name}{이가} 신분증을 잃어버렸대요",
+			"누군가 신분증을 두고 왔대요",
 			"예약 하나가 취소됐어요",
-			"{name}{이가} 맛집 목록을 들고 왔어요",
+			"맛집 목록이 새로 도착했어요",
 			"기차표가 한 장 모자라요",
 			"근처에서 축제가 열린다는 소식이에요",
-			"{name} 짐이 너무 무거워요",
+			"짐 하나가 너무 무거워요",
 		},
 		topics = {
 			"놀러 가서 꼭 먹어야 하는 것",
@@ -916,28 +940,29 @@ Themes.list = {
 	},
 	{
 		name = "동네 중고 장터",
-		roles = { "판매왕", "흥정의 달인", "수집가", "구경꾼", "가게 주인", "단골손님", "초보 판매자", "감정사", "배달원", "경매사", "짠돌이", "부자 손님" },
 		missions = {
 			{
 				id = "market_console",
-				situation = "장터에 낡은 오락기가 나왔어요.",
-				problem = "사고 싶은 사람은 많은데 하나뿐이에요.",
-				goal = "누가 어떻게 가져갈지 정해 보세요.",
+				title = "중고 로봇 흥정",
+				situation = "장터에 중고 로봇이 50만 원에 나왔어요.",
+				problem = "비싸지만 갖고 싶다는 사람이 많아요.",
+				goal = "살 가치가 있는지 정해 보세요.",
 				options = {
-					{ id = "auction", text = "경매로 팔기" },
-					{ id = "first", text = "먼저 온 사람에게" },
-					{ id = "share", text = "같이 사서 돌려 쓰기" },
+					{ id = "haggle", text = "가격 깎기" },
+					{ id = "test", text = "성능 확인" },
+					{ id = "pass", text = "거래 포기" },
 				},
-				notice = "주인이 가격을 깎아 줄 수도 있대요.",
+				notice = "춤은 잘 추는데 청소는 서툴대요.",
 				followups = {
-					auction = "가격이 너무 올라갔어요. 여기서 멈출까요?",
-					first = "줄을 섰는데 새치기가 생겼어요. 어떻게 할까요?",
-					share = "돌려 쓰는 규칙이 필요해요. 하루씩? 한 시간씩? 정해 볼까요?",
-					undecided = "다른 손님이 더 높은 값을 불렀어요. 맞출까요, 포기할까요?",
+					haggle = "판매자가 5만 원만 깎아 준대요. 더 깎을까요, 살까요?",
+					test = "로봇이 혼자 춤을 추기 시작했어요. 이 성능이면 얼마가 적당할까요?",
+					pass = "판매자가 10만 원을 낮춰 다시 제안했어요. 다시 생각해 볼까요?",
+					undecided = "다른 손님이 관심을 보여요. 같이 사서 나눠 쓸까요?",
 				},
 			},
 			{
 				id = "market_booth",
+				title = "장사 방식 고르기",
 				situation = "우리도 장터에 작은 자리를 하나 받았어요.",
 				problem = "싸게 내놓으면 남는 돈이 적고, 자세히 알리면 오래 걸려요.",
 				goal = "어떤 방식으로 팔지 정해 보세요.",
@@ -956,6 +981,7 @@ Themes.list = {
 			},
 			{
 				id = "market_missing",
+				title = "사라진 물건",
 				situation = "진열해 둔 물건 하나가 사라졌어요.",
 				problem = "누가 가져갔는지 아무도 못 봤대요.",
 				goal = "어떻게 해결할지 정해 보세요.",
@@ -974,12 +1000,12 @@ Themes.list = {
 			},
 		},
 		events = {
-			"{name} 물건에 말도 안 되는 가격이 붙었어요",
+			"어떤 물건에 말도 안 되는 가격이 붙었어요",
 			"깜짝 할인 시간이 시작됐어요",
 			"가짜 명품이 돌고 있다는 소문이 나요",
-			"{name}{이가} 전 재산을 걸고 경매에 참여했어요",
+			"누군가 전 재산을 걸고 경매에 참여했어요",
 			"날씨가 나빠져서 장터가 곧 문을 닫아요",
-			"{name} 가게에 손님이 몰려왔어요",
+			"우리 가게에 손님이 몰려왔어요",
 			"경품 추첨이 곧 시작돼요",
 		},
 		topics = {
@@ -1447,16 +1473,17 @@ end
 return JudgeService
 ]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "MissionService"; s.Source = [====[--!strict
--- Assistant host (V2.1): the round's theme and loose roles, then the theme's mission cards one after another
--- (situation, problem, goal, options -> notice -> short vote -> follow-up), plus topic cards / small events only
--- when the table goes quiet. Nobody dies for a mission, and nothing here ever looks at the secret words:
--- theme, roles, missions and their timing depend only on missionRng, public votes and time, so they can never
--- hint at anyone's word. Card texts are kept word-free ahead of time by tools/check_content.luau.
+-- Assistant host (V2.1): the round's theme, then the theme's mission cards one after another on a fixed timetable
+-- (card -> notice -> short vote -> follow-up), plus topic cards / small events only when the table goes quiet.
+-- Nobody dies for a mission, there are no personal roles, and nothing here ever looks at the secret words:
+-- theme, missions and their timing depend only on a fresh RNG, public votes, public events and time, so they can
+-- never hint at anyone's word. Card texts are kept word-free ahead of time by tools/check_content.luau.
+--
+-- One big thing at a time (report V2.1 §7.2): a new stage, a vote or a quiet-time event waits while
+-- Match.hostHeldUntil is in the future (a word warning/addition or a launch is on screen).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local shared = ReplicatedStorage:WaitForChild("BannedWords")
-local Config = require(shared:WaitForChild("Config"))
-local Judge = require(shared:WaitForChild("Judge"))
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local Net = require(script.Parent.Parent:WaitForChild("Net"))
 local Themes = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("Themes"))
@@ -1471,18 +1498,8 @@ local themePayload: any = nil
 local missionPayload: any = nil -- the mission card on screen
 local cardPayloads: { [string]: any } = {} -- "topic" | "event" -> what is shown (late joiners)
 local used: { [string]: boolean } = {} -- quiet-time cards already shown this round
-local lastLaunchAt = -math.huge
 
-local function shuffled<T>(list: { T }, rng: Random): { T }
-	local out = table.clone(list)
-	for i = #out, 2, -1 do
-		local j = rng:NextInteger(1, i)
-		out[i], out[j] = out[j], out[i]
-	end
-	return out
-end
-
--- After words are assigned: theme (not the same twice in a row) and one unique role per participant.
+-- After words are assigned: the theme (not the same twice in a row).
 function MissionService.setup(rng: Random)
 	local options = {}
 	for _, t in Themes.list do
@@ -1497,24 +1514,7 @@ function MissionService.setup(rng: Random)
 	table.clear(used)
 	table.clear(cardPayloads)
 	missionPayload = nil
-
-	local roles = shuffled(chosen.roles, rng)
-	local players = {}
-	for player in Match.participants do
-		table.insert(players, player)
-	end
-	table.sort(players, function(a, b)
-		return a.UserId < b.UserId -- stable order, so the role only depends on missionRng
-	end)
-	local byUser = {}
-	for i, player in players do
-		local role = roles[i]
-		Match.participants[player].role = role
-		if role then
-			byUser[tostring(player.UserId)] = role
-		end
-	end
-	themePayload = { kind = "theme", theme = chosen.name, roles = byUser }
+	themePayload = { kind = "theme", theme = chosen.name }
 	Net.toAll("Host", themePayload)
 end
 
@@ -1531,39 +1531,14 @@ local function pickUnused(list: { string }, rng: Random): string
 	return text
 end
 
-local function showCard(kind: string, text: string, spotlight: Player?)
+local function showCard(kind: string, text: string)
 	local payload = {
 		kind = kind,
 		text = text,
-		spotlightId = if spotlight then spotlight.UserId else nil,
 		expiresAt = if kind == "event" then Match.now() + Config.EVENT_SHOW_SECONDS else nil,
 	}
 	cardPayloads[kind] = { payload = payload, at = os.clock() }
 	Net.toAll("Host", payload)
-end
-
-local function quietEvent(rng: Random)
-	local t = theme
-	if not t then
-		return
-	end
-	local text = pickUnused(t.events, rng)
-	local spotlight: Player? = nil
-	if string.find(text, "{name}", 1, true) then
-		-- A role, never a display name: role texts are checked against the word bank, names are not.
-		local alive = Match.aliveList()
-		table.sort(alive, function(a, b)
-			return a.UserId < b.UserId
-		end)
-		if #alive == 0 then
-			return
-		end
-		spotlight = alive[rng:NextInteger(1, #alive)]
-		local role = Match.participants[spotlight :: Player].role or "누군가"
-		text = string.gsub(text, "{name}{이가}", role .. Judge.josa(role, "이", "가"))
-		text = string.gsub(text, "{name}", role)
-	end
-	showCard("event", text, spotlight)
 end
 
 local function quietTopic(rng: Random)
@@ -1576,7 +1551,8 @@ local function quietTopic(rng: Random)
 	showCard("topic", pickUnused(pool, rng))
 end
 
-local function showMission(index: number, total: number, mission: Themes.Mission, condition: string?, stage: string)
+-- stage: "open" | "notice" | "vote" | "after". decision: the chosen option's text after the vote.
+local function showMission(index: number, total: number, mission: Themes.Mission, stage: string, condition: string?, decision: string?)
 	local options = {}
 	for _, option in mission.options do
 		table.insert(options, option.text)
@@ -1585,19 +1561,33 @@ local function showMission(index: number, total: number, mission: Themes.Mission
 		kind = "mission",
 		index = index,
 		total = total,
+		title = mission.title,
 		situation = mission.situation,
 		problem = mission.problem,
 		goal = mission.goal,
 		options = options,
 		condition = condition,
-		stage = stage, -- "open" | "notice" | "vote" | "after"
+		decision = decision,
+		stage = stage,
 	}
 	Net.toAll("Host", missionPayload)
 end
 
--- Waits until os.clock() reaches `t`; false if the talk ended first.
-local function waitUntil(t: number, stillTalking: () -> boolean): boolean
-	while os.clock() < t do
+-- True if something shown now for `seconds` would not clash with anything big: nothing is on screen and no
+-- (public, scheduled) word warning starts inside that time.
+local function clearFor(seconds: number): boolean
+	local now = os.clock()
+	if now < Match.hostHeldUntil then
+		return false
+	end
+	local untilWarn = Match.nextWordWarnAt - now
+	return not (untilWarn >= -1 and untilWarn <= seconds + 1)
+end
+
+-- Waits until os.clock() reaches `t` and the next step (shown for `showFor` seconds) is clear; false if the talk
+-- ended first.
+local function waitUntil(t: number, showFor: number, stillTalking: () -> boolean): boolean
+	while os.clock() < t or not clearFor(showFor) do
 		if not stillTalking() then
 			return false
 		end
@@ -1606,8 +1596,8 @@ local function waitUntil(t: number, stillTalking: () -> boolean): boolean
 	return stillTalking()
 end
 
--- Quiet-time help (runs next to the missions): a topic card after QUIET_TOPIC seconds without speech, a small
--- event after QUIET_EVENT (never right after a launch, at most one per EVENT_COOLDOWN).
+-- Quiet-time help (runs next to the missions): a topic line after QUIET_TOPIC seconds without speech, a small
+-- event after QUIET_EVENT (at most one per EVENT_COOLDOWN, never while something big is on screen).
 local function runQuietHelp(stillTalking: () -> boolean, rng: Random)
 	local lastTopicAt = os.clock()
 	local lastEventAt = -math.huge
@@ -1615,8 +1605,9 @@ local function runQuietHelp(stillTalking: () -> boolean, rng: Random)
 		local now = os.clock()
 		local quietTalk = now - Match.lastActivityAt
 		local quiet = now - math.max(Match.lastActivityAt, lastTopicAt, lastEventAt)
-		if quietTalk >= Config.QUIET_EVENT and now - lastEventAt >= Config.EVENT_COOLDOWN and now - lastLaunchAt >= Config.AFTER_LAUNCH_QUIET then
-			quietEvent(rng)
+		if clearFor(Config.EVENT_SHOW_SECONDS) and quietTalk >= Config.QUIET_EVENT and now - lastEventAt >= Config.EVENT_COOLDOWN and theme then
+			showCard("event", pickUnused((theme :: Themes.Theme).events, rng))
+			Match.holdHost(Config.EVENT_SHOW_SECONDS) -- the banner has the stage while it shows
 			lastEventAt = now
 		elseif quiet >= Config.QUIET_TOPIC then
 			quietTopic(rng)
@@ -1627,8 +1618,8 @@ local function runQuietHelp(stillTalking: () -> boolean, rng: Random)
 end
 
 -- Runs alongside the talk. `runVote(spec)` (wired by RoundService to VoteService) blocks until the vote closes
--- and returns the winning option id or "undecided".
-function MissionService.run(stillTalking: () -> boolean, rng: Random, runVote: (VoteSpec) -> string)
+-- and returns the winning option id (or "undecided") plus a function that shows the result to everyone.
+function MissionService.run(stillTalking: () -> boolean, rng: Random, runVote: (VoteSpec) -> (string, () -> ()))
 	local t = theme
 	if not t then
 		return
@@ -1636,29 +1627,44 @@ function MissionService.run(stillTalking: () -> boolean, rng: Random, runVote: (
 	task.spawn(runQuietHelp, stillTalking, rng)
 	local missions = t.missions -- in order: each theme's missions tell a small story
 	for index, mission in missions do
+		if not waitUntil(os.clock(), Config.CARD_OPEN_SECONDS, stillTalking) then
+			return
+		end
 		local started = os.clock()
-		showMission(index, #missions, mission, nil, "open")
-		if not waitUntil(started + Config.MISSION_NOTICE_AT, stillTalking) then
+		showMission(index, #missions, mission, "open")
+		Match.holdHost(Config.CARD_OPEN_SECONDS) -- the new card has the stage while it is open
+		if not waitUntil(started + Config.MISSION_NOTICE_AT, Config.STAGE_HOLD, stillTalking) then
 			return
 		end
-		showMission(index, #missions, mission, mission.notice, "notice")
-		if not waitUntil(started + Config.VOTE_OPEN_AFTER, stillTalking) then
+		showMission(index, #missions, mission, "notice", mission.notice)
+		Match.holdHost(Config.STAGE_HOLD)
+		-- Talk time after the notice is kept even when the notice itself was held back.
+		local noticeShownAt = os.clock()
+		local voteAt = math.max(started + Config.VOTE_OPEN_AFTER, noticeShownAt + Config.VOTE_OPEN_AFTER - Config.MISSION_NOTICE_AT)
+		-- The vote and its result must both fit before any scheduled word warning.
+		if not waitUntil(voteAt, Config.VOTE_SECONDS + Config.STAGE_HOLD, stillTalking) then
 			return
 		end
-		showMission(index, #missions, mission, mission.notice, "vote")
-		local outcome = runVote({ id = mission.id, options = mission.options, seconds = Config.VOTE_SECONDS })
-		if not stillTalking() then
+		showMission(index, #missions, mission, "vote", mission.notice)
+		Match.holdHost(Config.VOTE_SECONDS + 1) -- no quiet-time event pops up during the vote
+		local outcome, announce = runVote({ id = mission.id, options = mission.options, seconds = Config.VOTE_SECONDS })
+		-- Counted at the close; shown once nothing big is on screen (e.g. a launch during the vote).
+		if not waitUntil(os.clock(), Config.STAGE_HOLD, stillTalking) then
 			return
 		end
-		showMission(index, #missions, mission, mission.followups[outcome] or mission.followups.undecided, "after")
-		if not waitUntil(started + Config.MISSION_LENGTH, stillTalking) then
+		announce()
+		local decision = "결정 못 함"
+		for _, option in mission.options do
+			if option.id == outcome then
+				decision = option.text
+			end
+		end
+		showMission(index, #missions, mission, "after", mission.followups[outcome] or mission.followups.undecided, decision)
+		Match.holdHost(Config.STAGE_HOLD)
+		if not waitUntil(started + Config.MISSION_LENGTH, 0, stillTalking) then
 			return
 		end
 	end
-end
-
-function MissionService.noteLaunch()
-	lastLaunchAt = os.clock()
 end
 
 -- Late joiners: the theme, the mission card and whatever quiet-time card is up.
@@ -2042,6 +2048,7 @@ type Ballot = { voteKey: string, options: { Option }, endsAt: number, votes: { [
 
 local current: Ballot? = nil
 local lastClosed: any = nil -- { payload, at = os.clock() } for late joiners
+local pendingKey: string? = nil -- closed and counted, result not shown yet
 local serial = 0
 
 local function isOption(ballot: Ballot, id: any): boolean
@@ -2081,8 +2088,11 @@ function VoteService.start()
 	end)
 end
 
--- Blocks until the vote closes (or the talk ends) and returns the winning option id or "undecided".
-function VoteService.run(spec: { id: string, options: { Option }, seconds: number }, stillTalking: () -> boolean): string
+local function noop() end
+
+-- Blocks until the vote closes (or the talk ends). Returns the winning option id (or "undecided") and a function
+-- that shows the result to everyone (the host calls it when nothing else is on screen; counts are fixed already).
+function VoteService.run(spec: { id: string, options: { Option }, seconds: number }, stillTalking: () -> boolean): (string, () -> ())
 	serial += 1
 	local ballot: Ballot = {
 		voteKey = string.format("%d:%d:%s", Match.roundId, serial, spec.id),
@@ -2102,9 +2112,11 @@ function VoteService.run(spec: { id: string, options: { Option }, seconds: numbe
 			current = nil
 			Net.toAll("VoteState", { kind = "cancel", voteKey = ballot.voteKey })
 		end
-		return "undecided"
+		return "undecided", noop
 	end
 	current = nil
+	pendingKey = ballot.voteKey
+	Net.toAll("VoteState", { kind = "pending", voteKey = ballot.voteKey })
 
 	-- Counted right at the close: only votes of players alive at this moment.
 	local counts: { [string]: number } = {}
@@ -2132,17 +2144,25 @@ function VoteService.run(spec: { id: string, options: { Option }, seconds: numbe
 		outcome = outcome,
 		counts = counts,
 		options = openPayload(ballot).options,
-		expiresAt = Match.now() + Config.VOTE_RESULT_SECONDS,
 	}
-	lastClosed = { payload = result, at = os.clock() }
-	Net.toAll("VoteState", result)
-	return outcome
+	local function announce()
+		if pendingKey ~= ballot.voteKey then
+			return -- cleared meanwhile (round over)
+		end
+		pendingKey = nil
+		result.expiresAt = Match.now() + Config.VOTE_RESULT_SECONDS
+		lastClosed = { payload = result, at = os.clock() }
+		Net.toAll("VoteState", result)
+	end
+	return outcome, announce
 end
 
--- Late joiners: the open vote, or a result that is still on everyone's screen.
+-- Late joiners: the open vote, a vote waiting for its result, or a result that is still on everyone's screen.
 function VoteService.send(player: Player)
 	if current then
 		Net.to(player, "VoteState", openPayload(current))
+	elseif pendingKey then
+		Net.to(player, "VoteState", { kind = "pending", voteKey = pendingKey })
 	elseif lastClosed and os.clock() - lastClosed.at < Config.VOTE_RESULT_SECONDS then
 		Net.to(player, "VoteState", lastClosed.payload)
 	end
@@ -2150,6 +2170,7 @@ end
 
 function VoteService.clear()
 	current = nil
+	pendingKey = nil
 	lastClosed = nil
 	Net.toAll("VoteState", { kind = "clear" })
 end
@@ -2238,7 +2259,9 @@ function WordService.runSchedule(talkSeconds: number, stillTalking: () -> boolea
 				end
 			end
 			lastCheck = os.clock()
+			Match.nextWordWarnAt = if warned then math.huge else os.clock() + (effectiveAt - Config.WORD_WARNING - Match.now())
 			if effectiveAt > Match.endsAt - Config.WORD_WARNING then
+				Match.nextWordWarnAt = math.huge
 				if warned then
 					Net.toAll("WordWarn", { at = 0, count = wordCount }) -- cancelled
 				end
@@ -2248,11 +2271,15 @@ function WordService.runSchedule(talkSeconds: number, stillTalking: () -> boolea
 				warned = true
 				Net.toAll("WordWarn", { at = effectiveAt, count = wordCount })
 			end
+			if warned then
+				Match.holdHost(effectiveAt - Match.now() + Config.HOLD_AFTER_WORD) -- the countdown has the stage
+			end
 			if Match.now() >= effectiveAt then
 				break -- checked above in this same step: still talking, no burst delay pending
 			end
 			task.wait(0.25)
 		end
+		Match.nextWordWarnAt = math.huge
 		local kind: "noun" | "habit" = if wordCount == 3 and rng:NextNumber() < Config.HABIT_WORD_CHANCE then "habit" else "noun"
 		for _, p in Match.participants do
 			if p.alive then
@@ -2340,11 +2367,10 @@ end
 
 local function refresh()
 	local round = State.round
-	local playing = State.inRound() and State.meAlive()
-	Hud.setStatus(round.phase, round.message, if playing then State.roleOf(State.myId()) else nil)
+	Hud.setStatus(round.phase, round.message)
 	Hud.setAlive(#round.alive, round.total)
 	Hud.setMyWords(if State.inRound() and State.meAlive() then State.myWordCount() else 0)
-	Billboards.render({ show = bubbleTargets(), words = State.words, roleOf = State.roleOf })
+	Billboards.render({ show = bubbleTargets(), words = State.words })
 	RingCamera.set(State.inRound() and State.meAlive())
 	ReactionBar.setVisible(not (State.inRound() and State.meAlive()))
 	VotePanel.setCanVote(State.round.phase == "Talk" and State.meAlive())
@@ -2432,6 +2458,8 @@ remotes.VoteState.OnClientEvent:Connect(function(info)
 		VotePanel.open(info, State.round.phase == "Talk" and State.meAlive())
 	elseif info.kind == "closed" then
 		VotePanel.closed(info)
+	elseif info.kind == "pending" then
+		VotePanel.pending(info)
 	elseif info.kind == "cancel" then
 		VotePanel.clear()
 	else
@@ -2496,6 +2524,7 @@ RunService.Heartbeat:Connect(function()
 	Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
 	HostPanel.tick(now)
 	VotePanel.tick(now)
+	MissionPanel.tick()
 	-- Tells the host the table is not quiet even when the recognizer misses speech (never used to judge).
 	if State.round.phase == "Talk" and State.meAlive() and Speech.isSpeaking() and now - lastPing >= Config.VOICE_PING_INTERVAL then
 		lastPing = now
@@ -2507,7 +2536,7 @@ end)
 remotes.Sync:FireServer()
 ]====]
 do local s = Instance.new("ModuleScript"); s.Name = "Billboards"; s.Source = [====[--!strict
--- Word bubbles above heads: each other alive participant's words (up to 3, newest flashes), name and role.
+-- Word bubbles above heads: each other alive participant's words (up to 3, newest flashes) and name.
 -- My own bubble is never drawn while I play (the HUD shows "??? × n"); in the result everyone's words show.
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -2637,7 +2666,6 @@ end
 export type View = {
 	show: { number }, -- userIds that get a bubble
 	words: { [string]: { words: { string }?, count: number } },
-	roleOf: (number) -> string?,
 }
 
 -- Draws exactly the bubbles in view.show; rebuilds a bubble only when its content changed.
@@ -2654,8 +2682,7 @@ function Billboards.render(view: View)
 		local entry = view.words[tostring(userId)]
 		if player and entry and entry.words then
 			keep[userId] = true
-			local role = view.roleOf(userId)
-			local caption = if role then player.DisplayName .. " · " .. role else player.DisplayName
+			local caption = player.DisplayName
 			local signature = table.concat(entry.words, "|") .. "#" .. caption
 			local existing = bubbles[userId]
 			local head = player.Character and player.Character:FindFirstChild("Head")
@@ -3178,7 +3205,7 @@ export type WordsEntry = { words: { string }?, count: number }
 local State = {
 	round = { phase = "Lobby", endsAt = 0, message = "", participants = {}, alive = {}, total = 0 } :: any,
 	words = {} :: { [string]: WordsEntry }, -- userId string -> visible words (nil words = my own, hidden)
-	theme = nil :: any, -- { theme, situation, roles = { [userId string] = role } }
+	theme = nil :: any, -- { theme }
 	micTested = false,
 }
 
@@ -3200,11 +3227,6 @@ end
 
 function State.meAlive(): boolean
 	return State.isAlive(State.myId())
-end
-
-function State.roleOf(userId: number): string?
-	local theme = State.theme
-	return theme and theme.roles and theme.roles[tostring(userId)] or nil
 end
 
 function State.myWordCount(): number
@@ -3288,7 +3310,7 @@ end
 return HostPanel
 ]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "Hud"; s.Source = [====[--!strict
--- Status board at the top centre: phase + message (+ my role), timer, survivors, and how many words I have
+-- Status board at the top centre: phase + message (the theme during the talk), timer, survivors, and how many words I have
 -- (never which). Kept short (64 px) so the far side of the ring stays visible under it.
 local Style = require(script.Parent:WaitForChild("Style"))
 
@@ -3330,12 +3352,8 @@ function Hud.build()
 	aliveL.TextXAlignment = Enum.TextXAlignment.Right
 end
 
-function Hud.setStatus(phase: string, message: string, myRole: string?)
-	local text = (PHASE_TITLE[phase] or phase) .. (if message ~= "" then " · " .. message else "")
-	if myRole then
-		text ..= " · 내 역할: " .. myRole
-	end
-	statusL.Text = text
+function Hud.setStatus(phase: string, message: string)
+	statusL.Text = (PHASE_TITLE[phase] or phase) .. (if message ~= "" then " · " .. message else "")
 end
 
 function Hud.setTimer(seconds: number?)
@@ -3412,23 +3430,34 @@ end
 return MicPanel
 ]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [====[--!strict
--- The mission card (V2.1) in the bottom stack, centred under the ring (the side edges show the neighbours'
--- bubbles): theme · mission n/N, situation + problem, goal, the current condition (notice / vote follow-up),
--- the options (people argue about them before the vote opens), and a quiet-time topic line.
+-- The mission card (V2.1) in the bottom stack, centred under the ring (the side edges show the neighbours' bubbles).
+-- A new mission opens big for CARD_OPEN_SECONDS (theme · mission n/N · title, situation + problem, goal, options,
+-- condition, "talk freely" hint), then folds to the title plus the current condition / decision so it does not
+-- cover the table. Tapping the card opens or folds it. A quiet-time topic line sits at the bottom.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Style = require(script.Parent:WaitForChild("Style"))
 
 local MissionPanel = {}
 
-local panel: Frame
+local COMPACT_BELOW = 560 -- viewport height (px) under which the open card drops the goal, hint and topic lines
+
+local panel: TextButton
 local headerL: TextLabel
 local bodyL: TextLabel
 local goalL: TextLabel
-local conditionL: TextLabel
 local optionsL: TextLabel
+local conditionL: TextLabel
+local decisionL: TextLabel
+local hintL: TextLabel
 local topicL: TextLabel
-local hasMission = false
+local info: any = nil -- last mission payload
+local themeName: string? = nil
+local openUntil = 0
+local pinned = false
 local compact = false
-local COMPACT_BELOW = 560 -- viewport height (px) under which the card drops the goal and topic lines
+local shownOpen: boolean? = nil
 
 local function row(order: number, font: Font, size: number, color: Color3): TextLabel
 	local l = Instance.new("TextLabel")
@@ -3446,18 +3475,49 @@ local function row(order: number, font: Font, size: number, color: Color3): Text
 	return l
 end
 
-local function refreshVisible()
+local function isOpen(): boolean
+	return pinned or os.clock() < openUntil
+end
+
+-- Fills the texts for the open or folded view and shows only the rows that view uses.
+local function render()
+	local open = isOpen()
+	shownOpen = open
+	local hasMission = info ~= nil
+	if hasMission then
+		if open then
+			headerL.Text = string.format("%s · 미션 %d/%d · %s", themeName or "미션", info.index, info.total, info.title)
+		else
+			headerL.Text = string.format("%s  (미션 %d/%d · 눌러서 펼치기)", info.title, info.index, info.total)
+		end
+		bodyL.Text = info.situation .. " " .. info.problem
+		goalL.Text = "목표: " .. info.goal
+		optionsL.Text = "선택지: " .. table.concat(info.options, " / ")
+		conditionL.Text = if info.condition then "📌 " .. info.condition else ""
+		decisionL.Text = if info.decision then "✅ 결정: " .. info.decision else ""
+	end
 	headerL.Visible = hasMission
-	bodyL.Visible = hasMission
-	goalL.Visible = hasMission and not compact
-	optionsL.Visible = hasMission
+	bodyL.Visible = hasMission and open
+	goalL.Visible = hasMission and not (open and compact)
+	optionsL.Visible = hasMission and open
 	conditionL.Visible = hasMission and conditionL.Text ~= ""
-	topicL.Visible = topicL.Text ~= "" and not (compact and hasMission)
+	decisionL.Visible = hasMission and decisionL.Text ~= ""
+	hintL.Visible = hasMission and open and not compact
+	topicL.Visible = topicL.Text ~= "" and not (compact and hasMission and open)
 	panel.Visible = hasMission or topicL.Visible
 end
 
 function MissionPanel.build()
-	panel = Style.panel(Style.bottomStack(), Style.CARD, 0.08, 14)
+	panel = Instance.new("TextButton") -- the whole card is tappable (open / fold)
+	panel.Text = ""
+	panel.AutoButtonColor = false
+	panel.BackgroundColor3 = Style.CARD
+	panel.BackgroundTransparency = 0.08
+	panel.BorderSizePixel = 0
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 14)
+	corner.Parent = panel
+	panel.Parent = Style.bottomStack()
 	panel.LayoutOrder = 2
 	panel.Size = UDim2.new(1, 0, 0, 0)
 	panel.AutomaticSize = Enum.AutomaticSize.Y
@@ -3478,9 +3538,18 @@ function MissionPanel.build()
 	goalL = row(3, Style.BOLD, 16, Color3.fromRGB(40, 110, 70))
 	optionsL = row(4, Style.REGULAR, 15, Color3.fromRGB(70, 70, 90))
 	conditionL = row(5, Style.BOLD, 16, Color3.fromRGB(190, 70, 30))
-	topicL = row(6, Style.REGULAR, 15, Color3.fromRGB(90, 90, 100))
+	decisionL = row(6, Style.BOLD, 15, Color3.fromRGB(40, 110, 70))
+	hintL = row(7, Style.REGULAR, 13, Color3.fromRGB(120, 120, 130))
+	hintL.Text = Config.TEXT.FREE_TALK
+	topicL = row(8, Style.REGULAR, 15, Color3.fromRGB(90, 90, 100))
 
-	-- Short (phone landscape) screens: smaller text, no goal/topic lines, so the stack stays low.
+	panel.Activated:Connect(function()
+		pinned = not isOpen()
+		openUntil = 0
+		render()
+	end)
+
+	-- Short (phone landscape) screens: smaller text and fewer lines on the open card.
 	local camera = workspace.CurrentCamera
 	local function fit()
 		compact = camera.ViewportSize.Y < COMPACT_BELOW
@@ -3488,34 +3557,43 @@ function MissionPanel.build()
 		conditionL.TextSize = if compact then 14 else 16
 		optionsL.TextSize = if compact then 13 else 15
 		headerL.TextSize = if compact then 12 else 14
-		refreshVisible()
+		render()
 	end
 	camera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
 	task.defer(fit)
 end
 
--- info: the server's mission payload (situation, problem, goal, condition, index, total).
-function MissionPanel.show(themeName: string?, info: any)
-	hasMission = true
-	headerL.Text = string.format("%s · 미션 %d/%d", themeName or "미션", info.index, info.total)
-	bodyL.Text = info.situation .. " " .. info.problem
-	goalL.Text = "목표: " .. info.goal
-	optionsL.Text = "선택지: " .. table.concat(info.options, " / ")
-	conditionL.Text = if info.condition then "📌 " .. info.condition else ""
-	refreshVisible()
+-- payload: the server's mission card (index, total, title, situation, problem, goal, options, condition, decision).
+function MissionPanel.show(theme: string?, payload: any)
+	local isNew = info == nil or info.index ~= payload.index or info.title ~= payload.title
+	info = payload
+	themeName = theme
+	if isNew then
+		pinned = false
+		openUntil = os.clock() + Config.CARD_OPEN_SECONDS
+	end
+	render()
 end
 
 -- Quiet-time topic (stays until the next one).
 function MissionPanel.setTopic(text: string)
 	topicL.Text = "💬 이야깃거리: " .. text
-	refreshVisible()
+	render()
+end
+
+-- Every frame: fold the card once its open time is over.
+function MissionPanel.tick()
+	if info and shownOpen ~= isOpen() then
+		render()
+	end
 end
 
 function MissionPanel.clear()
-	hasMission = false
-	conditionL.Text = ""
+	info = nil
+	pinned = false
+	openUntil = 0
 	topicL.Text = ""
-	refreshVisible()
+	render()
 end
 
 return MissionPanel
@@ -3816,6 +3894,18 @@ function VotePanel.setCanVote(allowed: boolean)
 	end
 end
 
+-- Closed and counted, result coming (e.g. after a launch on screen): no buttons, just a waiting line.
+function VotePanel.pending(info: any)
+	if voteKey ~= nil and info.voteKey ~= voteKey then
+		return
+	end
+	voteKey = nil
+	clearButtons()
+	titleL.Text = "투표 마감 · 결과를 곧 알려 드려요"
+	hideAt = 0
+	frame.Visible = true
+end
+
 -- info = { voteKey, outcome, counts = { [id] = n }, options }
 function VotePanel.closed(info: any)
 	if voteKey ~= nil and info.voteKey ~= voteKey then
@@ -3842,7 +3932,7 @@ function VotePanel.tick(now: number)
 	end
 	if voteKey then
 		local left = math.max(0, math.ceil(endsAt - now))
-		titleL.Text = if canVote then string.format("투표! 고르세요 · %d초 (말하면서 해도 돼요)", left) else string.format("투표 중 · %d초", left)
+		titleL.Text = if canVote then string.format("%s · %d초", Config.TEXT.VOTE_FREE, left) else string.format("투표 중 · %d초", left)
 	elseif hideAt > 0 and os.clock() >= hideAt then
 		frame.Visible = false
 		hideAt = 0

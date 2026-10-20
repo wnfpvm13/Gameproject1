@@ -1,5 +1,5 @@
 --!strict
--- Word bubbles above heads: each other alive participant's words (up to 3, newest flashes), name and role.
+-- Word bubbles above heads: each other alive participant's words (up to 3, newest flashes) and name.
 -- My own bubble is never drawn while I play (the HUD shows "??? × n"); in the result everyone's words show.
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -129,7 +129,6 @@ end
 export type View = {
 	show: { number }, -- userIds that get a bubble
 	words: { [string]: { words: { string }?, count: number } },
-	roleOf: (number) -> string?,
 }
 
 -- Draws exactly the bubbles in view.show; rebuilds a bubble only when its content changed.
@@ -146,8 +145,7 @@ function Billboards.render(view: View)
 		local entry = view.words[tostring(userId)]
 		if player and entry and entry.words then
 			keep[userId] = true
-			local role = view.roleOf(userId)
-			local caption = if role then player.DisplayName .. " · " .. role else player.DisplayName
+			local caption = player.DisplayName
 			local signature = table.concat(entry.words, "|") .. "#" .. caption
 			local existing = bubbles[userId]
 			local head = player.Character and player.Character:FindFirstChild("Head")

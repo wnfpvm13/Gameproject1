@@ -70,11 +70,10 @@ end
 
 local function refresh()
 	local round = State.round
-	local playing = State.inRound() and State.meAlive()
-	Hud.setStatus(round.phase, round.message, if playing then State.roleOf(State.myId()) else nil)
+	Hud.setStatus(round.phase, round.message)
 	Hud.setAlive(#round.alive, round.total)
 	Hud.setMyWords(if State.inRound() and State.meAlive() then State.myWordCount() else 0)
-	Billboards.render({ show = bubbleTargets(), words = State.words, roleOf = State.roleOf })
+	Billboards.render({ show = bubbleTargets(), words = State.words })
 	RingCamera.set(State.inRound() and State.meAlive())
 	ReactionBar.setVisible(not (State.inRound() and State.meAlive()))
 	VotePanel.setCanVote(State.round.phase == "Talk" and State.meAlive())
@@ -162,6 +161,8 @@ remotes.VoteState.OnClientEvent:Connect(function(info)
 		VotePanel.open(info, State.round.phase == "Talk" and State.meAlive())
 	elseif info.kind == "closed" then
 		VotePanel.closed(info)
+	elseif info.kind == "pending" then
+		VotePanel.pending(info)
 	elseif info.kind == "cancel" then
 		VotePanel.clear()
 	else
@@ -226,6 +227,7 @@ RunService.Heartbeat:Connect(function()
 	Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
 	HostPanel.tick(now)
 	VotePanel.tick(now)
+	MissionPanel.tick()
 	-- Tells the host the table is not quiet even when the recognizer misses speech (never used to judge).
 	if State.round.phase == "Talk" and State.meAlive() and Speech.isSpeaking() and now - lastPing >= Config.VOICE_PING_INTERVAL then
 		lastPing = now

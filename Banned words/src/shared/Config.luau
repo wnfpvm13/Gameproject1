@@ -60,7 +60,16 @@ return {
 	QUIET_TOPIC = 30, -- seconds without speech -> a topic card on the left
 	QUIET_EVENT = 60, -- seconds without speech -> a small situation event
 	EVENT_COOLDOWN = 40,
-	AFTER_LAUNCH_QUIET = 12, -- no new event right after a launch, let people react
+	AFTER_LAUNCH_QUIET = 12, -- after a launch, no new stage / vote / event for this long (let people react)
+	HOLD_AFTER_WORD = 8, -- after a new word takes effect, no new stage / vote / event for this long
+	CARD_OPEN_SECONDS = 8, -- a new mission card is shown big this long, then folds to one line
+	STAGE_HOLD = 5, -- after a notice or a vote result, no quiet-time event for this long
+
+	-- Fixed UI texts players may read aloud (checked against the word bank by tools/check_content.luau).
+	TEXT = {
+		FREE_TALK = "선택하지 않아도 자유롭게 이야기할 수 있어요",
+		VOTE_FREE = "투표는 자유예요 · 계속 이야기해도 돼요",
+	},
 
 	-- Scoring (session leaderstats, casual only): the last other alive speaker before a launch gets the assist.
 	ASSIST_WINDOW = 10,

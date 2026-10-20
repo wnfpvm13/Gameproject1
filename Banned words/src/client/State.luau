@@ -7,7 +7,7 @@ export type WordsEntry = { words: { string }?, count: number }
 local State = {
 	round = { phase = "Lobby", endsAt = 0, message = "", participants = {}, alive = {}, total = 0 } :: any,
 	words = {} :: { [string]: WordsEntry }, -- userId string -> visible words (nil words = my own, hidden)
-	theme = nil :: any, -- { theme, situation, roles = { [userId string] = role } }
+	theme = nil :: any, -- { theme }
 	micTested = false,
 }
 
@@ -29,11 +29,6 @@ end
 
 function State.meAlive(): boolean
 	return State.isAlive(State.myId())
-end
-
-function State.roleOf(userId: number): string?
-	local theme = State.theme
-	return theme and theme.roles and theme.roles[tostring(userId)] or nil
 end
 
 function State.myWordCount(): number

@@ -1,5 +1,5 @@
 --!strict
--- Status board at the top centre: phase + message (+ my role), timer, survivors, and how many words I have
+-- Status board at the top centre: phase + message (the theme during the talk), timer, survivors, and how many words I have
 -- (never which). Kept short (64 px) so the far side of the ring stays visible under it.
 local Style = require(script.Parent:WaitForChild("Style"))
 
@@ -41,12 +41,8 @@ function Hud.build()
 	aliveL.TextXAlignment = Enum.TextXAlignment.Right
 end
 
-function Hud.setStatus(phase: string, message: string, myRole: string?)
-	local text = (PHASE_TITLE[phase] or phase) .. (if message ~= "" then " · " .. message else "")
-	if myRole then
-		text ..= " · 내 역할: " .. myRole
-	end
-	statusL.Text = text
+function Hud.setStatus(phase: string, message: string)
+	statusL.Text = (PHASE_TITLE[phase] or phase) .. (if message ~= "" then " · " .. message else "")
 end
 
 function Hud.setTimer(seconds: number?)

@@ -18,7 +18,6 @@ export type Word = {
 export type Participant = {
 	player: Player,
 	words: { Word },
-	role: string?,
 	alive: boolean,
 }
 
@@ -37,6 +36,8 @@ local Match = {
 	lastEndedAt = -math.huge, -- os.clock() when the last result finished (rematch countdown)
 	ready = {} :: { [Player]: boolean },
 	loading = {} :: { [Player]: boolean }, -- character being reloaded (not eligible until it is in place)
+	hostHeldUntil = 0, -- os.clock(): no new mission stage / vote / event before this (one big thing at a time)
+	nextWordWarnAt = math.huge, -- os.clock() of the next (public, scheduled) word warning
 	theme = nil :: string?,
 }
 
@@ -81,6 +82,12 @@ function Match.eligiblePlayers(): { Player }
 		end
 	end
 	return list
+end
+
+-- Something big is on screen (a word warning/addition, a launch): the host waits `seconds` before its next step.
+-- Only public events call this, so the host's timing never depends on the secret words.
+function Match.holdHost(seconds: number)
+	Match.hostHeldUntil = math.max(Match.hostHeldUntil, os.clock() + seconds)
 end
 
 -- Launches in the last `seconds` (the word schedule waits after a burst of eliminations).
@@ -135,6 +142,8 @@ function Match.resetRound()
 	Match.saidCount = 0
 	Match.talkStartedAt = math.huge
 	Match.cutoffAt = math.huge
+	Match.hostHeldUntil = 0
+	Match.nextWordWarnAt = math.huge
 	Match.theme = nil
 end
 

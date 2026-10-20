@@ -74,7 +74,7 @@ local function eliminate(player: Player, reason: string, word: string?)
 	if reason == "said" then
 		Match.saidCount += 1
 		lastLaunchAt = os.clock()
-		MissionService.noteLaunch()
+		Match.holdHost(Config.AFTER_LAUNCH_QUIET)
 		SeatService.launch(player)
 	end
 	GhostService.markGhost(player)
@@ -169,7 +169,7 @@ local function runRound()
 		table.remove(candidates)
 	end
 
-	-- Assign: seats, first word, theme and roles.
+	-- Assign: seats, first word, theme.
 	Match.roundId += 1
 	local myRound = Match.roundId
 	Match.resetRound()
@@ -177,7 +177,7 @@ local function runRound()
 	local seated = SeatService.seatPlayers(candidates)
 	for _, player in candidates do
 		if seated[player] then
-			Match.participants[player] = { player = player, words = {}, role = nil, alive = true }
+			Match.participants[player] = { player = player, words = {}, alive = true }
 			local humanoid = (player.Character :: Model):FindFirstChildOfClass("Humanoid") :: Humanoid
 			humanoid.Died:Once(function()
 				eliminate(player, "died")
@@ -186,7 +186,7 @@ local function runRound()
 	end
 	Match.startedWith = #Match.aliveList()
 	WordService.assignFirst(rng)
-	MissionService.setup(Random.new()) -- theme + roles: never depends on the words or on earlier rounds
+	MissionService.setup(Random.new()) -- theme: never depends on the words or on earlier rounds
 	GhostService.beginRound()
 	refreshSpeakers()
 	Match.setPhase("Assign", Config.ASSIGN_TIME, "내 금칙어는 나만 몰라요! 다른 사람이 말하게 만드세요")
@@ -201,7 +201,7 @@ local function runRound()
 	local stillTalking = talking(myRound)
 	task.spawn(WordService.runSchedule, seconds, stillTalking, rng)
 	task.spawn(MissionService.run, stillTalking, Random.new(), function(spec)
-		return VoteService.run(spec, stillTalking)
+		return VoteService.run(spec, stillTalking) -- (outcome, announce)
 	end)
 	waitPhase(roundOver)
 
@@ -217,6 +217,7 @@ local function runRound()
 	local text = resultText()
 	SeatService.releaseAll()
 	VoiceService.setSpeakers(nil)
+	VoteService.clear() -- a vote cut off by the end of the talk leaves no window behind
 	Match.setPhase("Result", Config.RESULT_TIME, text)
 	WordService.sendAll()
 	waitPhase()

@@ -1,23 +1,23 @@
 --!strict
 -- Round themes and their mission cards (data only, V2.1). A theme gives the table a reason to talk:
--- loose roles (acting is optional), three missions played in this order (a little story), quiet-time events and
--- topic cards. Every place and group in a card is imaginary, so it works with 2 or 10 players.
+-- three missions played in this order (a little story), quiet-time events and topic cards. No personal roles
+-- (owner 2026-10-20): everyone shares the same scene. Every place and group in a card is imaginary, so it works
+-- with 2 or 10 players.
 --
--- Mission card = situation, problem, goal, 2-3 options. Stages: a notice after a while, a short vote, then a
--- follow-up that depends on the vote (or "undecided" on a tie / no votes). Nobody dies for a mission result.
+-- Mission card = title, situation, problem, goal, 2-3 options. Stages: a notice after a while, a short vote, then
+-- a follow-up that depends on the vote (or "undecided" on a tie / no votes). Nobody dies for a mission result.
 --
 -- Writing rules (docs/DESIGN_V2.md, V2.1):
 --   - never tell anyone to say a specific word; every card must be answerable in many ways;
 --   - NO text here may contain any word-bank word (or alias): the game never adapts cards to the secret words,
 --     so the text itself must be safe for every word. tools/check_content.luau checks this — run it after edits;
---   - nothing aggressive, nothing asking for real personal info.
--- "{name}" in an event is replaced by a random alive player's ROLE (role texts are checked like everything else;
--- display names are not, so they never go into a card); "{이가}" becomes 이/가 to fit that role.
+--   - nothing aggressive, nothing asking for real personal info, nobody singled out.
 
 export type Option = { id: string, text: string }
 
 export type Mission = {
 	id: string,
+	title: string, -- short event name shown on the collapsed card
 	situation: string,
 	problem: string,
 	goal: string,
@@ -28,7 +28,6 @@ export type Mission = {
 
 export type Theme = {
 	name: string,
-	roles: { string },
 	missions: { Mission },
 	events: { string },
 	topics: { string },
@@ -39,10 +38,10 @@ local Themes = {}
 Themes.list = {
 	{
 		name = "회식 자리",
-		roles = { "사장", "부장", "과장", "대리", "신입", "인턴", "총무", "막내", "경리", "거래처 손님", "영업왕", "야근왕" },
 		missions = {
 			{
 				id = "dinner_seats",
+				title = "좁은 방 대작전",
 				situation = "예약한 방이 생각보다 좁아요.",
 				problem = "다 같이 앉으려면 누군가는 불편해져요.",
 				goal = "모두가 납득할 자리 배치를 정해 보세요.",
@@ -61,6 +60,7 @@ Themes.list = {
 			},
 			{
 				id = "dinner_menu",
+				title = "주문 눈치싸움",
 				situation = "정해진 금액 안에서 다 같이 먹을 것을 골라야 해요.",
 				problem = "종류를 늘리면 양이 줄고, 나눠 고르면 오래 기다려야 해요.",
 				goal = "양, 종류, 기다리는 시간 중 무엇을 먼저 챙길지 정해 보세요.",
@@ -79,31 +79,32 @@ Themes.list = {
 			},
 			{
 				id = "dinner_bill",
-				situation = "식사가 끝나고 영수증이 나왔어요.",
-				problem = "생각보다 금액이 훨씬 커요.",
-				goal = "어떻게 낼지 정해 보세요.",
+				title = "영수증 대소동",
+				situation = "예산은 20만 원인데 영수증에는 42만 원이 적혀 있어요.",
+				problem = "누가 얼마나 더 내야 할지 아무도 몰라요.",
+				goal = "어떻게 해결할지 정해 보세요.",
 				options = {
-					{ id = "equal", text = "똑같이 나눠 내기" },
-					{ id = "eaten", text = "먹은 만큼 내기" },
-					{ id = "boss", text = "제일 높은 사람이 내기" },
+					{ id = "check", text = "주문 내역 확인" },
+					{ id = "pool", text = "돈 더 모으기" },
+					{ id = "ask", text = "직원에게 문의" },
 				},
-				notice = "가게에서 할인 쿠폰을 준대요.",
+				notice = "같은 메뉴가 영수증에 두 번 적혀 있대요.",
 				followups = {
-					equal = "적게 먹은 사람이 억울하대요. 뭐라고 설득할까요?",
-					eaten = "누가 뭘 먹었는지 기억이 안 나요. 어떻게 따질까요?",
-					boss = "높은 사람이 카드를 두고 왔대요. 이제 어떡하죠?",
+					check = "중복을 빼니 총액이 20만 원으로 줄었어요. 남은 할인은 어디에 쓸까요?",
+					pool = "모자란 돈을 모으기로 했어요. 어떤 기준으로 나눌까요?",
+					ask = "직원이 실수를 인정하고 디저트를 준대요. 무엇으로 받을까요?",
 					undecided = "가게가 오늘만 여러 번 나눠 결제해 준대요. 어떤 기준으로 나눌까요?",
 				},
 			},
 		},
 		events = {
 			"갑자기 정전이 됐다가 다시 불이 들어왔어요",
-			"{name} 앞에 처음 보는 메뉴가 나왔어요",
+			"처음 보는 메뉴가 테이블에 올라왔어요",
 			"옆 테이블에서 축하 노래가 들려요",
 			"내일 아침 모임이 갑자기 잡혔어요",
 			"2차를 갈지 말지 의견이 갈려요",
-			"{name}{이가} 건배사를 맡게 됐어요",
-			"{name} 휴대폰으로 급한 연락이 왔어요",
+			"건배사를 할 사람이 필요해요",
+			"누군가의 휴대폰이 계속 울려요",
 		},
 		topics = {
 			"회식 메뉴로 최악은?",
@@ -115,10 +116,10 @@ Themes.list = {
 	},
 	{
 		name = "방과 후 우리 반",
-		roles = { "반장 후보", "부반장", "전학생", "운동부장", "청소 당번", "지각 대장", "수학 천재", "미술부", "방송부", "학생회장", "잠꾸러기", "축구부" },
 		missions = {
 			{
 				id = "class_election",
+				title = "공약 고르기",
 				situation = "가상의 후보 셋이 서로 다른 공약을 냈어요.",
 				problem = "이번에는 한 가지 일에만 힘을 쓸 수 있어요.",
 				goal = "우리 반에 먼저 필요한 일을 골라 보세요.",
@@ -137,6 +138,7 @@ Themes.list = {
 			},
 			{
 				id = "class_outing",
+				title = "나들이 장소 정하기",
 				situation = "반 단체 나들이 장소를 정해야 해요.",
 				problem = "돈은 적고 가고 싶은 곳은 제각각이에요.",
 				goal = "모두 갈 만한 곳을 정해 보세요.",
@@ -155,6 +157,7 @@ Themes.list = {
 			},
 			{
 				id = "class_festival",
+				title = "축제 부스 준비",
 				situation = "학교 축제에서 반 부스를 맡았어요.",
 				problem = "준비할 시간이 이틀뿐이에요.",
 				goal = "무슨 부스를 열지 정해 보세요.",
@@ -174,10 +177,10 @@ Themes.list = {
 		},
 		events = {
 			"담임이 갑자기 문을 열었어요",
-			"{name} 서랍에서 쪽지가 나왔어요",
+			"서랍에서 주인 없는 쪽지가 나왔어요",
 			"내일 깜짝 퀴즈가 있다는 공지가 떴어요",
 			"점심 메뉴가 바뀌었다는 소문이 돌아요",
-			"{name}{이가} 반장 후보로 추천됐어요",
+			"후보가 한 명 더 나왔대요",
 			"창밖에 갑자기 비가 쏟아져요",
 			"에어컨이 고장 났어요",
 		},
@@ -191,10 +194,10 @@ Themes.list = {
 	},
 	{
 		name = "단체 나들이 계획",
-		roles = { "총무", "운전 담당", "기록 담당", "맛집 탐정", "길치", "짐꾼", "일정 담당", "늦잠 대장", "분위기 메이커", "안전 요원", "기념품 수집가", "캠핑 고수" },
 		missions = {
 			{
 				id = "outing_place",
+				title = "어디로 갈까",
 				situation = "다 같이 1박 2일로 놀러 가기로 했어요.",
 				problem = "산파, 계곡파, 도시파로 의견이 갈렸어요.",
 				goal = "어디로 갈지 정해 보세요.",
@@ -213,6 +216,7 @@ Themes.list = {
 			},
 			{
 				id = "outing_ride",
+				title = "이동 작전",
 				situation = "이동 수단을 정해야 해요.",
 				problem = "차는 한 대뿐이고 사람은 많아요.",
 				goal = "어떻게 갈지 정해 보세요.",
@@ -231,31 +235,32 @@ Themes.list = {
 			},
 			{
 				id = "outing_stay",
-				situation = "묵을 곳을 골라야 해요.",
-				problem = "좋은 곳은 비싸고 싼 곳은 멀어요.",
-				goal = "어디서 잘지 정해 보세요.",
+				title = "숙소 예약 사고",
+				situation = "단체로 묵을 호텔을 예약했는데 날짜가 하루 어긋났어요.",
+				problem = "바꾸면 돈이 들고, 그대로 두면 일정이 꼬여요.",
+				goal = "비용과 일정을 어떻게 맞출지 정해 보세요.",
 				options = {
-					{ id = "cheap", text = "싸고 먼 곳" },
-					{ id = "nice", text = "비싸고 가까운 곳" },
-					{ id = "tent", text = "텐트 치기" },
+					{ id = "change", text = "날짜 바꾸기" },
+					{ id = "other", text = "다른 숙소 찾기" },
+					{ id = "plan", text = "일정 바꾸기" },
 				},
-				notice = "한 곳이 갑자기 반값이 됐대요.",
+				notice = "날짜를 바꾸면 추가 요금을 내야 한대요.",
 				followups = {
-					cheap = "돌아오는 길이 너무 멀어요. 어떻게 버틸까요?",
-					nice = "누가 돈을 더 낼지 정해야 해요. 어떻게 나눌까요?",
-					tent = "텐트 치는 법을 아무도 몰라요. 어떤 순서로 해 볼까요?",
-					undecided = "두 곳 중 한 곳만 남았대요. 어느 쪽을 포기할까요?",
+					change = "예약을 바꿨어요. 추가 요금 3만 원은 어떻게 나눌까요?",
+					other = "근처에 방이 하나 남았대요. 좁아도 갈까요, 더 찾아볼까요?",
+					plan = "하루 늦게 출발하기로 했어요. 남는 하루엔 뭘 할까요?",
+					undecided = "호텔이 한 시간만 기다려 준대요. 무엇부터 확인할까요?",
 				},
 			},
 		},
 		events = {
 			"쓸 수 있는 돈이 절반으로 줄었어요",
-			"{name}{이가} 신분증을 잃어버렸대요",
+			"누군가 신분증을 두고 왔대요",
 			"예약 하나가 취소됐어요",
-			"{name}{이가} 맛집 목록을 들고 왔어요",
+			"맛집 목록이 새로 도착했어요",
 			"기차표가 한 장 모자라요",
 			"근처에서 축제가 열린다는 소식이에요",
-			"{name} 짐이 너무 무거워요",
+			"짐 하나가 너무 무거워요",
 		},
 		topics = {
 			"놀러 가서 꼭 먹어야 하는 것",
@@ -267,28 +272,29 @@ Themes.list = {
 	},
 	{
 		name = "동네 중고 장터",
-		roles = { "판매왕", "흥정의 달인", "수집가", "구경꾼", "가게 주인", "단골손님", "초보 판매자", "감정사", "배달원", "경매사", "짠돌이", "부자 손님" },
 		missions = {
 			{
 				id = "market_console",
-				situation = "장터에 낡은 오락기가 나왔어요.",
-				problem = "사고 싶은 사람은 많은데 하나뿐이에요.",
-				goal = "누가 어떻게 가져갈지 정해 보세요.",
+				title = "중고 로봇 흥정",
+				situation = "장터에 중고 로봇이 50만 원에 나왔어요.",
+				problem = "비싸지만 갖고 싶다는 사람이 많아요.",
+				goal = "살 가치가 있는지 정해 보세요.",
 				options = {
-					{ id = "auction", text = "경매로 팔기" },
-					{ id = "first", text = "먼저 온 사람에게" },
-					{ id = "share", text = "같이 사서 돌려 쓰기" },
+					{ id = "haggle", text = "가격 깎기" },
+					{ id = "test", text = "성능 확인" },
+					{ id = "pass", text = "거래 포기" },
 				},
-				notice = "주인이 가격을 깎아 줄 수도 있대요.",
+				notice = "춤은 잘 추는데 청소는 서툴대요.",
 				followups = {
-					auction = "가격이 너무 올라갔어요. 여기서 멈출까요?",
-					first = "줄을 섰는데 새치기가 생겼어요. 어떻게 할까요?",
-					share = "돌려 쓰는 규칙이 필요해요. 하루씩? 한 시간씩? 정해 볼까요?",
-					undecided = "다른 손님이 더 높은 값을 불렀어요. 맞출까요, 포기할까요?",
+					haggle = "판매자가 5만 원만 깎아 준대요. 더 깎을까요, 살까요?",
+					test = "로봇이 혼자 춤을 추기 시작했어요. 이 성능이면 얼마가 적당할까요?",
+					pass = "판매자가 10만 원을 낮춰 다시 제안했어요. 다시 생각해 볼까요?",
+					undecided = "다른 손님이 관심을 보여요. 같이 사서 나눠 쓸까요?",
 				},
 			},
 			{
 				id = "market_booth",
+				title = "장사 방식 고르기",
 				situation = "우리도 장터에 작은 자리를 하나 받았어요.",
 				problem = "싸게 내놓으면 남는 돈이 적고, 자세히 알리면 오래 걸려요.",
 				goal = "어떤 방식으로 팔지 정해 보세요.",
@@ -307,6 +313,7 @@ Themes.list = {
 			},
 			{
 				id = "market_missing",
+				title = "사라진 물건",
 				situation = "진열해 둔 물건 하나가 사라졌어요.",
 				problem = "누가 가져갔는지 아무도 못 봤대요.",
 				goal = "어떻게 해결할지 정해 보세요.",
@@ -325,12 +332,12 @@ Themes.list = {
 			},
 		},
 		events = {
-			"{name} 물건에 말도 안 되는 가격이 붙었어요",
+			"어떤 물건에 말도 안 되는 가격이 붙었어요",
 			"깜짝 할인 시간이 시작됐어요",
 			"가짜 명품이 돌고 있다는 소문이 나요",
-			"{name}{이가} 전 재산을 걸고 경매에 참여했어요",
+			"누군가 전 재산을 걸고 경매에 참여했어요",
 			"날씨가 나빠져서 장터가 곧 문을 닫아요",
-			"{name} 가게에 손님이 몰려왔어요",
+			"우리 가게에 손님이 몰려왔어요",
 			"경품 추첨이 곧 시작돼요",
 		},
 		topics = {

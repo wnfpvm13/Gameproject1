@@ -108,6 +108,18 @@ function VotePanel.setCanVote(allowed: boolean)
 	end
 end
 
+-- Closed and counted, result coming (e.g. after a launch on screen): no buttons, just a waiting line.
+function VotePanel.pending(info: any)
+	if voteKey ~= nil and info.voteKey ~= voteKey then
+		return
+	end
+	voteKey = nil
+	clearButtons()
+	titleL.Text = "투표 마감 · 결과를 곧 알려 드려요"
+	hideAt = 0
+	frame.Visible = true
+end
+
 -- info = { voteKey, outcome, counts = { [id] = n }, options }
 function VotePanel.closed(info: any)
 	if voteKey ~= nil and info.voteKey ~= voteKey then
@@ -134,7 +146,7 @@ function VotePanel.tick(now: number)
 	end
 	if voteKey then
 		local left = math.max(0, math.ceil(endsAt - now))
-		titleL.Text = if canVote then string.format("투표! 고르세요 · %d초 (말하면서 해도 돼요)", left) else string.format("투표 중 · %d초", left)
+		titleL.Text = if canVote then string.format("%s · %d초", Config.TEXT.VOTE_FREE, left) else string.format("투표 중 · %d초", left)
 	elseif hideAt > 0 and os.clock() >= hideAt then
 		frame.Visible = false
 		hideAt = 0

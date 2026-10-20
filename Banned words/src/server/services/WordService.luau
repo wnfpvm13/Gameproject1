@@ -80,7 +80,9 @@ function WordService.runSchedule(talkSeconds: number, stillTalking: () -> boolea
 				end
 			end
 			lastCheck = os.clock()
+			Match.nextWordWarnAt = if warned then math.huge else os.clock() + (effectiveAt - Config.WORD_WARNING - Match.now())
 			if effectiveAt > Match.endsAt - Config.WORD_WARNING then
+				Match.nextWordWarnAt = math.huge
 				if warned then
 					Net.toAll("WordWarn", { at = 0, count = wordCount }) -- cancelled
 				end
@@ -90,11 +92,15 @@ function WordService.runSchedule(talkSeconds: number, stillTalking: () -> boolea
 				warned = true
 				Net.toAll("WordWarn", { at = effectiveAt, count = wordCount })
 			end
+			if warned then
+				Match.holdHost(effectiveAt - Match.now() + Config.HOLD_AFTER_WORD) -- the countdown has the stage
+			end
 			if Match.now() >= effectiveAt then
 				break -- checked above in this same step: still talking, no burst delay pending
 			end
 			task.wait(0.25)
 		end
+		Match.nextWordWarnAt = math.huge
 		local kind: "noun" | "habit" = if wordCount == 3 and rng:NextNumber() < Config.HABIT_WORD_CHANCE then "habit" else "noun"
 		for _, p in Match.participants do
 			if p.alive then

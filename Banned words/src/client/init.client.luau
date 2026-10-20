@@ -111,7 +111,7 @@ Speech.onText(function(text, earliest, latest, ended, textId)
 end)
 Speech.onUnstable(function()
 	if State.inRound() and State.meAlive() then
-		Toast.show("음성 인식이 불안정해요 · 마이크와 이어폰을 확인해 주세요", "near")
+		Toast.show(Config.TEXT.RECOGNITION_UNSTABLE, "near")
 	end
 end)
 Speech.start(script) -- this LocalScript lives in PlayerScripts and survives respawns

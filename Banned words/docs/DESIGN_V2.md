@@ -309,6 +309,8 @@ GPT가 놓친 판정 문제 3건을 고치고, 긴 판에서 미션이 모자라
     - 같은 동작을 하는 if/else 가지(2건)
   - selene 경고 7건: `UDim2.new` → `fromScale`·`fromOffset` 서식 제안.
 
+**대화 중 안내 문구의 금칙어(리뷰어 발견, 오너 결정)**: 대화 중 생존자에게 뜨는 "음성 인식이 불안정해요 · 마이크와 이어폰을 확인해 주세요"에 단어장 단어 '이어폰'이 들어 있었다(그 단어를 받은 사람이 읽으면 탈락). "음성 인식이 불안정해요 · 마이크 연결을 확인해 주세요"로 바꾸고 `Config.TEXT.RECOGNITION_UNSTABLE`로 옮겨 문구 검사(`tools/check_content.luau`, 이제 215개)가 늘 보게 했다. 대기실의 이어폰 권장 안내는 내가 판에서 뛰는 동안 숨겨지므로 그대로 둔다.
+
 **공용 스킬**: Roblox 스킬 11개(roblox-brain 10 + roblox-dev-skill)를 git에 올라가지 않은 `moncook-claude/MonCook/.claude/skills/`에서 저장소 루트 `.claude/skills/`로 **복사**해 커밋한다(내용 동일, THIRD_PARTY.md의 위치·우선순위·주의 문구만 수정). 원본은 moncook-claude에 그대로 있다. 이 커밋이 그 브랜치나 메인 체크아웃에 들어가면 같은 스킬이 두 벌이 되므로 원본을 지운다(루트에 스킬이 없는 워크트리는 메인 체크아웃의 것을 대신 읽는다).
 - Claude Code는 시작 폴더부터 저장소(워크트리) 루트까지의 `.claude/skills/`를 읽는다. 그래서 금칙어·MonCook 어느 하위 폴더에서 시작해도 보인다.
 - 다른 워크트리는 이 커밋이 그 브랜치에 합쳐지거나, 루트에 스킬이 없을 때 대신 읽는 메인 체크아웃(integration/hunting)에 들어가야 보인다.

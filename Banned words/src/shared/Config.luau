@@ -72,6 +72,7 @@ return {
 		FREE_TALK = "선택하지 않아도 자유롭게 이야기할 수 있어요",
 		VOTE_FREE = "투표는 자유예요 · 계속 이야기해도 돼요",
 		SETTLING = "마지막 말을 확인하고 있어요…",
+		RECOGNITION_UNSTABLE = "음성 인식이 불안정해요 · 마이크 연결을 확인해 주세요", -- shown to players during the talk
 	},
 
 	-- Scoring (session leaderstats, casual only): the last other alive speaker before a launch gets the assist.

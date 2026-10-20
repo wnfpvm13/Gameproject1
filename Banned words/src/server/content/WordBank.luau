@@ -64,4 +64,13 @@ function WordBank.counts(): (number, number)
 	return #NOUNS, #HABITS
 end
 
+-- Every entry (tools/check_content.luau checks that no card text contains any of them).
+function WordBank.allEntries(): { Entry }
+	local all = table.clone(NOUNS)
+	for _, entry in HABITS do
+		table.insert(all, entry)
+	end
+	return all
+end
+
 return WordBank

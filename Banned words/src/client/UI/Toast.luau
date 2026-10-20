@@ -11,7 +11,7 @@ local toastL: TextLabel
 function Toast.build()
 	toastL = Style.label(Style.gui(), Style.BOLD, 46, Style.WHITE)
 	toastL.AnchorPoint = Vector2.new(0.5, 0.5)
-	toastL.Position = UDim2.fromScale(0.5, 0.45)
+	toastL.Position = UDim2.fromScale(0.5, 0.4)
 	toastL.Size = UDim2.fromScale(0.8, 0.14)
 	toastL.TextTransparency = 1
 	toastL.TextStrokeTransparency = 1

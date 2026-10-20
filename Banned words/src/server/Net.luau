@@ -6,7 +6,9 @@
 --   Words       visible words per player     VoicePing   mic hears speech (activity only)
 --   WordWarn    a new word is coming         Ready       mic test passed + voice connected
 --   Eliminated  someone was launched / left  Sync        "send me the current state"
---   Host        theme, topic card, event     Reaction    ghost/spectator emoji
+--   Host        theme, mission card, topic,  Reaction    ghost/spectator emoji
+--               event                        Vote        (voteKey, option id) mission vote
+--   VoteState   vote opened / closed
 --   Notice      short toast text
 --   Reaction    emoji shown above a player
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,8 +16,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Net = {}
 
 local NAMES = {
-	"RoundState", "Words", "WordWarn", "Eliminated", "Host", "Notice", "Reaction",
-	"Transcript", "VoicePing", "Ready", "Sync",
+	"RoundState", "Words", "WordWarn", "Eliminated", "Host", "VoteState", "Notice", "Reaction",
+	"Transcript", "VoicePing", "Ready", "Sync", "Vote",
 }
 
 local folder: Folder

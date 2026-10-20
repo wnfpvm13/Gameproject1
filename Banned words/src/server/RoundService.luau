@@ -2,8 +2,9 @@
 -- Round flow (the only module that wires the services together):
 --   Lobby -> Countdown -> Assign (seats, first word, theme) -> Talk (free talk, words pile up, host helps)
 --   -> Result -> Countdown (quick rematch) ...
--- Rules live in the services: words in WordService, judging in JudgeService, the host in HostService,
--- ghosts in GhostService, chairs in SeatService, voice routing in VoiceService, score in Scores.
+-- Rules live in the services: words in WordService, judging in JudgeService, theme/missions in MissionService,
+-- mission votes in VoteService, ghosts in GhostService, chairs in SeatService, voice routing in VoiceService,
+-- score in Scores.
 -- Nobody is eliminated for staying quiet; only saying one of your words launches you.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,7 +15,8 @@ local Net = require(script.Parent:WaitForChild("Net"))
 local services = script.Parent:WaitForChild("services")
 local WordService = require(services:WaitForChild("WordService"))
 local JudgeService = require(services:WaitForChild("JudgeService"))
-local HostService = require(services:WaitForChild("HostService"))
+local MissionService = require(services:WaitForChild("MissionService"))
+local VoteService = require(services:WaitForChild("VoteService"))
 local GhostService = require(services:WaitForChild("GhostService"))
 local SeatService = require(services:WaitForChild("SeatService"))
 local VoiceService = require(services:WaitForChild("VoiceService"))
@@ -22,7 +24,7 @@ local Scores = require(services:WaitForChild("Scores"))
 
 local RoundService = {}
 
-local rng = Random.new()
+local rng = Random.new() -- words, seats (missions get fresh generators every round, see runRound)
 local lastLaunchAt = -math.huge
 
 -- Alive participants are heard by everyone; ghosts and spectators only by each other.
@@ -72,7 +74,7 @@ local function eliminate(player: Player, reason: string, word: string?)
 	if reason == "said" then
 		Match.saidCount += 1
 		lastLaunchAt = os.clock()
-		HostService.noteLaunch()
+		MissionService.noteLaunch()
 		SeatService.launch(player)
 	end
 	GhostService.markGhost(player)
@@ -147,7 +149,8 @@ local function cleanup()
 	SeatService.releaseAll()
 	VoiceService.setSpeakers(nil)
 	GhostService.endRound()
-	HostService.clear()
+	MissionService.clear()
+	VoteService.clear()
 	Match.resetRound()
 end
 
@@ -183,7 +186,7 @@ local function runRound()
 	end
 	Match.startedWith = #Match.aliveList()
 	WordService.assignFirst(rng)
-	HostService.setup(rng)
+	MissionService.setup(Random.new()) -- theme + roles: never depends on the words or on earlier rounds
 	GhostService.beginRound()
 	refreshSpeakers()
 	Match.setPhase("Assign", Config.ASSIGN_TIME, "내 금칙어는 나만 몰라요! 다른 사람이 말하게 만드세요")
@@ -196,8 +199,10 @@ local function runRound()
 	JudgeService.setOpen(true)
 	Match.setPhase("Talk", seconds, Match.theme or "대화 시작")
 	local stillTalking = talking(myRound)
-	task.spawn(WordService.runSchedule, seconds, stillTalking, HostService.revalidate, rng)
-	task.spawn(HostService.run, stillTalking, rng)
+	task.spawn(WordService.runSchedule, seconds, stillTalking, rng)
+	task.spawn(MissionService.run, stillTalking, Random.new(), function(spec)
+		return VoteService.run(spec, stillTalking)
+	end)
 	waitPhase(roundOver)
 
 	-- Grace: transcripts of speech that started before the round was decided still count, then judging closes.
@@ -223,7 +228,8 @@ local function onSync(player: Player)
 	Net.to(player, "RoundState", Match.payload())
 	if Match.phase ~= "Lobby" and Match.phase ~= "Countdown" then
 		WordService.send(player)
-		HostService.send(player)
+		MissionService.send(player)
+		VoteService.send(player)
 	end
 end
 
@@ -231,6 +237,7 @@ function RoundService.start()
 	VoiceService.start()
 	Scores.start()
 	GhostService.start()
+	VoteService.start()
 	SeatService.init()
 	JudgeService.start(function(player, word)
 		eliminate(player, "said", word)

@@ -12,7 +12,7 @@ local WordBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChi
 local WordService = {}
 
 local function addWord(p: Match.Participant, kind: "noun" | "habit", effectiveAt: number, rng: Random): boolean
-	local entry = WordBank.draw(kind, Match.reservedTexts(), rng)
+	local entry = WordBank.draw(kind, Match.wordsInPlay(), rng)
 	if not entry then
 		return false
 	end
@@ -55,10 +55,10 @@ function WordService.sendAll()
 	end
 end
 
--- Runs alongside the talk: warns, then adds a word to everyone alive. `stillTalking()` stops it,
--- `onAdded()` runs after each new word (the host re-checks its cards).
+-- Runs alongside the talk: warns, then adds a word to everyone alive. `stillTalking()` stops it.
+-- Nothing else reacts to a new word (a card changing right then would hint at it).
 -- A burst of eliminations (2+ in WORD_DELAY_WINDOW) pushes the step back, also after the warning, up to WORD_DELAY_MAX.
-function WordService.runSchedule(talkSeconds: number, stillTalking: () -> boolean, onAdded: () -> (), rng: Random)
+function WordService.runSchedule(talkSeconds: number, stillTalking: () -> boolean, rng: Random)
 	local start = Match.now()
 	for index, fraction in Config.WORD_STEPS do
 		local wordCount = index + 1
@@ -102,7 +102,6 @@ function WordService.runSchedule(talkSeconds: number, stillTalking: () -> boolea
 			end
 		end
 		WordService.sendAll()
-		onAdded()
 		Net.notice(string.format("금칙어가 %d개가 됐어요! 머리 위를 다시 확인하세요", wordCount))
 	end
 end

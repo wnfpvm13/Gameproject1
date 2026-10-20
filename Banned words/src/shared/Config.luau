@@ -48,9 +48,17 @@ return {
 	TRANSCRIPT_BURST_WINDOW = 3,
 	VOICE_PING_INTERVAL = 1,
 
-	-- Assistant host: only steps in when the table goes quiet (no forced speaking, nobody dies for silence).
-	QUIET_TOPIC = 25, -- seconds without speech -> a topic card in the corner
-	QUIET_EVENT = 50, -- seconds without speech -> a small situation event
+	-- Mission cards (V2.1): card -> notice -> short vote -> follow-up, then the next mission. Nobody dies for them.
+	MISSION_NOTICE_AT = 25, -- seconds after the card: a notice raises the stakes
+	VOTE_OPEN_AFTER = 40, -- seconds after the card: the vote opens (talk first)
+	VOTE_SECONDS = 12,
+	VOTE_RESULT_SECONDS = 4, -- the result stays on screen this long (late joiners get it too)
+	EVENT_SHOW_SECONDS = 7, -- a quiet-time event banner stays this long
+	MISSION_LENGTH = 120, -- seconds per mission before the next card
+
+	-- Quiet-time help next to the missions (no forced speaking, nobody dies for silence).
+	QUIET_TOPIC = 30, -- seconds without speech -> a topic card on the left
+	QUIET_EVENT = 60, -- seconds without speech -> a small situation event
 	EVENT_COOLDOWN = 40,
 	AFTER_LAUNCH_QUIET = 12, -- no new event right after a launch, let people react
 

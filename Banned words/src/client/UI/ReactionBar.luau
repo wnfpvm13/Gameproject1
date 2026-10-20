@@ -1,5 +1,5 @@
 --!strict
--- Emoji reaction buttons for ghosts and spectators (bottom centre). The server rate-limits and broadcasts them.
+-- Emoji reaction buttons for ghosts and spectators (bottom of the bottom stack). The server rate-limits and broadcasts them.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -11,12 +11,11 @@ local bar: Frame
 
 function ReactionBar.build(onPick: (number) -> ())
 	bar = Instance.new("Frame")
-	bar.AnchorPoint = Vector2.new(0.5, 1)
-	bar.Position = UDim2.new(0.5, 0, 1, -20)
+	bar.LayoutOrder = 3 -- bottom of the stack, under the mission card
 	bar.Size = UDim2.new(0, 64 * #Config.REACTIONS, 0, 56)
 	bar.BackgroundTransparency = 1
 	bar.Visible = false
-	bar.Parent = Style.gui()
+	bar.Parent = Style.bottomStack()
 	local layout = Instance.new("UIListLayout")
 	layout.FillDirection = Enum.FillDirection.Horizontal
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center

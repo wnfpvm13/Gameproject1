@@ -21,6 +21,8 @@ local Toast = require(UI:WaitForChild("Toast"))
 local MicPanel = require(UI:WaitForChild("MicPanel"))
 local HostPanel = require(UI:WaitForChild("HostPanel"))
 local ReactionBar = require(UI:WaitForChild("ReactionBar"))
+local MissionPanel = require(UI:WaitForChild("MissionPanel"))
+local VotePanel = require(UI:WaitForChild("VotePanel"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
@@ -75,6 +77,7 @@ local function refresh()
 	Billboards.render({ show = bubbleTargets(), words = State.words, roleOf = State.roleOf })
 	RingCamera.set(State.inRound() and State.meAlive())
 	ReactionBar.setVisible(not (State.inRound() and State.meAlive()))
+	VotePanel.setCanVote(State.round.phase == "Talk" and State.meAlive())
 	refreshVoice()
 	applySeatLock()
 end
@@ -86,6 +89,10 @@ MicPanel.build()
 HostPanel.build()
 ReactionBar.build(function(index)
 	remotes.Reaction:FireServer(index)
+end)
+MissionPanel.build()
+VotePanel.build(function(voteKey, optionId)
+	remotes.Vote:FireServer(voteKey, optionId)
 end)
 Fx.init()
 FlatVoice.start()
@@ -135,18 +142,31 @@ end)
 remotes.Host.OnClientEvent:Connect(function(info)
 	if info.kind == "theme" then
 		State.theme = info
-		Toast.show(info.situation, "info")
+		Toast.show("오늘의 테마: " .. info.theme, "info")
+	elseif info.kind == "mission" then
+		MissionPanel.show(State.theme and State.theme.theme, info)
 	elseif info.kind == "topic" then
-		HostPanel.showTopic(info.text)
+		MissionPanel.setTopic(info.text)
 	elseif info.kind == "event" then
-		HostPanel.showEvent(info.text)
-	elseif info.kind == "hide" then
-		HostPanel.hide(info.which)
+		HostPanel.showEvent(info.text, info.expiresAt)
 	elseif info.kind == "clear" then
 		State.theme = nil
 		HostPanel.clear()
+		MissionPanel.clear()
 	end
 	refresh()
+end)
+
+remotes.VoteState.OnClientEvent:Connect(function(info)
+	if info.kind == "open" then
+		VotePanel.open(info, State.round.phase == "Talk" and State.meAlive())
+	elseif info.kind == "closed" then
+		VotePanel.closed(info)
+	elseif info.kind == "cancel" then
+		VotePanel.clear()
+	else
+		VotePanel.clear()
+	end
 end)
 
 remotes.WordWarn.OnClientEvent:Connect(function(info)
@@ -205,6 +225,7 @@ RunService.Heartbeat:Connect(function()
 	local remaining = State.round.endsAt - now
 	Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
 	HostPanel.tick(now)
+	VotePanel.tick(now)
 	-- Tells the host the table is not quiet even when the recognizer misses speech (never used to judge).
 	if State.round.phase == "Talk" and State.meAlive() and Speech.isSpeaking() and now - lastPing >= Config.VOICE_PING_INTERVAL then
 		lastPing = now

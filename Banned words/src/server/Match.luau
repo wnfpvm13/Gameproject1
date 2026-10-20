@@ -70,17 +70,6 @@ function Match.wordsInPlay(): { string }
 	return list
 end
 
--- Texts a new word must not overlap: words in play plus the roles on everyone's name tag.
-function Match.reservedTexts(): { string }
-	local list = Match.wordsInPlay()
-	for _, p in Match.participants do
-		if p.role then
-			table.insert(list, p.role)
-		end
-	end
-	return list
-end
-
 function Match.eligiblePlayers(): { Player }
 	local list = {}
 	for _, player in Players:GetPlayers() do

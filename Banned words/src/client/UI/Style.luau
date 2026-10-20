@@ -19,6 +19,7 @@ Style.CARD = Color3.fromRGB(255, 248, 225)
 Style.INK = Color3.fromRGB(40, 40, 50)
 
 local gui: ScreenGui? = nil
+local stack: Frame? = nil
 
 -- The single HUD ScreenGui (created on first use, survives respawns).
 function Style.gui(): ScreenGui
@@ -30,6 +31,33 @@ function Style.gui(): ScreenGui
 		gui = g
 	end
 	return gui :: ScreenGui
+end
+
+-- Bottom-centre stack (vote panel, mission card, reaction bar, top to bottom). The seated camera leaves the
+-- bottom centre free (only my own head is there); the side edges show the neighbours' bubbles.
+function Style.bottomStack(): Frame
+	if not stack then
+		local f = Instance.new("Frame")
+		f.Name = "BottomStack"
+		f.AnchorPoint = Vector2.new(0.5, 1)
+		f.Position = UDim2.new(0.5, 0, 1, -12)
+		f.Size = UDim2.new(0.46, 0, 0, 0)
+		f.AutomaticSize = Enum.AutomaticSize.Y
+		f.BackgroundTransparency = 1
+		f.Parent = Style.gui()
+		local c = Instance.new("UISizeConstraint")
+		c.MinSize = Vector2.new(300, 0)
+		c.MaxSize = Vector2.new(560, 600)
+		c.Parent = f
+		local layout = Instance.new("UIListLayout")
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+		layout.Padding = UDim.new(0, 6)
+		layout.Parent = f
+		stack = f
+	end
+	return stack :: Frame
 end
 
 function Style.label(parent: Instance, font: Font, maxSize: number, color: Color3): TextLabel

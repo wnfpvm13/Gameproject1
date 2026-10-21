@@ -43,13 +43,14 @@ local IMAGES = {
 	floorMedallion = "rbxassetid://127398268614665",
 }
 
--- MaterialVariants picked from Roblox generate_material results (2026-10-21). Maps: colour, normal, roughness, metalness.
+-- MaterialVariants picked from Roblox generate_material results (2026-10-21; leather/stage/walnut/carpet/acoustic re-picked
+-- 2026-10-22 after a swatch shot viewed from behind had swapped left and right). Maps: colour, normal, roughness, metalness.
 local VARIANTS = {
-	{ name = "BW_Leather", base = Enum.Material.Leather, studs = 6, maps = { "rbxassetid://104912978475572", "rbxassetid://115641812013401", "rbxassetid://99079211034687", "rbxassetid://77191835678658" } },
-	{ name = "BW_Carpet", base = Enum.Material.Carpet, studs = 8, maps = { "rbxassetid://113219748236017", "rbxassetid://86627878284565", "rbxassetid://104523259600666", "rbxassetid://137584139216841" } },
-	{ name = "BW_Acoustic", base = Enum.Material.Fabric, studs = 8, maps = { "rbxassetid://125353462766051", "rbxassetid://107964630109020", "rbxassetid://124077298834894", "rbxassetid://74947446137733" } },
-	{ name = "BW_Stage", base = Enum.Material.Marble, studs = 14, maps = { "rbxassetid://89441735908455", "rbxassetid://97766172366155", "rbxassetid://90961731095303", "rbxassetid://85710741602980" } },
-	{ name = "BW_Walnut", base = Enum.Material.Wood, studs = 6, maps = { "rbxassetid://72778896182645", "rbxassetid://94543261695115", "rbxassetid://98699201243236", "rbxassetid://137056784802506" } },
+	{ name = "BW_Leather", base = Enum.Material.Leather, studs = 3, maps = { "rbxassetid://104111814424194", "rbxassetid://119178468054381", "rbxassetid://91877623675248", "rbxassetid://74832096260289" } },
+	{ name = "BW_Carpet", base = Enum.Material.Carpet, studs = 8, maps = { "rbxassetid://104572894558298", "rbxassetid://127532556548552", "rbxassetid://81428723020417", "rbxassetid://114931145113740" } },
+	{ name = "BW_Acoustic", base = Enum.Material.Fabric, studs = 8, maps = { "rbxassetid://90544823425413", "rbxassetid://118321827268865", "rbxassetid://89936966730590", "rbxassetid://119054624414770" } },
+	{ name = "BW_Stage", base = Enum.Material.Marble, studs = 14, maps = { "rbxassetid://89236129129471", "rbxassetid://115672988350941", "rbxassetid://71134884086222", "rbxassetid://106776214745237" } },
+	{ name = "BW_Walnut", base = Enum.Material.Wood, studs = 6, maps = { "rbxassetid://92856808357327", "rbxassetid://92189490247665", "rbxassetid://96217265783928", "rbxassetid://74998730206237" } },
 }
 
 -- MaterialVariants live in MaterialService (not in the map), so a rebuild only refreshes them.

@@ -113,7 +113,12 @@
 - 조명: 키 5개(테이블과 의자 사이 y 10.5, 의자 두 개씩 얼굴 높이를 비춤, 그중 2개 그림자), 필 1개, 림 2개, 화면 조명 막대 4개, 관전 구역 다운라이트 4개. Lighting은 Realistic·그림자·ClockTime 0·Ambient (62,66,82)·Bloom 약하게. 천장이 하늘을 가려서 3절의 "어두운 Sky"는 넣지 않았다(ClockTime 0의 밤하늘로 충분).
 
 **재질·이미지 (오너 계정 자산)**
-- 재질: Roblox `generate_material`로 5종 × 4안을 만들어 견본으로 고름(가죽 3번, 카펫 1번, 흡음 0번, 무대 0번, 원목 0번). 텍스처 ID는 빌더의 `VARIANTS` 표.
+- 재질: Roblox `generate_material`로 5종 × 4안을 만들어 견본으로 고름. 텍스처 ID는 빌더의 `VARIANTS` 표.
+  **2026-10-22 정정:** 처음 고를 때 견본 판을 뒤쪽(-Z)에서 찍어 좌우가 뒤집혀 보였고, 그래서 다섯 재질 모두 의도와 다른 안이 들어갔다
+  (쿠션에는 의자 사진 텍스처가 들어감). 오너가 쿠션 비교(지금 / 다이아몬드 퀼팅 / 새 벨벳 / 새 단추 가죽) 뒤 "퀼팅 + 나머지 재질 바로잡기"를 골라,
+  지금은 가죽=QuiltedLeather(기본안, StudsPerTile 3), 카펫=StudioCarpet2, 흡음=AcousticPanel3, 무대=StageFloor3, 원목=WalnutVeneer3이다.
+  견본은 카메라가 +Z에서 -Z를 보게(왼쪽→오른쪽 = +X 순서) 놓고 위아래로 지금 것과 나란히 찍어 확인할 것.
+  쿠션 후보로 만든 TuftedVelvet·ChannelLeather 생성물은 QA 장소의 `AssistantMaterials`에만 있고 쓰지 않는다.
   QA 장소에는 생성기가 만든 `MaterialService/AssistantMaterials`가 남아 있지만 빌더는 쓰지 않는다.
 - 이미지: `tools/art/make_art.ps1`(Windows PowerShell, UTF-8 BOM 필수 — 없으면 한글 때문에 파싱 오류)로 그린 PNG 4장(`tools/art/`)을
   Studio MCP `upload_image`로 올림(로컬 http 서버로 제공). ID는 빌더의 `IMAGES` 표. 글자는 금칙어/KOREAN/TALK/LIVE/ON AIR만 쓰고 단어장과 부분 문자열 대조를 했다(“게임”은 단어장 말버릇이라 뺌).

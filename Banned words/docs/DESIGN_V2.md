@@ -88,7 +88,7 @@ src/client/
 - 이 의존 규칙은 `tools/tests/check_deps.py`가 검사한다(아래 "개발 도구" 절의 표).
 - Rojo는 폴더를 통째로 매핑한다(`default.project.json`).
 - `tools/install_game.py`는 같은 규칙으로 폴더를 걸어서 설치기(`tools/install_game.luau`)를 만든다. 새 파일을 빠뜨릴 수 없다.
-- 맵은 `tools/build_lounge_map.luau`(Edit에서 실행)로 만든다.
+- 맵은 `tools/build_lounge_map.luau`, 조명은 `tools/build_lounge_lighting.luau`로 만든다(둘 다 Edit에서, 이 순서로 실행). 세트 모양·재질·이미지 기록은 `docs/VISUAL_PLAN_2026-10-21.md`의 "만든 결과" 절.
 
 ## 어떻게 만들었나 (후임용)
 

@@ -5,7 +5,7 @@ MonCook과 별개인 로블록스 음성 파티 게임. 마이크 음성을 로�
 
 **현재 기준: V2.1.2 (2026-10-20) — [docs/DESIGN_V2.md](docs/DESIGN_V2.md)** (규칙, 코드 구조, 테스트 기록).
 - 제작 내역 전체(처음부터 V2.1.1까지): [docs/HISTORY_2026-10-20.md](docs/HISTORY_2026-10-20.md)
-- 그래픽 개선안(계획만, 오너 방향 결정 대기): [docs/VISUAL_PLAN_2026-10-21.md](docs/VISUAL_PLAN_2026-10-21.md)
+- 그래픽(A안 예능 토크 스튜디오 세트, 맵 `tools/build_lounge_map.luau` → 조명 `tools/build_lounge_lighting.luau`): [docs/VISUAL_PLAN_2026-10-21.md](docs/VISUAL_PLAN_2026-10-21.md)
 - 가상 시계 테스트 + 의존 방향 검사(Studio 없이): `python -I tools/tests/run_tests.py` (luau CLI 필요)
 - 정적 검사(Roblox API 타입 + 린트): `python -I tools/lint/run_lint.py` (luau-lsp·selene·rojo 필요)
 

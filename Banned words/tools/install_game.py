@@ -4,7 +4,7 @@ For places edited in Studio without Rojo (the test place is a cloud place). It f
 default.project.json, walking the folders, so a new module can never be left out of the installer:
   folder -> Folder, init.client.luau -> the folder becomes a LocalScript, X.server.luau -> Script,
   X.client.luau -> LocalScript, X.luau -> ModuleScript.
-The map is separate (tools/build_lounge_map.luau). The old STT live test is removed because its UI overlaps the HUD.
+The map is separate (tools/build_lounge_map.luau, then tools/build_lounge_lighting.luau). The old STT live test is removed because its UI overlaps the HUD.
 """
 import io, os
 

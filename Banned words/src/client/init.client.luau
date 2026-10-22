@@ -1,5 +1,5 @@
 -- 금칙어 게임 Korean client entry point: only wiring. Server events update State, then refresh() redraws
--- every part from State (HUD panels, bubbles, camera, reaction bar, recognizer on/off, seat lock).
+-- every part from State (HUD, head bubbles, camera, reaction bar, recognizer on/off, seat lock).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -9,7 +9,6 @@ local UserInputService = game:GetService("UserInputService")
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
 local remotes = shared:WaitForChild("Remotes")
 local Config = require(shared:WaitForChild("Config"))
-local Judge = require(shared:WaitForChild("Judge"))
 local State = require(script:WaitForChild("State"))
 local Speech = require(script:WaitForChild("Speech"))
 local FlatVoice = require(script:WaitForChild("FlatVoice"))
@@ -21,10 +20,7 @@ local UI = script:WaitForChild("UI")
 local Hud = require(UI:WaitForChild("Hud"))
 local Toast = require(UI:WaitForChild("Toast"))
 local MicPanel = require(UI:WaitForChild("MicPanel"))
-local HostPanel = require(UI:WaitForChild("HostPanel"))
 local ReactionBar = require(UI:WaitForChild("ReactionBar"))
-local MissionPanel = require(UI:WaitForChild("MissionPanel"))
-local VotePanel = require(UI:WaitForChild("VotePanel"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
@@ -43,7 +39,8 @@ local function applySeatLock()
 	end)
 end
 
--- Ready = voice connected + said something once. The recognizer runs only for the mic test and while I play.
+-- Ready = voice connected + said something once. The recognizer runs only for that mic test (docs/DESIGN_V3.md §2;
+-- judging speech comes back in phase 2).
 local function refreshVoice()
 	local status = Speech.status()
 	local isReady = State.micTested and (status == "Listening" or status == "Speaking")
@@ -51,35 +48,30 @@ local function refreshVoice()
 		readySent = isReady
 		remotes.Ready:FireServer(isReady)
 	end
-	Speech.setEnabled(not State.micTested or (State.round.phase == "Talk" and State.meAlive()))
+	Speech.setEnabled(not State.micTested)
 	MicPanel.setVoice(status)
 	MicPanel.setTest(status, State.micTested, State.inRound() and State.isParticipant(State.myId()), State.round.readyCount)
 end
 
+-- Everyone on the chairs gets a head bubble (name + hearts) during a round, every participant in the result.
 local function bubbleTargets(): { number }
-	local phase = State.round.phase
-	local list = {}
-	if phase == "Assign" or phase == "Talk" then
-		for _, id in State.round.alive do
-			if id ~= State.myId() then
-				table.insert(list, id)
-			end
-		end
-	elseif phase == "Result" then
-		list = State.round.participants
+	if State.inRound() then
+		return State.round.alive
+	elseif State.round.phase == "Result" then
+		return State.round.participants
 	end
-	return list
+	return {}
 end
 
 local function refresh()
 	local round = State.round
+	local me = State.myId()
 	Hud.setStatus(round.phase, round.message)
 	Hud.setAlive(#round.alive, round.total)
-	Hud.setMyWords(if State.inRound() and State.meAlive() then State.myWordCount() else 0)
-	Billboards.render({ show = bubbleTargets(), words = State.words })
+	Hud.setMyLives(if State.inRound() and State.isParticipant(me) then State.livesOf(me) else nil, round.maxLives)
+	Billboards.render({ show = bubbleTargets(), words = State.words, lives = round.lives, maxLives = round.maxLives })
 	ShowCamera.set((State.inRound() and State.meAlive()) or os.clock() < myFlightEndsAt)
 	ReactionBar.setVisible(not (State.inRound() and State.meAlive()))
-	VotePanel.setCanVote(State.round.phase == "Talk" and State.meAlive())
 	refreshVoice()
 	applySeatLock()
 end
@@ -88,13 +80,8 @@ end
 Hud.build()
 Toast.build()
 MicPanel.build()
-HostPanel.build()
 ReactionBar.build(function(index)
 	remotes.Reaction:FireServer(index)
-end)
-MissionPanel.build()
-VotePanel.build(function(voteKey, optionId)
-	remotes.Vote:FireServer(voteKey, optionId)
 end)
 Fx.init()
 FlatVoice.start()
@@ -102,38 +89,38 @@ GetUp.start()
 Speech.onStatus(function()
 	refreshVoice()
 end)
-Speech.onText(function(text, earliest, latest, ended, textId)
+Speech.onText(function()
 	if not State.micTested then
 		State.micTested = true
 		Toast.show("마이크 확인 완료!", "info")
 		refreshVoice()
-		return
-	end
-	if State.round.phase == "Talk" and State.meAlive() then
-		remotes.Transcript:FireServer(text, earliest, latest, ended, textId)
 	end
 end)
 Speech.onUnstable(function()
-	if State.inRound() and State.meAlive() then
+	if not State.micTested then
 		Toast.show(Config.TEXT.RECOGNITION_UNSTABLE, "near")
 	end
 end)
 Speech.start(script) -- this LocalScript lives in PlayerScripts and survives respawns
 
 -- Server events.
+local stateSeen = false -- the first state after joining only sets things up (no "it started" toast for late joiners)
 remotes.RoundState.OnClientEvent:Connect(function(round)
 	local previous = State.round.phase
 	State.round = round
 	if round.phase == "Lobby" or round.phase == "Countdown" then
 		State.words = {}
-		State.theme = nil
-		if previous ~= round.phase then
-			HostPanel.clear()
+	end
+	if stateSeen and round.phase ~= previous then
+		if round.phase == "Play" then
+			Toast.show(Config.TEXT.PLAY_START, "info")
+		elseif round.phase == "Final" then
+			Toast.show(Config.TEXT.FINAL, "near")
+		elseif round.phase == "Result" then
+			Toast.show(round.message, "info")
 		end
 	end
-	if round.phase == "Talk" and previous ~= "Talk" then
-		Toast.show("대화 시작! 다른 사람의 금칙어를 말하게 만드세요", "info")
-	end
+	stateSeen = true
 	refresh()
 end)
 
@@ -142,72 +129,43 @@ remotes.Words.OnClientEvent:Connect(function(words)
 	refresh()
 end)
 
-remotes.Host.OnClientEvent:Connect(function(info)
-	if info.kind == "theme" then
-		State.theme = info
-		Toast.show("오늘의 테마: " .. info.theme, "info")
-	elseif info.kind == "mission" then
-		MissionPanel.show(State.theme and State.theme.theme, info)
-	elseif info.kind == "topic" then
-		MissionPanel.setTopic(info.text)
-	elseif info.kind == "event" then
-		HostPanel.showEvent(info.text, info.expiresAt)
-	elseif info.kind == "clear" then
-		State.theme = nil
-		HostPanel.clear()
-		MissionPanel.clear()
+-- One event's lives lost (docs/DESIGN_V3.md §4): the bubbles pop, one toast names everyone (my own line first; when
+-- everyone left fell at once, the last line says they play the final).
+remotes.LifeLost.OnClientEvent:Connect(function(info)
+	local lost, out, lines = {}, {}, {}
+	local anyOut = false
+	for _, entry in info.players do
+		Billboards.hit(entry.userId, entry.lives, State.round.maxLives, entry.out)
+		anyOut = anyOut or entry.out
+		if entry.userId == State.myId() and info.reason ~= "left" then
+			table.insert(lines, if entry.out then Config.TEXT.MY_OUT else string.format(Config.TEXT.MY_LIFE_LOST, entry.lives))
+		elseif entry.out then
+			table.insert(out, entry.name)
+		else
+			table.insert(lost, entry.name)
+		end
 	end
-	refresh()
-end)
-
-remotes.VoteState.OnClientEvent:Connect(function(info)
-	if info.kind == "open" then
-		VotePanel.open(info, State.round.phase == "Talk" and State.meAlive())
-	elseif info.kind == "closed" then
-		VotePanel.closed(info)
-	elseif info.kind == "pending" then
-		VotePanel.pending(info)
-	elseif info.kind == "cancel" then
-		VotePanel.clear()
-	else
-		VotePanel.clear()
+	if info.reason == "left" then
+		Toast.show(string.format(Config.TEXT.LEFT, table.concat(out, ", ")), "near")
+		return
 	end
-end)
-
-remotes.WordWarn.OnClientEvent:Connect(function(info)
-	HostPanel.warnWord(info.at, info.count)
-end)
-
-remotes.Eliminated.OnClientEvent:Connect(function(info)
-	local isMe = info.userId == State.myId()
-	if info.reason == "said" then
-		Billboards.alarm(info.userId)
+	if #lost > 0 then
+		table.insert(lines, string.format(Config.TEXT.LIFE_LOST, table.concat(lost, ", ")))
+	end
+	if #out > 0 then
+		table.insert(lines, string.format(Config.TEXT.OUT, table.concat(out, ", ")))
+	end
+	if info.final then
+		table.insert(lines, Config.TEXT.TO_FINAL)
+	end
+	if anyOut then
 		Fx.elimination()
-		local who = if isMe then "내가" else info.name .. "님이"
-		local word = info.word or ""
-		local text = string.format("삐! %s 금칙어 \"%s\"%s 말했어요", who, word, Judge.josa(word, "을", "를"))
-		if isMe and info.words and #info.words > 1 then
-			text ..= "\n내 금칙어: " .. table.concat(info.words, ", ")
-		end
-		if info.assistName then
-			text ..= string.format("\n유도: %s +%d점", info.assistName, Config.SCORE_ASSIST)
-		end
-		Toast.show(text, "elim")
-	elseif info.reason == "left" then
-		Toast.show(info.name .. "님이 나갔어요", "near")
 	end
+	Toast.show(table.concat(lines, "\n"), if anyOut then "elim" else "near")
 end)
 
 remotes.Notice.OnClientEvent:Connect(function(info)
 	Toast.show(info.text, "near")
-end)
-
--- The round was decided: once my speech that may still count has been sent, say so (judging waits for it).
-remotes.Settle.OnClientEvent:Connect(function(info)
-	task.spawn(function()
-		Speech.waitSettled(info.cutoff, info.cutoff + Config.END_TOLERANCE, Config.SETTLE_MAX)
-		remotes.Settled:FireServer(info.key)
-	end)
 end)
 
 remotes.Reaction.OnClientEvent:Connect(function(info)
@@ -228,7 +186,7 @@ remotes.Splash.OnClientEvent:Connect(function(info)
 	Fx.splash(info.position)
 end)
 
--- Studio only: F launches me from my chair (no speech-to-text in Studio; the server ignores it on live servers).
+-- Studio only: F costs me a life (there are no real missions yet; the server ignores it on live servers).
 if RunService:IsStudio() then
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if not processed and input.KeyCode == Enum.KeyCode.F then
@@ -244,7 +202,7 @@ player.CharacterAdded:Connect(function()
 	ShowCamera.reapply()
 end)
 
--- Anyone's new character needs its bubble again (e.g. the last one launched respawns during the result).
+-- Anyone's new character needs its bubble again (e.g. a participant back on the chair after a fall).
 local function watchCharacters(other: Player)
 	other.CharacterAdded:Connect(function(character)
 		character:WaitForChild("Head", 5)
@@ -257,19 +215,9 @@ for _, other in Players:GetPlayers() do
 end
 Players.PlayerAdded:Connect(watchCharacters)
 
-local lastPing = 0
 RunService.Heartbeat:Connect(function()
-	local now = workspace:GetServerTimeNow()
-	local remaining = State.round.endsAt - now
+	local remaining = State.round.endsAt - workspace:GetServerTimeNow()
 	Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
-	HostPanel.tick(now)
-	VotePanel.tick(now)
-	MissionPanel.tick()
-	-- Tells the host the table is not quiet even when the recognizer misses speech (never used to judge).
-	if State.round.phase == "Talk" and State.meAlive() and Speech.isSpeaking() and now - lastPing >= Config.VOICE_PING_INTERVAL then
-		lastPing = now
-		remotes.VoicePing:FireServer()
-	end
 end)
 
 -- Ask for the current state now that every handler is connected (late joiners miss earlier broadcasts).

@@ -5,7 +5,7 @@ MonCook과 별개인 로블록스 음성 파티 게임. V3: 밝은 실내 수영
 (V2는 원형 라운지 의자에서 받아쓰기로 판정했다.)
 
 **설계 기준: V3 (2026-10-22) — [docs/DESIGN_V3.md](docs/DESIGN_V3.md)** (실내 수영장 미션 + 진행자 + 금칙어, 1단계 구현 중).
-지금 코드는 아직 V2.1.2 — [docs/DESIGN_V2.md](docs/DESIGN_V2.md) (규칙, 코드 구조, 테스트 기록). V2 마지막 상태는 git 태그 `banned-words-v2-final`.
+지금 코드는 V3 1단계 묶음 2b까지 — 판 규칙(목숨 3개·8분·결승): [docs/ROUND_RULES_2026-10-22.md](docs/ROUND_RULES_2026-10-22.md), 발사 연출: [docs/FLING_2026-10-22.md](docs/FLING_2026-10-22.md). 금칙어·진행자·실제 미션은 아직 없다(라이브 서버는 미션 없이 이야기만 하다가, 8분이 지나거나 퇴장으로 판이 정해지면 남은 사람이 결승 없이 우승). V2 규칙·코드 구조·테스트 기록은 [docs/DESIGN_V2.md](docs/DESIGN_V2.md), V2 마지막 상태는 git 태그 `banned-words-v2-final`.
 - V3 맵(밝은 실내 수영장, 맵 `tools/build_pool_hall.luau` → 조명 `tools/build_pool_lighting.luau`): [docs/VISUAL_V3_POOL_2026-10-22.md](docs/VISUAL_V3_POOL_2026-10-22.md)
 - 제작 내역 전체(처음부터 V2.1.1까지): [docs/HISTORY_2026-10-20.md](docs/HISTORY_2026-10-20.md)
 - 그래픽(A안 예능 토크 스튜디오 세트, 맵 `tools/build_lounge_map.luau` → 조명 `tools/build_lounge_lighting.luau`): [docs/VISUAL_PLAN_2026-10-21.md](docs/VISUAL_PLAN_2026-10-21.md)
@@ -15,7 +15,7 @@ MonCook과 별개인 로블록스 음성 파티 게임. V3: 밝은 실내 수영
 **코드 규칙(이 게임)** — 전역 규칙(`~/.claude/CLAUDE.md` 3번)의 구체 사항
 - 서비스끼리는 require하지 않는다. 연결은 `RoundService`가 콜백으로 한다. UI 패널끼리도 require하지 않고, 클라이언트 연결은 `init.client`만 한다.
 - 조정할 숫자(시간·확률·한도)는 `src/shared/Config.luau`에 둔다. 대화 중 플레이어가 소리 내 읽을 수 있는 새 고정 문구는 `Config.TEXT`에 넣는다(`tools/check_content.luau`가 단어장 전체와 대조한다). 예전 문구 일부는 아직 각 모듈 안에 있다.
-- 바꾼 동작은 `tools/tests/run_tests.py`(가상 시계 테스트 + 의존 방향 검사)와 `tools/lint/run_lint.py`로 확인한다. 층 규칙의 표는 `docs/DESIGN_V2.md`의 "개발 도구" 절에 있다.
+- 바꾼 동작은 `tools/tests/run_tests.py`(가상 시계 테스트 + 고정 문구 검사 + 의존 방향 검사)와 `tools/lint/run_lint.py`로 확인한다. 층 규칙의 기준은 `tools/tests/check_deps.py`의 `ALLOWED` 표다(V2 때 설명은 `docs/DESIGN_V2.md` "개발 도구" 절, V3의 missions 층은 `docs/DESIGN_V3.md` 13번).
 아래 2026-10-17 결정 중 수영장·버전1 동시 출시는 V2 결정으로 바뀌었다.
 
 - 설계 원본(Claude Docs, 그림 포함): https://claude.ai/code/artifact/36208a40-0e2b-49e8-becf-d77f1b3fef31

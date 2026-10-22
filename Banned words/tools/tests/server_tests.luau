@@ -1,9 +1,9 @@
--- Server tests on the real modules: judge range rule, settle, per-player habit draw, mission spacing.
+-- Server tests on the real modules: judge range rule, settle, per-player habit draw (JudgeService and WordService are
+-- kept for the speech judging of phase 2 and the banned words of bundle 5; the V3 round rules are in round_tests.luau).
 local Config = require(node("Config"))
 local Match = require(node("Match"))
 local JudgeService = require(node("JudgeService"))
 local WordService = require(node("WordService"))
-local MissionService = require(node("MissionService"))
 
 local fails = 0
 local function check(name, cond, detail)
@@ -162,54 +162,18 @@ check("3a every player got 3 words", allThree)
 check("3b kinds are mixed within matches (not one kind for all)", mixed >= 18, mixed .. "/20 matches mixed")
 check("3c about half the third words are habits", habitCount >= 70 and habitCount <= 130, habitCount .. "/" .. total)
 
----------------------------------------------------------------- 4. mission spacing with the real word schedule
-for _, talk in { 330, 450, 570 } do
-	Match.resetRound()
-	local list = {}
-	for i = 1, 4 do
-		local p = fakePlayer(200 + i)
-		table.insert(list, p)
-		Match.participants[p] = { player = p, alive = true, words = {} }
-	end
-	playerList = list
-	local rng = Random.new(talk)
-	WordService.assignFirst(rng)
-	MissionService.setup(Random.new(talk + 1))
-	local start = now
-	table.clear(NetStub.sent)
-	Match.phase = "Talk"
-	Match.talkStartedAt = start
-	Match.endsAt = start + talk
-	local function stillTalking() return now < Match.endsAt end
-	task.spawn(function() -- the table keeps talking (no quiet-time events)
-		while stillTalking() do
-			Match.lastActivityAt = os.clock()
-			task.wait(1)
-		end
-	end)
-	task.spawn(WordService.runSchedule, talk, stillTalking, rng)
-	task.spawn(MissionService.run, talk, stillTalking, Random.new(talk + 2), function(spec)
-		task.wait(spec.seconds)
-		return "undecided", function() end
-	end)
-	at(start + talk + 1)
-	local opens, afters, line = {}, {}, {}
-	for _, m in NetStub.sent do
-		if m.name == "Host" and m.payload.kind == "mission" then
-			if m.payload.stage == "open" then
-				opens[m.payload.index] = m.at - start
-			elseif m.payload.stage == "after" then
-				afters[m.payload.index] = m.at - start
-			end
+---------------------------------------------------------------- 4. fixed texts never contain a word-bank word
+-- Players may read them aloud, so the same rule as the judge applies (tools/check_content.luau does this in Studio).
+local Judge = require(node("Judge"))
+local WordBank = require(node("WordBank"))
+local clashes = {}
+for key, text in Config.TEXT do
+	for _, entry in WordBank.allEntries() do
+		if Judge.isConfirmed(entry.word, text, entry.aliases) then
+			table.insert(clashes, key .. ":" .. entry.word)
 		end
 	end
-	for i = 1, 3 do
-		table.insert(line, string.format("m%d open %.1f after %s", i, opens[i] or -1, if afters[i] then string.format("%.1f", afters[i]) else "-"))
-	end
-	local length = talk / 3
-	local ok = opens[3] ~= nil and afters[3] ~= nil and opens[3] <= 2 * length + 15 and talk - afters[3] >= 30
-	check(string.format("4 talk %d s (missions every %d s): all 3 run, last follow-up >= 30 s", talk, length), ok,
-		table.concat(line, " | ") .. string.format(" | last follow-up %.1f s", talk - (afters[3] or talk)))
 end
+check("4 no fixed UI text (Config.TEXT) contains a word-bank word", #clashes == 0, table.concat(clashes, ", "))
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

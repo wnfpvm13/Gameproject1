@@ -6,8 +6,10 @@ Each suite is one generated Luau file: a prelude (virtual clock, coroutine sched
 the REAL module sources from src/ + the test file. The modules run unchanged; only `game`, `workspace`, `task`,
 `os.clock`, `Random`, `Instance` and the remotes (Net) are fakes.
   speech  src/client/Speech.luau: transcript start ranges, late texts, ~10 s cuts, waitSettled, unstable notice
-  server  Config, Judge, WordBank, Themes, Match, JudgeService, WordService, MissionService: range judging,
-          settle at the end of a round, per-player habit words, mission spacing with the real word schedule
+  server  Config, Judge, WordBank, Match, JudgeService, WordService: range judging, settle at the end of a round,
+          per-player habit words (kept for phase 2 speech judging and the bundle 5 banned words)
+  round   Config, Match, LifeService, Timeline, MissionRunner, RoundService (+ stub chairs, stands, voice, scores and
+          a scripted mission): lives rules, the time budget, the final triggers, whole rounds to the result
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
 """
 import io, os, subprocess, sys, tempfile
@@ -19,11 +21,18 @@ SERVER_MODULES = [
     ("Config", "src/shared/Config.luau"),
     ("Judge", "src/shared/Judge.luau"),
     ("WordBank", "src/server/content/WordBank.luau"),
-    ("Themes", "src/server/content/Themes.luau"),
     ("Match", "src/server/Match.luau"),
     ("JudgeService", "src/server/services/JudgeService.luau"),
     ("WordService", "src/server/services/WordService.luau"),
-    ("MissionService", "src/server/services/MissionService.luau"),
+]
+
+ROUND_MODULES = [
+    ("Config", "src/shared/Config.luau"),
+    ("Match", "src/server/Match.luau"),
+    ("LifeService", "src/server/services/LifeService.luau"),
+    ("Timeline", "src/server/services/Timeline.luau"),
+    ("MissionRunner", "src/server/services/MissionRunner.luau"),
+    ("RoundService", "src/server/RoundService.luau"),
 ]
 
 
@@ -43,19 +52,27 @@ def build_speech():
     ])
 
 
-def build_server():
+def build_with_modules(modules, tests):
     parts = [read(os.path.join(HERE, "prelude_server.luau"))]
-    for name, rel in SERVER_MODULES:
+    for name, rel in modules:
         parts.append("loaders.%s = function()\n%s\nend" % (name, module_source(rel)))
-    parts.append(read(os.path.join(HERE, "server_tests.luau")))
+    parts.append(read(os.path.join(HERE, tests)))
     return "\n".join(parts)
+
+
+def build_server():
+    return build_with_modules(SERVER_MODULES, "server_tests.luau")
+
+
+def build_round():
+    return build_with_modules(ROUND_MODULES, "round_tests.luau")
 
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     failed = False
     with tempfile.TemporaryDirectory() as tmp:
-        for name, build in (("speech", build_speech), ("server", build_server)):
+        for name, build in (("speech", build_speech), ("server", build_server), ("round", build_round)):
             path = os.path.join(tmp, name + ".luau")
             io.open(path, "w", encoding="utf-8", newline="\n").write(build())
             result = subprocess.run(["luau", path], capture_output=True, text=True, encoding="utf-8")

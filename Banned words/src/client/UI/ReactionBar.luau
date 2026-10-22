@@ -1,5 +1,5 @@
 --!strict
--- Emoji reaction buttons for ghosts and spectators (bottom of the bottom stack). The server rate-limits and broadcasts them.
+-- Emoji reaction buttons for players who are out and spectators (bottom of the bottom stack). The server rate-limits and broadcasts them.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))

@@ -104,8 +104,7 @@ local function onReaction(player: Player, index: any)
 	if typeof(index) ~= "number" or not Config.REACTIONS[index] then
 		return
 	end
-	local inRound = Match.phase == "Assign" or Match.phase == "Talk"
-	if inRound and Match.isAlive(player) then
+	if Match.inRound() and Match.isAlive(player) then
 		return -- players on the chairs talk; reactions are for spectators
 	end
 	local now = os.clock()

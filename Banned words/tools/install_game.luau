@@ -12,8 +12,8 @@ for _, pair in { { parents[1], "BannedWords" }, { parents[2], "BannedWords" }, {
 end
 local n1 = Instance.new("Folder"); n1.Name = "BannedWords"
 do local s = Instance.new("ModuleScript"); s.Name = "Config"; s.Source = [====[--!strict
--- Tunable numbers for 금칙어 게임 Korean (V2, 2026-10-20: free talk in a round lounge, words pile up 1 -> 2 -> 3).
--- Everything here is a first guess to adjust after playtests (docs/DESIGN_V2.md).
+-- Tunable numbers for 금칙어 게임 Korean (V3, 2026-10-22: indoor pool missions, 3 lives, the flying chair).
+-- Everything here is a first guess to adjust after playtests (docs/DESIGN_V3.md §14).
 local RunService = game:GetService("RunService")
 
 local isStudio = RunService:IsStudio()
@@ -21,7 +21,7 @@ local isStudio = RunService:IsStudio()
 return {
 	-- Studio allows a solo round so one tester can watch the flow; live servers need two.
 	MIN_PLAYERS = if isStudio then 1 else 2,
-	MAX_PLAYERS = 10, -- one match per server for now (owner 2026-10-20)
+	MAX_PLAYERS = 10, -- one match per server, ten chairs
 
 	-- Only players who connected voice and passed the mic test take a seat (Studio test accounts have no voice).
 	REQUIRE_VOICE_READY = not isStudio,
@@ -31,26 +31,34 @@ return {
 	ASSIGN_TIME = 8,
 	RESULT_TIME = 10,
 
-	-- Maximum match length by starting player count (the round ends early once one survivor is left).
-	MATCH_TIME = {
-		{ upTo = 3, seconds = 330 },
-		{ upTo = 6, seconds = 450 },
-		{ upTo = 10, seconds = 570 },
-	},
+	-- Round (docs/DESIGN_V3.md §2, §4): 8 minutes of free talk and missions, then a sudden-death final.
+	LIVES = 3,
+	ROUND_SECONDS = 480,
+	FINAL_AT_ALIVE = 3, -- a round begun with 4+ players goes to the final as soon as this few are left
+	FINAL_MAX_SECONDS = 90, -- past this the survivors share the win
+	FREE_TALK_SECONDS = 40, -- between missions
+	AFK_MISSES = 2, -- answer missions missed in a row -> out (a spectator)
+	SUBJECTIVE_FLINGS = 1, -- public servers: launches by the presenter or a vote, per player per round
+	-- Studio has no private servers: this says which rules a Studio round plays (workspace attribute BW_ServerKind =
+	-- "public" / "private" overrides it while testing).
+	STUDIO_SERVER_KIND = "public",
 
-	-- Words pile up: everyone alive gets one more word at these fractions of the match time (max 3 words).
+	-- The Studio-only test mission (bundle 2b, until the real missions of bundle 4): everyone alive fails with
+	-- TEST_FAIL_CHANCE; a final question knocks out each finalist with TEST_FINAL_FAIL_CHANCE.
+	TEST_MISSION_SECONDS = 8,
+	TEST_FAIL_CHANCE = 0.3,
+	TEST_FINAL_FAIL_CHANCE = 0.4,
+
+	-- V2 word schedule and speech judging (WordService / JudgeService). Not used by the V3 round until the banned
+	-- words come back (bundle 5) and speech judging (phase 2); kept for those modules and their tests.
 	WORD_STEPS = { 0.30, 0.65 },
 	WORD_WARNING = 10, -- seconds of notice before a new word takes effect
-	-- Two or more launches in the last WORD_DELAY_WINDOW seconds push the next word back (at most WORD_DELAY_MAX).
-	WORD_DELAY_WINDOW = 30, -- counts eliminations except players leaving
+	WORD_DELAY_WINDOW = 30, -- two or more launches in this window push the next word back (at most WORD_DELAY_MAX)
 	WORD_DELAY_MAX = 30,
-	HABIT_WORD_CHANCE = 0.5, -- per player: chance that their third word is a speech habit (진짜, 대박 ...) instead of a noun
-
-	-- When the round is decided (last elimination / time-out), speech still counts if it began before that moment
-	-- and ended no later than END_TOLERANCE seconds after it. 0 = only speech that was over by then: a transcript has
-	-- no word times, so speech running past the end may hold words said after it (not judged; raise only once
-	-- word times exist). Judging stays open until every alive player's client says that speech has been sent
-	-- (at most SETTLE_MAX seconds; a notice after SETTLE_NOTICE_AFTER).
+	HOLD_AFTER_WORD = 8,
+	HABIT_WORD_CHANCE = 0.5, -- per player: chance that a word is a speech habit (진짜, 대박 ...) instead of a noun
+	-- Speech still counts if it began before the moment the round was decided and ended no later than END_TOLERANCE
+	-- after it; judging waits until every alive player's client says that speech has been sent (SETTLE_MAX at most).
 	END_TOLERANCE = 0,
 	SETTLE_MAX = 5,
 	SETTLE_NOTICE_AFTER = 1.2,
@@ -81,35 +89,36 @@ return {
 	TRANSCRIPT_BURST_WINDOW = 3,
 	VOICE_PING_INTERVAL = 1,
 
-	-- Mission cards (V2.1): card -> notice -> short vote -> follow-up, then the next mission. Nobody dies for them.
-	-- The theme's missions are spread evenly over the talk (330/450/570 s with 3 missions -> 110/150/190 s each).
-	MISSION_NOTICE_AT = 25, -- seconds after the card: a notice raises the stakes
-	VOTE_OPEN_AFTER = 40, -- seconds after the card: the vote opens (talk first)
-	VOTE_SECONDS = 12,
-	VOTE_RESULT_SECONDS = 4, -- the result stays on screen this long (late joiners get it too)
-	EVENT_SHOW_SECONDS = 7, -- a quiet-time event banner stays this long
-
-	-- Quiet-time help next to the missions (no forced speaking, nobody dies for silence).
-	QUIET_TOPIC = 30, -- seconds without speech -> a topic card on the left
-	QUIET_EVENT = 60, -- seconds without speech -> a small situation event
-	EVENT_COOLDOWN = 40,
-	AFTER_LAUNCH_QUIET = 12, -- after a launch, no new stage / vote / event for this long (let people react)
-	HOLD_AFTER_WORD = 8, -- after a new word takes effect, no new stage / vote / event for this long
-	CARD_OPEN_SECONDS = 8, -- a new mission card is shown big this long, then folds to one line
-	STAGE_HOLD = 5, -- after a notice or a vote result, no quiet-time event for this long
-
 	-- Fixed UI texts players may read aloud (checked against the word bank by tools/check_content.luau).
+	-- %s / %d are filled in by the code (names, numbers).
 	TEXT = {
-		FREE_TALK = "선택하지 않아도 자유롭게 이야기할 수 있어요",
-		VOTE_FREE = "투표는 자유예요 · 계속 이야기해도 돼요",
+		NEED_READY = "마이크 준비된 플레이어 %d명 더 필요해요",
+		NEED_PLAYERS = "플레이어 %d명 더 필요해요",
+		COUNTDOWN = "곧 시작해요",
+		RECOVERING = "잠시 문제가 생겨서 다음 판을 준비해요",
+		ASSIGN = "목숨은 %d개예요 · 미션에 실패하면 날아가요",
+		PLAY_START = "본 경기 시작!",
+		FREE_TALK = "자유롭게 이야기하세요",
+		TEST_MISSION = "연습 미션 · 운에 맡겨 보세요",
+		FINAL = "결승 · 틀리면 바로 탈락",
+		ALL_WRONG = "모두 틀려서 아무도 탈락하지 않아요 · 다시!",
+		TO_FINAL = "남은 사람이 한꺼번에 떨어져서 그대로 결승으로 가요",
+		LIFE_LOST = "%s 목숨 -1",
+		OUT = "%s 탈락!",
+		MY_LIFE_LOST = "내 목숨 -1 · 남은 목숨 %d",
+		MY_OUT = "탈락! 관람석에서 응원해 주세요",
+		LEFT = "%s 님이 나갔어요",
+		WINNER = "%s 우승!",
+		JOINT_WINNERS = "%s 공동 우승!",
+		NO_WINNER = "우승자 없이 끝났어요",
 		SETTLING = "마지막 말을 확인하고 있어요…",
-		RECOGNITION_UNSTABLE = "음성 인식이 불안정해요 · 마이크 연결을 확인해 주세요", -- shown to players during the talk
+		RECOGNITION_UNSTABLE = "음성 인식이 불안정해요 · 마이크 연결을 확인해 주세요",
 	},
 
-	-- Scoring (session leaderstats, casual only): the last other alive speaker before a launch gets the assist.
-	ASSIST_WINDOW = 10,
+	-- Scoring (session leaderstats, casual only).
+	SCORE_WIN = 3,
+	ASSIST_WINDOW = 10, -- (speech assist credit, used again with speech judging in phase 2)
 	SCORE_ASSIST = 1,
-	SCORE_SURVIVE = 3,
 
 	-- Spectators (V3): players who are out and late joiners watch from the stands, with reactions.
 	REACTIONS = { "👏", "😂", "😱", "😮", "❤️" },
@@ -124,6 +133,29 @@ return {
 	SOUND_BANG = "rbxassetid://9114086657", -- Dirt Explosion 1: sharp bang (SFX), the flying chair firing
 	SOUND_SPLASH = "rbxassetid://9120585252", -- Water Splash, Big Water Splash, Dive In 1 (SFX), the landing
 }
+]====]; s.Parent = n1 end
+do local s = Instance.new("ModuleScript"); s.Name = "Hearts"; s.Source = [====[--!strict
+-- Lives as a row of hearts for RichText labels: the lives left in red, the lost ones in grey (the HUD and the head
+-- bubbles show them the same way).
+local Hearts = {}
+
+local GLYPH = "♥"
+local FULL = "#FF4D6D"
+local LOST = "#B4BAC8"
+
+function Hearts.text(lives: number, max: number): string
+	local full = math.clamp(lives, 0, max)
+	local parts = {}
+	if full > 0 then
+		table.insert(parts, string.format('<font color="%s">%s</font>', FULL, string.rep(GLYPH, full)))
+	end
+	if max > full then
+		table.insert(parts, string.format('<font color="%s">%s</font>', LOST, string.rep(GLYPH, max - full)))
+	end
+	return table.concat(parts)
+end
+
+return Hearts
 ]====]; s.Parent = n1 end
 do local s = Instance.new("ModuleScript"); s.Name = "Judge"; s.Source = [====[--!strict
 -- Forbidden-word judge (V2 rule, owner-confirmed): after normalisation, the word appearing anywhere inside one
@@ -192,9 +224,9 @@ require(script.Parent:WaitForChild("RoundService")).start()
 ]====]; s.Parent = n2 end
 do local s = Instance.new("ModuleScript"); s.Name = "Match"; s.Source = [====[--!strict
 -- Shared match state plus small read helpers and the RoundState broadcast. No game rules: services read it,
--- and only RoundService changes phase and participants.
+-- and only RoundService (and LifeService for lives) changes phase, participants and lives.
 -- Times: `Match.now()` (server clock shared with clients) for anything sent over the network,
--- os.clock() for local intervals (activity, launches).
+-- os.clock() for local intervals.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -209,31 +241,37 @@ export type Word = {
 
 export type Participant = {
 	player: Player,
-	words: { Word },
-	alive: boolean,
+	words: { Word }, -- banned words (none until bundle 5)
+	alive: boolean, -- still in the game (lives left, or a finalist after everyone fell at once)
+	lives: number,
+	afkMisses: number, -- answer missions missed in a row
 }
 
 local Match = {
-	phase = "Lobby", -- Lobby | Countdown | Assign | Talk | Result
+	phase = "Lobby", -- Lobby | Countdown | Assign | Play | Final | Result
 	endsAt = 0,
 	message = "",
 	roundId = 0,
+	serverKind = "public", -- "public" | "private" (docs/DESIGN_V3.md §3), set at each round start
 	participants = {} :: { [Player]: Participant },
 	startedWith = 0,
-	talkStartedAt = math.huge, -- Match.now() when Talk began; speech from before it is ignored
-	cutoffAt = math.huge, -- Match.now() when the round is decided (the talk's end, or earlier); later speech is ignored
+	ready = {} :: { [Player]: boolean },
+	-- Speech judging and the V2 word schedule (JudgeService / WordService, back in phase 2 / bundle 5):
+	talkStartedAt = math.huge, -- Match.now() when the talk began; speech from before it is ignored
+	cutoffAt = math.huge, -- Match.now() when the round is decided; later speech is ignored
 	lastActivityAt = 0, -- os.clock() of the last speech heard from an alive participant
 	launches = {} :: { number }, -- os.clock() of each launch this round
-	saidCount = 0, -- launches for saying a word (tells a real win from a walkover)
-	lastEndedAt = -math.huge, -- os.clock() when the last result finished (rematch countdown)
-	ready = {} :: { [Player]: boolean },
-	hostHeldUntil = 0, -- os.clock(): no new mission stage / vote / event before this (one big thing at a time)
+	hostHeldUntil = 0, -- os.clock(): the word schedule waits until then
 	nextWordWarnAt = math.huge, -- os.clock() of the next (public, scheduled) word warning
-	theme = nil :: string?,
 }
 
 function Match.now(): number
 	return workspace:GetServerTimeNow()
+end
+
+-- A round is being played (seats taken): Assign, Play or Final.
+function Match.inRound(): boolean
+	return Match.phase == "Assign" or Match.phase == "Play" or Match.phase == "Final"
 end
 
 function Match.isAlive(player: Player): boolean
@@ -251,7 +289,7 @@ function Match.aliveList(): { Player }
 	return list
 end
 
--- Every word in play this round (dead players' words too, so new words never overlap them).
+-- Every word in play this round (out players' words too, so new words never overlap them).
 function Match.wordsInPlay(): { string }
 	local list = {}
 	for _, p in Match.participants do
@@ -275,13 +313,12 @@ function Match.eligiblePlayers(): { Player }
 	return list
 end
 
--- Something big is on screen (a word warning/addition, a launch): the host waits `seconds` before its next step.
--- Only public events call this, so the host's timing never depends on the secret words.
+-- The word schedule waits `seconds` before its next step (V2; WordService).
 function Match.holdHost(seconds: number)
 	Match.hostHeldUntil = math.max(Match.hostHeldUntil, os.clock() + seconds)
 end
 
--- Launches in the last `seconds` (the word schedule waits after a burst of eliminations).
+-- Launches in the last `seconds` (V2: the word schedule waits after a burst of launches).
 function Match.recentLaunches(seconds: number): number
 	local count = 0
 	local now = os.clock()
@@ -294,12 +331,13 @@ function Match.recentLaunches(seconds: number): number
 end
 
 function Match.payload()
-	local ids, alive = {}, {}
+	local ids, alive, lives = {}, {}, {}
 	for player, p in Match.participants do
 		table.insert(ids, player.UserId)
 		if p.alive then
 			table.insert(alive, player.UserId)
 		end
+		lives[tostring(player.UserId)] = p.lives
 	end
 	return {
 		phase = Match.phase,
@@ -307,10 +345,12 @@ function Match.payload()
 		message = Match.message,
 		participants = ids,
 		alive = alive,
+		lives = lives, -- userId string -> lives left
+		maxLives = Config.LIVES,
 		total = Match.startedWith,
 		readyCount = #Match.eligiblePlayers(),
 		requireReady = Config.REQUIRE_VOICE_READY,
-		theme = Match.theme,
+		serverKind = Match.serverKind,
 	}
 end
 
@@ -325,17 +365,21 @@ function Match.setPhase(name: string, duration: number, text: string)
 	Match.broadcast()
 end
 
+-- A new status line within the same phase (a mission starting, free talk again).
+function Match.setMessage(text: string)
+	Match.message = text
+	Match.broadcast()
+end
+
 -- Clears everything that belongs to one round.
 function Match.resetRound()
 	table.clear(Match.participants)
 	table.clear(Match.launches)
 	Match.startedWith = 0
-	Match.saidCount = 0
 	Match.talkStartedAt = math.huge
 	Match.cutoffAt = math.huge
 	Match.hostHeldUntil = 0
 	Match.nextWordWarnAt = math.huge
-	Match.theme = nil
 end
 
 return Match
@@ -344,25 +388,25 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 -- Remote events: the only place that creates them. Every server module talks to clients through these helpers.
 --
 -- Server -> client                         Client -> server
---   RoundState  round snapshot (Match)       Transcript  (text, earliest + latest start, latest end, text id)
---   Words       visible words per player     VoicePing   mic hears speech (activity only)
---   WordWarn    a new word is coming         Ready       mic test passed + voice connected
---   Eliminated  someone was launched / left  Sync        "send me the current state"
---   Host        theme, mission card, topic,  Reaction    ghost/spectator emoji
---               event                        Vote        (voteKey, option id) mission vote
---   VoteState   vote opened / closed         Settled     (key) my speech from before the cutoff is sent
---   Notice      short toast text                DevFling    Studio only: launch me (tests the flying chair)
+--   RoundState  round snapshot (Match)       Ready       mic test passed + voice connected
+--   LifeLost    who lost a life / is out:    Sync        "send me the current state"
+--               { reason, players = {        Reaction    spectator emoji
+--               { userId, name, lives, out }  DevFling    Studio only: (mode) lose a life / "out" / "show"
+--               }, final = they all fell at
+--               once and play the final }
+--   Notice      short toast text
 --   Reaction    emoji shown above a player
---   Settle      round decided: { key, cutoff }
 --   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
 --   Splash      that player hit the water: { userId, position }
+-- Kept for the speech judging and the banned words (JudgeService / WordService, not wired in V3 until phase 2 /
+-- bundle 5): Words, WordWarn, Settle (server -> client), Transcript, VoicePing, Settled (client -> server).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = {}
 
 local NAMES = {
-	"RoundState", "Words", "WordWarn", "Eliminated", "Host", "VoteState", "Notice", "Reaction", "Settle", "Fling",
-	"Splash", "Transcript", "VoicePing", "Ready", "Sync", "Vote", "Settled", "DevFling",
+	"RoundState", "LifeLost", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling",
+	"Words", "WordWarn", "Settle", "Transcript", "VoicePing", "Settled",
 }
 
 local folder: Folder
@@ -412,14 +456,13 @@ end
 return Net
 ]====]; s.Parent = n2 end
 do local s = Instance.new("ModuleScript"); s.Name = "RoundService"; s.Source = [====[--!strict
--- Round flow (the only module that wires the services together):
---   Lobby -> Countdown -> Assign (seats, first word, theme) -> Talk (free talk, words pile up, host helps)
---   -> Result -> Countdown (quick rematch) ...
--- Rules live in the services: words in WordService, judging in JudgeService, theme/missions in MissionService,
--- mission votes in VoteService, spectators in SpectatorService, flying chairs in SeatService, voice routing in
--- VoiceService, score in Scores.
--- Nobody is eliminated for staying quiet; only saying one of your words launches you. (V3 bundle 2a: the V2 rules
--- still run here, with the V3 pool hall, flying-chair launch, stands and show camera; docs/DESIGN_V3.md.)
+-- Round flow (V3, docs/DESIGN_V3.md §2; the only module that wires the services together):
+--   Lobby -> Countdown -> Assign (chairs, lives) -> Play (ROUND_SECONDS: free talk -> mission -> launches -> ...)
+--   -> Final (sudden death) -> Result -> Countdown (quick rematch) ...
+-- Rules live in the services: lives in LifeService, the time budget and the final trigger in Timeline, missions in
+-- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, score in
+-- Scores. Bundle 2b: no banned words and no presenter yet, and the only mission is the Studio test mission (live
+-- servers just talk until the main game is over, then the survivors win without a final).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -428,20 +471,26 @@ local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChil
 local Match = require(script.Parent:WaitForChild("Match"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local services = script.Parent:WaitForChild("services")
-local WordService = require(services:WaitForChild("WordService"))
-local JudgeService = require(services:WaitForChild("JudgeService"))
-local MissionService = require(services:WaitForChild("MissionService"))
-local VoteService = require(services:WaitForChild("VoteService"))
-local SpectatorService = require(services:WaitForChild("SpectatorService"))
+local LifeService = require(services:WaitForChild("LifeService"))
+local Timeline = require(services:WaitForChild("Timeline"))
+local MissionRunner = require(services:WaitForChild("MissionRunner"))
 local SeatService = require(services:WaitForChild("SeatService"))
+local SpectatorService = require(services:WaitForChild("SpectatorService"))
 local VoiceService = require(services:WaitForChild("VoiceService"))
 local Scores = require(services:WaitForChild("Scores"))
 
 local RoundService = {}
 
-local rng = Random.new() -- words, seats (missions get fresh generators every round, see runRound)
+type Reason = "fail" | "final" | "left" | "dev"
 
--- Alive participants are heard by everyone; ghosts and spectators only by each other.
+local rng = Random.new() -- seat order and mission draws
+local runs = 0 -- every mission run (and every Studio fail) gets its own number for the event ids
+local toFinal = false -- everyone left fell at once: exactly those players play the final
+local freeTalk = false -- free talk in the main game (the Studio fail key works only then, so no launch starts while
+-- a mission runs or the round waits for flights)
+local lastEndedAt = -math.huge -- os.clock() when the last result finished (quick rematch countdown)
+
+-- Alive participants are heard by everyone; players who are out and spectators only by each other.
 local function refreshSpeakers()
 	local ids = {}
 	for _, player in Match.aliveList() do
@@ -450,71 +499,99 @@ local function refreshSpeakers()
 	VoiceService.setSpeakers(ids)
 end
 
-local function wordTexts(p: Match.Participant): { string }
-	local list = {}
-	for _, word in p.words do
-		table.insert(list, word.text)
+-- Private servers play other rules (docs/DESIGN_V3.md §3). Studio has none, so a setting stands in for it there.
+local function detectServerKind(): string
+	if RunService:IsStudio() then
+		local forced = workspace:GetAttribute("BW_ServerKind")
+		if forced == "public" or forced == "private" then
+			return forced
+		end
+		return Config.STUDIO_SERVER_KIND
 	end
-	return list
+	return if game.PrivateServerOwnerId ~= 0 then "private" else "public"
 end
 
-local function roundOver(): boolean
+-- Tells everyone who lost a life or is out (one message per event, so the toast names them together; `final`: they
+-- all fell at once and play the final among themselves).
+local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean)
+	local list = {}
+	for _, outcome in outcomes do
+		table.insert(list, {
+			userId = outcome.player.UserId,
+			name = outcome.player.DisplayName,
+			lives = outcome.livesLeft,
+			out = outcome.out,
+		})
+	end
+	Net.toAll("LifeLost", { reason = reason, players = list, final = final })
+	refreshSpeakers()
+	Match.broadcast()
+end
+
+-- Launches everyone who lost a life. Players who are out reach the stands after their flight (onFlightOver), or
+-- right away when there was nothing to launch (no character on the chair at that moment).
+local function announce(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean)
+	if #outcomes == 0 then
+		return
+	end
+	for _, outcome in outcomes do
+		if not SeatService.fling(outcome.player, Match.roundId) and outcome.out then
+			SpectatorService.toStands(outcome.player)
+		end
+	end
+	tell(outcomes, reason, final)
+end
+
+-- A main-game fail (a mission, a Studio test): a life each, or the final for exactly those players when nobody
+-- would be left.
+local function failPlayers(players: { Player }, eventId: string, reason: Reason)
+	local outcomes, everyone = LifeService.fail(players, eventId, "objective")
+	if everyone then
+		toFinal = true
+	end
+	announce(outcomes, reason, everyone)
+end
+
+-- Flights in progress land and come back first (the next step, the final or the result waits for them). Returns
+-- whether everyone landed. A flight ends FLING_RETURN_SECONDS after its launch; the cap only matters if launches kept
+-- coming meanwhile.
+local function waitFlights(): boolean
+	local deadline = os.clock() + 3 * (Config.FLING_RETURN_SECONDS + 1)
+	while SeatService.anyFlying() and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	return not SeatService.anyFlying()
+end
+
+-- Over without a final: one player left (of two or more), or nobody.
+local function decided(): boolean
 	local alive = #Match.aliveList()
 	return alive == 0 or (Match.startedWith >= 2 and alive <= 1)
 end
 
--- reason: "said" (one of their words) | "died" (reset/fell) | "left" (quit the server)
-local function eliminate(player: Player, reason: string, word: string?)
-	local p = Match.participants[player]
-	if not p or not p.alive then
-		return
-	end
-	p.alive = false
-	if Match.phase == "Talk" and roundOver() then
-		Match.cutoffAt = math.min(Match.cutoffAt, Match.now()) -- the round is decided right now
-	end
-	local helper = if reason == "said" then Scores.creditAssist(player) else nil
-	Net.toAll("Eliminated", {
-		userId = player.UserId,
-		name = player.DisplayName,
-		reason = reason,
-		word = word,
-		words = wordTexts(p),
-		assistName = if helper then helper.DisplayName else nil,
-	})
-	if reason ~= "left" then
-		table.insert(Match.launches, os.clock()) -- eliminations that delay the next word
-	end
-	if reason == "said" then
-		Match.saidCount += 1
-		Match.holdHost(Config.AFTER_LAUNCH_QUIET)
-		SeatService.fling(player, Match.roundId) -- back from the pool into the stands (onFlightOver)
-	end
-	refreshSpeakers()
-	Match.broadcast()
-	WordService.sendAll() -- the eliminated player may now see their own words
+-- The main game's outcome is fixed: decided, everyone left fell at once, or so few are left that the final starts
+-- at once. (The time running out is not one of these: a mission running then is played to its end.)
+local function mainSettled(): boolean
+	return toFinal or decided() or Timeline.fewLeft(#Match.aliveList())
 end
 
--- FLING_RETURN_SECONDS after a launch (docs/DESIGN_V3.md §10 step 4): undo the ragdoll, then back on the chair if
--- the player is still in this round's game, else into the stands. A flight from an older round, or of a character
--- the player no longer has, only gets undone.
-local function onFlightOver(player: Player, roundId: any, character: Model)
-	SeatService.endFling(player)
-	if not player.Parent or player.Character ~= character or roundId ~= Match.roundId then
-		return
-	end
-	if not (Match.phase == "Assign" or Match.phase == "Talk") then
-		return
-	end
-	if not (Match.isAlive(player) and SeatService.reseat(player)) then
-		SpectatorService.toStands(player)
-	end
-end
-
-local function talking(myRound: number): () -> boolean
-	return function()
-		return Match.phase == "Talk" and Match.roundId == myRound and not roundOver() and Match.now() < Match.endsAt
-	end
+-- What a mission may do (docs/DESIGN_V3.md §13). `onFail(players, key)`: who failed the mission's event `key`.
+-- `settled()`: the outcome is already fixed, so the running mission stops and later results are dropped (§2 "확정 뒤에
+-- 도착한 결과는 버린다").
+local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, string) -> (), settled: () -> boolean): MissionRunner.Ctx
+	return {
+		final = final,
+		players = Match.aliveList,
+		rng = rng,
+		fail = onFail,
+		show = function(text: string)
+			Match.setMessage(text)
+			Net.notice(text)
+		end,
+		cancelled = function()
+			return Match.roundId ~= myRound or settled()
+		end,
+	}
 end
 
 local function waitPhase(shouldStop: (() -> boolean)?)
@@ -526,13 +603,104 @@ local function waitPhase(shouldStop: (() -> boolean)?)
 	end
 end
 
-local function matchSeconds(players: number): number
-	for _, step in Config.MATCH_TIME do
-		if players <= step.upTo then
-			return step.seconds
+-- Main game: free talk and missions until the time is up, the final is due or the round is decided. A mission
+-- that would not fit in the time left is not started; one running when the time is up is played to its end. A
+-- mission starts only when nobody is in the air (else another free talk first).
+local function playMain(myRound: number)
+	-- Players who left during the assignment do not count as having started (§2: "4명 이상으로 시작한 판").
+	Timeline.begin(#Match.aliveList())
+	Match.setPhase("Play", Config.ROUND_SECONDS, Config.TEXT.FREE_TALK)
+	local function over(): boolean
+		return Match.roundId ~= myRound or mainSettled() or Timeline.finalDue(#Match.aliveList())
+	end
+	local function talk(untilAt: number)
+		freeTalk = true
+		while os.clock() < untilAt and not over() do
+			task.wait(0.2)
+		end
+		freeTalk = false
+	end
+	while true do
+		talk(os.clock() + Config.FREE_TALK_SECONDS)
+		local landed = waitFlights()
+		if over() then
+			return
+		end
+		local mission = if landed then MissionRunner.choose(Timeline.left()) else nil
+		if landed and not mission then
+			talk(math.huge) -- nothing fits any more: free talk to the end
+			return
+		end
+		if mission then
+			runs += 1
+			local run = runs
+			MissionRunner.run(mission, missionCtx(myRound, false, function(players, key)
+				failPlayers(players, "m" .. run .. ":" .. key, "fail")
+			end, mainSettled))
+			waitFlights()
+			if over() then
+				return
+			end
+			Match.setMessage(Config.TEXT.FREE_TALK)
 		end
 	end
-	return Config.MATCH_TIME[#Config.MATCH_TIME].seconds
+end
+
+-- Final: sudden-death questions for the survivors until one is left or FINAL_MAX_SECONDS have passed (a question
+-- begun before that is played to its end); a question everyone gets wrong puts nobody out. A question that breaks
+-- ends the final (the survivors share the win).
+local function playFinal(myRound: number)
+	local mission = MissionRunner.finalMission()
+	if not mission or #Match.aliveList() < 2 or Match.roundId ~= myRound then
+		return
+	end
+	Match.setPhase("Final", Config.FINAL_MAX_SECONDS, Config.TEXT.FINAL)
+	local deadline = os.clock() + Config.FINAL_MAX_SECONDS
+	local function settled(): boolean
+		return #Match.aliveList() < 2 -- the others left: the last one wins
+	end
+	while not settled() and os.clock() < deadline and Match.roundId == myRound do
+		local wrong: { Player } = {}
+		local ok = MissionRunner.run(mission, missionCtx(myRound, true, function(players, _key)
+			for _, player in players do
+				if not table.find(wrong, player) then
+					table.insert(wrong, player)
+				end
+			end
+		end, settled))
+		if not ok or Match.roundId ~= myRound or settled() then
+			return
+		end
+		local alive = Match.aliveList()
+		local out: { Player } = {}
+		for _, player in wrong do
+			if table.find(alive, player) then
+				table.insert(out, player)
+			end
+		end
+		if #out >= #alive then
+			Net.notice(Config.TEXT.ALL_WRONG)
+		elseif #out > 0 then
+			announce(LifeService.eliminate(out), "final", false)
+			waitFlights()
+		end
+		task.wait() -- every question yields at least once, even one that returns at once
+	end
+end
+
+-- Who won (everyone still in), with the session score.
+local function resultText(): string
+	local names = {}
+	for _, player in Match.aliveList() do
+		Scores.add(player, Config.SCORE_WIN)
+		table.insert(names, player.DisplayName)
+	end
+	if #names == 0 then
+		return Config.TEXT.NO_WINNER
+	elseif #names == 1 then
+		return string.format(Config.TEXT.WINNER, names[1])
+	end
+	return string.format(Config.TEXT.JOINT_WINNERS, table.concat(names, ", "))
 end
 
 local function shuffled(list: { Player }): { Player }
@@ -544,48 +712,19 @@ local function shuffled(list: { Player }): { Player }
 	return out
 end
 
-local function resultText(): string
-	local survivors = {}
-	for player, p in Match.participants do
-		if p.alive then
-			table.insert(survivors, player)
-			Scores.add(player, Config.SCORE_SURVIVE)
-		end
-	end
-	local text
-	if #survivors == 0 then
-		text = "모두 탈락!"
-	elseif #survivors == 1 and Match.startedWith >= 2 then
-		local name = survivors[1].DisplayName
-		text = if Match.saidCount > 0 then name .. " 최후의 1인!" else name .. " 기권승 (다른 참가자가 모두 나갔어요)"
-	else
-		local names = {}
-		for _, player in survivors do
-			table.insert(names, player.DisplayName)
-		end
-		text = table.concat(names, ", ") .. " 공동 생존!"
-	end
-	local best, bestScore = Scores.bestAssist()
-	if best then
-		text ..= string.format(" · 유도왕 %s (%d점)", best.DisplayName, bestScore)
-	end
-	return text
-end
-
 local function cleanup()
-	JudgeService.setOpen(false)
 	SeatService.releaseAll()
 	VoiceService.setSpeakers(nil)
 	SpectatorService.endRound()
-	MissionService.clear()
-	VoteService.clear()
 	Match.resetRound()
+	toFinal = false
+	freeTalk = false
 end
 
 local function runRound()
 	-- Countdown (short right after a result, so friends can go again quickly).
-	local rematch = os.clock() - Match.lastEndedAt < 20
-	Match.setPhase("Countdown", if rematch then Config.REMATCH_COUNTDOWN else Config.LOBBY_COUNTDOWN, "곧 시작해요")
+	local rematch = os.clock() - lastEndedAt < 20
+	Match.setPhase("Countdown", if rematch then Config.REMATCH_COUNTDOWN else Config.LOBBY_COUNTDOWN, Config.TEXT.COUNTDOWN)
 	waitPhase(function()
 		return #Match.eligiblePlayers() < Config.MIN_PLAYERS
 	end)
@@ -597,84 +736,74 @@ local function runRound()
 		table.remove(candidates)
 	end
 
-	-- Assign: seats, first word, theme.
+	-- Assign: chairs and lives.
 	Match.roundId += 1
 	local myRound = Match.roundId
 	Match.resetRound()
+	Match.serverKind = detectServerKind()
+	toFinal = false
 	Scores.resetRound()
 	local seated = SeatService.seatPlayers(candidates)
 	for _, player in candidates do
 		if seated[player] then
-			Match.participants[player] = { player = player, words = {}, alive = true }
-			local humanoid = (player.Character :: Model):FindFirstChildOfClass("Humanoid") :: Humanoid
-			humanoid.Died:Once(function()
-				eliminate(player, "died")
-			end)
+			Match.participants[player] = { player = player, words = {}, alive = true, lives = Config.LIVES, afkMisses = 0 }
 		end
 	end
 	Match.startedWith = #Match.aliveList()
-	WordService.assignFirst(rng)
-	MissionService.setup(Random.new()) -- theme: never depends on the words or on earlier rounds
+	LifeService.beginRound()
 	SpectatorService.beginRound()
 	refreshSpeakers()
-	Match.setPhase("Assign", Config.ASSIGN_TIME, "내 금칙어는 나만 몰라요! 다른 사람이 말하게 만드세요")
-	WordService.sendAll()
+	Match.setPhase("Assign", Config.ASSIGN_TIME, string.format(Config.TEXT.ASSIGN, Config.LIVES))
 	waitPhase()
 
-	-- Talk: free conversation; words pile up and the host helps only when it goes quiet.
-	local seconds = matchSeconds(Match.startedWith)
-	Match.talkStartedAt = Match.now()
-	JudgeService.setOpen(true)
-	Match.setPhase("Talk", seconds, Match.theme or "대화 시작")
-	Match.cutoffAt = Match.endsAt -- decided at the latest when the time runs out (no polling gap at the end)
-	local stillTalking = talking(myRound)
-	task.spawn(WordService.runSchedule, seconds, stillTalking, rng)
-	task.spawn(MissionService.run, seconds, stillTalking, Random.new(), function(spec)
-		return VoteService.run(spec, stillTalking) -- (outcome, announce)
-	end)
-	waitPhase(roundOver)
+	playMain(myRound)
+	waitFlights()
+	playFinal(myRound)
+	waitFlights()
 
-	-- Settle: speech that began before the round was decided still counts once its text arrives, then judging
-	-- closes. The phase stays Talk meanwhile, so the clients keep their recognizers on.
-	Match.cutoffAt = math.min(Match.cutoffAt, Match.now(), Match.endsAt)
-	JudgeService.settle(Match.cutoffAt)
-	JudgeService.setOpen(false)
-	-- The result waits for flights in progress (they land and go to the stands first).
-	local flightsDeadline = os.clock() + Config.FLING_RETURN_SECONDS + 1
-	while SeatService.anyFlying() and os.clock() < flightsDeadline do
-		task.wait(0.1)
-	end
-
-	-- Result: everyone sees every word.
+	-- Result: winners and scores.
 	local text = resultText()
 	SeatService.releaseAll()
 	VoiceService.setSpeakers(nil)
-	VoteService.clear() -- a vote cut off by the end of the talk leaves no window behind
 	Match.setPhase("Result", Config.RESULT_TIME, text)
-	WordService.sendAll()
 	waitPhase()
 	cleanup()
-	Match.lastEndedAt = os.clock()
+	lastEndedAt = os.clock()
+end
+
+-- FLING_RETURN_SECONDS after a launch (docs/DESIGN_V3.md §10 step 4): undo the ragdoll, then back on the chair if
+-- the player is still in this round's game, else into the stands. A flight from an older round, or of a character
+-- the player no longer has, only gets undone.
+local function onFlightOver(player: Player, roundId: any, character: Model)
+	SeatService.endFling(player)
+	if not player.Parent or player.Character ~= character or roundId ~= Match.roundId or not Match.inRound() then
+		return
+	end
+	if not (Match.isAlive(player) and SeatService.reseat(player)) then
+		SpectatorService.toStands(player)
+	end
+end
+
+-- A participant's new character (after a fall or a reset that slipped through) costs nothing: back on the chair
+-- (docs/DESIGN_V3.md §4). Everyone else's goes to the stands (SpectatorService).
+local function onCharacterAdded(player: Player, character: Model)
+	character:WaitForChild("HumanoidRootPart", 10)
+	task.wait(0.5) -- let the engine finish placing it at the spawn
+	if player.Character == character and Match.inRound() and Match.isAlive(player) then
+		SeatService.reseat(player)
+	end
 end
 
 local function onSync(player: Player)
 	Net.to(player, "RoundState", Match.payload())
-	if Match.phase ~= "Lobby" and Match.phase ~= "Countdown" then
-		WordService.send(player)
-		MissionService.send(player)
-		VoteService.send(player)
-	end
 end
 
 function RoundService.start()
 	VoiceService.start()
 	Scores.start()
+	LifeService.start(SeatService.isFlying)
 	SpectatorService.start(SeatService.isFlying)
-	VoteService.start()
 	SeatService.init(onFlightOver)
-	JudgeService.start(function(player, word)
-		eliminate(player, "said", word)
-	end, Scores.noteSpeech)
 	Net.listen("Ready", function(player, isReady)
 		local value = isReady == true
 		if (Match.ready[player] == true) ~= value then -- repeats change nothing and send nothing
@@ -690,25 +819,41 @@ function RoundService.start()
 			onSync(player)
 		end
 	end)
-	Players.PlayerRemoving:Connect(function(player)
-		lastSync[player] = nil
-	end)
-	-- Studio only (there is no speech-to-text in Studio; live servers ignore it): a seated player launches themselves
-	-- and comes back to the chair, or with "out" is eliminated (launch, then the stands).
+	-- Studio only (live servers ignore it): during free talk in the main game (not once it is settled) a seated player
+	-- loses a life (F key), or with "out" is out at once, or with "show" is only launched (nothing lost).
 	Net.listen("DevFling", function(player, mode)
-		if not (RunService:IsStudio() and Match.isAlive(player) and (Match.phase == "Assign" or Match.phase == "Talk")) then
+		if not (RunService:IsStudio() and freeTalk and not mainSettled() and Match.isAlive(player)) then
 			return
 		end
 		if mode == "out" then
-			eliminate(player, "said", "테스트")
-		else
+			announce(LifeService.eliminate({ player }), "dev", false)
+		elseif mode == "show" then
 			SeatService.fling(player, Match.roundId)
+		else
+			runs += 1
+			failPlayers({ player }, "dev" .. runs, "dev")
 		end
 	end)
+	local function watch(player: Player)
+		player.CharacterAdded:Connect(function(character)
+			onCharacterAdded(player, character)
+		end)
+	end
+	for _, player in Players:GetPlayers() do
+		watch(player)
+	end
+	Players.PlayerAdded:Connect(watch)
 	Players.PlayerRemoving:Connect(function(player)
-		eliminate(player, "left")
+		lastSync[player] = nil
+		-- Leaving is out (docs/DESIGN_V3.md §4).
+		local outcomes = if Match.inRound() then LifeService.eliminate({ player }) else {}
 		Match.participants[player] = nil
 		Match.ready[player] = nil
+		if #outcomes > 0 then
+			tell(outcomes, "left", false)
+		else
+			Match.broadcast()
+		end
 	end)
 
 	task.spawn(function()
@@ -718,17 +863,16 @@ function RoundService.start()
 				local needed = Config.MIN_PLAYERS - #Match.eligiblePlayers()
 				if needed ~= shown then
 					shown = needed
-					Match.setPhase("Lobby", 0, if Config.REQUIRE_VOICE_READY
-						then string.format("마이크 준비된 플레이어 %d명 더 필요해요", needed)
-						else string.format("플레이어 %d명 더 필요해요", needed))
+					Match.setPhase("Lobby", 0, string.format(if Config.REQUIRE_VOICE_READY then Config.TEXT.NEED_READY else Config.TEXT.NEED_PLAYERS, needed))
 				end
 				task.wait(1)
 			end
 			local ok, err = xpcall(runRound, debug.traceback)
 			if not ok then
 				warn("[BannedWords] round crashed, recovering:", err)
+				Match.roundId += 1 -- anything still holding the broken round's ctx sees it as cancelled
 				cleanup()
-				Match.setPhase("Lobby", 3, "잠시 문제가 생겨서 다음 판을 준비해요")
+				Match.setPhase("Lobby", 3, Config.TEXT.RECOVERING)
 				task.wait(3)
 			end
 		end
@@ -738,379 +882,6 @@ end
 return RoundService
 ]====]; s.Parent = n2 end
 local n3 = Instance.new("Folder"); n3.Name = "content"
-do local s = Instance.new("ModuleScript"); s.Name = "Themes"; s.Source = [====[--!strict
--- Round themes and their mission cards (data only, V2.1). A theme gives the table a reason to talk:
--- three missions played in this order (a little story), quiet-time events and topic cards. No personal roles
--- (owner 2026-10-20): everyone shares the same scene. Every place and group in a card is imaginary, so it works
--- with 2 or 10 players.
---
--- Mission card = title, situation, problem, goal, 2-3 options. Stages: a notice after a while, a short vote, then
--- a follow-up that depends on the vote (or "undecided" on a tie / no votes). Nobody dies for a mission result.
---
--- Writing rules (docs/DESIGN_V2.md, V2.1):
---   - never tell anyone to say a specific word; every card must be answerable in many ways;
---   - NO text here may contain any word-bank word (or alias): the game never adapts cards to the secret words,
---     so the text itself must be safe for every word. tools/check_content.luau checks this — run it after edits;
---   - nothing aggressive, nothing asking for real personal info, nobody singled out.
-
-export type Option = { id: string, text: string }
-
-export type Mission = {
-	id: string,
-	title: string, -- short event name shown on the collapsed card
-	situation: string,
-	problem: string,
-	goal: string,
-	options: { Option },
-	notice: string, -- shown MISSION_NOTICE_AT seconds in (raises the stakes)
-	followups: { [string]: string }, -- option id (or "undecided") -> new condition after the vote
-}
-
-export type Theme = {
-	name: string,
-	missions: { Mission },
-	events: { string },
-	topics: { string },
-}
-
-local Themes = {}
-
-Themes.list = {
-	{
-		name = "회식 자리",
-		missions = {
-			{
-				id = "dinner_seats",
-				title = "좁은 방 대작전",
-				situation = "예약한 방이 생각보다 좁아요.",
-				problem = "다 같이 앉으려면 누군가는 불편해져요.",
-				goal = "모두가 납득할 자리 배치를 정해 보세요.",
-				options = {
-					{ id = "squeeze", text = "좁아도 한 방에 다 같이" },
-					{ id = "split", text = "두 테이블로 나눠 앉기" },
-					{ id = "move", text = "다른 가게로 옮기기" },
-				},
-				notice = "옆방 손님이 곧 나간다고 해요.",
-				followups = {
-					squeeze = "끝자리는 불편한 대신 먼저 나갈 수 있어요. 어떤 기준으로 정할까요?",
-					split = "두 테이블 분위기가 달라요. 누가 어느 쪽에 앉을까요?",
-					move = "새 가게까지 걸어서 10분이래요. 가는 길에 뭘 할까요?",
-					undecided = "직원이 조금 더 기다려 준대요. 다른 방법은 없을까요?",
-				},
-			},
-			{
-				id = "dinner_menu",
-				title = "주문 눈치싸움",
-				situation = "정해진 금액 안에서 다 같이 먹을 것을 골라야 해요.",
-				problem = "종류를 늘리면 양이 줄고, 나눠 고르면 오래 기다려야 해요.",
-				goal = "양, 종류, 기다리는 시간 중 무엇을 먼저 챙길지 정해 보세요.",
-				options = {
-					{ id = "plenty", text = "한 종류를 넉넉하게" },
-					{ id = "variety", text = "두 종류를 조금씩" },
-					{ id = "later", text = "일부 먼저, 나머지는 나중에" },
-				},
-				notice = "한 번 고르면 바꿀 수 없대요.",
-				followups = {
-					plenty = "곁들일 것은 하나만 더 고를 수 있대요. 무엇을 챙길까요?",
-					variety = "한쪽만 먼저 나왔어요. 바로 나눌지 함께 기다릴지 정해 볼까요?",
-					later = "먼저 나온 몫이 적어요. 조금씩 나눌지, 배고픈 쪽부터 줄지 정해 볼까요?",
-					undecided = "바로 받을 수 있는 양이 줄었어요. 적게 먼저 받을지, 더 기다릴지 골라 볼까요?",
-				},
-			},
-			{
-				id = "dinner_bill",
-				title = "영수증 대소동",
-				situation = "예산은 20만 원인데 영수증에는 42만 원이 적혀 있어요.",
-				problem = "누가 얼마나 더 내야 할지 아무도 몰라요.",
-				goal = "어떻게 해결할지 정해 보세요.",
-				options = {
-					{ id = "check", text = "주문 내역 확인" },
-					{ id = "pool", text = "돈 더 모으기" },
-					{ id = "ask", text = "직원에게 문의" },
-				},
-				notice = "같은 메뉴가 영수증에 두 번 적혀 있대요.",
-				followups = {
-					check = "중복을 빼니 총액이 20만 원으로 줄었어요. 남은 할인은 어디에 쓸까요?",
-					pool = "모자란 돈을 모으기로 했어요. 어떤 기준으로 나눌까요?",
-					ask = "직원이 실수를 인정하고 디저트를 준대요. 무엇으로 받을까요?",
-					undecided = "가게가 오늘만 여러 번 나눠 결제해 준대요. 어떤 기준으로 나눌까요?",
-				},
-			},
-		},
-		events = {
-			"갑자기 정전이 됐다가 다시 불이 들어왔어요",
-			"처음 보는 메뉴가 테이블에 올라왔어요",
-			"옆 테이블에서 축하 노래가 들려요",
-			"내일 아침 모임이 갑자기 잡혔어요",
-			"2차를 갈지 말지 의견이 갈려요",
-			"건배사를 할 사람이 필요해요",
-			"누군가의 휴대폰이 계속 울려요",
-		},
-		topics = {
-			"회식 메뉴로 최악은?",
-			"들어 본 최고의 칭찬",
-			"2차로 가고 싶은 곳",
-			"보너스가 나오면 하고 싶은 것",
-			"일하다 생길 법한 황당한 일",
-		},
-	},
-	{
-		name = "방과 후 우리 반",
-		missions = {
-			{
-				id = "class_election",
-				title = "공약 고르기",
-				situation = "가상의 후보 셋이 서로 다른 공약을 냈어요.",
-				problem = "이번에는 한 가지 일에만 힘을 쓸 수 있어요.",
-				goal = "우리 반에 먼저 필요한 일을 골라 보세요.",
-				options = {
-					{ id = "play", text = "함께 노는 틈 늘리기" },
-					{ id = "share", text = "같이 쓰는 물건 늘리기" },
-					{ id = "rest", text = "조용히 쉴 곳 꾸미기" },
-				},
-				notice = "도와줄 사람이 줄어서 계획을 작게 줄여야 해요.",
-				followups = {
-					play = "여럿이 모이면 시끄러워질 수 있대요. 쉬는 쪽도 편할 규칙을 정해 볼까요?",
-					share = "둘 곳이 부족해요. 적게 들일지, 놓는 곳을 바꿀지 정해 볼까요?",
-					rest = "쓸 수 있는 자리가 적어요. 차례로 쓸지, 머무는 시간을 줄일지 정해 볼까요?",
-					undecided = "작게 한 번 해 볼 기회가 생겼어요. 무엇을 먼저 해 보고 판단할까요?",
-				},
-			},
-			{
-				id = "class_outing",
-				title = "나들이 장소 정하기",
-				situation = "반 단체 나들이 장소를 정해야 해요.",
-				problem = "돈은 적고 가고 싶은 곳은 제각각이에요.",
-				goal = "모두 갈 만한 곳을 정해 보세요.",
-				options = {
-					{ id = "mountain", text = "가까운 산" },
-					{ id = "museum", text = "박물관" },
-					{ id = "camp", text = "캠핑장" },
-				},
-				notice = "버스를 한 대만 빌릴 수 있대요.",
-				followups = {
-					mountain = "정상까지 못 가겠다는 친구가 있어요. 어떻게 할까요?",
-					museum = "지루할 거라는 반응이 많아요. 재밌게 만들 방법은?",
-					camp = "밤에 할 놀이를 정해야 해요. 뭐가 좋을까요?",
-					undecided = "담임이 다음 주까지 정하래요. 후보를 줄여 볼까요?",
-				},
-			},
-			{
-				id = "class_festival",
-				title = "축제 부스 준비",
-				situation = "학교 축제에서 반 부스를 맡았어요.",
-				problem = "준비할 시간이 이틀뿐이에요.",
-				goal = "무슨 부스를 열지 정해 보세요.",
-				options = {
-					{ id = "food", text = "간식 가게" },
-					{ id = "haunted", text = "귀신의 집" },
-					{ id = "photo", text = "포토존" },
-				},
-				notice = "옆 반도 같은 부스를 준비 중이래요.",
-				followups = {
-					food = "재료값이 모자라요. 어떻게 마련할까요?",
-					haunted = "무서운 역할이 인기가 없어요. 어떻게 하면 하고 싶어질까요?",
-					photo = "꾸밀 소품이 부족해요. 뭘 가져올까요?",
-					undecided = "옆 반이 같이 하자고 제안했어요. 합칠까요, 따로 할까요?",
-				},
-			},
-		},
-		events = {
-			"담임이 갑자기 문을 열었어요",
-			"서랍에서 주인 없는 쪽지가 나왔어요",
-			"내일 깜짝 퀴즈가 있다는 공지가 떴어요",
-			"점심 메뉴가 바뀌었다는 소문이 돌아요",
-			"후보가 한 명 더 나왔대요",
-			"창밖에 갑자기 비가 쏟아져요",
-			"에어컨이 고장 났어요",
-		},
-		topics = {
-			"가장 좋아했던 점심 메뉴",
-			"학교에서 제일 무서운 장소",
-			"반장이 되면 바꾸고 싶은 것",
-			"기억에 남는 수업 시간",
-			"쉬는 시간에 제일 많이 하는 것",
-		},
-	},
-	{
-		name = "단체 나들이 계획",
-		missions = {
-			{
-				id = "outing_place",
-				title = "어디로 갈까",
-				situation = "다 같이 1박 2일로 놀러 가기로 했어요.",
-				problem = "산파, 계곡파, 도시파로 의견이 갈렸어요.",
-				goal = "어디로 갈지 정해 보세요.",
-				options = {
-					{ id = "mountain", text = "산" },
-					{ id = "valley", text = "계곡" },
-					{ id = "city", text = "도시 구경" },
-				},
-				notice = "출발 날 비 소식이 있대요.",
-				followups = {
-					mountain = "등산화가 없는 사람이 있어요. 어떻게 할까요?",
-					valley = "물에 들어가기 싫은 사람이 있어요. 뭘 하면 좋을까요?",
-					city = "볼 곳이 너무 많아요. 딱 세 군데만 고른다면?",
-					undecided = "비가 올 수도 있으니 실내에서 할 것도 하나 넣재요. 뭘 넣을까요?",
-				},
-			},
-			{
-				id = "outing_ride",
-				title = "이동 작전",
-				situation = "이동 수단을 정해야 해요.",
-				problem = "차는 한 대뿐이고 사람은 많아요.",
-				goal = "어떻게 갈지 정해 보세요.",
-				options = {
-					{ id = "car", text = "차로 나눠서 두 번 가기" },
-					{ id = "train", text = "기차" },
-					{ id = "bus", text = "버스 대절" },
-				},
-				notice = "기차 좌석이 거의 다 팔렸대요.",
-				followups = {
-					car = "먼저 간 쪽이 한참 기다려야 해요. 기다리는 동안 뭘 할까요?",
-					train = "가는 동안 먹을 간식을 정해야 해요. 뭐가 좋을까요?",
-					bus = "가는 동안 할 놀이를 정해 볼까요?",
-					undecided = "몇 명만 먼저 출발하자는 말이 나와요. 어떻게 나눌까요?",
-				},
-			},
-			{
-				id = "outing_stay",
-				title = "숙소 예약 사고",
-				situation = "단체로 묵을 호텔을 예약했는데 날짜가 하루 어긋났어요.",
-				problem = "바꾸면 돈이 들고, 그대로 두면 일정이 꼬여요.",
-				goal = "비용과 일정을 어떻게 맞출지 정해 보세요.",
-				options = {
-					{ id = "change", text = "날짜 바꾸기" },
-					{ id = "other", text = "다른 숙소 찾기" },
-					{ id = "plan", text = "일정 바꾸기" },
-				},
-				notice = "날짜를 바꾸면 추가 요금을 내야 한대요.",
-				followups = {
-					change = "예약을 바꿨어요. 추가 요금 3만 원은 어떻게 나눌까요?",
-					other = "근처에 방이 하나 남았대요. 좁아도 갈까요, 더 찾아볼까요?",
-					plan = "하루 늦게 출발하기로 했어요. 남는 하루엔 뭘 할까요?",
-					undecided = "호텔이 한 시간만 기다려 준대요. 무엇부터 확인할까요?",
-				},
-			},
-		},
-		events = {
-			"쓸 수 있는 돈이 절반으로 줄었어요",
-			"누군가 신분증을 두고 왔대요",
-			"예약 하나가 취소됐어요",
-			"맛집 목록이 새로 도착했어요",
-			"기차표가 한 장 모자라요",
-			"근처에서 축제가 열린다는 소식이에요",
-			"짐 하나가 너무 무거워요",
-		},
-		topics = {
-			"놀러 가서 꼭 먹어야 하는 것",
-			"함께 움직일 때 편한 규칙",
-			"산이 좋아, 물가가 좋아?",
-			"짐에 꼭 챙기는 것",
-			"언젠가 가 보고 싶은 나라",
-		},
-	},
-	{
-		name = "동네 중고 장터",
-		missions = {
-			{
-				id = "market_console",
-				title = "중고 로봇 흥정",
-				situation = "장터에 중고 로봇이 50만 원에 나왔어요.",
-				problem = "비싸지만 갖고 싶다는 사람이 많아요.",
-				goal = "살 가치가 있는지 정해 보세요.",
-				options = {
-					{ id = "haggle", text = "가격 깎기" },
-					{ id = "test", text = "성능 확인" },
-					{ id = "pass", text = "거래 포기" },
-				},
-				notice = "춤은 잘 추는데 청소는 서툴대요.",
-				followups = {
-					haggle = "판매자가 5만 원만 깎아 준대요. 더 깎을까요, 살까요?",
-					test = "로봇이 혼자 춤을 추기 시작했어요. 이 성능이면 얼마가 적당할까요?",
-					pass = "판매자가 10만 원을 낮춰 다시 제안했어요. 다시 생각해 볼까요?",
-					undecided = "다른 손님이 관심을 보여요. 같이 사서 나눠 쓸까요?",
-				},
-			},
-			{
-				id = "market_booth",
-				title = "장사 방식 고르기",
-				situation = "우리도 장터에 작은 자리를 하나 받았어요.",
-				problem = "싸게 내놓으면 남는 돈이 적고, 자세히 알리면 오래 걸려요.",
-				goal = "어떤 방식으로 팔지 정해 보세요.",
-				options = {
-					{ id = "cheap", text = "값을 낮춰 빨리 팔기" },
-					{ id = "show", text = "하나씩 보여 주며 제값에" },
-					{ id = "bundle", text = "묶음으로만 팔기" },
-				},
-				notice = "마감 뒤 남은 건 직접 정리해야 한대요.",
-				followups = {
-					cheap = "손님이 더 깎아 달래요. 어디까지 낮출지 기준을 정해 볼까요?",
-					show = "한 손님이 오래 머물러요. 뒤에서 기다리는 손님은 어떻게 챙길까요?",
-					bundle = "한 개만 사고 싶은 손님이 왔어요. 묶음을 풀지, 그대로 둘지 정해 볼까요?",
-					undecided = "작은 물건부터 먼저 내놓을 수 있대요. 무엇을 기준으로 첫 물건을 고를까요?",
-				},
-			},
-			{
-				id = "market_missing",
-				title = "사라진 물건",
-				situation = "진열해 둔 물건 하나가 사라졌어요.",
-				problem = "누가 가져갔는지 아무도 못 봤대요.",
-				goal = "어떻게 해결할지 정해 보세요.",
-				options = {
-					{ id = "search", text = "다 같이 찾아보기" },
-					{ id = "ask", text = "주변 가게에 물어보기" },
-					{ id = "forget", text = "잊고 장사하기" },
-				},
-				notice = "물건이 놓였던 자리를 본 사람이 있대요. 어디부터 확인할까요?",
-				followups = {
-					search = "찾다가 다른 물건이 나왔어요. 이건 누구 걸까요?",
-					ask = "옆 가게도 물건을 잃어버렸대요. 같이 대책을 세울까요?",
-					forget = "손님이 그 물건을 찾아요. 뭐라고 할까요?",
-					undecided = "장터 관리인이 같이 찾아 준대요. 어디부터 볼까요?",
-				},
-			},
-		},
-		events = {
-			"어떤 물건에 말도 안 되는 가격이 붙었어요",
-			"깜짝 할인 시간이 시작됐어요",
-			"가짜 명품이 돌고 있다는 소문이 나요",
-			"누군가 전 재산을 걸고 경매에 참여했어요",
-			"날씨가 나빠져서 장터가 곧 문을 닫아요",
-			"우리 가게에 손님이 몰려왔어요",
-			"경품 추첨이 곧 시작돼요",
-		},
-		topics = {
-			"버리기 아까운 물건",
-			"제일 잘 샀다고 생각하는 물건",
-			"제일 후회한 구매",
-			"흥정 꿀팁",
-			"만 원으로 살 수 있는 최고의 물건",
-		},
-	},
-} :: { Theme }
-
--- Topics that fit any theme (shown only when the table goes quiet).
-Themes.general = {
-	"요즘 제일 맛있게 먹은 음식",
-	"무인도에 가져갈 물건 세 가지",
-	"키우고 싶은 동물과 이름",
-	"쉬는 날에 하고 싶은 것",
-	"최근에 본 재밌는 영상",
-	"하루 동안 투명인간이 된다면",
-	"제일 좋아하는 계절과 이유",
-	"로블록스에서 제일 좋아하는 곳",
-	"초능력 하나를 고른다면",
-	"어렸을 때 꿈",
-	"요즘 제일 웃겼던 일",
-	"받으면 기분 좋은 깜짝 이벤트",
-	"비 오는 날 하면 좋은 것",
-	"가장 좋아하는 캐릭터와 이유",
-	"아침에 일어나서 제일 먼저 하는 일",
-}
-
-return Themes
-]====]; s.Parent = n3 end
 do local s = Instance.new("ModuleScript"); s.Name = "WordBank"; s.Source = [====[--!strict
 -- Word bank (version 2, server only, never replicated). Data + drawing only.
 -- Nouns: everyday 2-5 syllable words. Habits: speech habits for the third word (무한도전 세븐's '에이' idea).
@@ -1189,7 +960,55 @@ end
 return WordBank
 ]====]; s.Parent = n3 end
 n3.Parent = n2
-local n4 = Instance.new("Folder"); n4.Name = "services"
+local n4 = Instance.new("Folder"); n4.Name = "missions"
+do local s = Instance.new("ModuleScript"); s.Name = "TestMission"; s.Source = [====[--!strict
+-- The Studio-only test mission (bundle 2b): stands in for the real missions until bundle 4, so the round flow (lives,
+-- launches, the final, the time budget) can be tried in Studio. In the main game every alive player fails with
+-- TEST_FAIL_CHANCE; as a final question it knocks out each finalist with TEST_FINAL_FAIL_CHANCE.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	wait: (seconds: number) -> boolean,
+}
+
+local TestMission = {
+	id = "test",
+	expectedSeconds = Config.TEST_MISSION_SECONDS,
+}
+
+function TestMission.available(_final: boolean): boolean
+	return RunService:IsStudio()
+end
+
+function TestMission.run(ctx: Ctx)
+	ctx.show(if ctx.final then Config.TEXT.FINAL else Config.TEXT.TEST_MISSION)
+	if not ctx.wait(Config.TEST_MISSION_SECONDS) then
+		return
+	end
+	local chance = if ctx.final then Config.TEST_FINAL_FAIL_CHANCE else Config.TEST_FAIL_CHANCE
+	local failed = {}
+	for _, player in ctx.players() do
+		if ctx.rng:NextNumber() < chance then
+			table.insert(failed, player)
+		end
+	end
+	ctx.fail(failed, "result")
+end
+
+return TestMission
+]====]; s.Parent = n4 end
+n4.Parent = n2
+local n5 = Instance.new("Folder"); n5.Name = "services"
 do local s = Instance.new("ModuleScript"); s.Name = "JudgeService"; s.Source = [====[--!strict
 -- Transcript intake and judging. Every alive participant is judged on everything they say during the talk
 -- (no turns). The client cannot prove a transcript is real speech; these checks only stop spam and mix-ups.
@@ -1383,230 +1202,256 @@ function JudgeService.setOpen(isOpen: boolean)
 end
 
 return JudgeService
-]====]; s.Parent = n4 end
-do local s = Instance.new("ModuleScript"); s.Name = "MissionService"; s.Source = [====[--!strict
--- Assistant host (V2.1): the round's theme, then the theme's mission cards one after another on a fixed timetable
--- (card -> notice -> short vote -> follow-up, the missions spread evenly over the talk), plus topic cards / small
--- events only when the table goes quiet.
--- Nobody dies for a mission, there are no personal roles, and nothing here ever looks at the secret words:
--- theme, missions and their timing depend only on a fresh RNG, public votes, public events and time, so they can
--- never hint at anyone's word. Card texts are kept word-free ahead of time by tools/check_content.luau.
---
--- One big thing at a time (report V2.1 §7.2): a new stage, a vote or a quiet-time event waits while
--- Match.hostHeldUntil is in the future (a word warning/addition or a launch is on screen).
+]====]; s.Parent = n5 end
+do local s = Instance.new("ModuleScript"); s.Name = "LifeService"; s.Source = [====[--!strict
+-- Lives (docs/DESIGN_V3.md §4). Everyone starts a round with LIVES; a failed player loses one (RoundService launches
+-- them) and at zero is out. The rules:
+--   - one penalty per event: the same event never costs the same player twice;
+--   - none while flying: a launched player takes no new penalty until back on the chair;
+--   - simultaneous fails are taken together, and a fail that would leave nobody alive sends exactly those players to
+--     a final among themselves instead (they stay in with no lives left);
+--   - subjective launches (the presenter or a vote decides) in public servers: SUBJECTIVE_FLINGS per player per round,
+--     and never the last life (bundles 3-4 use this);
+--   - AFK_MISSES answer missions missed in a row make a player a spectator (out); a miss while flying does not count.
+-- Lives live in Match.participants; this module only changes them.
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
-local Net = require(script.Parent.Parent:WaitForChild("Net"))
-local Themes = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("Themes"))
 
-local MissionService = {}
+local LifeService = {}
 
-export type VoteSpec = { id: string, options: { Themes.Option }, seconds: number }
+export type Kind = "objective" | "subjective"
+export type Outcome = { player: Player, livesLeft: number, out: boolean }
 
-local theme: Themes.Theme? = nil
-local lastThemeName: string? = nil
-local themePayload: any = nil
-local missionPayload: any = nil -- the mission card on screen
-local cardPayloads: { [string]: any } = {} -- "topic" | "event" -> what is shown (late joiners)
-local used: { [string]: boolean } = {} -- quiet-time cards already shown this round
+local busy: (Player) -> boolean = function(_player: Player): boolean
+	return false -- until start() gets the real check
+end
+local penalized: { [string]: { [Player]: boolean } } = {} -- event id -> players it already cost a life
+local subjectiveUsed: { [Player]: number } = {}
 
--- After words are assigned: the theme (not the same twice in a row).
-function MissionService.setup(rng: Random)
-	local options = {}
-	for _, t in Themes.list do
-		if t.name ~= lastThemeName then
-			table.insert(options, t)
+-- isBusy(player): true while the player cannot take a penalty (flying; RoundService passes SeatService.isFlying).
+function LifeService.start(isBusy: (Player) -> boolean)
+	busy = isBusy
+	Players.PlayerRemoving:Connect(function(player)
+		subjectiveUsed[player] = nil
+		for _, set in penalized do
+			set[player] = nil
 		end
-	end
-	local chosen = if #options > 0 then options[rng:NextInteger(1, #options)] else Themes.list[1]
-	theme = chosen
-	lastThemeName = chosen.name
-	Match.theme = chosen.name
-	table.clear(used)
-	table.clear(cardPayloads)
-	missionPayload = nil
-	themePayload = { kind = "theme", theme = chosen.name }
-	Net.toAll("Host", themePayload)
+	end)
 end
 
-local function pickUnused(list: { string }, rng: Random): string
-	local fresh = {}
-	for _, text in list do
-		if not used[text] then
-			table.insert(fresh, text)
-		end
-	end
-	local pool = if #fresh > 0 then fresh else list
-	local text = pool[rng:NextInteger(1, #pool)]
-	used[text] = true
-	return text
+-- A fresh round: lives come from Match.participants (RoundService sets them), the per-round counters start over.
+function LifeService.beginRound()
+	table.clear(penalized)
+	table.clear(subjectiveUsed)
 end
 
-local function showCard(kind: string, text: string)
-	local payload = {
-		kind = kind,
-		text = text,
-		expiresAt = if kind == "event" then Match.now() + Config.EVENT_SHOW_SECONDS else nil,
-	}
-	cardPayloads[kind] = { payload = payload, at = os.clock() }
-	Net.toAll("Host", payload)
-end
-
-local function quietTopic(rng: Random)
-	local pool = table.clone(Themes.general)
-	if theme then
-		for _, text in (theme :: Themes.Theme).topics do
-			table.insert(pool, text)
-		end
-	end
-	showCard("topic", pickUnused(pool, rng))
-end
-
--- stage: "open" | "notice" | "vote" | "after". decision: the chosen option's text after the vote.
-local function showMission(index: number, total: number, mission: Themes.Mission, stage: string, condition: string?, decision: string?)
-	local options = {}
-	for _, option in mission.options do
-		table.insert(options, option.text)
-	end
-	missionPayload = {
-		kind = "mission",
-		index = index,
-		total = total,
-		title = mission.title,
-		situation = mission.situation,
-		problem = mission.problem,
-		goal = mission.goal,
-		options = options,
-		condition = condition,
-		decision = decision,
-		stage = stage,
-	}
-	Net.toAll("Host", missionPayload)
-end
-
--- True if something shown now for `seconds` would not clash with anything big: nothing is on screen and no
--- (public, scheduled) word warning starts inside that time.
-local function clearFor(seconds: number): boolean
-	local now = os.clock()
-	if now < Match.hostHeldUntil then
+-- Whether `player` can be failed now by an event of this kind (alive, not flying; subjective limits in public).
+function LifeService.canFail(player: Player, kind: Kind): boolean
+	local p = Match.participants[player]
+	if not (p and p.alive) or busy(player) then
 		return false
 	end
-	local untilWarn = Match.nextWordWarnAt - now
-	return not (untilWarn >= -1 and untilWarn <= seconds + 1)
+	if kind == "subjective" and Match.serverKind == "public" then
+		return (subjectiveUsed[player] or 0) < Config.SUBJECTIVE_FLINGS and p.lives > 1
+	end
+	return true
 end
 
--- Waits until os.clock() reaches `t` and the next step (shown for `showFor` seconds) is clear; false if the talk
--- ended first.
-local function waitUntil(t: number, showFor: number, stillTalking: () -> boolean): boolean
-	while os.clock() < t or not clearFor(showFor) do
-		if not stillTalking() then
-			return false
-		end
-		task.wait(0.2)
-	end
-	return stillTalking()
-end
-
--- Quiet-time help (runs next to the missions): a topic line after QUIET_TOPIC seconds without speech, a small
--- event after QUIET_EVENT (at most one per EVENT_COOLDOWN, never while something big is on screen).
-local function runQuietHelp(stillTalking: () -> boolean, rng: Random)
-	local lastTopicAt = os.clock()
-	local lastEventAt = -math.huge
-	while stillTalking() do
-		local now = os.clock()
-		local quietTalk = now - Match.lastActivityAt
-		local quiet = now - math.max(Match.lastActivityAt, lastTopicAt, lastEventAt)
-		if clearFor(Config.EVENT_SHOW_SECONDS) and quietTalk >= Config.QUIET_EVENT and now - lastEventAt >= Config.EVENT_COOLDOWN and theme then
-			showCard("event", pickUnused((theme :: Themes.Theme).events, rng))
-			Match.holdHost(Config.EVENT_SHOW_SECONDS) -- the banner has the stage while it shows
-			lastEventAt = now
-		elseif quiet >= Config.QUIET_TOPIC then
-			quietTopic(rng)
-			lastTopicAt = now
-		end
-		task.wait(1)
-	end
-end
-
--- Runs alongside the talk. `runVote(spec)` (wired by RoundService to VoteService) blocks until the vote closes
--- and returns the winning option id (or "undecided") plus a function that shows the result to everyone.
-function MissionService.run(talkSeconds: number, stillTalking: () -> boolean, rng: Random, runVote: (VoteSpec) -> (string, () -> ()))
-	local t = theme
-	if not t then
-		return
-	end
-	task.spawn(runQuietHelp, stillTalking, rng)
-	local missions = t.missions -- in order: each theme's missions tell a small story
-	local missionLength = talkSeconds / #missions -- spread over the whole talk, however long it is
-	for index, mission in missions do
-		if not waitUntil(os.clock(), Config.CARD_OPEN_SECONDS, stillTalking) then
-			return
-		end
-		local started = os.clock()
-		showMission(index, #missions, mission, "open")
-		Match.holdHost(Config.CARD_OPEN_SECONDS) -- the new card has the stage while it is open
-		if not waitUntil(started + Config.MISSION_NOTICE_AT, Config.STAGE_HOLD, stillTalking) then
-			return
-		end
-		showMission(index, #missions, mission, "notice", mission.notice)
-		Match.holdHost(Config.STAGE_HOLD)
-		-- Talk time after the notice is kept even when the notice itself was held back.
-		local noticeShownAt = os.clock()
-		local voteAt = math.max(started + Config.VOTE_OPEN_AFTER, noticeShownAt + Config.VOTE_OPEN_AFTER - Config.MISSION_NOTICE_AT)
-		-- The vote and its result must both fit before any scheduled word warning.
-		if not waitUntil(voteAt, Config.VOTE_SECONDS + Config.STAGE_HOLD, stillTalking) then
-			return
-		end
-		showMission(index, #missions, mission, "vote", mission.notice)
-		Match.holdHost(Config.VOTE_SECONDS + 1) -- no quiet-time event pops up during the vote
-		local outcome, announce = runVote({ id = mission.id, options = mission.options, seconds = Config.VOTE_SECONDS })
-		-- Counted at the close; shown once nothing big is on screen (e.g. a launch during the vote).
-		if not waitUntil(os.clock(), Config.STAGE_HOLD, stillTalking) then
-			return
-		end
-		announce()
-		local decision = "결정 못 함"
-		for _, option in mission.options do
-			if option.id == outcome then
-				decision = option.text
+-- Fails `players` for event `eventId`. Returns who lost a life (and who is now out), and whether the fail sent the
+-- players hit to a final among themselves (it would have left nobody alive). The event is used up for everyone
+-- listed, also for those it could not hit (flying, limits): the same event coming again later never costs them.
+function LifeService.fail(players: { Player }, eventId: string, kind: Kind): ({ Outcome }, boolean)
+	local seen = penalized[eventId] or {}
+	penalized[eventId] = seen
+	local hit: { Player } = {}
+	for _, player in players do
+		if not seen[player] then
+			seen[player] = true
+			if LifeService.canFail(player, kind) then
+				table.insert(hit, player)
 			end
 		end
-		showMission(index, #missions, mission, "after", mission.followups[outcome] or mission.followups.undecided, decision)
-		Match.holdHost(Config.STAGE_HOLD)
-		if not waitUntil(started + missionLength, 0, stillTalking) then
-			return
+	end
+	-- Would this leave nobody alive? Then nobody goes out: the players hit play the final.
+	local survivors = 0
+	for player, p in Match.participants do
+		if p.alive and not (table.find(hit, player) and p.lives <= 1) then
+			survivors += 1
 		end
 	end
+	local toFinal = #hit > 0 and survivors == 0
+	local outcomes: { Outcome } = {}
+	for _, player in hit do
+		local p = Match.participants[player]
+		p.lives = math.max(0, p.lives - 1)
+		if kind == "subjective" then
+			subjectiveUsed[player] = (subjectiveUsed[player] or 0) + 1
+		end
+		local out = p.lives == 0 and not toFinal
+		if out then
+			p.alive = false
+		end
+		table.insert(outcomes, { player = player, livesLeft = p.lives, out = out })
+	end
+	return outcomes, toFinal
 end
 
--- Late joiners: the theme, the mission card and whatever quiet-time card is up.
-function MissionService.send(player: Player)
-	if themePayload then
-		Net.to(player, "Host", themePayload)
-	end
-	if missionPayload then
-		Net.to(player, "Host", missionPayload)
-	end
-	for kind, card in cardPayloads do
-		-- Topics stay up; an event banner only while it is still on everyone's screen.
-		if kind ~= "event" or os.clock() - card.at < Config.EVENT_SHOW_SECONDS then
-			Net.to(player, "Host", card.payload)
+-- Puts players out at once (a wrong final answer, leaving, the AFK rule, a Studio test). Already-out players are
+-- skipped. Returns the outcomes.
+function LifeService.eliminate(players: { Player }): { Outcome }
+	local outcomes: { Outcome } = {}
+	for _, player in players do
+		local p = Match.participants[player]
+		if p and p.alive then
+			p.alive = false
+			p.lives = 0
+			table.insert(outcomes, { player = player, livesLeft = 0, out = true })
 		end
 	end
+	return outcomes
 end
 
-function MissionService.clear()
-	theme = nil
-	themePayload = nil
-	missionPayload = nil
-	table.clear(cardPayloads)
-	Net.toAll("Host", { kind = "clear" })
+-- An answer mission closed: `answered` resets the player's run of misses; AFK_MISSES misses in a row put them out.
+-- A mission missed while flying does not count (docs/DESIGN_V3.md §4). Returns true if this miss made the player out.
+function LifeService.noteAnswer(player: Player, answered: boolean): boolean
+	local p = Match.participants[player]
+	if not (p and p.alive) then
+		return false
+	end
+	if answered then
+		p.afkMisses = 0
+		return false
+	end
+	if busy(player) then
+		return false
+	end
+	p.afkMisses += 1
+	if p.afkMisses >= Config.AFK_MISSES then
+		LifeService.eliminate({ player })
+		return true
+	end
+	return false
 end
 
-return MissionService
-]====]; s.Parent = n4 end
+return LifeService
+]====]; s.Parent = n5 end
+do local s = Instance.new("ModuleScript"); s.Name = "MissionRunner"; s.Source = [====[--!strict
+-- Missions (docs/DESIGN_V3.md §5, §13): picks the next mission that fits the time left and runs one at a time with a
+-- ctx (missions cannot require services, so everything they may do comes through the ctx RoundService builds). A
+-- mission stops as soon as it is cancelled (the round was decided or is over): its waits wake up and its fails and
+-- notices are dropped. Only this service requires the modules under server/missions (tools/tests/check_deps.py
+-- checks it). Bundle 2b has one mission, the Studio-only test mission, so the round flow can be tried before the
+-- real missions (bundle 4).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local missionFolder = script.Parent.Parent:WaitForChild("missions")
+local TestMission = require(missionFolder:WaitForChild("TestMission"))
+
+local MissionRunner = {}
+
+local POLL = 0.2 -- seconds between "cancelled yet?" checks while a mission waits
+
+-- What RoundService gives for one run.
+export type Ctx = {
+	final: boolean, -- a final question (sudden death) instead of a main-game mission
+	players: () -> { Player }, -- the alive participants now
+	rng: Random,
+	-- Who failed the mission's event `key` (one penalty per event: the same key never costs a player twice);
+	-- RoundService turns that into lives and launches.
+	fail: (players: { Player }, key: string) -> (),
+	show: (text: string) -> (), -- the status line and a toast
+	cancelled: () -> boolean, -- the round was decided or another one began: stop
+}
+
+-- What a mission gets: the same, with fail/show that do nothing once cancelled, and wait().
+export type MissionCtx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	-- Waits `seconds`; returns false at once if the mission is cancelled meanwhile (then the mission should return).
+	wait: (seconds: number) -> boolean,
+}
+
+export type Mission = {
+	id: string,
+	expectedSeconds: number, -- for the time budget, without the launches afterwards
+	available: (final: boolean) -> boolean,
+	run: (ctx: MissionCtx) -> (),
+}
+
+local MISSIONS: { Mission } = { TestMission }
+
+-- The next main-game mission that still fits, launches included, in `secondsLeft`; nil if none does.
+function MissionRunner.choose(secondsLeft: number): Mission?
+	for _, mission in MISSIONS do
+		if mission.available(false) and mission.expectedSeconds + Config.FLING_RETURN_SECONDS <= secondsLeft then
+			return mission
+		end
+	end
+	return nil
+end
+
+-- A mission that can ask final questions, or nil (then the survivors share the win).
+function MissionRunner.finalMission(): Mission?
+	for _, mission in MISSIONS do
+		if mission.available(true) then
+			return mission
+		end
+	end
+	return nil
+end
+
+local function missionCtx(ctx: Ctx): MissionCtx
+	return {
+		final = ctx.final,
+		players = ctx.players,
+		rng = ctx.rng,
+		cancelled = ctx.cancelled,
+		fail = function(players: { Player }, key: string)
+			if not ctx.cancelled() then
+				ctx.fail(players, key)
+			end
+		end,
+		show = function(text: string)
+			if not ctx.cancelled() then
+				ctx.show(text)
+			end
+		end,
+		wait = function(seconds: number): boolean
+			local untilAt = os.clock() + seconds
+			while os.clock() < untilAt do
+				if ctx.cancelled() then
+					return false
+				end
+				task.wait(math.min(POLL, untilAt - os.clock()))
+			end
+			return not ctx.cancelled()
+		end,
+	}
+end
+
+-- Runs one mission to its end. Returns false if it raised an error (reported; that run is over).
+function MissionRunner.run(mission: Mission, ctx: Ctx): boolean
+	local runCtx = missionCtx(ctx)
+	local ok, err = pcall(function(): any
+		mission.run(runCtx)
+		return nil -- one return value, so the type checker reads pcall's results as (ok, error)
+	end)
+	if not ok then
+		warn("[BannedWords] mission " .. mission.id .. " failed:", err)
+	end
+	return ok
+end
+
+return MissionRunner
+]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "Scores"; s.Source = [====[--!strict
 -- Casual session score (leaderstats "점수") and the assist ("유도") credit. Nothing is saved between sessions.
 local Players = game:GetService("Players")
@@ -1688,7 +1533,7 @@ function Scores.resetRound()
 end
 
 return Scores
-]====]; s.Parent = n4 end
+]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "SeatService"; s.Source = [====[--!strict
 -- Flying chairs in a row at the near edge of the pool (docs/DESIGN_V3.md §9-10): seat the players of a round in the
 -- middle chairs, keep them seated, and launch a failed player. A launch turns the character into a ragdoll and throws
@@ -2127,7 +1972,7 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 
 return SeatService
-]====]; s.Parent = n4 end
+]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "SpectatorService"; s.Source = [====[--!strict
 -- Spectators (docs/DESIGN_V3.md §8-10, was GhostService in V2): during a round everyone who is not an alive
 -- participant (players who are out, late joiners, anyone who respawns) watches from the stands. Anyone found on the
@@ -2234,8 +2079,7 @@ local function onReaction(player: Player, index: any)
 	if typeof(index) ~= "number" or not Config.REACTIONS[index] then
 		return
 	end
-	local inRound = Match.phase == "Assign" or Match.phase == "Talk"
-	if inRound and Match.isAlive(player) then
+	if Match.inRound() and Match.isAlive(player) then
 		return -- players on the chairs talk; reactions are for spectators
 	end
 	local now = os.clock()
@@ -2322,13 +2166,48 @@ function SpectatorService.endRound()
 end
 
 return SpectatorService
-]====]; s.Parent = n4 end
+]====]; s.Parent = n5 end
+do local s = Instance.new("ModuleScript"); s.Name = "Timeline"; s.Source = [====[--!strict
+-- The round's clock (docs/DESIGN_V3.md §2): ROUND_SECONDS of main game, a time budget for missions (a mission that
+-- would not fit in the time left is not started; free talk fills the rest), and when the final is due: when the time
+-- is up, or as soon as FINAL_AT_ALIVE or fewer are left in a round begun with more than that (3 -> rounds of 4+).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+
+local Timeline = {}
+
+local startedAt = 0
+local startedWith = 0
+
+-- The main game starts now with `players` participants.
+function Timeline.begin(players: number)
+	startedAt = os.clock()
+	startedWith = players
+end
+
+function Timeline.left(): number
+	return math.max(0, Config.ROUND_SECONDS - (os.clock() - startedAt))
+end
+
+-- Whether so few are left that the final starts at once (only in a round begun with more than FINAL_AT_ALIVE).
+function Timeline.fewLeft(alive: number): boolean
+	return startedWith > Config.FINAL_AT_ALIVE and alive <= Config.FINAL_AT_ALIVE
+end
+
+-- Whether the main game is over and the final should start, with `alive` participants left.
+function Timeline.finalDue(alive: number): boolean
+	return Timeline.left() <= 0 or Timeline.fewLeft(alive)
+end
+
+return Timeline
+]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "VoiceService"; s.Source = [====[--!strict
 -- Voice routing.
 -- 1. Flat volume: default voice creates each character's AudioEmitter on the server with a 7-80 stud rolloff;
 --    the flat curve set here replicates to every listener (src/client/FlatVoice.luau covers client-made emitters).
--- 2. Ghosts and spectators are silent to the table: during a round they know every word, so their
---    AudioDeviceInput is only audible to other ghosts/spectators (design V2 §6.2).
+-- 2. Players who are out and spectators are silent to the table: during a round their AudioDeviceInput is only
+--    audible to each other (docs/DESIGN_V3.md §13; with banned words they know every word).
 local Players = game:GetService("Players")
 
 local VoiceService = {}
@@ -2411,154 +2290,7 @@ function VoiceService.start()
 end
 
 return VoiceService
-]====]; s.Parent = n4 end
-do local s = Instance.new("ModuleScript"); s.Name = "VoteService"; s.Source = [====[--!strict
--- Short mission votes (V2.1): open for a few seconds, alive participants may vote (and change their vote) whether
--- or not they spoke; counts stay hidden until it closes. One option with the most votes wins; a tie or no votes
--- is "undecided" (a neutral follow-up, never a penalty). Talk and judging go on during the vote.
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
-local Match = require(script.Parent.Parent:WaitForChild("Match"))
-local Net = require(script.Parent.Parent:WaitForChild("Net"))
-
-local VoteService = {}
-
-type Option = { id: string, text: string }
-type Ballot = { voteKey: string, options: { Option }, endsAt: number, votes: { [Player]: string } }
-
-local current: Ballot? = nil
-local lastClosed: any = nil -- { payload, at = os.clock() } for late joiners
-local pendingKey: string? = nil -- closed and counted, result not shown yet
-local serial = 0
-
-local function isOption(ballot: Ballot, id: any): boolean
-	for _, option in ballot.options do
-		if option.id == id then
-			return true
-		end
-	end
-	return false
-end
-
-local function openPayload(ballot: Ballot)
-	local options = {}
-	for _, option in ballot.options do
-		table.insert(options, { id = option.id, text = option.text })
-	end
-	return { kind = "open", voteKey = ballot.voteKey, options = options, endsAt = ballot.endsAt }
-end
-
-local function onVote(player: Player, voteKey: any, optionId: any)
-	local ballot = current
-	if not ballot or voteKey ~= ballot.voteKey or Match.phase ~= "Talk" or not Match.isAlive(player) or not isOption(ballot, optionId) then
-		return
-	end
-	if Match.now() > ballot.endsAt then
-		return
-	end
-	ballot.votes[player] = optionId
-end
-
-function VoteService.start()
-	Net.listen("Vote", onVote)
-	Players.PlayerRemoving:Connect(function(player)
-		if current then
-			current.votes[player] = nil -- leaving before the close: the vote no longer counts
-		end
-	end)
-end
-
-local function noop() end
-
--- Blocks until the vote closes (or the talk ends). Returns the winning option id (or "undecided") and a function
--- that shows the result to everyone (the host calls it when nothing else is on screen; counts are fixed already).
-function VoteService.run(spec: { id: string, options: { Option }, seconds: number }, stillTalking: () -> boolean): (string, () -> ())
-	serial += 1
-	local ballot: Ballot = {
-		voteKey = string.format("%d:%d:%s", Match.roundId, serial, spec.id),
-		options = spec.options,
-		endsAt = Match.now() + spec.seconds,
-		votes = {},
-	}
-	current = ballot
-	lastClosed = nil
-	Net.toAll("VoteState", openPayload(ballot))
-	while Match.now() < ballot.endsAt and stillTalking() and current == ballot do
-		task.wait(math.min(0.2, math.max(0, ballot.endsAt - Match.now())))
-	end
-	if current ~= ballot or not stillTalking() then
-		-- The round stopped (or was cleared) during the vote: no result, nothing changes.
-		if current == ballot then
-			current = nil
-			Net.toAll("VoteState", { kind = "cancel", voteKey = ballot.voteKey })
-		end
-		return "undecided", noop
-	end
-	current = nil
-	pendingKey = ballot.voteKey
-	Net.toAll("VoteState", { kind = "pending", voteKey = ballot.voteKey })
-
-	-- Counted right at the close: only votes of players alive at this moment.
-	local counts: { [string]: number } = {}
-	for _, option in ballot.options do
-		counts[option.id] = 0
-	end
-	for player, optionId in ballot.votes do
-		if Match.isAlive(player) then
-			counts[optionId] += 1
-		end
-	end
-	local best, bestCount, tie = "undecided", 0, false
-	for _, option in ballot.options do
-		local n = counts[option.id]
-		if n > bestCount then
-			best, bestCount, tie = option.id, n, false
-		elseif n == bestCount and n > 0 then
-			tie = true
-		end
-	end
-	local outcome = if tie or bestCount == 0 then "undecided" else best
-	local result = {
-		kind = "closed",
-		voteKey = ballot.voteKey,
-		outcome = outcome,
-		counts = counts,
-		options = openPayload(ballot).options,
-	}
-	local function announce()
-		if pendingKey ~= ballot.voteKey then
-			return -- cleared meanwhile (round over)
-		end
-		pendingKey = nil
-		result.expiresAt = Match.now() + Config.VOTE_RESULT_SECONDS
-		lastClosed = { payload = result, at = os.clock() }
-		Net.toAll("VoteState", result)
-	end
-	return outcome, announce
-end
-
--- Late joiners: the open vote, a vote waiting for its result, or a result that is still on everyone's screen.
-function VoteService.send(player: Player)
-	if current then
-		Net.to(player, "VoteState", openPayload(current))
-	elseif pendingKey then
-		Net.to(player, "VoteState", { kind = "pending", voteKey = pendingKey })
-	elseif lastClosed and os.clock() - lastClosed.at < Config.VOTE_RESULT_SECONDS then
-		Net.to(player, "VoteState", lastClosed.payload)
-	end
-end
-
-function VoteService.clear()
-	current = nil
-	pendingKey = nil
-	lastClosed = nil
-	Net.toAll("VoteState", { kind = "clear" })
-end
-
-return VoteService
-]====]; s.Parent = n4 end
+]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "WordService"; s.Source = [====[--!strict
 -- Forbidden words: first word at the start, then one more for everyone alive at WORD_STEPS (max 3 words),
 -- and what each viewer may see. Nobody ever receives their own words while alive.
@@ -2675,11 +2407,11 @@ function WordService.runSchedule(talkSeconds: number, stillTalking: () -> boolea
 end
 
 return WordService
-]====]; s.Parent = n4 end
-n4.Parent = n2
+]====]; s.Parent = n5 end
+n5.Parent = n2
 n2.Parent = parents[2]
-local n5 = Instance.new("LocalScript"); n5.Name = "BannedWordsClient"; n5.Source = [====[-- 금칙어 게임 Korean client entry point: only wiring. Server events update State, then refresh() redraws
--- every part from State (HUD panels, bubbles, camera, reaction bar, recognizer on/off, seat lock).
+local n6 = Instance.new("LocalScript"); n6.Name = "BannedWordsClient"; n6.Source = [====[-- 금칙어 게임 Korean client entry point: only wiring. Server events update State, then refresh() redraws
+-- every part from State (HUD, head bubbles, camera, reaction bar, recognizer on/off, seat lock).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -2689,7 +2421,6 @@ local UserInputService = game:GetService("UserInputService")
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
 local remotes = shared:WaitForChild("Remotes")
 local Config = require(shared:WaitForChild("Config"))
-local Judge = require(shared:WaitForChild("Judge"))
 local State = require(script:WaitForChild("State"))
 local Speech = require(script:WaitForChild("Speech"))
 local FlatVoice = require(script:WaitForChild("FlatVoice"))
@@ -2701,10 +2432,7 @@ local UI = script:WaitForChild("UI")
 local Hud = require(UI:WaitForChild("Hud"))
 local Toast = require(UI:WaitForChild("Toast"))
 local MicPanel = require(UI:WaitForChild("MicPanel"))
-local HostPanel = require(UI:WaitForChild("HostPanel"))
 local ReactionBar = require(UI:WaitForChild("ReactionBar"))
-local MissionPanel = require(UI:WaitForChild("MissionPanel"))
-local VotePanel = require(UI:WaitForChild("VotePanel"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
@@ -2723,7 +2451,8 @@ local function applySeatLock()
 	end)
 end
 
--- Ready = voice connected + said something once. The recognizer runs only for the mic test and while I play.
+-- Ready = voice connected + said something once. The recognizer runs only for that mic test (docs/DESIGN_V3.md §2;
+-- judging speech comes back in phase 2).
 local function refreshVoice()
 	local status = Speech.status()
 	local isReady = State.micTested and (status == "Listening" or status == "Speaking")
@@ -2731,35 +2460,30 @@ local function refreshVoice()
 		readySent = isReady
 		remotes.Ready:FireServer(isReady)
 	end
-	Speech.setEnabled(not State.micTested or (State.round.phase == "Talk" and State.meAlive()))
+	Speech.setEnabled(not State.micTested)
 	MicPanel.setVoice(status)
 	MicPanel.setTest(status, State.micTested, State.inRound() and State.isParticipant(State.myId()), State.round.readyCount)
 end
 
+-- Everyone on the chairs gets a head bubble (name + hearts) during a round, every participant in the result.
 local function bubbleTargets(): { number }
-	local phase = State.round.phase
-	local list = {}
-	if phase == "Assign" or phase == "Talk" then
-		for _, id in State.round.alive do
-			if id ~= State.myId() then
-				table.insert(list, id)
-			end
-		end
-	elseif phase == "Result" then
-		list = State.round.participants
+	if State.inRound() then
+		return State.round.alive
+	elseif State.round.phase == "Result" then
+		return State.round.participants
 	end
-	return list
+	return {}
 end
 
 local function refresh()
 	local round = State.round
+	local me = State.myId()
 	Hud.setStatus(round.phase, round.message)
 	Hud.setAlive(#round.alive, round.total)
-	Hud.setMyWords(if State.inRound() and State.meAlive() then State.myWordCount() else 0)
-	Billboards.render({ show = bubbleTargets(), words = State.words })
+	Hud.setMyLives(if State.inRound() and State.isParticipant(me) then State.livesOf(me) else nil, round.maxLives)
+	Billboards.render({ show = bubbleTargets(), words = State.words, lives = round.lives, maxLives = round.maxLives })
 	ShowCamera.set((State.inRound() and State.meAlive()) or os.clock() < myFlightEndsAt)
 	ReactionBar.setVisible(not (State.inRound() and State.meAlive()))
-	VotePanel.setCanVote(State.round.phase == "Talk" and State.meAlive())
 	refreshVoice()
 	applySeatLock()
 end
@@ -2768,13 +2492,8 @@ end
 Hud.build()
 Toast.build()
 MicPanel.build()
-HostPanel.build()
 ReactionBar.build(function(index)
 	remotes.Reaction:FireServer(index)
-end)
-MissionPanel.build()
-VotePanel.build(function(voteKey, optionId)
-	remotes.Vote:FireServer(voteKey, optionId)
 end)
 Fx.init()
 FlatVoice.start()
@@ -2782,38 +2501,38 @@ GetUp.start()
 Speech.onStatus(function()
 	refreshVoice()
 end)
-Speech.onText(function(text, earliest, latest, ended, textId)
+Speech.onText(function()
 	if not State.micTested then
 		State.micTested = true
 		Toast.show("마이크 확인 완료!", "info")
 		refreshVoice()
-		return
-	end
-	if State.round.phase == "Talk" and State.meAlive() then
-		remotes.Transcript:FireServer(text, earliest, latest, ended, textId)
 	end
 end)
 Speech.onUnstable(function()
-	if State.inRound() and State.meAlive() then
+	if not State.micTested then
 		Toast.show(Config.TEXT.RECOGNITION_UNSTABLE, "near")
 	end
 end)
 Speech.start(script) -- this LocalScript lives in PlayerScripts and survives respawns
 
 -- Server events.
+local stateSeen = false -- the first state after joining only sets things up (no "it started" toast for late joiners)
 remotes.RoundState.OnClientEvent:Connect(function(round)
 	local previous = State.round.phase
 	State.round = round
 	if round.phase == "Lobby" or round.phase == "Countdown" then
 		State.words = {}
-		State.theme = nil
-		if previous ~= round.phase then
-			HostPanel.clear()
+	end
+	if stateSeen and round.phase ~= previous then
+		if round.phase == "Play" then
+			Toast.show(Config.TEXT.PLAY_START, "info")
+		elseif round.phase == "Final" then
+			Toast.show(Config.TEXT.FINAL, "near")
+		elseif round.phase == "Result" then
+			Toast.show(round.message, "info")
 		end
 	end
-	if round.phase == "Talk" and previous ~= "Talk" then
-		Toast.show("대화 시작! 다른 사람의 금칙어를 말하게 만드세요", "info")
-	end
+	stateSeen = true
 	refresh()
 end)
 
@@ -2822,72 +2541,43 @@ remotes.Words.OnClientEvent:Connect(function(words)
 	refresh()
 end)
 
-remotes.Host.OnClientEvent:Connect(function(info)
-	if info.kind == "theme" then
-		State.theme = info
-		Toast.show("오늘의 테마: " .. info.theme, "info")
-	elseif info.kind == "mission" then
-		MissionPanel.show(State.theme and State.theme.theme, info)
-	elseif info.kind == "topic" then
-		MissionPanel.setTopic(info.text)
-	elseif info.kind == "event" then
-		HostPanel.showEvent(info.text, info.expiresAt)
-	elseif info.kind == "clear" then
-		State.theme = nil
-		HostPanel.clear()
-		MissionPanel.clear()
+-- One event's lives lost (docs/DESIGN_V3.md §4): the bubbles pop, one toast names everyone (my own line first; when
+-- everyone left fell at once, the last line says they play the final).
+remotes.LifeLost.OnClientEvent:Connect(function(info)
+	local lost, out, lines = {}, {}, {}
+	local anyOut = false
+	for _, entry in info.players do
+		Billboards.hit(entry.userId, entry.lives, State.round.maxLives, entry.out)
+		anyOut = anyOut or entry.out
+		if entry.userId == State.myId() and info.reason ~= "left" then
+			table.insert(lines, if entry.out then Config.TEXT.MY_OUT else string.format(Config.TEXT.MY_LIFE_LOST, entry.lives))
+		elseif entry.out then
+			table.insert(out, entry.name)
+		else
+			table.insert(lost, entry.name)
+		end
 	end
-	refresh()
-end)
-
-remotes.VoteState.OnClientEvent:Connect(function(info)
-	if info.kind == "open" then
-		VotePanel.open(info, State.round.phase == "Talk" and State.meAlive())
-	elseif info.kind == "closed" then
-		VotePanel.closed(info)
-	elseif info.kind == "pending" then
-		VotePanel.pending(info)
-	elseif info.kind == "cancel" then
-		VotePanel.clear()
-	else
-		VotePanel.clear()
+	if info.reason == "left" then
+		Toast.show(string.format(Config.TEXT.LEFT, table.concat(out, ", ")), "near")
+		return
 	end
-end)
-
-remotes.WordWarn.OnClientEvent:Connect(function(info)
-	HostPanel.warnWord(info.at, info.count)
-end)
-
-remotes.Eliminated.OnClientEvent:Connect(function(info)
-	local isMe = info.userId == State.myId()
-	if info.reason == "said" then
-		Billboards.alarm(info.userId)
+	if #lost > 0 then
+		table.insert(lines, string.format(Config.TEXT.LIFE_LOST, table.concat(lost, ", ")))
+	end
+	if #out > 0 then
+		table.insert(lines, string.format(Config.TEXT.OUT, table.concat(out, ", ")))
+	end
+	if info.final then
+		table.insert(lines, Config.TEXT.TO_FINAL)
+	end
+	if anyOut then
 		Fx.elimination()
-		local who = if isMe then "내가" else info.name .. "님이"
-		local word = info.word or ""
-		local text = string.format("삐! %s 금칙어 \"%s\"%s 말했어요", who, word, Judge.josa(word, "을", "를"))
-		if isMe and info.words and #info.words > 1 then
-			text ..= "\n내 금칙어: " .. table.concat(info.words, ", ")
-		end
-		if info.assistName then
-			text ..= string.format("\n유도: %s +%d점", info.assistName, Config.SCORE_ASSIST)
-		end
-		Toast.show(text, "elim")
-	elseif info.reason == "left" then
-		Toast.show(info.name .. "님이 나갔어요", "near")
 	end
+	Toast.show(table.concat(lines, "\n"), if anyOut then "elim" else "near")
 end)
 
 remotes.Notice.OnClientEvent:Connect(function(info)
 	Toast.show(info.text, "near")
-end)
-
--- The round was decided: once my speech that may still count has been sent, say so (judging waits for it).
-remotes.Settle.OnClientEvent:Connect(function(info)
-	task.spawn(function()
-		Speech.waitSettled(info.cutoff, info.cutoff + Config.END_TOLERANCE, Config.SETTLE_MAX)
-		remotes.Settled:FireServer(info.key)
-	end)
 end)
 
 remotes.Reaction.OnClientEvent:Connect(function(info)
@@ -2908,7 +2598,7 @@ remotes.Splash.OnClientEvent:Connect(function(info)
 	Fx.splash(info.position)
 end)
 
--- Studio only: F launches me from my chair (no speech-to-text in Studio; the server ignores it on live servers).
+-- Studio only: F costs me a life (there are no real missions yet; the server ignores it on live servers).
 if RunService:IsStudio() then
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if not processed and input.KeyCode == Enum.KeyCode.F then
@@ -2924,7 +2614,7 @@ player.CharacterAdded:Connect(function()
 	ShowCamera.reapply()
 end)
 
--- Anyone's new character needs its bubble again (e.g. the last one launched respawns during the result).
+-- Anyone's new character needs its bubble again (e.g. a participant back on the chair after a fall).
 local function watchCharacters(other: Player)
 	other.CharacterAdded:Connect(function(character)
 		character:WaitForChild("Head", 5)
@@ -2937,30 +2627,23 @@ for _, other in Players:GetPlayers() do
 end
 Players.PlayerAdded:Connect(watchCharacters)
 
-local lastPing = 0
 RunService.Heartbeat:Connect(function()
-	local now = workspace:GetServerTimeNow()
-	local remaining = State.round.endsAt - now
+	local remaining = State.round.endsAt - workspace:GetServerTimeNow()
 	Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
-	HostPanel.tick(now)
-	VotePanel.tick(now)
-	MissionPanel.tick()
-	-- Tells the host the table is not quiet even when the recognizer misses speech (never used to judge).
-	if State.round.phase == "Talk" and State.meAlive() and Speech.isSpeaking() and now - lastPing >= Config.VOICE_PING_INTERVAL then
-		lastPing = now
-		remotes.VoicePing:FireServer()
-	end
 end)
 
 -- Ask for the current state now that every handler is connected (late joiners miss earlier broadcasts).
 remotes.Sync:FireServer()
 ]====]
 do local s = Instance.new("ModuleScript"); s.Name = "Billboards"; s.Source = [====[--!strict
--- Word bubbles above heads: each other alive participant's words (up to 3, newest flashes) and name.
--- My own bubble is never drawn while I play (the HUD shows "??? × n"); in the result everyone's words show.
--- The V3 pool hall is white, so the cards carry a thick navy outline and the name sits on a navy pill.
+-- Head bubbles: name and lives (hearts) for every participant on the chairs, me included, and from bundle 5 the
+-- banned words above them: each other participant's visible words (a new one flashes) and "???" for my own.
+-- The V3 pool hall is white, so word cards carry a thick navy outline and the name sits on a navy pill.
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+
+local Hearts = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hearts"))
 
 local Billboards = {}
 
@@ -2969,16 +2652,27 @@ local NAME_FONT = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.Fo
 local WIDTH = 4.6 -- studs; the flying chairs are 5 studs apart
 local ROW = 1.0 -- studs per word row
 local NAME_ROW = 0.9
+local HEART_ROW = 0.8
 local CARD_COLOR = Color3.fromRGB(255, 255, 255)
 local NEW_COLOR = Color3.fromRGB(255, 225, 90)
 local OUTLINE = Color3.fromRGB(22, 34, 64)
 local NAME_PILL = Color3.fromRGB(22, 34, 64)
+local HIDDEN = "???" -- my own words while I play
 
-local ALARM_SECONDS = 1.2
+local GROW_SECONDS = 0.15 -- hit(): the pop grows, then settles back
+local SETTLE_SECONDS = 0.35
 
-type Bubble = { gui: BillboardGui, words: { string }, signature: string }
+export type View = {
+	show: { number }, -- userIds that get a bubble
+	words: { [string]: { words: { string }?, count: number } }, -- nil words = hidden (my own)
+	lives: { [string]: number },
+	maxLives: number,
+}
+
+type Bubble = { gui: BillboardGui, size: UDim2, hearts: TextLabel, words: { string }, layout: string }
 local bubbles: { [number]: Bubble } = {}
-local dying: { [number]: boolean } = {} -- red alarm playing; render() leaves these alone
+local dying: { [number]: boolean } = {} -- bubbles of players just out, kept until their pop is over
+local lastView: View? = nil -- drawn again when a pop is over (the round may show that player again by then)
 
 local function removeBubble(userId: number)
 	local bubble = bubbles[userId]
@@ -3034,43 +2728,46 @@ local function wordRow(parent: Instance, text: string, order: number, fresh: boo
 	return row
 end
 
--- (Re)builds one bubble. `previous` = the words shown before, so a newly added word flashes.
+-- (Re)builds one bubble: word rows (none, or "???" for hidden words), the name pill, the hearts. `previous` = the
+-- words shown before, so a newly added word flashes.
 local function build(player: Player, words: { string }, caption: string, previous: { string }?): Bubble?
 	local head = player.Character and player.Character:FindFirstChild("Head") :: BasePart?
 	if not head then
 		return nil
 	end
-	local rows = math.max(#words, 1)
+	local wordsHeight = #words * ROW
+	local total = wordsHeight + NAME_ROW + HEART_ROW
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "WordBubble"
-	gui.Size = UDim2.fromScale(WIDTH, rows * ROW + NAME_ROW)
-	gui.StudsOffsetWorldSpace = Vector3.new(0, 1.6 + (rows * ROW + NAME_ROW) / 2, 0)
+	gui.Size = UDim2.fromScale(WIDTH, total)
+	gui.StudsOffsetWorldSpace = Vector3.new(0, 1.6 + total / 2, 0)
 	gui.AlwaysOnTop = true
 	gui.MaxDistance = 150
 	gui.LightInfluence = 0
 
-	local list = Instance.new("Frame")
-	list.Name = "Words"
-	list.BackgroundTransparency = 1
-	list.Size = UDim2.fromScale(1, (rows * ROW) / (rows * ROW + NAME_ROW))
-	list.Parent = gui
-	local layout = Instance.new("UIListLayout")
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Padding = UDim.new(0.04, 0)
-	layout.Parent = list
-	local shown = if #words > 0 then words else { "?" }
-	for i, text in shown do
-		local fresh = previous ~= nil and #words > 0 and not table.find(previous, text)
-		local row = wordRow(list, text, i, fresh)
-		row.Size = UDim2.new(1, 0, 1 / rows, -2)
+	if #words > 0 then
+		local list = Instance.new("Frame")
+		list.Name = "Words"
+		list.BackgroundTransparency = 1
+		list.Size = UDim2.fromScale(1, wordsHeight / total)
+		list.Parent = gui
+		local layout = Instance.new("UIListLayout")
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(0.04, 0)
+		layout.Parent = list
+		for i, text in words do
+			local fresh = previous ~= nil and text ~= HIDDEN and not table.find(previous, text)
+			local row = wordRow(list, text, i, fresh)
+			row.Size = UDim2.new(1, 0, 1 / #words, -2)
+		end
 	end
 
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "Caption"
 	nameLabel.BackgroundColor3 = NAME_PILL
 	nameLabel.BackgroundTransparency = 0.1
-	nameLabel.Position = UDim2.fromScale(0.1, list.Size.Y.Scale + 0.03)
-	nameLabel.Size = UDim2.fromScale(0.8, 1 - list.Size.Y.Scale - 0.03)
+	nameLabel.Position = UDim2.fromScale(0.1, wordsHeight / total + 0.02)
+	nameLabel.Size = UDim2.fromScale(0.8, NAME_ROW / total - 0.02)
 	nameLabel.FontFace = NAME_FONT
 	nameLabel.TextScaled = true
 	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -3086,46 +2783,57 @@ local function build(player: Player, words: { string }, caption: string, previou
 	namePad.PaddingRight = UDim.new(0.06, 0)
 	namePad.Parent = nameLabel
 
+	local hearts = Instance.new("TextLabel")
+	hearts.Name = "Hearts"
+	hearts.BackgroundTransparency = 1
+	hearts.Position = UDim2.fromScale(0.15, (wordsHeight + NAME_ROW) / total)
+	hearts.Size = UDim2.fromScale(0.7, HEART_ROW / total)
+	hearts.FontFace = NAME_FONT
+	hearts.TextScaled = true
+	hearts.RichText = true
+	hearts.TextStrokeColor3 = OUTLINE
+	hearts.TextStrokeTransparency = 0
+	hearts.Parent = gui
+
 	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	end
 	gui.Adornee = head
 	gui.Parent = head
-	return { gui = gui, words = table.clone(words), signature = "" }
+	return { gui = gui, size = gui.Size, hearts = hearts, words = table.clone(words), layout = "" }
 end
 
-export type View = {
-	show: { number }, -- userIds that get a bubble
-	words: { [string]: { words: { string }?, count: number } },
-}
-
--- Draws exactly the bubbles in view.show; rebuilds a bubble only when its content changed.
+-- Draws exactly the bubbles in view.show (plus the ones of players just out, until their pop is over). A bubble is
+-- rebuilt only when its words or name changed; new lives just change its hearts (so a running pop goes on).
 function Billboards.render(view: View)
+	lastView = view
 	local keep: { [number]: boolean } = {}
 	for userId in dying do
 		keep[userId] = true
 	end
 	for _, userId in view.show do
-		if dying[userId] then
-			continue
-		end
 		local player = Players:GetPlayerByUserId(userId)
-		local entry = view.words[tostring(userId)]
-		if player and entry and entry.words then
+		local head = player and player.Character and player.Character:FindFirstChild("Head")
+		if player and head and not dying[userId] then
 			keep[userId] = true
+			local key = tostring(userId)
+			local entry = view.words[key]
+			local words = if not entry then {} elseif entry.words then entry.words else { HIDDEN }
 			local caption = player.DisplayName
-			local signature = table.concat(entry.words, "|") .. "#" .. caption
-			local existing = bubbles[userId]
-			local head = player.Character and player.Character:FindFirstChild("Head")
-			if not existing or existing.signature ~= signature or existing.gui.Parent ~= head then
-				local previous = if existing then existing.words else nil
+			local layout = table.concat(words, "|") .. "#" .. caption
+			local bubble: Bubble? = bubbles[userId]
+			if not bubble or bubble.layout ~= layout or bubble.gui.Parent ~= head then
+				local previous = if bubble then bubble.words else nil
 				removeBubble(userId)
-				local bubble = build(player, entry.words, caption, previous)
+				bubble = build(player, words, caption, previous)
 				if bubble then
-					bubble.signature = signature
+					bubble.layout = layout
 					bubbles[userId] = bubble
 				end
+			end
+			if bubble then
+				bubble.hearts.Text = Hearts.text(view.lives[key] or 0, view.maxLives)
 			end
 		end
 	end
@@ -3136,41 +2844,38 @@ function Billboards.render(view: View)
 	end
 end
 
--- Elimination: the bubble turns red and swells for ALARM_SECONDS, then disappears.
-function Billboards.alarm(userId: number)
+-- Lost a life: the hearts show the lives left and the bubble pops. The bubble of a player who is out stays until the
+-- pop is over; then the latest view is drawn again (it goes, unless the round still shows them, e.g. in the result).
+function Billboards.hit(userId: number, lives: number, maxLives: number, out: boolean)
 	local bubble = bubbles[userId]
 	if not bubble then
 		return
 	end
-	dying[userId] = true
-	task.delay(ALARM_SECONDS, function()
-		dying[userId] = nil
-		if bubbles[userId] == bubble then
-			removeBubble(userId)
+	bubble.hearts.Text = Hearts.text(lives, maxLives)
+	local gui = bubble.gui
+	local size = bubble.size
+	local grow = TweenService:Create(gui, TweenInfo.new(GROW_SECONDS, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Size = UDim2.fromScale(size.X.Scale * 1.35, size.Y.Scale * 1.35),
+	})
+	grow.Completed:Once(function()
+		if gui.Parent then
+			TweenService:Create(gui, TweenInfo.new(SETTLE_SECONDS, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = size }):Play()
 		end
 	end)
-	for _, row in (bubble.gui:FindFirstChild("Words") :: Frame):GetChildren() do
-		if row:IsA("Frame") then
-			row.BackgroundColor3 = Color3.fromRGB(230, 40, 40)
-			local label = row:FindFirstChild("Text") :: TextLabel
-			label.TextColor3 = Color3.fromRGB(255, 255, 255)
-		end
-	end
-	local size = bubble.gui.Size
-	TweenService:Create(bubble.gui, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Size = UDim2.fromScale(size.X.Scale * 1.5, size.Y.Scale * 1.5),
-	}):Play()
-end
-
-function Billboards.clear()
-	table.clear(dying)
-	for userId in bubbles do
-		removeBubble(userId)
+	grow:Play()
+	if out then
+		dying[userId] = true
+		task.delay(GROW_SECONDS + SETTLE_SECONDS + 0.2, function()
+			dying[userId] = nil
+			if lastView then
+				Billboards.render(lastView)
+			end
+		end)
 	end
 end
 
 return Billboards
-]====]; s.Parent = n5 end
+]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "FlatVoice"; s.Source = [====[--!strict
 -- Everyone hears everyone at the same volume, wherever they are on the map (owner decision 2026-10-17).
 -- Default voice (UseAudioApi) wires each AudioDeviceInput into an AudioEmitter inside the character with a
@@ -3211,7 +2916,7 @@ function FlatVoice.start()
 end
 
 return FlatVoice
-]====]; s.Parent = n5 end
+]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "Fx"; s.Source = [====[--!strict
 -- Effects: the flying chair firing (seat flap snapping back on its hinge, "펑", smoke and confetti), the splash where
 -- the player hits the water, the elimination buzzer and red flash, and floating emoji reactions.
@@ -3484,7 +3189,7 @@ function Fx.reaction(player: Player?, emoji: string)
 end
 
 return Fx
-]====]; s.Parent = n5 end
+]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "GetUp"; s.Source = [====[--!strict
 -- After a launch the server ends the ragdoll (PlatformStand off) and hands my character back to me. Only the owning
 -- client may change its humanoid's state (docs/DESIGN_V3.md §10 step 5), so this stands my character back up unless
@@ -3540,7 +3245,7 @@ function GetUp.start()
 end
 
 return GetUp
-]====]; s.Parent = n5 end
+]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "ShowCamera"; s.Source = [====[--!strict
 -- The show camera (docs/DESIGN_V3.md §10, owner 2026-10-22): seated participants watch the chair row from the front,
 -- so every other participant (faces and word bubbles) is on screen with the pool behind, including anyone flying off.
@@ -3671,14 +3376,15 @@ function ShowCamera.reapply()
 end
 
 return ShowCamera
-]====]; s.Parent = n5 end
+]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "Speech"; s.Source = [====[--!strict
 -- Transcribes the local player's own mic. Roblox only runs AudioSpeechToText on clients, so every client
 -- transcribes itself and the server judges. Voice starts disconnected (since 2026-01): AudioDeviceInput.Active
 -- stays false until the player connects voice from the in-experience settings menu.
 --
 -- STT requests count against an experience-wide limit (1 + 5 x CCU per minute), so the recognizer is only
--- enabled while it matters (mic test, and alive participants during the talk) — see setEnabled.
+-- enabled while it matters — see setEnabled. V3 phase 1 uses it for the mic test only; judging speech comes back
+-- in phase 2 (docs/DESIGN_V3.md §12).
 local Players = game:GetService("Players")
 
 local Speech = {}
@@ -3959,7 +3665,7 @@ function Speech.start(parent: Instance)
 end
 
 return Speech
-]====]; s.Parent = n5 end
+]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "State"; s.Source = [====[--!strict
 -- What the client knows about the round (data + small questions about it, no UI).
 local Players = game:GetService("Players")
@@ -3967,9 +3673,18 @@ local Players = game:GetService("Players")
 export type WordsEntry = { words: { string }?, count: number }
 
 local State = {
-	round = { phase = "Lobby", endsAt = 0, message = "", participants = {}, alive = {}, total = 0 } :: any,
-	words = {} :: { [string]: WordsEntry }, -- userId string -> visible words (nil words = my own, hidden)
-	theme = nil :: any, -- { theme }
+	round = {
+		phase = "Lobby",
+		endsAt = 0,
+		message = "",
+		participants = {},
+		alive = {},
+		lives = {},
+		maxLives = 0,
+		total = 0,
+	} :: any,
+	-- userId string -> visible words (nil words = my own, hidden). Empty until the banned words come back (bundle 5).
+	words = {} :: { [string]: WordsEntry },
 	micTested = false,
 }
 
@@ -3985,97 +3700,29 @@ function State.isAlive(userId: number): boolean
 	return table.find(State.round.alive, userId) ~= nil
 end
 
+-- A round is being played (seats taken): Assign, Play or Final.
 function State.inRound(): boolean
-	return State.round.phase == "Assign" or State.round.phase == "Talk"
+	local phase = State.round.phase
+	return phase == "Assign" or phase == "Play" or phase == "Final"
 end
 
 function State.meAlive(): boolean
 	return State.isAlive(State.myId())
 end
 
-function State.myWordCount(): number
-	local entry = State.words[tostring(State.myId())]
-	return if entry then entry.count else 0
+function State.livesOf(userId: number): number
+	return State.round.lives[tostring(userId)] or 0
 end
 
 return State
-]====]; s.Parent = n5 end
-local n6 = Instance.new("Folder"); n6.Name = "UI"
-do local s = Instance.new("ModuleScript"); s.Name = "HostPanel"; s.Source = [====[--!strict
--- Short centre texts from the assistant host: the event banner and the new-word countdown, over the centre
--- table (the emptiest part of the seated view: far chairs sit above it, neighbours at the screen edges).
--- The mission card and topic line live in MissionPanel (bottom stack); theme and my role in the status board.
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
-
-local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
-local Style = require(script.Parent:WaitForChild("Style"))
-
-local HostPanel = {}
-
-local eventL: TextLabel
-local warnL: TextLabel
-local warnAt = 0
-local warnCount = 0
-
-function HostPanel.build()
-	local gui = Style.gui()
-	eventL = Style.label(gui, Style.HEAVY, 28, Style.AMBER)
-	eventL.AnchorPoint = Vector2.new(0.5, 0.5)
-	eventL.Position = UDim2.fromScale(0.5, 0.52)
-	eventL.Size = UDim2.new(0.6, 0, 0, 40)
-	eventL.TextTransparency = 1
-	eventL.TextStrokeTransparency = 1
-
-	warnL = Style.label(gui, Style.HEAVY, 32, Style.RED)
-	warnL.AnchorPoint = Vector2.new(0.5, 0.5)
-	warnL.Position = UDim2.fromScale(0.5, 0.6)
-	warnL.Size = UDim2.new(0.6, 0, 0, 42)
-	warnL.TextStrokeTransparency = 0.3
-end
-
--- expiresAt (server time) is shared, so a late joiner only sees what is left of it.
-function HostPanel.showEvent(text: string, expiresAt: number?)
-	local left = if expiresAt then expiresAt - workspace:GetServerTimeNow() else Config.EVENT_SHOW_SECONDS
-	if left <= 0.2 then
-		return
-	end
-	eventL.Text = "📢 " .. text
-	eventL.TextTransparency = 0
-	eventL.TextStrokeTransparency = 0.3
-	local fade = math.min(0.8, left)
-	local info = TweenInfo.new(fade, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, left - fade)
-	TweenService:Create(eventL, info, { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
-end
-
-function HostPanel.warnWord(at: number, count: number)
-	warnAt = at
-	warnCount = count
-end
-
--- Every frame: the new-word countdown. Both texts stay just above the bottom stack (on short phone screens the
--- stack reaches higher than 60 %).
-function HostPanel.tick(now: number)
-	local viewport = workspace.CurrentCamera.ViewportSize.Y
-	local stackTop = Style.bottomStack().AbsolutePosition.Y
-	local warnY = math.min(viewport * 0.6, stackTop - 28)
-	warnL.Position = UDim2.new(0.5, 0, 0, warnY)
-	eventL.Position = UDim2.new(0.5, 0, 0, math.min(viewport * 0.52, warnY - 40))
-	local left = warnAt - now
-	warnL.Text = if left > 0 then string.format("%d초 뒤 금칙어가 %d개로 늘어나요!", math.ceil(left), warnCount) else ""
-end
-
-function HostPanel.clear()
-	eventL.TextTransparency = 1
-	eventL.TextStrokeTransparency = 1
-	warnAt = 0
-end
-
-return HostPanel
 ]====]; s.Parent = n6 end
+local n7 = Instance.new("Folder"); n7.Name = "UI"
 do local s = Instance.new("ModuleScript"); s.Name = "Hud"; s.Source = [====[--!strict
--- Status board at the top centre: phase + message (the theme during the talk), timer, survivors, and how many words I have
--- (never which). Kept short (64 px) so the far side of the ring stays visible under it.
+-- Status board at the top centre: phase + message, timer, my lives (hearts) and survivors. Kept short (64 px) so the
+-- chair row under it stays visible.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Hearts = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hearts"))
 local Style = require(script.Parent:WaitForChild("Style"))
 
 local Hud = {}
@@ -4083,15 +3730,16 @@ local Hud = {}
 local PHASE_TITLE = {
 	Lobby = "대기 중",
 	Countdown = "곧 시작",
-	Assign = "금칙어 배정",
-	Talk = "대화 중",
+	Assign = "자리 배정",
+	Play = "본 경기", -- not "게임": a word-bank word, and players read this aloud
+	Final = "결승",
 	Result = "결과",
 }
 
 local statusL: TextLabel
 local timerL: TextLabel
 local aliveL: TextLabel
-local mineL: TextLabel
+local livesL: TextLabel
 
 function Hud.build()
 	local top = Style.panel(Style.gui(), Style.PANEL, 0.2, 14)
@@ -4107,9 +3755,10 @@ function Hud.build()
 	timerL.Position = UDim2.fromScale(0.04, 0.55)
 	timerL.Size = UDim2.fromScale(0.28, 0.38)
 	timerL.TextXAlignment = Enum.TextXAlignment.Left
-	mineL = Style.label(top, Style.BOLD, 20, Style.AMBER)
-	mineL.Position = UDim2.fromScale(0.32, 0.55)
-	mineL.Size = UDim2.fromScale(0.36, 0.38)
+	livesL = Style.label(top, Style.BOLD, 22, Style.WHITE)
+	livesL.Position = UDim2.fromScale(0.32, 0.55)
+	livesL.Size = UDim2.fromScale(0.36, 0.38)
+	livesL.RichText = true
 	aliveL = Style.label(top, Style.REGULAR, 20, Style.GREY)
 	aliveL.Position = UDim2.fromScale(0.68, 0.55)
 	aliveL.Size = UDim2.fromScale(0.28, 0.38)
@@ -4134,16 +3783,16 @@ function Hud.setAlive(alive: number, total: number)
 	aliveL.Text = if total > 0 then string.format("생존 %d / %d", alive, total) else ""
 end
 
--- count = 0 hides it (not playing).
-function Hud.setMyWords(count: number)
-	mineL.Text = if count > 0 then string.format("내 금칙어 ??? × %d", count) else ""
+-- nil hides it (not playing this round).
+function Hud.setMyLives(lives: number?, max: number)
+	livesL.Text = if lives then "내 목숨 " .. Hearts.text(lives, max) else ""
 end
 
 return Hud
-]====]; s.Parent = n6 end
+]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "MicPanel"; s.Source = [====[--!strict
 -- Voice connection and mic test lines (rows 0 and 1 under the status board), plus the earphone tip.
--- Both are empty while I play with a working mic, so nothing covers the ring.
+-- Both are empty while I play with a working mic, so nothing covers the chair row.
 local Style = require(script.Parent:WaitForChild("Style"))
 
 local MicPanel = {}
@@ -4192,178 +3841,9 @@ function MicPanel.setTest(status: string, micTested: boolean, inMyRound: boolean
 end
 
 return MicPanel
-]====]; s.Parent = n6 end
-do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [====[--!strict
--- The mission card (V2.1) in the bottom stack, centred under the ring (the side edges show the neighbours' bubbles).
--- A new mission opens big for CARD_OPEN_SECONDS (theme · mission n/N · title, situation + problem, goal, options,
--- condition, "talk freely" hint), then folds to the title plus the current condition / decision so it does not
--- cover the table. Tapping the card opens or folds it. A quiet-time topic line sits at the bottom.
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
-local Style = require(script.Parent:WaitForChild("Style"))
-
-local MissionPanel = {}
-
-local COMPACT_BELOW = 560 -- viewport height (px) under which the open card drops the goal, hint and topic lines
-
-local panel: TextButton
-local headerL: TextLabel
-local bodyL: TextLabel
-local goalL: TextLabel
-local optionsL: TextLabel
-local conditionL: TextLabel
-local decisionL: TextLabel
-local hintL: TextLabel
-local topicL: TextLabel
-local info: any = nil -- last mission payload
-local themeName: string? = nil
-local openUntil = 0
-local pinned = false
-local compact = false
-local shownOpen: boolean? = nil
-
-local function row(order: number, font: Font, size: number, color: Color3): TextLabel
-	local l = Instance.new("TextLabel")
-	l.LayoutOrder = order
-	l.BackgroundTransparency = 1
-	l.FontFace = font
-	l.TextSize = size
-	l.TextColor3 = color
-	l.TextWrapped = true
-	l.TextXAlignment = Enum.TextXAlignment.Left
-	l.AutomaticSize = Enum.AutomaticSize.Y
-	l.Size = UDim2.new(1, 0, 0, 0)
-	l.Text = ""
-	l.Parent = panel
-	return l
-end
-
-local function isOpen(): boolean
-	return pinned or os.clock() < openUntil
-end
-
--- Fills the texts for the open or folded view and shows only the rows that view uses.
-local function render()
-	local open = isOpen()
-	shownOpen = open
-	local hasMission = info ~= nil
-	if hasMission then
-		if open then
-			headerL.Text = string.format("%s · 미션 %d/%d · %s", themeName or "미션", info.index, info.total, info.title)
-		else
-			headerL.Text = string.format("%s  (미션 %d/%d · 눌러서 펼치기)", info.title, info.index, info.total)
-		end
-		bodyL.Text = info.situation .. " " .. info.problem
-		goalL.Text = "목표: " .. info.goal
-		optionsL.Text = "선택지: " .. table.concat(info.options, " / ")
-		conditionL.Text = if info.condition then "📌 " .. info.condition else ""
-		decisionL.Text = if info.decision then "✅ 결정: " .. info.decision else ""
-	end
-	headerL.Visible = hasMission
-	bodyL.Visible = hasMission and open
-	goalL.Visible = hasMission and not (open and compact)
-	optionsL.Visible = hasMission and open
-	conditionL.Visible = hasMission and conditionL.Text ~= ""
-	decisionL.Visible = hasMission and decisionL.Text ~= ""
-	hintL.Visible = hasMission and open and not compact
-	topicL.Visible = topicL.Text ~= "" and not (compact and hasMission and open)
-	panel.Visible = hasMission or topicL.Visible
-end
-
-function MissionPanel.build()
-	panel = Instance.new("TextButton") -- the whole card is tappable (open / fold)
-	panel.Text = ""
-	panel.AutoButtonColor = false
-	panel.BackgroundColor3 = Style.CARD
-	panel.BackgroundTransparency = 0.08
-	panel.BorderSizePixel = 0
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 14)
-	corner.Parent = panel
-	panel.Parent = Style.bottomStack()
-	panel.LayoutOrder = 2
-	panel.Size = UDim2.new(1, 0, 0, 0)
-	panel.AutomaticSize = Enum.AutomaticSize.Y
-	panel.Visible = false
-	local pad = Instance.new("UIPadding")
-	pad.PaddingTop = UDim.new(0, 8)
-	pad.PaddingBottom = UDim.new(0, 8)
-	pad.PaddingLeft = UDim.new(0, 12)
-	pad.PaddingRight = UDim.new(0, 12)
-	pad.Parent = panel
-	local layout = Instance.new("UIListLayout")
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Padding = UDim.new(0, 3)
-	layout.Parent = panel
-
-	headerL = row(1, Style.BOLD, 14, Color3.fromRGB(200, 90, 40))
-	bodyL = row(2, Style.BOLD, 17, Style.INK)
-	goalL = row(3, Style.BOLD, 16, Color3.fromRGB(40, 110, 70))
-	optionsL = row(4, Style.REGULAR, 15, Color3.fromRGB(70, 70, 90))
-	conditionL = row(5, Style.BOLD, 16, Color3.fromRGB(190, 70, 30))
-	decisionL = row(6, Style.BOLD, 15, Color3.fromRGB(40, 110, 70))
-	hintL = row(7, Style.REGULAR, 13, Color3.fromRGB(120, 120, 130))
-	hintL.Text = Config.TEXT.FREE_TALK
-	topicL = row(8, Style.REGULAR, 15, Color3.fromRGB(90, 90, 100))
-
-	panel.Activated:Connect(function()
-		pinned = not isOpen()
-		openUntil = 0
-		render()
-	end)
-
-	-- Short (phone landscape) screens: smaller text and fewer lines on the open card.
-	local camera = workspace.CurrentCamera
-	local function fit()
-		compact = camera.ViewportSize.Y < COMPACT_BELOW
-		bodyL.TextSize = if compact then 14 else 17
-		conditionL.TextSize = if compact then 14 else 16
-		optionsL.TextSize = if compact then 13 else 15
-		headerL.TextSize = if compact then 12 else 14
-		render()
-	end
-	camera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
-	task.defer(fit)
-end
-
--- payload: the server's mission card (index, total, title, situation, problem, goal, options, condition, decision).
-function MissionPanel.show(theme: string?, payload: any)
-	local isNew = info == nil or info.index ~= payload.index or info.title ~= payload.title
-	info = payload
-	themeName = theme
-	if isNew then
-		pinned = false
-		openUntil = os.clock() + Config.CARD_OPEN_SECONDS
-	end
-	render()
-end
-
--- Quiet-time topic (stays until the next one).
-function MissionPanel.setTopic(text: string)
-	topicL.Text = "💬 이야깃거리: " .. text
-	render()
-end
-
--- Every frame: fold the card once its open time is over.
-function MissionPanel.tick()
-	if info and shownOpen ~= isOpen() then
-		render()
-	end
-end
-
-function MissionPanel.clear()
-	info = nil
-	pinned = false
-	openUntil = 0
-	topicL.Text = ""
-	render()
-end
-
-return MissionPanel
-]====]; s.Parent = n6 end
+]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "ReactionBar"; s.Source = [====[--!strict
--- Emoji reaction buttons for ghosts and spectators (bottom of the bottom stack). The server rate-limits and broadcasts them.
+-- Emoji reaction buttons for players who are out and spectators (bottom of the bottom stack). The server rate-limits and broadcasts them.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -4409,7 +3889,7 @@ function ReactionBar.setVisible(visible: boolean)
 end
 
 return ReactionBar
-]====]; s.Parent = n6 end
+]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "Style"; s.Source = [====[--!strict
 -- Shared look for every HUD panel: fonts, colours, the one ScreenGui, and small constructors.
 local Players = game:GetService("Players")
@@ -4417,7 +3897,6 @@ local Players = game:GetService("Players")
 local Style = {}
 
 Style.BOLD = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold)
-Style.HEAVY = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Heavy)
 Style.REGULAR = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Regular)
 
 Style.WHITE = Color3.fromRGB(240, 240, 245)
@@ -4425,10 +3904,7 @@ Style.GREY = Color3.fromRGB(170, 175, 185)
 Style.RED = Color3.fromRGB(255, 110, 110)
 Style.AMBER = Color3.fromRGB(255, 200, 90)
 Style.GREEN = Color3.fromRGB(120, 220, 140)
-Style.BLUE = Color3.fromRGB(170, 200, 255)
 Style.PANEL = Color3.fromRGB(18, 22, 30)
-Style.CARD = Color3.fromRGB(255, 248, 225)
-Style.INK = Color3.fromRGB(40, 40, 50)
 
 local gui: ScreenGui? = nil
 local stack: Frame? = nil
@@ -4445,8 +3921,8 @@ function Style.gui(): ScreenGui
 	return gui :: ScreenGui
 end
 
--- Bottom-centre stack (vote panel, mission card, reaction bar, top to bottom). The seated camera leaves the
--- bottom centre free (only my own head is there); the side edges show the neighbours' bubbles.
+-- Bottom-centre stack (the reaction bar now; the mission and vote panels of bundle 4 go above it). Panels are
+-- stacked top to bottom.
 function Style.bottomStack(): Frame
 	if not stack then
 		local f = Instance.new("Frame")
@@ -4517,7 +3993,7 @@ function Style.line(row: number, color: Color3): TextLabel
 end
 
 return Style
-]====]; s.Parent = n6 end
+]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "Toast"; s.Source = [====[--!strict
 -- Big centre toast (elimination, warnings, info) that fades out by itself.
 local TweenService = game:GetService("TweenService")
@@ -4547,171 +4023,8 @@ function Toast.show(text: string, kind: "elim" | "near" | "info")
 end
 
 return Toast
-]====]; s.Parent = n6 end
-do local s = Instance.new("ModuleScript"); s.Name = "VotePanel"; s.Source = [====[--!strict
--- The short mission vote (bottom stack, above the mission card, V2.1): one button per option and a countdown. Only alive participants
--- can press (and change) a choice; everyone else sees it read-only. Counts appear only after it closes.
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
-local Style = require(script.Parent:WaitForChild("Style"))
-
-local VotePanel = {}
-
-local IDLE = Color3.fromRGB(40, 48, 64)
-local PICKED = Color3.fromRGB(240, 140, 60)
-
-local frame: Frame
-local titleL: TextLabel
-local buttonRow: Frame
-local buttons: { [string]: TextButton } = {}
-local onPick: (string, string) -> () = function() end
-local voteKey: string? = nil
-local endsAt = 0
-local canVote = false
-local hideAt = 0
-
-function VotePanel.build(pick: (string, string) -> ())
-	onPick = pick
-	frame = Instance.new("Frame")
-	frame.LayoutOrder = 1 -- above the mission card in the bottom stack
-	frame.Size = UDim2.new(1, 0, 0, 92)
-	frame.BackgroundTransparency = 1
-	frame.Visible = false
-	frame.Parent = Style.bottomStack()
-	titleL = Style.label(frame, Style.BOLD, 20, Style.WHITE)
-	titleL.Size = UDim2.new(1, 0, 0, 28)
-	titleL.TextStrokeTransparency = 0.4
-	buttonRow = Instance.new("Frame")
-	buttonRow.BackgroundTransparency = 1
-	buttonRow.Position = UDim2.new(0, 0, 0, 32)
-	buttonRow.Size = UDim2.new(1, 0, 0, 60)
-	buttonRow.Parent = frame
-	local layout = Instance.new("UIListLayout")
-	layout.FillDirection = Enum.FillDirection.Horizontal
-	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	layout.Padding = UDim.new(0, 8)
-	layout.Parent = buttonRow
-end
-
-local function clearButtons()
-	for _, b in buttons do
-		b:Destroy()
-	end
-	table.clear(buttons)
-end
-
-local function paint(picked: string?)
-	for id, b in buttons do
-		b.BackgroundColor3 = if id == picked then PICKED else IDLE
-		b.AutoButtonColor = canVote
-		b.TextTransparency = if canVote then 0 else 0.35
-	end
-end
-
--- info = { voteKey, options = { {id, text} }, endsAt }
-function VotePanel.open(info: any, allowed: boolean)
-	clearButtons()
-	voteKey = info.voteKey
-	endsAt = info.endsAt
-	canVote = allowed
-	hideAt = 0
-	local width = 1 / math.max(#info.options, 1)
-	for _, option in info.options do
-		local b = Instance.new("TextButton")
-		b.Size = UDim2.new(width, -8, 1, 0)
-		b.BackgroundColor3 = IDLE
-		b.BackgroundTransparency = 0.1
-		b.FontFace = Style.BOLD
-		b.TextColor3 = Style.WHITE
-		b.TextScaled = true
-		b.TextWrapped = true
-		b.Text = option.text
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 12)
-		corner.Parent = b
-		local limit = Instance.new("UITextSizeConstraint")
-		limit.MaxTextSize = 20
-		limit.Parent = b
-		local pad = Instance.new("UIPadding")
-		pad.PaddingLeft = UDim.new(0, 8)
-		pad.PaddingRight = UDim.new(0, 8)
-		pad.Parent = b
-		b.Activated:Connect(function()
-			if canVote and voteKey == info.voteKey then
-				onPick(info.voteKey, option.id)
-				paint(option.id)
-			end
-		end)
-		b.Parent = buttonRow
-		buttons[option.id] = b
-	end
-	paint(nil)
-	frame.Visible = true
-end
-
--- Dead or not playing any more: buttons stay visible but stop working.
-function VotePanel.setCanVote(allowed: boolean)
-	if canVote ~= allowed then
-		canVote = allowed
-		paint(nil)
-	end
-end
-
--- Closed and counted, result coming (e.g. after a launch on screen): no buttons, just a waiting line.
-function VotePanel.pending(info: any)
-	if voteKey ~= nil and info.voteKey ~= voteKey then
-		return
-	end
-	voteKey = nil
-	clearButtons()
-	titleL.Text = "투표 마감 · 결과를 곧 알려 드려요"
-	hideAt = 0
-	frame.Visible = true
-end
-
--- info = { voteKey, outcome, counts = { [id] = n }, options }
-function VotePanel.closed(info: any)
-	if voteKey ~= nil and info.voteKey ~= voteKey then
-		return -- a different vote is open
-	end
-	voteKey = nil
-	clearButtons()
-	local winner = "결정 못 함"
-	for _, option in info.options do
-		if option.id == info.outcome then
-			winner = string.format("%s (%d표)", option.text, info.counts[option.id] or 0)
-		end
-	end
-	titleL.Text = "투표 결과: " .. winner
-	local left = if info.expiresAt then info.expiresAt - workspace:GetServerTimeNow() else Config.VOTE_RESULT_SECONDS
-	hideAt = os.clock() + math.max(0, left)
-	frame.Visible = true
-end
-
--- Every frame: countdown while open, hide the result after a moment.
-function VotePanel.tick(now: number)
-	if not frame.Visible then
-		return
-	end
-	if voteKey then
-		local left = math.max(0, math.ceil(endsAt - now))
-		titleL.Text = if canVote then string.format("%s · %d초", Config.TEXT.VOTE_FREE, left) else string.format("투표 중 · %d초", left)
-	elseif hideAt > 0 and os.clock() >= hideAt then
-		frame.Visible = false
-		hideAt = 0
-	end
-end
-
-function VotePanel.clear()
-	voteKey = nil
-	clearButtons()
-	frame.Visible = false
-end
-
-return VotePanel
-]====]; s.Parent = n6 end
-n6.Parent = n5
-n5.Parent = parents[3]
+]====]; s.Parent = n7 end
+n7.Parent = n6
+n6.Parent = parents[3]
 game:GetService("VoiceChatService").UseAudioApi = Enum.AudioApiRollout.Enabled
 return "game installed"

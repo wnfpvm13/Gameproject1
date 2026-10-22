@@ -1,0 +1,34 @@
+--!strict
+-- The round's clock (docs/DESIGN_V3.md §2): ROUND_SECONDS of main game, a time budget for missions (a mission that
+-- would not fit in the time left is not started; free talk fills the rest), and when the final is due: when the time
+-- is up, or as soon as FINAL_AT_ALIVE or fewer are left in a round begun with more than that (3 -> rounds of 4+).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+
+local Timeline = {}
+
+local startedAt = 0
+local startedWith = 0
+
+-- The main game starts now with `players` participants.
+function Timeline.begin(players: number)
+	startedAt = os.clock()
+	startedWith = players
+end
+
+function Timeline.left(): number
+	return math.max(0, Config.ROUND_SECONDS - (os.clock() - startedAt))
+end
+
+-- Whether so few are left that the final starts at once (only in a round begun with more than FINAL_AT_ALIVE).
+function Timeline.fewLeft(alive: number): boolean
+	return startedWith > Config.FINAL_AT_ALIVE and alive <= Config.FINAL_AT_ALIVE
+end
+
+-- Whether the main game is over and the final should start, with `alive` participants left.
+function Timeline.finalDue(alive: number): boolean
+	return Timeline.left() <= 0 or Timeline.fewLeft(alive)
+end
+
+return Timeline

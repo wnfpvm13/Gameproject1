@@ -1,8 +1,8 @@
 --!strict
 -- Shared match state plus small read helpers and the RoundState broadcast. No game rules: services read it,
--- and only RoundService changes phase and participants.
+-- and only RoundService (and LifeService for lives) changes phase, participants and lives.
 -- Times: `Match.now()` (server clock shared with clients) for anything sent over the network,
--- os.clock() for local intervals (activity, launches).
+-- os.clock() for local intervals.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -17,31 +17,37 @@ export type Word = {
 
 export type Participant = {
 	player: Player,
-	words: { Word },
-	alive: boolean,
+	words: { Word }, -- banned words (none until bundle 5)
+	alive: boolean, -- still in the game (lives left, or a finalist after everyone fell at once)
+	lives: number,
+	afkMisses: number, -- answer missions missed in a row
 }
 
 local Match = {
-	phase = "Lobby", -- Lobby | Countdown | Assign | Talk | Result
+	phase = "Lobby", -- Lobby | Countdown | Assign | Play | Final | Result
 	endsAt = 0,
 	message = "",
 	roundId = 0,
+	serverKind = "public", -- "public" | "private" (docs/DESIGN_V3.md §3), set at each round start
 	participants = {} :: { [Player]: Participant },
 	startedWith = 0,
-	talkStartedAt = math.huge, -- Match.now() when Talk began; speech from before it is ignored
-	cutoffAt = math.huge, -- Match.now() when the round is decided (the talk's end, or earlier); later speech is ignored
+	ready = {} :: { [Player]: boolean },
+	-- Speech judging and the V2 word schedule (JudgeService / WordService, back in phase 2 / bundle 5):
+	talkStartedAt = math.huge, -- Match.now() when the talk began; speech from before it is ignored
+	cutoffAt = math.huge, -- Match.now() when the round is decided; later speech is ignored
 	lastActivityAt = 0, -- os.clock() of the last speech heard from an alive participant
 	launches = {} :: { number }, -- os.clock() of each launch this round
-	saidCount = 0, -- launches for saying a word (tells a real win from a walkover)
-	lastEndedAt = -math.huge, -- os.clock() when the last result finished (rematch countdown)
-	ready = {} :: { [Player]: boolean },
-	hostHeldUntil = 0, -- os.clock(): no new mission stage / vote / event before this (one big thing at a time)
+	hostHeldUntil = 0, -- os.clock(): the word schedule waits until then
 	nextWordWarnAt = math.huge, -- os.clock() of the next (public, scheduled) word warning
-	theme = nil :: string?,
 }
 
 function Match.now(): number
 	return workspace:GetServerTimeNow()
+end
+
+-- A round is being played (seats taken): Assign, Play or Final.
+function Match.inRound(): boolean
+	return Match.phase == "Assign" or Match.phase == "Play" or Match.phase == "Final"
 end
 
 function Match.isAlive(player: Player): boolean
@@ -59,7 +65,7 @@ function Match.aliveList(): { Player }
 	return list
 end
 
--- Every word in play this round (dead players' words too, so new words never overlap them).
+-- Every word in play this round (out players' words too, so new words never overlap them).
 function Match.wordsInPlay(): { string }
 	local list = {}
 	for _, p in Match.participants do
@@ -83,13 +89,12 @@ function Match.eligiblePlayers(): { Player }
 	return list
 end
 
--- Something big is on screen (a word warning/addition, a launch): the host waits `seconds` before its next step.
--- Only public events call this, so the host's timing never depends on the secret words.
+-- The word schedule waits `seconds` before its next step (V2; WordService).
 function Match.holdHost(seconds: number)
 	Match.hostHeldUntil = math.max(Match.hostHeldUntil, os.clock() + seconds)
 end
 
--- Launches in the last `seconds` (the word schedule waits after a burst of eliminations).
+-- Launches in the last `seconds` (V2: the word schedule waits after a burst of launches).
 function Match.recentLaunches(seconds: number): number
 	local count = 0
 	local now = os.clock()
@@ -102,12 +107,13 @@ function Match.recentLaunches(seconds: number): number
 end
 
 function Match.payload()
-	local ids, alive = {}, {}
+	local ids, alive, lives = {}, {}, {}
 	for player, p in Match.participants do
 		table.insert(ids, player.UserId)
 		if p.alive then
 			table.insert(alive, player.UserId)
 		end
+		lives[tostring(player.UserId)] = p.lives
 	end
 	return {
 		phase = Match.phase,
@@ -115,10 +121,12 @@ function Match.payload()
 		message = Match.message,
 		participants = ids,
 		alive = alive,
+		lives = lives, -- userId string -> lives left
+		maxLives = Config.LIVES,
 		total = Match.startedWith,
 		readyCount = #Match.eligiblePlayers(),
 		requireReady = Config.REQUIRE_VOICE_READY,
-		theme = Match.theme,
+		serverKind = Match.serverKind,
 	}
 end
 
@@ -133,17 +141,21 @@ function Match.setPhase(name: string, duration: number, text: string)
 	Match.broadcast()
 end
 
+-- A new status line within the same phase (a mission starting, free talk again).
+function Match.setMessage(text: string)
+	Match.message = text
+	Match.broadcast()
+end
+
 -- Clears everything that belongs to one round.
 function Match.resetRound()
 	table.clear(Match.participants)
 	table.clear(Match.launches)
 	Match.startedWith = 0
-	Match.saidCount = 0
 	Match.talkStartedAt = math.huge
 	Match.cutoffAt = math.huge
 	Match.hostHeldUntil = 0
 	Match.nextWordWarnAt = math.huge
-	Match.theme = nil
 end
 
 return Match

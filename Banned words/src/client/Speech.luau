@@ -4,7 +4,8 @@
 -- stays false until the player connects voice from the in-experience settings menu.
 --
 -- STT requests count against an experience-wide limit (1 + 5 x CCU per minute), so the recognizer is only
--- enabled while it matters (mic test, and alive participants during the talk) — see setEnabled.
+-- enabled while it matters — see setEnabled. V3 phase 1 uses it for the mic test only; judging speech comes back
+-- in phase 2 (docs/DESIGN_V3.md §12).
 local Players = game:GetService("Players")
 
 local Speech = {}

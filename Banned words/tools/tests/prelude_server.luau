@@ -1,5 +1,6 @@
 -- Server test prelude: virtual clock + coroutine scheduler, fake Roblox services, a module loader that runs the
--- real module sources (require(node) by name), and a Net stub that records what would be sent.
+-- real module sources (require(node) by name), and a Net stub that records what would be sent. `warn` records into
+-- `warnings` (a round crash or a failing mission shows up there).
 local now = 1000
 local queue = {}
 local function schedule(at, co, ...)
@@ -47,7 +48,20 @@ local task = {
 	end,
 }
 local os = { clock = function() return now end }
-local workspace = { GetServerTimeNow = function() return now end }
+local workspaceAttributes = {}
+local workspace = {
+	GetServerTimeNow = function() return now end,
+	GetAttribute = function(_, name) return workspaceAttributes[name] end,
+}
+local warnings = {}
+local function warn(...)
+	local parts = table.pack(...)
+	for i = 1, parts.n do
+		parts[i] = tostring(parts[i])
+	end
+	table.insert(warnings, table.concat(parts, " ", 1, parts.n))
+	print("WARN " .. warnings[#warnings])
+end
 
 -- Deterministic Random (Park-Miller), enough for NextNumber / NextInteger.
 local Random = {

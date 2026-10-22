@@ -1,12 +1,11 @@
 --!strict
--- Round flow (the only module that wires the services together):
---   Lobby -> Countdown -> Assign (seats, first word, theme) -> Talk (free talk, words pile up, host helps)
---   -> Result -> Countdown (quick rematch) ...
--- Rules live in the services: words in WordService, judging in JudgeService, theme/missions in MissionService,
--- mission votes in VoteService, spectators in SpectatorService, flying chairs in SeatService, voice routing in
--- VoiceService, score in Scores.
--- Nobody is eliminated for staying quiet; only saying one of your words launches you. (V3 bundle 2a: the V2 rules
--- still run here, with the V3 pool hall, flying-chair launch, stands and show camera; docs/DESIGN_V3.md.)
+-- Round flow (V3, docs/DESIGN_V3.md §2; the only module that wires the services together):
+--   Lobby -> Countdown -> Assign (chairs, lives) -> Play (ROUND_SECONDS: free talk -> mission -> launches -> ...)
+--   -> Final (sudden death) -> Result -> Countdown (quick rematch) ...
+-- Rules live in the services: lives in LifeService, the time budget and the final trigger in Timeline, missions in
+-- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, score in
+-- Scores. Bundle 2b: no banned words and no presenter yet, and the only mission is the Studio test mission (live
+-- servers just talk until the main game is over, then the survivors win without a final).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -15,20 +14,26 @@ local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChil
 local Match = require(script.Parent:WaitForChild("Match"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local services = script.Parent:WaitForChild("services")
-local WordService = require(services:WaitForChild("WordService"))
-local JudgeService = require(services:WaitForChild("JudgeService"))
-local MissionService = require(services:WaitForChild("MissionService"))
-local VoteService = require(services:WaitForChild("VoteService"))
-local SpectatorService = require(services:WaitForChild("SpectatorService"))
+local LifeService = require(services:WaitForChild("LifeService"))
+local Timeline = require(services:WaitForChild("Timeline"))
+local MissionRunner = require(services:WaitForChild("MissionRunner"))
 local SeatService = require(services:WaitForChild("SeatService"))
+local SpectatorService = require(services:WaitForChild("SpectatorService"))
 local VoiceService = require(services:WaitForChild("VoiceService"))
 local Scores = require(services:WaitForChild("Scores"))
 
 local RoundService = {}
 
-local rng = Random.new() -- words, seats (missions get fresh generators every round, see runRound)
+type Reason = "fail" | "final" | "left" | "dev"
 
--- Alive participants are heard by everyone; ghosts and spectators only by each other.
+local rng = Random.new() -- seat order and mission draws
+local runs = 0 -- every mission run (and every Studio fail) gets its own number for the event ids
+local toFinal = false -- everyone left fell at once: exactly those players play the final
+local freeTalk = false -- free talk in the main game (the Studio fail key works only then, so no launch starts while
+-- a mission runs or the round waits for flights)
+local lastEndedAt = -math.huge -- os.clock() when the last result finished (quick rematch countdown)
+
+-- Alive participants are heard by everyone; players who are out and spectators only by each other.
 local function refreshSpeakers()
 	local ids = {}
 	for _, player in Match.aliveList() do
@@ -37,71 +42,99 @@ local function refreshSpeakers()
 	VoiceService.setSpeakers(ids)
 end
 
-local function wordTexts(p: Match.Participant): { string }
-	local list = {}
-	for _, word in p.words do
-		table.insert(list, word.text)
+-- Private servers play other rules (docs/DESIGN_V3.md §3). Studio has none, so a setting stands in for it there.
+local function detectServerKind(): string
+	if RunService:IsStudio() then
+		local forced = workspace:GetAttribute("BW_ServerKind")
+		if forced == "public" or forced == "private" then
+			return forced
+		end
+		return Config.STUDIO_SERVER_KIND
 	end
-	return list
+	return if game.PrivateServerOwnerId ~= 0 then "private" else "public"
 end
 
-local function roundOver(): boolean
+-- Tells everyone who lost a life or is out (one message per event, so the toast names them together; `final`: they
+-- all fell at once and play the final among themselves).
+local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean)
+	local list = {}
+	for _, outcome in outcomes do
+		table.insert(list, {
+			userId = outcome.player.UserId,
+			name = outcome.player.DisplayName,
+			lives = outcome.livesLeft,
+			out = outcome.out,
+		})
+	end
+	Net.toAll("LifeLost", { reason = reason, players = list, final = final })
+	refreshSpeakers()
+	Match.broadcast()
+end
+
+-- Launches everyone who lost a life. Players who are out reach the stands after their flight (onFlightOver), or
+-- right away when there was nothing to launch (no character on the chair at that moment).
+local function announce(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean)
+	if #outcomes == 0 then
+		return
+	end
+	for _, outcome in outcomes do
+		if not SeatService.fling(outcome.player, Match.roundId) and outcome.out then
+			SpectatorService.toStands(outcome.player)
+		end
+	end
+	tell(outcomes, reason, final)
+end
+
+-- A main-game fail (a mission, a Studio test): a life each, or the final for exactly those players when nobody
+-- would be left.
+local function failPlayers(players: { Player }, eventId: string, reason: Reason)
+	local outcomes, everyone = LifeService.fail(players, eventId, "objective")
+	if everyone then
+		toFinal = true
+	end
+	announce(outcomes, reason, everyone)
+end
+
+-- Flights in progress land and come back first (the next step, the final or the result waits for them). Returns
+-- whether everyone landed. A flight ends FLING_RETURN_SECONDS after its launch; the cap only matters if launches kept
+-- coming meanwhile.
+local function waitFlights(): boolean
+	local deadline = os.clock() + 3 * (Config.FLING_RETURN_SECONDS + 1)
+	while SeatService.anyFlying() and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	return not SeatService.anyFlying()
+end
+
+-- Over without a final: one player left (of two or more), or nobody.
+local function decided(): boolean
 	local alive = #Match.aliveList()
 	return alive == 0 or (Match.startedWith >= 2 and alive <= 1)
 end
 
--- reason: "said" (one of their words) | "died" (reset/fell) | "left" (quit the server)
-local function eliminate(player: Player, reason: string, word: string?)
-	local p = Match.participants[player]
-	if not p or not p.alive then
-		return
-	end
-	p.alive = false
-	if Match.phase == "Talk" and roundOver() then
-		Match.cutoffAt = math.min(Match.cutoffAt, Match.now()) -- the round is decided right now
-	end
-	local helper = if reason == "said" then Scores.creditAssist(player) else nil
-	Net.toAll("Eliminated", {
-		userId = player.UserId,
-		name = player.DisplayName,
-		reason = reason,
-		word = word,
-		words = wordTexts(p),
-		assistName = if helper then helper.DisplayName else nil,
-	})
-	if reason ~= "left" then
-		table.insert(Match.launches, os.clock()) -- eliminations that delay the next word
-	end
-	if reason == "said" then
-		Match.saidCount += 1
-		Match.holdHost(Config.AFTER_LAUNCH_QUIET)
-		SeatService.fling(player, Match.roundId) -- back from the pool into the stands (onFlightOver)
-	end
-	refreshSpeakers()
-	Match.broadcast()
-	WordService.sendAll() -- the eliminated player may now see their own words
+-- The main game's outcome is fixed: decided, everyone left fell at once, or so few are left that the final starts
+-- at once. (The time running out is not one of these: a mission running then is played to its end.)
+local function mainSettled(): boolean
+	return toFinal or decided() or Timeline.fewLeft(#Match.aliveList())
 end
 
--- FLING_RETURN_SECONDS after a launch (docs/DESIGN_V3.md §10 step 4): undo the ragdoll, then back on the chair if
--- the player is still in this round's game, else into the stands. A flight from an older round, or of a character
--- the player no longer has, only gets undone.
-local function onFlightOver(player: Player, roundId: any, character: Model)
-	SeatService.endFling(player)
-	if not player.Parent or player.Character ~= character or roundId ~= Match.roundId then
-		return
-	end
-	if not (Match.phase == "Assign" or Match.phase == "Talk") then
-		return
-	end
-	if not (Match.isAlive(player) and SeatService.reseat(player)) then
-		SpectatorService.toStands(player)
-	end
-end
-
-local function talking(myRound: number): () -> boolean
-	return function()
-		return Match.phase == "Talk" and Match.roundId == myRound and not roundOver() and Match.now() < Match.endsAt
-	end
+-- What a mission may do (docs/DESIGN_V3.md §13). `onFail(players, key)`: who failed the mission's event `key`.
+-- `settled()`: the outcome is already fixed, so the running mission stops and later results are dropped (§2 "확정 뒤에
+-- 도착한 결과는 버린다").
+local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, string) -> (), settled: () -> boolean): MissionRunner.Ctx
+	return {
+		final = final,
+		players = Match.aliveList,
+		rng = rng,
+		fail = onFail,
+		show = function(text: string)
+			Match.setMessage(text)
+			Net.notice(text)
+		end,
+		cancelled = function()
+			return Match.roundId ~= myRound or settled()
+		end,
+	}
 end
 
 local function waitPhase(shouldStop: (() -> boolean)?)
@@ -113,13 +146,104 @@ local function waitPhase(shouldStop: (() -> boolean)?)
 	end
 end
 
-local function matchSeconds(players: number): number
-	for _, step in Config.MATCH_TIME do
-		if players <= step.upTo then
-			return step.seconds
+-- Main game: free talk and missions until the time is up, the final is due or the round is decided. A mission
+-- that would not fit in the time left is not started; one running when the time is up is played to its end. A
+-- mission starts only when nobody is in the air (else another free talk first).
+local function playMain(myRound: number)
+	-- Players who left during the assignment do not count as having started (§2: "4명 이상으로 시작한 판").
+	Timeline.begin(#Match.aliveList())
+	Match.setPhase("Play", Config.ROUND_SECONDS, Config.TEXT.FREE_TALK)
+	local function over(): boolean
+		return Match.roundId ~= myRound or mainSettled() or Timeline.finalDue(#Match.aliveList())
+	end
+	local function talk(untilAt: number)
+		freeTalk = true
+		while os.clock() < untilAt and not over() do
+			task.wait(0.2)
+		end
+		freeTalk = false
+	end
+	while true do
+		talk(os.clock() + Config.FREE_TALK_SECONDS)
+		local landed = waitFlights()
+		if over() then
+			return
+		end
+		local mission = if landed then MissionRunner.choose(Timeline.left()) else nil
+		if landed and not mission then
+			talk(math.huge) -- nothing fits any more: free talk to the end
+			return
+		end
+		if mission then
+			runs += 1
+			local run = runs
+			MissionRunner.run(mission, missionCtx(myRound, false, function(players, key)
+				failPlayers(players, "m" .. run .. ":" .. key, "fail")
+			end, mainSettled))
+			waitFlights()
+			if over() then
+				return
+			end
+			Match.setMessage(Config.TEXT.FREE_TALK)
 		end
 	end
-	return Config.MATCH_TIME[#Config.MATCH_TIME].seconds
+end
+
+-- Final: sudden-death questions for the survivors until one is left or FINAL_MAX_SECONDS have passed (a question
+-- begun before that is played to its end); a question everyone gets wrong puts nobody out. A question that breaks
+-- ends the final (the survivors share the win).
+local function playFinal(myRound: number)
+	local mission = MissionRunner.finalMission()
+	if not mission or #Match.aliveList() < 2 or Match.roundId ~= myRound then
+		return
+	end
+	Match.setPhase("Final", Config.FINAL_MAX_SECONDS, Config.TEXT.FINAL)
+	local deadline = os.clock() + Config.FINAL_MAX_SECONDS
+	local function settled(): boolean
+		return #Match.aliveList() < 2 -- the others left: the last one wins
+	end
+	while not settled() and os.clock() < deadline and Match.roundId == myRound do
+		local wrong: { Player } = {}
+		local ok = MissionRunner.run(mission, missionCtx(myRound, true, function(players, _key)
+			for _, player in players do
+				if not table.find(wrong, player) then
+					table.insert(wrong, player)
+				end
+			end
+		end, settled))
+		if not ok or Match.roundId ~= myRound or settled() then
+			return
+		end
+		local alive = Match.aliveList()
+		local out: { Player } = {}
+		for _, player in wrong do
+			if table.find(alive, player) then
+				table.insert(out, player)
+			end
+		end
+		if #out >= #alive then
+			Net.notice(Config.TEXT.ALL_WRONG)
+		elseif #out > 0 then
+			announce(LifeService.eliminate(out), "final", false)
+			waitFlights()
+		end
+		task.wait() -- every question yields at least once, even one that returns at once
+	end
+end
+
+-- Who won (everyone still in), with the session score.
+local function resultText(): string
+	local names = {}
+	for _, player in Match.aliveList() do
+		Scores.add(player, Config.SCORE_WIN)
+		table.insert(names, player.DisplayName)
+	end
+	if #names == 0 then
+		return Config.TEXT.NO_WINNER
+	elseif #names == 1 then
+		return string.format(Config.TEXT.WINNER, names[1])
+	end
+	return string.format(Config.TEXT.JOINT_WINNERS, table.concat(names, ", "))
 end
 
 local function shuffled(list: { Player }): { Player }
@@ -131,48 +255,19 @@ local function shuffled(list: { Player }): { Player }
 	return out
 end
 
-local function resultText(): string
-	local survivors = {}
-	for player, p in Match.participants do
-		if p.alive then
-			table.insert(survivors, player)
-			Scores.add(player, Config.SCORE_SURVIVE)
-		end
-	end
-	local text
-	if #survivors == 0 then
-		text = "모두 탈락!"
-	elseif #survivors == 1 and Match.startedWith >= 2 then
-		local name = survivors[1].DisplayName
-		text = if Match.saidCount > 0 then name .. " 최후의 1인!" else name .. " 기권승 (다른 참가자가 모두 나갔어요)"
-	else
-		local names = {}
-		for _, player in survivors do
-			table.insert(names, player.DisplayName)
-		end
-		text = table.concat(names, ", ") .. " 공동 생존!"
-	end
-	local best, bestScore = Scores.bestAssist()
-	if best then
-		text ..= string.format(" · 유도왕 %s (%d점)", best.DisplayName, bestScore)
-	end
-	return text
-end
-
 local function cleanup()
-	JudgeService.setOpen(false)
 	SeatService.releaseAll()
 	VoiceService.setSpeakers(nil)
 	SpectatorService.endRound()
-	MissionService.clear()
-	VoteService.clear()
 	Match.resetRound()
+	toFinal = false
+	freeTalk = false
 end
 
 local function runRound()
 	-- Countdown (short right after a result, so friends can go again quickly).
-	local rematch = os.clock() - Match.lastEndedAt < 20
-	Match.setPhase("Countdown", if rematch then Config.REMATCH_COUNTDOWN else Config.LOBBY_COUNTDOWN, "곧 시작해요")
+	local rematch = os.clock() - lastEndedAt < 20
+	Match.setPhase("Countdown", if rematch then Config.REMATCH_COUNTDOWN else Config.LOBBY_COUNTDOWN, Config.TEXT.COUNTDOWN)
 	waitPhase(function()
 		return #Match.eligiblePlayers() < Config.MIN_PLAYERS
 	end)
@@ -184,84 +279,74 @@ local function runRound()
 		table.remove(candidates)
 	end
 
-	-- Assign: seats, first word, theme.
+	-- Assign: chairs and lives.
 	Match.roundId += 1
 	local myRound = Match.roundId
 	Match.resetRound()
+	Match.serverKind = detectServerKind()
+	toFinal = false
 	Scores.resetRound()
 	local seated = SeatService.seatPlayers(candidates)
 	for _, player in candidates do
 		if seated[player] then
-			Match.participants[player] = { player = player, words = {}, alive = true }
-			local humanoid = (player.Character :: Model):FindFirstChildOfClass("Humanoid") :: Humanoid
-			humanoid.Died:Once(function()
-				eliminate(player, "died")
-			end)
+			Match.participants[player] = { player = player, words = {}, alive = true, lives = Config.LIVES, afkMisses = 0 }
 		end
 	end
 	Match.startedWith = #Match.aliveList()
-	WordService.assignFirst(rng)
-	MissionService.setup(Random.new()) -- theme: never depends on the words or on earlier rounds
+	LifeService.beginRound()
 	SpectatorService.beginRound()
 	refreshSpeakers()
-	Match.setPhase("Assign", Config.ASSIGN_TIME, "내 금칙어는 나만 몰라요! 다른 사람이 말하게 만드세요")
-	WordService.sendAll()
+	Match.setPhase("Assign", Config.ASSIGN_TIME, string.format(Config.TEXT.ASSIGN, Config.LIVES))
 	waitPhase()
 
-	-- Talk: free conversation; words pile up and the host helps only when it goes quiet.
-	local seconds = matchSeconds(Match.startedWith)
-	Match.talkStartedAt = Match.now()
-	JudgeService.setOpen(true)
-	Match.setPhase("Talk", seconds, Match.theme or "대화 시작")
-	Match.cutoffAt = Match.endsAt -- decided at the latest when the time runs out (no polling gap at the end)
-	local stillTalking = talking(myRound)
-	task.spawn(WordService.runSchedule, seconds, stillTalking, rng)
-	task.spawn(MissionService.run, seconds, stillTalking, Random.new(), function(spec)
-		return VoteService.run(spec, stillTalking) -- (outcome, announce)
-	end)
-	waitPhase(roundOver)
+	playMain(myRound)
+	waitFlights()
+	playFinal(myRound)
+	waitFlights()
 
-	-- Settle: speech that began before the round was decided still counts once its text arrives, then judging
-	-- closes. The phase stays Talk meanwhile, so the clients keep their recognizers on.
-	Match.cutoffAt = math.min(Match.cutoffAt, Match.now(), Match.endsAt)
-	JudgeService.settle(Match.cutoffAt)
-	JudgeService.setOpen(false)
-	-- The result waits for flights in progress (they land and go to the stands first).
-	local flightsDeadline = os.clock() + Config.FLING_RETURN_SECONDS + 1
-	while SeatService.anyFlying() and os.clock() < flightsDeadline do
-		task.wait(0.1)
-	end
-
-	-- Result: everyone sees every word.
+	-- Result: winners and scores.
 	local text = resultText()
 	SeatService.releaseAll()
 	VoiceService.setSpeakers(nil)
-	VoteService.clear() -- a vote cut off by the end of the talk leaves no window behind
 	Match.setPhase("Result", Config.RESULT_TIME, text)
-	WordService.sendAll()
 	waitPhase()
 	cleanup()
-	Match.lastEndedAt = os.clock()
+	lastEndedAt = os.clock()
+end
+
+-- FLING_RETURN_SECONDS after a launch (docs/DESIGN_V3.md §10 step 4): undo the ragdoll, then back on the chair if
+-- the player is still in this round's game, else into the stands. A flight from an older round, or of a character
+-- the player no longer has, only gets undone.
+local function onFlightOver(player: Player, roundId: any, character: Model)
+	SeatService.endFling(player)
+	if not player.Parent or player.Character ~= character or roundId ~= Match.roundId or not Match.inRound() then
+		return
+	end
+	if not (Match.isAlive(player) and SeatService.reseat(player)) then
+		SpectatorService.toStands(player)
+	end
+end
+
+-- A participant's new character (after a fall or a reset that slipped through) costs nothing: back on the chair
+-- (docs/DESIGN_V3.md §4). Everyone else's goes to the stands (SpectatorService).
+local function onCharacterAdded(player: Player, character: Model)
+	character:WaitForChild("HumanoidRootPart", 10)
+	task.wait(0.5) -- let the engine finish placing it at the spawn
+	if player.Character == character and Match.inRound() and Match.isAlive(player) then
+		SeatService.reseat(player)
+	end
 end
 
 local function onSync(player: Player)
 	Net.to(player, "RoundState", Match.payload())
-	if Match.phase ~= "Lobby" and Match.phase ~= "Countdown" then
-		WordService.send(player)
-		MissionService.send(player)
-		VoteService.send(player)
-	end
 end
 
 function RoundService.start()
 	VoiceService.start()
 	Scores.start()
+	LifeService.start(SeatService.isFlying)
 	SpectatorService.start(SeatService.isFlying)
-	VoteService.start()
 	SeatService.init(onFlightOver)
-	JudgeService.start(function(player, word)
-		eliminate(player, "said", word)
-	end, Scores.noteSpeech)
 	Net.listen("Ready", function(player, isReady)
 		local value = isReady == true
 		if (Match.ready[player] == true) ~= value then -- repeats change nothing and send nothing
@@ -277,25 +362,41 @@ function RoundService.start()
 			onSync(player)
 		end
 	end)
-	Players.PlayerRemoving:Connect(function(player)
-		lastSync[player] = nil
-	end)
-	-- Studio only (there is no speech-to-text in Studio; live servers ignore it): a seated player launches themselves
-	-- and comes back to the chair, or with "out" is eliminated (launch, then the stands).
+	-- Studio only (live servers ignore it): during free talk in the main game (not once it is settled) a seated player
+	-- loses a life (F key), or with "out" is out at once, or with "show" is only launched (nothing lost).
 	Net.listen("DevFling", function(player, mode)
-		if not (RunService:IsStudio() and Match.isAlive(player) and (Match.phase == "Assign" or Match.phase == "Talk")) then
+		if not (RunService:IsStudio() and freeTalk and not mainSettled() and Match.isAlive(player)) then
 			return
 		end
 		if mode == "out" then
-			eliminate(player, "said", "테스트")
-		else
+			announce(LifeService.eliminate({ player }), "dev", false)
+		elseif mode == "show" then
 			SeatService.fling(player, Match.roundId)
+		else
+			runs += 1
+			failPlayers({ player }, "dev" .. runs, "dev")
 		end
 	end)
+	local function watch(player: Player)
+		player.CharacterAdded:Connect(function(character)
+			onCharacterAdded(player, character)
+		end)
+	end
+	for _, player in Players:GetPlayers() do
+		watch(player)
+	end
+	Players.PlayerAdded:Connect(watch)
 	Players.PlayerRemoving:Connect(function(player)
-		eliminate(player, "left")
+		lastSync[player] = nil
+		-- Leaving is out (docs/DESIGN_V3.md §4).
+		local outcomes = if Match.inRound() then LifeService.eliminate({ player }) else {}
 		Match.participants[player] = nil
 		Match.ready[player] = nil
+		if #outcomes > 0 then
+			tell(outcomes, "left", false)
+		else
+			Match.broadcast()
+		end
 	end)
 
 	task.spawn(function()
@@ -305,17 +406,16 @@ function RoundService.start()
 				local needed = Config.MIN_PLAYERS - #Match.eligiblePlayers()
 				if needed ~= shown then
 					shown = needed
-					Match.setPhase("Lobby", 0, if Config.REQUIRE_VOICE_READY
-						then string.format("마이크 준비된 플레이어 %d명 더 필요해요", needed)
-						else string.format("플레이어 %d명 더 필요해요", needed))
+					Match.setPhase("Lobby", 0, string.format(if Config.REQUIRE_VOICE_READY then Config.TEXT.NEED_READY else Config.TEXT.NEED_PLAYERS, needed))
 				end
 				task.wait(1)
 			end
 			local ok, err = xpcall(runRound, debug.traceback)
 			if not ok then
 				warn("[BannedWords] round crashed, recovering:", err)
+				Match.roundId += 1 -- anything still holding the broken round's ctx sees it as cancelled
 				cleanup()
-				Match.setPhase("Lobby", 3, "잠시 문제가 생겨서 다음 판을 준비해요")
+				Match.setPhase("Lobby", 3, Config.TEXT.RECOVERING)
 				task.wait(3)
 			end
 		end

@@ -2,7 +2,7 @@
 
 - `kids_themes_2026-10-21.json` — 어린이도 쉬운 "바보모드" 테마 후보 10개(테마마다 미션 3개, 이벤트 7개, 대화 주제 5개).
   오너 요청(2026-10-21): "Codex와 너가 함께 테마와 미션을 10개씩 다시 짜서 내게 보여줘봐. 어린이들도 이해하기 쉬운 바보모드로".
-  임시 후보이고, 오너가 마음에 드는 테마를 고르면 `src/server/content/Themes.luau`에 옮긴다(옮긴 뒤 Studio에서 `tools/check_content.luau` 실행).
+  임시 후보였다. V3(2026-10-22)에서 대화 카드(`Themes.luau`, `MissionService`)를 지웠으므로 지금은 게임에 넣을 곳이 없다(지우기 전 코드는 태그 `banned-words-v2-final`).
   - 만든 방법: 1~5번(우주·해적선·공룡·마법사·과자)은 Claude, 6~10번은 Codex가 먼저 썼고, Claude 검토자가 6~10이 테마와 안 맞는다고 해서
     Claude가 다시 썼다. Codex 검토 + Claude 검토자 → 고침 → Codex 재확인 "없음".
   - 기계 검사(단어장 부분 문자열, 숫자 금지, 문장 길이, 형식): 통과. 형식은 Themes.luau의 Theme 타입과 같다(필드 이름 그대로).

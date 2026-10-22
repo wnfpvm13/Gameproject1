@@ -5,9 +5,18 @@ local Players = game:GetService("Players")
 export type WordsEntry = { words: { string }?, count: number }
 
 local State = {
-	round = { phase = "Lobby", endsAt = 0, message = "", participants = {}, alive = {}, total = 0 } :: any,
-	words = {} :: { [string]: WordsEntry }, -- userId string -> visible words (nil words = my own, hidden)
-	theme = nil :: any, -- { theme }
+	round = {
+		phase = "Lobby",
+		endsAt = 0,
+		message = "",
+		participants = {},
+		alive = {},
+		lives = {},
+		maxLives = 0,
+		total = 0,
+	} :: any,
+	-- userId string -> visible words (nil words = my own, hidden). Empty until the banned words come back (bundle 5).
+	words = {} :: { [string]: WordsEntry },
 	micTested = false,
 }
 
@@ -23,17 +32,18 @@ function State.isAlive(userId: number): boolean
 	return table.find(State.round.alive, userId) ~= nil
 end
 
+-- A round is being played (seats taken): Assign, Play or Final.
 function State.inRound(): boolean
-	return State.round.phase == "Assign" or State.round.phase == "Talk"
+	local phase = State.round.phase
+	return phase == "Assign" or phase == "Play" or phase == "Final"
 end
 
 function State.meAlive(): boolean
 	return State.isAlive(State.myId())
 end
 
-function State.myWordCount(): number
-	local entry = State.words[tostring(State.myId())]
-	return if entry then entry.count else 0
+function State.livesOf(userId: number): number
+	return State.round.lives[tostring(userId)] or 0
 end
 
 return State

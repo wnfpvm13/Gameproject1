@@ -1,6 +1,6 @@
 --!strict
 -- Voice connection and mic test lines (rows 0 and 1 under the status board), plus the earphone tip.
--- Both are empty while I play with a working mic, so nothing covers the ring.
+-- Both are empty while I play with a working mic, so nothing covers the chair row.
 local Style = require(script.Parent:WaitForChild("Style"))
 
 local MicPanel = {}

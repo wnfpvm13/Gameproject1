@@ -1,6 +1,6 @@
 --!strict
--- Tunable numbers for 금칙어 게임 Korean (V2, 2026-10-20: free talk in a round lounge, words pile up 1 -> 2 -> 3).
--- Everything here is a first guess to adjust after playtests (docs/DESIGN_V2.md).
+-- Tunable numbers for 금칙어 게임 Korean (V3, 2026-10-22: indoor pool missions, 3 lives, the flying chair).
+-- Everything here is a first guess to adjust after playtests (docs/DESIGN_V3.md §14).
 local RunService = game:GetService("RunService")
 
 local isStudio = RunService:IsStudio()
@@ -8,7 +8,7 @@ local isStudio = RunService:IsStudio()
 return {
 	-- Studio allows a solo round so one tester can watch the flow; live servers need two.
 	MIN_PLAYERS = if isStudio then 1 else 2,
-	MAX_PLAYERS = 10, -- one match per server for now (owner 2026-10-20)
+	MAX_PLAYERS = 10, -- one match per server, ten chairs
 
 	-- Only players who connected voice and passed the mic test take a seat (Studio test accounts have no voice).
 	REQUIRE_VOICE_READY = not isStudio,
@@ -18,26 +18,34 @@ return {
 	ASSIGN_TIME = 8,
 	RESULT_TIME = 10,
 
-	-- Maximum match length by starting player count (the round ends early once one survivor is left).
-	MATCH_TIME = {
-		{ upTo = 3, seconds = 330 },
-		{ upTo = 6, seconds = 450 },
-		{ upTo = 10, seconds = 570 },
-	},
+	-- Round (docs/DESIGN_V3.md §2, §4): 8 minutes of free talk and missions, then a sudden-death final.
+	LIVES = 3,
+	ROUND_SECONDS = 480,
+	FINAL_AT_ALIVE = 3, -- a round begun with 4+ players goes to the final as soon as this few are left
+	FINAL_MAX_SECONDS = 90, -- past this the survivors share the win
+	FREE_TALK_SECONDS = 40, -- between missions
+	AFK_MISSES = 2, -- answer missions missed in a row -> out (a spectator)
+	SUBJECTIVE_FLINGS = 1, -- public servers: launches by the presenter or a vote, per player per round
+	-- Studio has no private servers: this says which rules a Studio round plays (workspace attribute BW_ServerKind =
+	-- "public" / "private" overrides it while testing).
+	STUDIO_SERVER_KIND = "public",
 
-	-- Words pile up: everyone alive gets one more word at these fractions of the match time (max 3 words).
+	-- The Studio-only test mission (bundle 2b, until the real missions of bundle 4): everyone alive fails with
+	-- TEST_FAIL_CHANCE; a final question knocks out each finalist with TEST_FINAL_FAIL_CHANCE.
+	TEST_MISSION_SECONDS = 8,
+	TEST_FAIL_CHANCE = 0.3,
+	TEST_FINAL_FAIL_CHANCE = 0.4,
+
+	-- V2 word schedule and speech judging (WordService / JudgeService). Not used by the V3 round until the banned
+	-- words come back (bundle 5) and speech judging (phase 2); kept for those modules and their tests.
 	WORD_STEPS = { 0.30, 0.65 },
 	WORD_WARNING = 10, -- seconds of notice before a new word takes effect
-	-- Two or more launches in the last WORD_DELAY_WINDOW seconds push the next word back (at most WORD_DELAY_MAX).
-	WORD_DELAY_WINDOW = 30, -- counts eliminations except players leaving
+	WORD_DELAY_WINDOW = 30, -- two or more launches in this window push the next word back (at most WORD_DELAY_MAX)
 	WORD_DELAY_MAX = 30,
-	HABIT_WORD_CHANCE = 0.5, -- per player: chance that their third word is a speech habit (진짜, 대박 ...) instead of a noun
-
-	-- When the round is decided (last elimination / time-out), speech still counts if it began before that moment
-	-- and ended no later than END_TOLERANCE seconds after it. 0 = only speech that was over by then: a transcript has
-	-- no word times, so speech running past the end may hold words said after it (not judged; raise only once
-	-- word times exist). Judging stays open until every alive player's client says that speech has been sent
-	-- (at most SETTLE_MAX seconds; a notice after SETTLE_NOTICE_AFTER).
+	HOLD_AFTER_WORD = 8,
+	HABIT_WORD_CHANCE = 0.5, -- per player: chance that a word is a speech habit (진짜, 대박 ...) instead of a noun
+	-- Speech still counts if it began before the moment the round was decided and ended no later than END_TOLERANCE
+	-- after it; judging waits until every alive player's client says that speech has been sent (SETTLE_MAX at most).
 	END_TOLERANCE = 0,
 	SETTLE_MAX = 5,
 	SETTLE_NOTICE_AFTER = 1.2,
@@ -68,35 +76,36 @@ return {
 	TRANSCRIPT_BURST_WINDOW = 3,
 	VOICE_PING_INTERVAL = 1,
 
-	-- Mission cards (V2.1): card -> notice -> short vote -> follow-up, then the next mission. Nobody dies for them.
-	-- The theme's missions are spread evenly over the talk (330/450/570 s with 3 missions -> 110/150/190 s each).
-	MISSION_NOTICE_AT = 25, -- seconds after the card: a notice raises the stakes
-	VOTE_OPEN_AFTER = 40, -- seconds after the card: the vote opens (talk first)
-	VOTE_SECONDS = 12,
-	VOTE_RESULT_SECONDS = 4, -- the result stays on screen this long (late joiners get it too)
-	EVENT_SHOW_SECONDS = 7, -- a quiet-time event banner stays this long
-
-	-- Quiet-time help next to the missions (no forced speaking, nobody dies for silence).
-	QUIET_TOPIC = 30, -- seconds without speech -> a topic card on the left
-	QUIET_EVENT = 60, -- seconds without speech -> a small situation event
-	EVENT_COOLDOWN = 40,
-	AFTER_LAUNCH_QUIET = 12, -- after a launch, no new stage / vote / event for this long (let people react)
-	HOLD_AFTER_WORD = 8, -- after a new word takes effect, no new stage / vote / event for this long
-	CARD_OPEN_SECONDS = 8, -- a new mission card is shown big this long, then folds to one line
-	STAGE_HOLD = 5, -- after a notice or a vote result, no quiet-time event for this long
-
 	-- Fixed UI texts players may read aloud (checked against the word bank by tools/check_content.luau).
+	-- %s / %d are filled in by the code (names, numbers).
 	TEXT = {
-		FREE_TALK = "선택하지 않아도 자유롭게 이야기할 수 있어요",
-		VOTE_FREE = "투표는 자유예요 · 계속 이야기해도 돼요",
+		NEED_READY = "마이크 준비된 플레이어 %d명 더 필요해요",
+		NEED_PLAYERS = "플레이어 %d명 더 필요해요",
+		COUNTDOWN = "곧 시작해요",
+		RECOVERING = "잠시 문제가 생겨서 다음 판을 준비해요",
+		ASSIGN = "목숨은 %d개예요 · 미션에 실패하면 날아가요",
+		PLAY_START = "본 경기 시작!",
+		FREE_TALK = "자유롭게 이야기하세요",
+		TEST_MISSION = "연습 미션 · 운에 맡겨 보세요",
+		FINAL = "결승 · 틀리면 바로 탈락",
+		ALL_WRONG = "모두 틀려서 아무도 탈락하지 않아요 · 다시!",
+		TO_FINAL = "남은 사람이 한꺼번에 떨어져서 그대로 결승으로 가요",
+		LIFE_LOST = "%s 목숨 -1",
+		OUT = "%s 탈락!",
+		MY_LIFE_LOST = "내 목숨 -1 · 남은 목숨 %d",
+		MY_OUT = "탈락! 관람석에서 응원해 주세요",
+		LEFT = "%s 님이 나갔어요",
+		WINNER = "%s 우승!",
+		JOINT_WINNERS = "%s 공동 우승!",
+		NO_WINNER = "우승자 없이 끝났어요",
 		SETTLING = "마지막 말을 확인하고 있어요…",
-		RECOGNITION_UNSTABLE = "음성 인식이 불안정해요 · 마이크 연결을 확인해 주세요", -- shown to players during the talk
+		RECOGNITION_UNSTABLE = "음성 인식이 불안정해요 · 마이크 연결을 확인해 주세요",
 	},
 
-	-- Scoring (session leaderstats, casual only): the last other alive speaker before a launch gets the assist.
-	ASSIST_WINDOW = 10,
+	-- Scoring (session leaderstats, casual only).
+	SCORE_WIN = 3,
+	ASSIST_WINDOW = 10, -- (speech assist credit, used again with speech judging in phase 2)
 	SCORE_ASSIST = 1,
-	SCORE_SURVIVE = 3,
 
 	-- Spectators (V3): players who are out and late joiners watch from the stands, with reactions.
 	REACTIONS = { "👏", "😂", "😱", "😮", "❤️" },

@@ -5,7 +5,6 @@ local Players = game:GetService("Players")
 local Style = {}
 
 Style.BOLD = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold)
-Style.HEAVY = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Heavy)
 Style.REGULAR = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Regular)
 
 Style.WHITE = Color3.fromRGB(240, 240, 245)
@@ -13,10 +12,7 @@ Style.GREY = Color3.fromRGB(170, 175, 185)
 Style.RED = Color3.fromRGB(255, 110, 110)
 Style.AMBER = Color3.fromRGB(255, 200, 90)
 Style.GREEN = Color3.fromRGB(120, 220, 140)
-Style.BLUE = Color3.fromRGB(170, 200, 255)
 Style.PANEL = Color3.fromRGB(18, 22, 30)
-Style.CARD = Color3.fromRGB(255, 248, 225)
-Style.INK = Color3.fromRGB(40, 40, 50)
 
 local gui: ScreenGui? = nil
 local stack: Frame? = nil
@@ -33,8 +29,8 @@ function Style.gui(): ScreenGui
 	return gui :: ScreenGui
 end
 
--- Bottom-centre stack (vote panel, mission card, reaction bar, top to bottom). The seated camera leaves the
--- bottom centre free (only my own head is there); the side edges show the neighbours' bubbles.
+-- Bottom-centre stack (the reaction bar now; the mission and vote panels of bundle 4 go above it). Panels are
+-- stacked top to bottom.
 function Style.bottomStack(): Frame
 	if not stack then
 		local f = Instance.new("Frame")

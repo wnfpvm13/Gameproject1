@@ -2,8 +2,8 @@
 -- Voice routing.
 -- 1. Flat volume: default voice creates each character's AudioEmitter on the server with a 7-80 stud rolloff;
 --    the flat curve set here replicates to every listener (src/client/FlatVoice.luau covers client-made emitters).
--- 2. Ghosts and spectators are silent to the table: during a round they know every word, so their
---    AudioDeviceInput is only audible to other ghosts/spectators (design V2 §6.2).
+-- 2. Players who are out and spectators are silent to the table: during a round their AudioDeviceInput is only
+--    audible to each other (docs/DESIGN_V3.md §13; with banned words they know every word).
 local Players = game:GetService("Players")
 
 local VoiceService = {}

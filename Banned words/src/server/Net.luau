@@ -2,25 +2,25 @@
 -- Remote events: the only place that creates them. Every server module talks to clients through these helpers.
 --
 -- Server -> client                         Client -> server
---   RoundState  round snapshot (Match)       Transcript  (text, earliest + latest start, latest end, text id)
---   Words       visible words per player     VoicePing   mic hears speech (activity only)
---   WordWarn    a new word is coming         Ready       mic test passed + voice connected
---   Eliminated  someone was launched / left  Sync        "send me the current state"
---   Host        theme, mission card, topic,  Reaction    ghost/spectator emoji
---               event                        Vote        (voteKey, option id) mission vote
---   VoteState   vote opened / closed         Settled     (key) my speech from before the cutoff is sent
---   Notice      short toast text                DevFling    Studio only: launch me (tests the flying chair)
+--   RoundState  round snapshot (Match)       Ready       mic test passed + voice connected
+--   LifeLost    who lost a life / is out:    Sync        "send me the current state"
+--               { reason, players = {        Reaction    spectator emoji
+--               { userId, name, lives, out }  DevFling    Studio only: (mode) lose a life / "out" / "show"
+--               }, final = they all fell at
+--               once and play the final }
+--   Notice      short toast text
 --   Reaction    emoji shown above a player
---   Settle      round decided: { key, cutoff }
 --   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
 --   Splash      that player hit the water: { userId, position }
+-- Kept for the speech judging and the banned words (JudgeService / WordService, not wired in V3 until phase 2 /
+-- bundle 5): Words, WordWarn, Settle (server -> client), Transcript, VoicePing, Settled (client -> server).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = {}
 
 local NAMES = {
-	"RoundState", "Words", "WordWarn", "Eliminated", "Host", "VoteState", "Notice", "Reaction", "Settle", "Fling",
-	"Splash", "Transcript", "VoicePing", "Ready", "Sync", "Vote", "Settled", "DevFling",
+	"RoundState", "LifeLost", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling",
+	"Words", "WordWarn", "Settle", "Transcript", "VoicePing", "Settled",
 }
 
 local folder: Folder

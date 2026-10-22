@@ -1,6 +1,9 @@
 --!strict
--- Status board at the top centre: phase + message (the theme during the talk), timer, survivors, and how many words I have
--- (never which). Kept short (64 px) so the far side of the ring stays visible under it.
+-- Status board at the top centre: phase + message, timer, my lives (hearts) and survivors. Kept short (64 px) so the
+-- chair row under it stays visible.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Hearts = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hearts"))
 local Style = require(script.Parent:WaitForChild("Style"))
 
 local Hud = {}
@@ -8,15 +11,16 @@ local Hud = {}
 local PHASE_TITLE = {
 	Lobby = "대기 중",
 	Countdown = "곧 시작",
-	Assign = "금칙어 배정",
-	Talk = "대화 중",
+	Assign = "자리 배정",
+	Play = "본 경기", -- not "게임": a word-bank word, and players read this aloud
+	Final = "결승",
 	Result = "결과",
 }
 
 local statusL: TextLabel
 local timerL: TextLabel
 local aliveL: TextLabel
-local mineL: TextLabel
+local livesL: TextLabel
 
 function Hud.build()
 	local top = Style.panel(Style.gui(), Style.PANEL, 0.2, 14)
@@ -32,9 +36,10 @@ function Hud.build()
 	timerL.Position = UDim2.fromScale(0.04, 0.55)
 	timerL.Size = UDim2.fromScale(0.28, 0.38)
 	timerL.TextXAlignment = Enum.TextXAlignment.Left
-	mineL = Style.label(top, Style.BOLD, 20, Style.AMBER)
-	mineL.Position = UDim2.fromScale(0.32, 0.55)
-	mineL.Size = UDim2.fromScale(0.36, 0.38)
+	livesL = Style.label(top, Style.BOLD, 22, Style.WHITE)
+	livesL.Position = UDim2.fromScale(0.32, 0.55)
+	livesL.Size = UDim2.fromScale(0.36, 0.38)
+	livesL.RichText = true
 	aliveL = Style.label(top, Style.REGULAR, 20, Style.GREY)
 	aliveL.Position = UDim2.fromScale(0.68, 0.55)
 	aliveL.Size = UDim2.fromScale(0.28, 0.38)
@@ -59,9 +64,9 @@ function Hud.setAlive(alive: number, total: number)
 	aliveL.Text = if total > 0 then string.format("생존 %d / %d", alive, total) else ""
 end
 
--- count = 0 hides it (not playing).
-function Hud.setMyWords(count: number)
-	mineL.Text = if count > 0 then string.format("내 금칙어 ??? × %d", count) else ""
+-- nil hides it (not playing this round).
+function Hud.setMyLives(lives: number?, max: number)
+	livesL.Text = if lives then "내 목숨 " .. Hearts.text(lives, max) else ""
 end
 
 return Hud

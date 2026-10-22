@@ -9,6 +9,8 @@ the argument must END with that lookup, and any other use of `require` fails, si
 Module names must stay unique in src/. Every module belongs to a layer by its path, and a layer may only require the
 layers listed in ALLOWED: services never require each other (RoundService wires them with callbacks), UI panels
 share only Style, client parts and data (content) see only shared code, and nothing on one side requires the other.
+Missions (server/missions) see only shared code, Net, Match and content, and only the MissionRunner service may
+require them (docs/DESIGN_V3.md §13).
 A new folder has no layer until layer_of knows it (the check fails and says so).
 A self-test with planted violations runs first, so a broken checker cannot pass silently.
 """
@@ -23,7 +25,8 @@ ALLOWED = {
     "net": {"shared"},
     "match": {"shared", "net"},
     "content": {"shared"},
-    "service": {"shared", "net", "match", "content"},
+    "mission": {"shared", "net", "match", "content"},
+    "service": {"shared", "net", "match", "content"},  # + "mission" for MissionRunner only (see MISSION_RUNNER)
     "flow": {"shared", "net", "match", "content", "service"},
     "server_entry": {"shared", "net", "match", "flow"},
     "client_style": {"shared"},
@@ -43,6 +46,7 @@ TARGET = re.compile(
     + _LOOKUP + r"""(?:"([^"\n]+)"|'([^'\n]+)')\s*\)\s*$"""
 )
 REQUIRE_WORD = re.compile(r"\brequire\b")
+MISSION_RUNNER = "MissionRunner"  # the one service that may require mission modules
 SUFFIXES = (".server.luau", ".client.luau", ".luau", ".server.lua", ".client.lua", ".lua")
 
 
@@ -67,6 +71,8 @@ def layer_of(rel):
             return "service"
         if len(parts) == 3 and parts[1] == "content":
             return "content"
+        if len(parts) == 3 and parts[1] == "missions":
+            return "mission"
         if len(parts) == 2:
             return {"Net": "net", "Match": "match", "RoundService": "flow", "Main": "server_entry"}.get(name)
         return None
@@ -221,7 +227,10 @@ def check(files):
                 problems.append("%s: requires unknown module %s" % (rel, target))
                 continue
             target_layer = layer_of(names[target])
-            if target_layer not in ALLOWED[layer]:
+            if target_layer == "mission" and layer != "mission":
+                if not (layer == "service" and module_name(rel) == MISSION_RUNNER):
+                    problems.append("%s (%s) must not require %s (mission): only %s may" % (rel, layer, names[target], MISSION_RUNNER))
+            elif target_layer not in ALLOWED[layer]:
                 problems.append("%s (%s) must not require %s (%s)" % (rel, layer, names[target], target_layer))
             graph.setdefault(rel, set()).add(names[target])
     problems.extend(find_cycles(graph))
@@ -276,6 +285,8 @@ def selftest():
         "server/Match.luau": 'local N = require(script.Parent:WaitForChild("Net"))',
         "server/services/A.luau": 'local M = require(script.Parent.Parent:WaitForChild("Match"))',
         "server/services/B.luau": "return {}",
+        "server/missions/TestM.luau": 'local M = require(script.Parent.Parent:WaitForChild("Match"))',
+        "server/services/MissionRunner.luau": 'local T = require(missions:WaitForChild("TestM"))',
         "server/RoundService.luau": 'local A = require(services:WaitForChild("A"))\nlocal B = require(services:WaitForChild("B"))',
         "client/UI/Style.luau": "return {}",
         "client/UI/Panel.luau": 'local S = require(script.Parent:WaitForChild("Style"))',
@@ -291,6 +302,10 @@ def selftest():
         ("unnamed require", "server/services/B.luau", "local A = require(someVariable)", "not a plain path"),
         ("duplicate name", "client/UI/Net.luau", "return {}", "duplicate module name"),
         ("unknown folder", "client/Effects/Spark.luau", "return {}", "no layer"),
+        ("service requires a mission", "server/services/B.luau", 'local T = require(x:WaitForChild("TestM"))', "only MissionRunner"),
+        ("RoundService requires a mission", "server/RoundService.luau", 'local T = require(x:WaitForChild("TestM"))', "only MissionRunner"),
+        ("mission requires a service", "server/missions/TestM.luau", 'local A = require(x:WaitForChild("A"))', "must not require"),
+        ("mission requires Config is fine", "server/missions/TestM.luau", 'local C = require(x:WaitForChild("Config"))', None),
         ("require with a space", "server/services/B.luau", 'local A = require (script.Parent:WaitForChild("A"))', "must not require"),
         ("---[[ toggle keeps code live", "server/services/B.luau", "---[[\n" + bad_require + "\n--]]", "must not require"),
         ("after a string holding --", "server/services/B.luau", 'local s = "--" ' + bad_require, "must not require"),

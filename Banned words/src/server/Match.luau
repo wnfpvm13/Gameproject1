@@ -1,6 +1,6 @@
 --!strict
 -- Shared match state plus small read helpers and the RoundState broadcast. No game rules: services read it,
--- and only RoundService (and LifeService for lives) changes phase, participants and lives.
+-- and only RoundService changes phase and participants (LifeService the lives, ChatService the chat choice).
 -- Times: `Match.now()` (server clock shared with clients) for anything sent over the network,
 -- os.clock() for local intervals.
 local Players = game:GetService("Players")
@@ -21,6 +21,7 @@ export type Participant = {
 	alive: boolean, -- still in the game (lives left, or a finalist after everyone fell at once)
 	lives: number,
 	afkMisses: number, -- answer missions missed in a row
+	chat: boolean, -- plays by text chat this round (docs/DESIGN_V3.md §7; their voice is off until the result)
 }
 
 local Match = {
@@ -31,7 +32,8 @@ local Match = {
 	serverKind = "public", -- "public" | "private" (docs/DESIGN_V3.md §3), set at each round start
 	participants = {} :: { [Player]: Participant },
 	startedWith = 0,
-	ready = {} :: { [Player]: boolean },
+	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
+	chatJoin = {} :: { [Player]: boolean }, -- joins by text chat instead (ChatService decides who may)
 	-- Speech judging and the V2 word schedule (JudgeService / WordService, back in phase 2 / bundle 5):
 	talkStartedAt = math.huge, -- Match.now() when the talk began; speech from before it is ignored
 	cutoffAt = math.huge, -- Match.now() when the round is decided; later speech is ignored
@@ -82,7 +84,8 @@ function Match.eligiblePlayers(): { Player }
 		local character = player.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 		local placed = character ~= nil and character.Parent == workspace and character:FindFirstChild("HumanoidRootPart") ~= nil
-		if humanoid and humanoid.Health > 0 and placed and (Match.ready[player] or not Config.REQUIRE_VOICE_READY) then
+		local joined = Match.ready[player] or Match.chatJoin[player] or not Config.REQUIRE_VOICE_READY
+		if humanoid and humanoid.Health > 0 and placed and joined then
 			table.insert(list, player)
 		end
 	end

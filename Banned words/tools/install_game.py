@@ -69,7 +69,14 @@ end
 """)
 for i, (folder, _, name) in enumerate(ROOTS):
     emit_folder(os.path.join(SRC, folder), f"parents[{i + 1}]", name, out)
-out.append('game:GetService("VoiceChatService").UseAudioApi = Enum.AudioApiRollout.Enabled\nreturn "game installed"\n')
+out.append('game:GetService("VoiceChatService").UseAudioApi = Enum.AudioApiRollout.Enabled\n')
+# Chat participants' bubble/tag decoration needs the TextChatService chat. Scripts cannot switch ChatVersion (it needs
+# RobloxScript capability): default.project.json sets it for Rojo builds, and here we can only warn.
+out.append("""if game:GetService("TextChatService").ChatVersion ~= Enum.ChatVersion.TextChatService then
+	return "game installed - WARNING: set TextChatService.ChatVersion to TextChatService in Studio (scripts cannot)"
+end
+return "game installed"
+""")
 code = "".join(out)
 io.open(os.path.join(HERE, "install_game.luau"), "w", encoding="utf-8", newline="\n").write(code)
 print(len(code))

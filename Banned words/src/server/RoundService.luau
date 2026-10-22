@@ -3,9 +3,10 @@
 --   Lobby -> Countdown -> Assign (chairs, lives) -> Play (ROUND_SECONDS: free talk -> mission -> launches -> ...)
 --   -> Final (sudden death) -> Result -> Countdown (quick rematch) ...
 -- Rules live in the services: lives in LifeService, the time budget and the final trigger in Timeline, missions in
--- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, score in
--- Scores. Bundle 2b: no banned words and no presenter yet, and the only mission is the Studio test mission (live
--- servers just talk until the main game is over, then the survivors win without a final).
+-- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
+-- join by chat in ChatService, score in Scores. Bundles 2b-2c: no banned words and no presenter yet, and the only
+-- mission is the Studio test mission (live servers just talk until the main game is over, then the survivors win
+-- without a final).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -20,6 +21,7 @@ local MissionRunner = require(services:WaitForChild("MissionRunner"))
 local SeatService = require(services:WaitForChild("SeatService"))
 local SpectatorService = require(services:WaitForChild("SpectatorService"))
 local VoiceService = require(services:WaitForChild("VoiceService"))
+local ChatService = require(services:WaitForChild("ChatService"))
 local Scores = require(services:WaitForChild("Scores"))
 
 local RoundService = {}
@@ -255,13 +257,25 @@ local function shuffled(list: { Player }): { Player }
 	return out
 end
 
+-- Round over for the voice routing: everyone open again (chat participants too).
+local function openVoices()
+	VoiceService.setSpeakers(nil)
+	VoiceService.setSilenced({})
+end
+
 local function cleanup()
 	SeatService.releaseAll()
-	VoiceService.setSpeakers(nil)
+	openVoices()
 	SpectatorService.endRound()
 	Match.resetRound()
 	toFinal = false
 	freeTalk = false
+	-- Chat participants whose voice got ready during the round join by voice from now on.
+	for player in Match.chatJoin do
+		if Match.ready[player] then
+			ChatService.voiceReady(player, false)
+		end
+	end
 end
 
 local function runRound()
@@ -279,7 +293,7 @@ local function runRound()
 		table.remove(candidates)
 	end
 
-	-- Assign: chairs and lives.
+	-- Assign: chairs, lives, and who plays by chat (their voice is off until the result, docs/DESIGN_V3.md §7).
 	Match.roundId += 1
 	local myRound = Match.roundId
 	Match.resetRound()
@@ -287,14 +301,21 @@ local function runRound()
 	toFinal = false
 	Scores.resetRound()
 	local seated = SeatService.seatPlayers(candidates)
+	local chatIds = {}
 	for _, player in candidates do
 		if seated[player] then
-			Match.participants[player] = { player = player, words = {}, alive = true, lives = Config.LIVES, afkMisses = 0 }
+			local chat = Match.chatJoin[player] == true
+			Match.participants[player] =
+				{ player = player, words = {}, alive = true, lives = Config.LIVES, afkMisses = 0, chat = chat }
+			if chat then
+				table.insert(chatIds, player.UserId)
+			end
 		end
 	end
 	Match.startedWith = #Match.aliveList()
 	LifeService.beginRound()
 	SpectatorService.beginRound()
+	VoiceService.setSilenced(chatIds)
 	refreshSpeakers()
 	Match.setPhase("Assign", Config.ASSIGN_TIME, string.format(Config.TEXT.ASSIGN, Config.LIVES))
 	waitPhase()
@@ -307,7 +328,7 @@ local function runRound()
 	-- Result: winners and scores.
 	local text = resultText()
 	SeatService.releaseAll()
-	VoiceService.setSpeakers(nil)
+	openVoices()
 	Match.setPhase("Result", Config.RESULT_TIME, text)
 	waitPhase()
 	cleanup()
@@ -339,11 +360,18 @@ end
 
 local function onSync(player: Player)
 	Net.to(player, "RoundState", Match.payload())
+	ChatService.sendAccess(player)
+end
+
+-- The player plays in the round being played: their way of joining (voice or chat) holds until it is over.
+local function lockedIn(player: Player): boolean
+	return Match.inRound() and Match.participants[player] ~= nil
 end
 
 function RoundService.start()
 	VoiceService.start()
 	Scores.start()
+	ChatService.start()
 	LifeService.start(SeatService.isFlying)
 	SpectatorService.start(SeatService.isFlying)
 	SeatService.init(onFlightOver)
@@ -351,6 +379,23 @@ function RoundService.start()
 		local value = isReady == true
 		if (Match.ready[player] == true) ~= value then -- repeats change nothing and send nothing
 			Match.ready[player] = value
+			if value then
+				ChatService.voiceReady(player, lockedIn(player)) -- voice players join by voice
+			end
+			Match.broadcast()
+		end
+	end)
+	local lastChatJoin: { [Player]: number } = {}
+	Net.listen("ChatJoin", function(player, on)
+		if typeof(on) ~= "boolean" then
+			return
+		end
+		local now = os.clock()
+		if now - (lastChatJoin[player] or -math.huge) < Config.CHAT_JOIN_COOLDOWN then
+			return
+		end
+		lastChatJoin[player] = now
+		if ChatService.request(player, on, lockedIn(player)) then
 			Match.broadcast()
 		end
 	end)
@@ -388,10 +433,12 @@ function RoundService.start()
 	Players.PlayerAdded:Connect(watch)
 	Players.PlayerRemoving:Connect(function(player)
 		lastSync[player] = nil
+		lastChatJoin[player] = nil
 		-- Leaving is out (docs/DESIGN_V3.md §4).
 		local outcomes = if Match.inRound() then LifeService.eliminate({ player }) else {}
 		Match.participants[player] = nil
 		Match.ready[player] = nil
+		Match.chatJoin[player] = nil -- (before the broadcast below, so the ready count is right)
 		if #outcomes > 0 then
 			tell(outcomes, "left", false)
 		else

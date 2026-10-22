@@ -90,11 +90,16 @@ function Style.limit(frame: GuiObject, min: Vector2, max: Vector2)
 	c.Parent = frame
 end
 
+-- The top (pixels) of row 0, 1, 2 ... under the status board.
+function Style.row(row: number): number
+	return 78 + row * 26
+end
+
 -- A line of text centred under the status board (row 0, 1, 2 ...).
 function Style.line(row: number, color: Color3): TextLabel
 	local l = Style.label(Style.gui(), Style.BOLD, 20, color)
 	l.AnchorPoint = Vector2.new(0.5, 0)
-	l.Position = UDim2.new(0.5, 0, 0, 78 + row * 26)
+	l.Position = UDim2.new(0.5, 0, 0, Style.row(row))
 	l.Size = UDim2.new(0.7, 0, 0, 24)
 	l.TextStrokeTransparency = 0.5
 	return l

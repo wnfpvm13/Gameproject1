@@ -83,6 +83,15 @@ return {
 	GETUP_RETRY_SECONDS = 0.2, -- after a launch my client stands my character up, retrying until it took
 	GETUP_TRIES = 5, -- (the network ownership comes back with or after PlatformStand)
 
+	-- Chat participants (docs/DESIGN_V3.md §7): their bubbles stand out and every bubble stays readable from the show
+	-- camera (43-49 studs from the chairs) and the far stands (about 120 studs).
+	CHAT_BUBBLE_MINIMIZE_DISTANCE = 150, -- studs; farther bubbles shrink to "..." (Roblox default 40)
+	CHAT_BUBBLE_MAX_DISTANCE = 200, -- farther bubbles are hidden (default 100)
+	CHAT_BUBBLE_TEXT_SIZE = 22, -- chat participants' bubbles (other bubbles keep the default 16)
+	-- Chat bubbles go up by this many studs so they sit above the name + hearts tag (client Billboards: 1.6 + 1.7
+	-- studs over the head). The banned words of bundle 5 add 1 stud per word row to that tag: raise this then.
+	CHAT_BUBBLE_VERTICAL_OFFSET = 2.5,
+
 	-- Transcript intake guards (client-side STT). 10 s of Korean speech is roughly 70 syllables = 210 bytes.
 	TRANSCRIPT_MAX_BYTES = 600,
 	TRANSCRIPT_BURST = 6, -- at most this many transcripts per window per player (spam guard)
@@ -92,7 +101,7 @@ return {
 	-- Fixed UI texts players may read aloud (checked against the word bank by tools/check_content.luau).
 	-- %s / %d are filled in by the code (names, numbers).
 	TEXT = {
-		NEED_READY = "마이크 준비된 플레이어 %d명 더 필요해요",
+		NEED_READY = "참가 준비된 플레이어 %d명 더 필요해요", -- voice ready or joining by chat
 		NEED_PLAYERS = "플레이어 %d명 더 필요해요",
 		COUNTDOWN = "곧 시작해요",
 		RECOVERING = "잠시 문제가 생겨서 다음 판을 준비해요",
@@ -113,6 +122,25 @@ return {
 		NO_WINNER = "우승자 없이 끝났어요",
 		SETTLING = "마지막 말을 확인하고 있어요…",
 		RECOGNITION_UNSTABLE = "음성 인식이 불안정해요 · 마이크 연결을 확인해 주세요",
+		-- Getting ready (MicPanel, docs/DESIGN_V3.md §2, §7): voice, or chat for players who cannot use voice.
+		VOICE_NONE = "음성 채팅을 쓸 수 없는 계정이에요 (만 13세 이상 + 연령 인증 필요)",
+		VOICE_CONNECT = "음성 채팅 연결 필요 · 왼쪽 위 ≡ 메뉴(또는 ESC) → 설정 → 음성 채팅 연결",
+		VOICE_MUTED = "마이크가 꺼져 있어요",
+		CONNECT_TO_PLAY = "음성을 연결하면 다음 판부터 참가할 수 있어요",
+		MIC_ON = "마이크를 켜 주세요",
+		MIC_TEST = "마이크 테스트 · 아무 말이나 해 보세요",
+		MIC_TESTED = "마이크 확인 완료!",
+		READY = "준비 완료!",
+		READY_COUNT = "준비 완료! (준비된 사람 %d명)",
+		HEADSET_TIP = "헤드셋을 쓰면 억울한 탈락을 막을 수 있어요", -- speakers feed others' voices back into the mic
+		OR_CHAT = "음성 대신 채팅으로 참가할 수 있어요",
+		NO_VOICE_NO_CHAT = "음성도 채팅도 쓸 수 없는 계정이라 관전만 할 수 있어요",
+		CHAT_CHECKING = "채팅으로 참가할 수 있는지 확인하고 있어요",
+		CHAT_CHECK_FAILED = "채팅 권한을 확인하지 못해서 지금은 관전만 할 수 있어요",
+		CHAT_JOIN = "⌨ 채팅으로 참가",
+		CHAT_CANCEL = "채팅 참가 취소",
+		CHAT_JOINED = "채팅으로 참가해요 · 판 중에는 음성이 꺼져요",
+		CHAT_TAG = "[채팅]", -- before a chat participant's name in the chat window
 	},
 
 	-- Scoring (session leaderstats, casual only).
@@ -127,6 +155,8 @@ return {
 	STAND_SPOTS_PER_ROW = 10, -- spectator spots along the stands marker, per tier row
 	REACTION_COOLDOWN = 1.2,
 	SYNC_COOLDOWN = 1, -- seconds between two "send me the state" requests from one player
+	CHAT_JOIN_COOLDOWN = 1, -- seconds between two "join by chat / stop" requests from one player (each one broadcasts)
+	CHAT_CHECK_RETRIES = { 5, 20 }, -- seconds before retrying a failed chat permission check (then: no chat for now)
 
 	-- Roblox-licensed Pro Sound Effects (public, free).
 	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)
@@ -224,7 +254,7 @@ require(script.Parent:WaitForChild("RoundService")).start()
 ]====]; s.Parent = n2 end
 do local s = Instance.new("ModuleScript"); s.Name = "Match"; s.Source = [====[--!strict
 -- Shared match state plus small read helpers and the RoundState broadcast. No game rules: services read it,
--- and only RoundService (and LifeService for lives) changes phase, participants and lives.
+-- and only RoundService changes phase and participants (LifeService the lives, ChatService the chat choice).
 -- Times: `Match.now()` (server clock shared with clients) for anything sent over the network,
 -- os.clock() for local intervals.
 local Players = game:GetService("Players")
@@ -245,6 +275,7 @@ export type Participant = {
 	alive: boolean, -- still in the game (lives left, or a finalist after everyone fell at once)
 	lives: number,
 	afkMisses: number, -- answer missions missed in a row
+	chat: boolean, -- plays by text chat this round (docs/DESIGN_V3.md §7; their voice is off until the result)
 }
 
 local Match = {
@@ -255,7 +286,8 @@ local Match = {
 	serverKind = "public", -- "public" | "private" (docs/DESIGN_V3.md §3), set at each round start
 	participants = {} :: { [Player]: Participant },
 	startedWith = 0,
-	ready = {} :: { [Player]: boolean },
+	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
+	chatJoin = {} :: { [Player]: boolean }, -- joins by text chat instead (ChatService decides who may)
 	-- Speech judging and the V2 word schedule (JudgeService / WordService, back in phase 2 / bundle 5):
 	talkStartedAt = math.huge, -- Match.now() when the talk began; speech from before it is ignored
 	cutoffAt = math.huge, -- Match.now() when the round is decided; later speech is ignored
@@ -306,7 +338,8 @@ function Match.eligiblePlayers(): { Player }
 		local character = player.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 		local placed = character ~= nil and character.Parent == workspace and character:FindFirstChild("HumanoidRootPart") ~= nil
-		if humanoid and humanoid.Health > 0 and placed and (Match.ready[player] or not Config.REQUIRE_VOICE_READY) then
+		local joined = Match.ready[player] or Match.chatJoin[player] or not Config.REQUIRE_VOICE_READY
+		if humanoid and humanoid.Health > 0 and placed and joined then
 			table.insert(list, player)
 		end
 	end
@@ -392,8 +425,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 --   LifeLost    who lost a life / is out:    Sync        "send me the current state"
 --               { reason, players = {        Reaction    spectator emoji
 --               { userId, name, lives, out }  DevFling    Studio only: (mode) lose a life / "out" / "show"
---               }, final = they all fell at
+--               }, final = they all fell at   ChatJoin    (on) join rounds by text chat instead of voice
 --               once and play the final }
+--   ChatAccess  to one player only: may I join by chat? { state = checking / yes / no / voice / error }
 --   Notice      short toast text
 --   Reaction    emoji shown above a player
 --   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
@@ -405,7 +439,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Net = {}
 
 local NAMES = {
-	"RoundState", "LifeLost", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling",
+	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
 	"Words", "WordWarn", "Settle", "Transcript", "VoicePing", "Settled",
 }
 
@@ -460,9 +494,10 @@ do local s = Instance.new("ModuleScript"); s.Name = "RoundService"; s.Source = [
 --   Lobby -> Countdown -> Assign (chairs, lives) -> Play (ROUND_SECONDS: free talk -> mission -> launches -> ...)
 --   -> Final (sudden death) -> Result -> Countdown (quick rematch) ...
 -- Rules live in the services: lives in LifeService, the time budget and the final trigger in Timeline, missions in
--- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, score in
--- Scores. Bundle 2b: no banned words and no presenter yet, and the only mission is the Studio test mission (live
--- servers just talk until the main game is over, then the survivors win without a final).
+-- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
+-- join by chat in ChatService, score in Scores. Bundles 2b-2c: no banned words and no presenter yet, and the only
+-- mission is the Studio test mission (live servers just talk until the main game is over, then the survivors win
+-- without a final).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -477,6 +512,7 @@ local MissionRunner = require(services:WaitForChild("MissionRunner"))
 local SeatService = require(services:WaitForChild("SeatService"))
 local SpectatorService = require(services:WaitForChild("SpectatorService"))
 local VoiceService = require(services:WaitForChild("VoiceService"))
+local ChatService = require(services:WaitForChild("ChatService"))
 local Scores = require(services:WaitForChild("Scores"))
 
 local RoundService = {}
@@ -712,13 +748,25 @@ local function shuffled(list: { Player }): { Player }
 	return out
 end
 
+-- Round over for the voice routing: everyone open again (chat participants too).
+local function openVoices()
+	VoiceService.setSpeakers(nil)
+	VoiceService.setSilenced({})
+end
+
 local function cleanup()
 	SeatService.releaseAll()
-	VoiceService.setSpeakers(nil)
+	openVoices()
 	SpectatorService.endRound()
 	Match.resetRound()
 	toFinal = false
 	freeTalk = false
+	-- Chat participants whose voice got ready during the round join by voice from now on.
+	for player in Match.chatJoin do
+		if Match.ready[player] then
+			ChatService.voiceReady(player, false)
+		end
+	end
 end
 
 local function runRound()
@@ -736,7 +784,7 @@ local function runRound()
 		table.remove(candidates)
 	end
 
-	-- Assign: chairs and lives.
+	-- Assign: chairs, lives, and who plays by chat (their voice is off until the result, docs/DESIGN_V3.md §7).
 	Match.roundId += 1
 	local myRound = Match.roundId
 	Match.resetRound()
@@ -744,14 +792,21 @@ local function runRound()
 	toFinal = false
 	Scores.resetRound()
 	local seated = SeatService.seatPlayers(candidates)
+	local chatIds = {}
 	for _, player in candidates do
 		if seated[player] then
-			Match.participants[player] = { player = player, words = {}, alive = true, lives = Config.LIVES, afkMisses = 0 }
+			local chat = Match.chatJoin[player] == true
+			Match.participants[player] =
+				{ player = player, words = {}, alive = true, lives = Config.LIVES, afkMisses = 0, chat = chat }
+			if chat then
+				table.insert(chatIds, player.UserId)
+			end
 		end
 	end
 	Match.startedWith = #Match.aliveList()
 	LifeService.beginRound()
 	SpectatorService.beginRound()
+	VoiceService.setSilenced(chatIds)
 	refreshSpeakers()
 	Match.setPhase("Assign", Config.ASSIGN_TIME, string.format(Config.TEXT.ASSIGN, Config.LIVES))
 	waitPhase()
@@ -764,7 +819,7 @@ local function runRound()
 	-- Result: winners and scores.
 	local text = resultText()
 	SeatService.releaseAll()
-	VoiceService.setSpeakers(nil)
+	openVoices()
 	Match.setPhase("Result", Config.RESULT_TIME, text)
 	waitPhase()
 	cleanup()
@@ -796,11 +851,18 @@ end
 
 local function onSync(player: Player)
 	Net.to(player, "RoundState", Match.payload())
+	ChatService.sendAccess(player)
+end
+
+-- The player plays in the round being played: their way of joining (voice or chat) holds until it is over.
+local function lockedIn(player: Player): boolean
+	return Match.inRound() and Match.participants[player] ~= nil
 end
 
 function RoundService.start()
 	VoiceService.start()
 	Scores.start()
+	ChatService.start()
 	LifeService.start(SeatService.isFlying)
 	SpectatorService.start(SeatService.isFlying)
 	SeatService.init(onFlightOver)
@@ -808,6 +870,23 @@ function RoundService.start()
 		local value = isReady == true
 		if (Match.ready[player] == true) ~= value then -- repeats change nothing and send nothing
 			Match.ready[player] = value
+			if value then
+				ChatService.voiceReady(player, lockedIn(player)) -- voice players join by voice
+			end
+			Match.broadcast()
+		end
+	end)
+	local lastChatJoin: { [Player]: number } = {}
+	Net.listen("ChatJoin", function(player, on)
+		if typeof(on) ~= "boolean" then
+			return
+		end
+		local now = os.clock()
+		if now - (lastChatJoin[player] or -math.huge) < Config.CHAT_JOIN_COOLDOWN then
+			return
+		end
+		lastChatJoin[player] = now
+		if ChatService.request(player, on, lockedIn(player)) then
 			Match.broadcast()
 		end
 	end)
@@ -845,10 +924,12 @@ function RoundService.start()
 	Players.PlayerAdded:Connect(watch)
 	Players.PlayerRemoving:Connect(function(player)
 		lastSync[player] = nil
+		lastChatJoin[player] = nil
 		-- Leaving is out (docs/DESIGN_V3.md §4).
 		local outcomes = if Match.inRound() then LifeService.eliminate({ player }) else {}
 		Match.participants[player] = nil
 		Match.ready[player] = nil
+		Match.chatJoin[player] = nil -- (before the broadcast below, so the ready count is right)
 		if #outcomes > 0 then
 			tell(outcomes, "left", false)
 		else
@@ -1009,6 +1090,146 @@ return TestMission
 ]====]; s.Parent = n4 end
 n4.Parent = n2
 local n5 = Instance.new("Folder"); n5.Name = "services"
+do local s = Instance.new("ModuleScript"); s.Name = "ChatService"; s.Source = [====[--!strict
+-- Joining by text chat (docs/DESIGN_V3.md §7; owner decision 2026-10-23: voice accounts join by voice only). Each
+-- player is checked once on the server when they join: does the account have voice
+-- (VoiceChatService:IsVoiceEnabledForUserIdAsync) and may it chat (TextChatService:CanUserChatAsync)? Only accounts
+-- without voice that may chat can choose chat, and not while their voice is ready or while they play in the round
+-- being played. The choice is Match.chatJoin, public as the BW_ChatMode player attribute (ChatLook makes those
+-- messages stand out). What a player may do is told to that player only ("ChatAccess"): whether an account may chat
+-- says something about its restrictions, so other clients never get it.
+-- Bundle 5 adds the rest of §7 here (delivery rules, the whisper block, judging chat).
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TextChatService = game:GetService("TextChatService")
+local VoiceChatService = game:GetService("VoiceChatService")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local Net = require(script.Parent.Parent:WaitForChild("Net"))
+
+local ChatService = {}
+
+-- checking: not known yet; yes: may join by chat; no: may not chat; voice: a voice account (joins by voice);
+-- error: the chat permission check kept failing (no chat for now).
+export type Access = "checking" | "yes" | "no" | "voice" | "error"
+
+local access: { [Player]: Access } = {}
+
+local function tell(player: Player)
+	Net.to(player, "ChatAccess", { state = access[player] or "checking" })
+end
+
+local function setAccess(player: Player, state: Access)
+	if player.Parent then -- not for a player who left meanwhile
+		access[player] = state
+		tell(player)
+	end
+end
+
+-- Runs one yielding check. Returns (ok, answer); a failed call is reported and returns ok = false.
+local function ask(what: string, player: Player, call: () -> boolean): (boolean, boolean)
+	local ok, result = pcall(call)
+	if not ok then
+		warn("[BannedWords] " .. what .. " check failed for", player.UserId, result)
+		return false, false
+	end
+	return true, result == true
+end
+
+local function check(player: Player)
+	setAccess(player, "checking")
+	-- Studio: workspace attribute BW_ChatAccess forces the result (yes / no / voice / error), e.g. to try chat mode with
+	-- a voice account (live servers ignore it).
+	local forced = if RunService:IsStudio() then workspace:GetAttribute("BW_ChatAccess") else nil
+	if forced == "yes" or forced == "no" or forced == "voice" or forced == "error" then
+		setAccess(player, forced)
+		return
+	end
+	-- A failed voice check counts as "no voice" (owner 2026-10-23); a chat participant's voice is off in rounds anyway.
+	local _, hasVoice = ask("voice", player, function()
+		return VoiceChatService:IsVoiceEnabledForUserIdAsync(player.UserId)
+	end)
+	if not player.Parent then
+		return -- left meanwhile
+	elseif hasVoice then
+		setAccess(player, "voice")
+		return
+	end
+	local retries = 0
+	while true do
+		local ok, allowed = ask("chat permission", player, function()
+			return TextChatService:CanUserChatAsync(player.UserId)
+		end)
+		if ok then
+			setAccess(player, if allowed then "yes" else "no")
+			return
+		end
+		retries += 1
+		local delay = Config.CHAT_CHECK_RETRIES[retries]
+		if not delay then
+			break
+		end
+		task.wait(delay)
+		if not player.Parent then
+			return
+		end
+	end
+	-- Still failing: no chat on live servers; Studio test accounts may try chat mode anyway.
+	setAccess(player, if RunService:IsStudio() then "yes" else "error")
+end
+
+local function setMode(player: Player, on: boolean)
+	if on then
+		Match.chatJoin[player] = true
+	else
+		Match.chatJoin[player] = nil
+	end
+	player:SetAttribute("BW_ChatMode", on)
+end
+
+function ChatService.start()
+	for _, player in Players:GetPlayers() do
+		task.spawn(check, player)
+	end
+	Players.PlayerAdded:Connect(check)
+	Players.PlayerRemoving:Connect(function(player)
+		access[player] = nil
+	end)
+end
+
+-- Sends the player what they may do again (they asked for the whole state, e.g. right after joining).
+function ChatService.sendAccess(player: Player)
+	tell(player)
+end
+
+-- The player asks to join by chat (`on`) or to stop. `locked`: they play in the round being played, so their choice
+-- holds until it is over. Joining needs an account without voice that may chat, and no voice ready. Returns whether
+-- anything changed.
+function ChatService.request(player: Player, on: boolean, locked: boolean): boolean
+	if locked or (Match.chatJoin[player] == true) == on then
+		return false
+	end
+	if on and (access[player] ~= "yes" or Match.ready[player]) then
+		return false
+	end
+	setMode(player, on)
+	return true
+end
+
+-- The player's voice is ready: they join by voice from now on (unless locked in the round being played). Returns
+-- whether anything changed.
+function ChatService.voiceReady(player: Player, locked: boolean): boolean
+	if locked or not Match.chatJoin[player] then
+		return false
+	end
+	setMode(player, false)
+	return true
+end
+
+return ChatService
+]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "JudgeService"; s.Source = [====[--!strict
 -- Transcript intake and judging. Every alive participant is judged on everything they say during the talk
 -- (no turns). The client cannot prove a transcript is real speech; these checks only stop spam and mix-ups.
@@ -2208,6 +2429,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "VoiceService"; s.Source = [
 --    the flat curve set here replicates to every listener (src/client/FlatVoice.luau covers client-made emitters).
 -- 2. Players who are out and spectators are silent to the table: during a round their AudioDeviceInput is only
 --    audible to each other (docs/DESIGN_V3.md §13; with banned words they know every word).
+-- 3. Chat participants are heard by nobody during their round, even if their voice connects meanwhile (§7: speaking
+--    would get around the chat judging).
 local Players = game:GetService("Players")
 
 local VoiceService = {}
@@ -2215,6 +2438,7 @@ local VoiceService = {}
 local FLAT_CURVE = { [0] = 1, [2000] = 1 }
 
 local speakers: { [number]: boolean }? = nil -- userIds allowed to talk to the table; nil = no round, everyone open
+local silenced: { [number]: boolean } = {} -- userIds nobody hears (chat participants of the round)
 
 local function flatten(child: Instance)
 	if child:IsA("AudioEmitter") then
@@ -2243,7 +2467,10 @@ local function apply()
 	for _, player in Players:GetPlayers() do
 		local input = inputOf(player)
 		if input then
-			if speakers == nil or speakers[player.UserId] then
+			if silenced[player.UserId] then
+				input.AccessType = Enum.AccessModifierType.Allow
+				input:SetUserIdAccessList({}) -- nobody allowed: nobody hears
+			elseif speakers == nil or speakers[player.UserId] then
 				input.AccessType = Enum.AccessModifierType.Deny
 				input:SetUserIdAccessList({}) -- nobody denied: the whole server hears
 			else
@@ -2264,6 +2491,15 @@ function VoiceService.setSpeakers(userIds: { number }?)
 		speakers = set
 	else
 		speakers = nil
+	end
+	apply()
+end
+
+-- The chat participants of the round being played (an empty list when it is over).
+function VoiceService.setSilenced(userIds: { number })
+	table.clear(silenced)
+	for _, id in userIds do
+		silenced[id] = true
 	end
 	apply()
 end
@@ -2411,7 +2647,7 @@ return WordService
 n5.Parent = n2
 n2.Parent = parents[2]
 local n6 = Instance.new("LocalScript"); n6.Name = "BannedWordsClient"; n6.Source = [====[-- 금칙어 게임 Korean client entry point: only wiring. Server events update State, then refresh() redraws
--- every part from State (HUD, head bubbles, camera, reaction bar, recognizer on/off, seat lock).
+-- every part from State (HUD, head bubbles, camera, reaction bar, getting ready, recognizer on/off, seat lock).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -2427,6 +2663,7 @@ local FlatVoice = require(script:WaitForChild("FlatVoice"))
 local ShowCamera = require(script:WaitForChild("ShowCamera"))
 local GetUp = require(script:WaitForChild("GetUp"))
 local Billboards = require(script:WaitForChild("Billboards"))
+local ChatLook = require(script:WaitForChild("ChatLook"))
 local Fx = require(script:WaitForChild("Fx"))
 local UI = script:WaitForChild("UI")
 local Hud = require(UI:WaitForChild("Hud"))
@@ -2452,7 +2689,8 @@ local function applySeatLock()
 end
 
 -- Ready = voice connected + said something once. The recognizer runs only for that mic test (docs/DESIGN_V3.md §2;
--- judging speech comes back in phase 2).
+-- judging speech comes back in phase 2). Accounts without voice may join by chat instead (§7; the server decides,
+-- tells me alone what I may do ("ChatAccess") and everyone who joins by chat (attribute BW_ChatMode)).
 local function refreshVoice()
 	local status = Speech.status()
 	local isReady = State.micTested and (status == "Listening" or status == "Speaking")
@@ -2461,8 +2699,14 @@ local function refreshVoice()
 		remotes.Ready:FireServer(isReady)
 	end
 	Speech.setEnabled(not State.micTested)
-	MicPanel.setVoice(status)
-	MicPanel.setTest(status, State.micTested, State.inRound() and State.isParticipant(State.myId()), State.round.readyCount)
+	MicPanel.set({
+		status = status,
+		micTested = State.micTested,
+		inMyRound = State.inRound() and State.isParticipant(State.myId()),
+		readyCount = State.round.readyCount,
+		chatAccess = State.chatAccess,
+		chatMode = player:GetAttribute("BW_ChatMode") == true,
+	})
 end
 
 -- Everyone on the chairs gets a head bubble (name + hearts) during a round, every participant in the result.
@@ -2491,23 +2735,27 @@ end
 -- Build UI and systems.
 Hud.build()
 Toast.build()
-MicPanel.build()
+MicPanel.build(function(on)
+	remotes.ChatJoin:FireServer(on)
+end)
 ReactionBar.build(function(index)
 	remotes.Reaction:FireServer(index)
 end)
 Fx.init()
 FlatVoice.start()
 GetUp.start()
+ChatLook.start()
 Speech.onStatus(function()
 	refreshVoice()
 end)
 Speech.onText(function()
 	if not State.micTested then
 		State.micTested = true
-		Toast.show("마이크 확인 완료!", "info")
+		Toast.show(Config.TEXT.MIC_TESTED, "info")
 		refreshVoice()
 	end
 end)
+player:GetAttributeChangedSignal("BW_ChatMode"):Connect(refreshVoice)
 Speech.onUnstable(function()
 	if not State.micTested then
 		Toast.show(Config.TEXT.RECOGNITION_UNSTABLE, "near")
@@ -2539,6 +2787,11 @@ end)
 remotes.Words.OnClientEvent:Connect(function(words)
 	State.words = words
 	refresh()
+end)
+
+remotes.ChatAccess.OnClientEvent:Connect(function(info)
+	State.chatAccess = info.state
+	refreshVoice()
 end)
 
 -- One event's lives lost (docs/DESIGN_V3.md §4): the bubbles pop, one toast names everyone (my own line first; when
@@ -2875,6 +3128,72 @@ function Billboards.hit(userId: number, lives: number, maxLives: number, out: bo
 end
 
 return Billboards
+]====]; s.Parent = n6 end
+do local s = Instance.new("ModuleScript"); s.Name = "ChatLook"; s.Source = [====[--!strict
+-- Chat participants' messages stand out (docs/DESIGN_V3.md §7, owner decision 2026-10-22): their bubbles are bigger,
+-- bold and yellow with a keyboard mark, and the chat window puts a coloured [채팅] before their name. All bubbles also
+-- stay full size out to the far stands and float above our name + hearts tag. Who joins by chat comes from the server (player attribute BW_ChatMode). Only Roblox
+-- chat is decorated: nobody's text is shown anywhere else (§11). These callbacks stop running if Platform Integrated
+-- Chat is turned on (mandatory from May 2027, §7), and they need TextChatService (ChatVersion) in the place.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TextChatService = game:GetService("TextChatService")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+
+local ChatLook = {}
+
+local BUBBLE_COLOR = Color3.fromRGB(255, 214, 64)
+local BUBBLE_TEXT_COLOR = Color3.fromRGB(30, 30, 36)
+local BUBBLE_FONT = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Heavy)
+local MARK = "⌨ " -- BubbleChatMessageProperties has no icon property, so the mark goes before the (filtered) text
+local TAG_COLOR = "#F2A900" -- a deep yellow: the chat window sits over the bright white hall
+
+local function fromChatter(message: TextChatMessage): boolean
+	local source = message.TextSource
+	local player = source and Players:GetPlayerByUserId(source.UserId)
+	return player ~= nil and player:GetAttribute("BW_ChatMode") == true
+end
+
+function ChatLook.start()
+	task.spawn(function()
+		-- (Studio adds the default configuration to a place when it opens it; a Rojo-built place file may lack it.)
+		local bubbles = TextChatService:WaitForChild("BubbleChatConfiguration", 10)
+		if bubbles and bubbles:IsA("BubbleChatConfiguration") then
+			bubbles.MinimizeDistance = Config.CHAT_BUBBLE_MINIMIZE_DISTANCE
+			bubbles.MaxDistance = Config.CHAT_BUBBLE_MAX_DISTANCE
+			bubbles.VerticalStudsOffset = Config.CHAT_BUBBLE_VERTICAL_OFFSET -- clear of our name + hearts tag
+		else
+			warn("[BannedWords] no BubbleChatConfiguration: chat bubbles keep Roblox's default distances")
+		end
+	end)
+	-- (Each callback may be set in one place only; this module owns both.)
+	TextChatService.OnIncomingMessage = function(message: TextChatMessage): TextChatMessageProperties?
+		if not fromChatter(message) then
+			return nil
+		end
+		local properties = Instance.new("TextChatMessageProperties")
+		properties.PrefixText = string.format('<b><font color="%s">%s</font></b> %s', TAG_COLOR, Config.TEXT.CHAT_TAG, message.PrefixText)
+		return properties
+	end
+	TextChatService.OnBubbleAdded = function(message: TextChatMessage, _adornee: Instance?): BubbleChatMessageProperties?
+		if message.Text == "" or not fromChatter(message) then
+			return nil
+		end
+		local properties = Instance.new("BubbleChatMessageProperties")
+		properties.BackgroundColor3 = BUBBLE_COLOR
+		properties.TextColor3 = BUBBLE_TEXT_COLOR
+		properties.FontFace = BUBBLE_FONT
+		properties.TextSize = Config.CHAT_BUBBLE_TEXT_SIZE
+		properties.Text = MARK .. message.Text
+		if message.Translation ~= "" then
+			properties.Translation = MARK .. message.Translation -- viewers who see it translated get the mark too
+		end
+		return properties
+	end
+end
+
+return ChatLook
 ]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "FlatVoice"; s.Source = [====[--!strict
 -- Everyone hears everyone at the same volume, wherever they are on the map (owner decision 2026-10-17).
@@ -3686,6 +4005,8 @@ local State = {
 	-- userId string -> visible words (nil words = my own, hidden). Empty until the banned words come back (bundle 5).
 	words = {} :: { [string]: WordsEntry },
 	micTested = false,
+	-- May I join by chat? The server tells only me: checking / yes / no / voice (a voice account) / error.
+	chatAccess = "checking",
 }
 
 function State.myId(): number
@@ -3791,53 +4112,114 @@ end
 return Hud
 ]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "MicPanel"; s.Source = [====[--!strict
--- Voice connection and mic test lines (rows 0 and 1 under the status board), plus the earphone tip.
--- Both are empty while I play with a working mic, so nothing covers the chair row.
+-- Getting ready (docs/DESIGN_V3.md §2, §7): the voice connection and mic test lines (rows 0 and 1 under the status
+-- board), and a "join by chat" button (row 2) for accounts without voice that may chat (owner 2026-10-23: voice
+-- accounts join by voice only). All of it is empty while I play, so nothing covers the chair row (a voice player
+-- still sees a muted mic warning).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Style = require(script.Parent:WaitForChild("Style"))
 
 local MicPanel = {}
 
+export type Ready = {
+	status: string, -- Speech.status(): NoVoice / Disconnected / Muted / Listening / Speaking
+	micTested: boolean,
+	inMyRound: boolean, -- I play in the round being played
+	readyCount: number?, -- players ready to play (voice or chat)
+	chatAccess: string, -- from the server, to me only: checking / yes / no / voice / error
+	chatMode: boolean, -- I join by chat (server attribute BW_ChatMode)
+}
+
+local TEXT = Config.TEXT
 local voiceL: TextLabel
 local testL: TextLabel
+local chatButton: TextButton
+local chatMode = false
 
-function MicPanel.build()
+-- onChat(on): the player pressed the chat button (join by chat, or stop).
+function MicPanel.build(onChat: (boolean) -> ())
 	voiceL = Style.line(0, Style.RED)
 	testL = Style.line(1, Style.AMBER)
+	chatButton = Instance.new("TextButton")
+	chatButton.Name = "ChatJoin"
+	chatButton.AnchorPoint = Vector2.new(0.5, 0)
+	chatButton.Position = UDim2.new(0.5, 0, 0, Style.row(2) + 2)
+	chatButton.Size = UDim2.fromOffset(240, 34)
+	chatButton.BackgroundColor3 = Style.PANEL
+	chatButton.BackgroundTransparency = 0.15
+	chatButton.FontFace = Style.BOLD
+	chatButton.TextSize = 18
+	chatButton.TextColor3 = Style.AMBER
+	chatButton.Visible = false
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = chatButton
+	chatButton.Parent = Style.gui()
+	chatButton.Activated:Connect(function()
+		onChat(not chatMode)
+	end)
 end
 
-function MicPanel.setVoice(status: string)
-	if status == "NoVoice" then
-		voiceL.Text = "음성 채팅을 쓸 수 없는 계정이에요 (만 13세 이상 + 연령 인증 필요)"
-	elseif status == "Disconnected" then
-		voiceL.Text = "음성 채팅 연결 필요 · 왼쪽 위 ≡ 메뉴(또는 ESC) → 설정 → 음성 채팅 연결"
-	elseif status == "Muted" then
-		voiceL.Text = "마이크가 꺼져 있어요"
-	else
-		voiceL.Text = ""
-	end
+-- The server found no voice on this account (chat checked instead): "connect voice" would ask for the impossible.
+local function noVoiceAccount(r: Ready): boolean
+	return r.chatAccess == "yes" or r.chatAccess == "no" or r.chatAccess == "error"
 end
 
--- What the player should do next to take a seat. `inMyRound` hides it while I'm playing.
-function MicPanel.setTest(status: string, micTested: boolean, inMyRound: boolean, readyCount: number?)
-	local text, done = "", false
-	if inMyRound then
-		text = ""
-	elseif status == "NoVoice" then
-		text = "음성 채팅을 쓸 수 없는 계정이라 관전만 할 수 있어요"
-	elseif status == "Disconnected" then
-		text = "음성을 연결하면 다음 판부터 참가할 수 있어요"
-	elseif status == "Muted" then
-		text = "마이크를 켜 주세요"
-	elseif not micTested then
-		text = "마이크 테스트 · 아무 말이나 해 보세요"
-	else
-		done = true
-		local ready = if readyCount then string.format("준비 완료! (준비된 사람 %d명)", readyCount) else "준비 완료!"
-		-- Speakers can feed other people's voices back into my mic, and others say my words on purpose.
-		text = ready .. " · 이어폰을 쓰면 억울한 탈락을 막을 수 있어요"
+local function voiceLine(r: Ready): string
+	if r.chatMode then
+		return "" -- playing by chat: no voice nagging
+	elseif r.status == "NoVoice" or (r.status == "Disconnected" and noVoiceAccount(r)) then
+		return TEXT.VOICE_NONE
+	elseif r.status == "Disconnected" then
+		return TEXT.VOICE_CONNECT
+	elseif r.status == "Muted" then
+		return TEXT.VOICE_MUTED
 	end
+	return ""
+end
+
+-- Without a connected voice: what the chat check says I can do.
+local function withoutVoice(r: Ready): string
+	if r.chatAccess == "yes" then
+		return TEXT.OR_CHAT
+	elseif r.chatAccess == "checking" then
+		return TEXT.CHAT_CHECKING
+	elseif r.chatAccess == "error" then
+		return TEXT.CHAT_CHECK_FAILED
+	elseif r.chatAccess == "no" then
+		return TEXT.NO_VOICE_NO_CHAT
+	end
+	return TEXT.CONNECT_TO_PLAY -- a voice account: connect voice
+end
+
+-- What the player should do next to take a seat (and whether that is done).
+local function nextStep(r: Ready): (string, boolean)
+	if r.inMyRound then
+		return "", false
+	elseif r.chatMode then
+		return TEXT.CHAT_JOINED, true
+	elseif r.status == "NoVoice" or r.status == "Disconnected" then
+		return withoutVoice(r), false
+	elseif r.status == "Muted" then
+		return TEXT.MIC_ON, false
+	elseif not r.micTested then
+		return TEXT.MIC_TEST, false
+	end
+	local ready = if r.readyCount then string.format(TEXT.READY_COUNT, r.readyCount) else TEXT.READY
+	return ready .. " · " .. TEXT.HEADSET_TIP, true
+end
+
+function MicPanel.set(r: Ready)
+	chatMode = r.chatMode
+	voiceL.Text = voiceLine(r)
+	local text, done = nextStep(r)
 	testL.Text = text
 	testL.TextColor3 = if done then Style.GREEN else Style.AMBER
+	local noVoice = r.status == "NoVoice" or r.status == "Disconnected"
+	chatButton.Visible = not r.inMyRound and (r.chatMode or (r.chatAccess == "yes" and noVoice))
+	chatButton.Text = if r.chatMode then TEXT.CHAT_CANCEL else TEXT.CHAT_JOIN
 end
 
 return MicPanel
@@ -3982,11 +4364,16 @@ function Style.limit(frame: GuiObject, min: Vector2, max: Vector2)
 	c.Parent = frame
 end
 
+-- The top (pixels) of row 0, 1, 2 ... under the status board.
+function Style.row(row: number): number
+	return 78 + row * 26
+end
+
 -- A line of text centred under the status board (row 0, 1, 2 ...).
 function Style.line(row: number, color: Color3): TextLabel
 	local l = Style.label(Style.gui(), Style.BOLD, 20, color)
 	l.AnchorPoint = Vector2.new(0.5, 0)
-	l.Position = UDim2.new(0.5, 0, 0, 78 + row * 26)
+	l.Position = UDim2.new(0.5, 0, 0, Style.row(row))
 	l.Size = UDim2.new(0.7, 0, 0, 24)
 	l.TextStrokeTransparency = 0.5
 	return l
@@ -4027,4 +4414,7 @@ return Toast
 n7.Parent = n6
 n6.Parent = parents[3]
 game:GetService("VoiceChatService").UseAudioApi = Enum.AudioApiRollout.Enabled
+if game:GetService("TextChatService").ChatVersion ~= Enum.ChatVersion.TextChatService then
+	return "game installed - WARNING: set TextChatService.ChatVersion to TextChatService in Studio (scripts cannot)"
+end
 return "game installed"

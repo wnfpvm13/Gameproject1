@@ -7,9 +7,10 @@ the REAL module sources from src/ + the test file. The modules run unchanged; on
 `os.clock`, `Random`, `Instance` and the remotes (Net) are fakes.
   speech  src/client/Speech.luau: transcript start ranges, late texts, ~10 s cuts, waitSettled, unstable notice
   server  Config, Judge, WordBank, Match, JudgeService, WordService: range judging, settle at the end of a round,
-          per-player habit words (kept for phase 2 speech judging and the bundle 5 banned words)
-  round   Config, Match, LifeService, Timeline, MissionRunner, RoundService (+ stub chairs, stands, voice, scores and
-          a scripted mission): lives rules, the time budget, the final triggers, whole rounds to the result
+          per-player habit words (kept for phase 2 speech judging and the bundle 5 banned words), and no fixed UI
+          text (Config.TEXT) containing a word-bank word
+  round   Config, Match, LifeService, Timeline, MissionRunner, ChatService, RoundService (+ stub chairs, stands, voice,
+          scores and a scripted mission): lives rules, the time budget, the final triggers, whole rounds, joining by chat
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
 """
 import io, os, subprocess, sys, tempfile
@@ -32,6 +33,8 @@ ROUND_MODULES = [
     ("LifeService", "src/server/services/LifeService.luau"),
     ("Timeline", "src/server/services/Timeline.luau"),
     ("MissionRunner", "src/server/services/MissionRunner.luau"),
+    ("ChatService", "src/server/services/ChatService.luau"),
+    ("VoiceServiceReal", "src/server/services/VoiceService.luau"),  # section 9 (RoundService gets a stub)
     ("RoundService", "src/server/RoundService.luau"),
 ]
 

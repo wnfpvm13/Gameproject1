@@ -2,7 +2,8 @@
 -- flying, simultaneous fails, everyone at once -> final, subjective limits, AFK), Timeline (time up, early final),
 -- and whole rounds of the real RoundService with stub chairs/stands/voice/scores and a scripted mission in place
 -- of the Studio test mission: 8 min -> final, time budget, final cap -> joint winners, 3 left of 4+ -> final at once,
--- everyone at once -> final among them, one left -> winner, leaving is out, the Studio fail key.
+-- everyone at once -> final among them, one left -> winner, leaving is out, the Studio fail key; joining by chat
+-- (ChatService: privacy of the check, retries, voice accounts, the round lock) and the real VoiceService routing.
 local Config = require(node("Config"))
 local Match = require(node("Match"))
 local LifeService = require(node("LifeService"))
@@ -29,7 +30,17 @@ local function fakeCharacter()
 	return character
 end
 local function fakePlayer(i)
-	return { Name = "P" .. i, UserId = i, DisplayName = "P" .. i, Parent = Players, Character = fakeCharacter(), CharacterAdded = signal() }
+	local attributes = {}
+	return {
+		Name = "P" .. i,
+		UserId = i,
+		DisplayName = "P" .. i,
+		Parent = Players,
+		Character = fakeCharacter(),
+		CharacterAdded = signal(),
+		SetAttribute = function(_, name, value) attributes[name] = value end,
+		GetAttribute = function(_, name) return attributes[name] end,
+	}
 end
 
 ---------------------------------------------------------------- 5. LifeService
@@ -186,9 +197,13 @@ function Spectator.endRound() end
 function Spectator.toStands(player) table.insert(Spectator.stands, { player = player, at = now }) end
 loaders.SpectatorService = function() return Spectator end
 
-local Voice = { speakers = nil }
+local Voice = { speakers = nil, silenced = nil, silencedCalls = 0 }
 function Voice.start() end
 function Voice.setSpeakers(ids) Voice.speakers = ids end
+function Voice.setSilenced(ids)
+	Voice.silenced = ids
+	Voice.silencedCalls += 1
+end
 loaders.VoiceService = function() return Voice end
 
 local Score = { added = {} }
@@ -602,5 +617,230 @@ for _, line in warnings do
 	end
 end
 check("7zf no round crashed; the only mission error is 7H's", crashed == 0 and #warnings == 1, table.concat(warnings, " | "))
+
+---------------------------------------------------------------- 8. joining by chat (ChatService through RoundService)
+do
+	local chatJoin = NetStub.listeners.ChatJoin
+	local ready = NetStub.listeners.Ready
+	local function join(player, on) -- one request, after the per-player cooldown has passed
+		at(now + Config.CHAT_JOIN_COOLDOWN)
+		chatJoin(player, on)
+	end
+	local function accessOf(player) -- the last ChatAccess state sent to that player
+		for i = #NetStub.sent, 1, -1 do
+			local m = NetStub.sent[i]
+			if m.name == "ChatAccess" and m.to == player then
+				return m.payload.state
+			end
+		end
+		return nil
+	end
+	local function arrive(player)
+		task.spawn(Players.PlayerAdded.fire, player)
+	end
+	local function lastState()
+		for i = #NetStub.sent, 1, -1 do
+			if NetStub.sent[i].name == "RoundState" then
+				return NetStub.sent[i].payload
+			end
+		end
+		return nil
+	end
+
+	local p1, p2, p3, pv = fakePlayer(3001), fakePlayer(3002), fakePlayer(3003), fakePlayer(3005)
+	chatAllowed[3002] = false
+	voiceEnabled[3005] = true
+	arrive(p1)
+	arrive(p2)
+	arrive(p3)
+	arrive(pv)
+	local private = true
+	for _, m in NetStub.sent do
+		if m.name == "ChatAccess" and m.to == nil then
+			private = false
+		end
+	end
+	check("8a each account is checked once and told privately: may chat / may not / a voice account", accessOf(p1) == "yes"
+		and accessOf(p2) == "no" and accessOf(pv) == "voice" and chatCalls[3001] == 1 and chatCalls[3005] == nil and private
+		and p1:GetAttribute("BW_CanChat") == nil)
+
+	local warned = #warnings
+	chatBroken = true
+	local p4 = fakePlayer(3004)
+	RunService.IsStudio = function() return false end
+	arrive(p4)
+	local during = accessOf(p4)
+	at(now + Config.CHAT_CHECK_RETRIES[1] + Config.CHAT_CHECK_RETRIES[2] + 1)
+	RunService.IsStudio = function() return true end
+	check("8b a chat check that keeps failing is retried, then no chat on a live server (each failure reported)",
+		during == "checking" and accessOf(p4) == "error" and chatCalls[3004] == 1 + #Config.CHAT_CHECK_RETRIES
+		and #warnings == warned + chatCalls[3004])
+	local p6 = fakePlayer(3006)
+	arrive(p6)
+	chatBroken = false
+	at(now + Config.CHAT_CHECK_RETRIES[1] + 0.5)
+	check("8c a retry that works gives the answer", accessOf(p6) == "yes" and chatCalls[3006] == 2)
+	voiceBroken = true
+	local p7 = fakePlayer(3007)
+	voiceEnabled[3007] = true
+	arrive(p7)
+	voiceBroken = false
+	check("8d a failing voice check counts as no voice (owner 2026-10-23)", accessOf(p7) == "yes")
+
+	chatDelay = 3
+	local p8, p9 = fakePlayer(3008), fakePlayer(3009)
+	arrive(p8)
+	arrive(p9)
+	join(p8, true) -- 1 s in: the 3 s check is still running
+	local refused = Match.chatJoin[p8] == nil and accessOf(p8) == "checking"
+	p9.Parent = nil
+	task.spawn(Players.PlayerRemoving.fire, p9)
+	at(now + 3)
+	chatDelay = 0
+	check("8e a request while the check runs is refused", refused and accessOf(p8) == "yes")
+	check("8f a player who leaves during the check is told nothing afterwards", accessOf(p9) == "checking")
+	join(p8, true)
+	check("8g once checked, that player can join by chat", Match.chatJoin[p8] == true and p8:GetAttribute("BW_ChatMode") == true)
+
+	join(p1, true)
+	check("8h a player who may chat joins by chat", Match.chatJoin[p1] == true and p1:GetAttribute("BW_ChatMode") == true)
+	chatJoin(p1, false)
+	check("8i requests closer than CHAT_JOIN_COOLDOWN are ignored (each one broadcasts)", Match.chatJoin[p1] == true)
+	at(now + Config.CHAT_JOIN_COOLDOWN)
+	chatJoin(p1, "no")
+	chatJoin(p1, nil)
+	check("8j a request that is not true/false is ignored (it does not cancel)", Match.chatJoin[p1] == true)
+	join(p2, true)
+	join(pv, true)
+	check("8k no chat for an account that may not chat, nor for a voice account", Match.chatJoin[p2] == nil and Match.chatJoin[pv] == nil)
+	ready(p3, true)
+	join(p3, true)
+	check("8l a player whose voice is ready cannot join by chat", Match.chatJoin[p3] == nil)
+	ready(p1, true)
+	check("8m voice ready -> joins by voice from now on", Match.chatJoin[p1] == nil and p1:GetAttribute("BW_ChatMode") == false)
+	ready(p1, false)
+	join(p1, true)
+	local joined = Match.chatJoin[p1] == true
+	join(p1, false)
+	check("8n leaving chat mode", joined and Match.chatJoin[p1] == nil and p1:GetAttribute("BW_ChatMode") == false)
+
+	join(p1, true)
+	Config.REQUIRE_VOICE_READY = true
+	playerList = { p1, p2, p3 }
+	local eligible = Match.eligiblePlayers()
+	Players.PlayerRemoving.fire(p1) -- (still listed while it runs, as in Roblox)
+	local state = lastState()
+	playerList = {}
+	Config.REQUIRE_VOICE_READY = false
+	check("8o live servers seat voice-ready and chat players only", #eligible == 2 and table.find(eligible, p1) ~= nil
+		and table.find(eligible, p3) ~= nil and table.find(eligible, p2) == nil)
+	check("8p a chat player who leaves is no longer counted in the state sent then", state ~= nil and state.readyCount == 1
+		and Match.chatJoin[p1] == nil)
+	ready(p3, false)
+
+	local sentBefore = #NetStub.sent
+	NetStub.listeners.Sync(p2)
+	local resent = false
+	for i = sentBefore + 1, #NetStub.sent do
+		local m = NetStub.sent[i]
+		resent = resent or (m.name == "ChatAccess" and m.to == p2 and m.payload.state == "no")
+	end
+	check("8v Sync sends the player's chat access again (a late client missed it)", resent)
+	voiceDelay = 2
+	local p10 = fakePlayer(3010)
+	arrive(p10)
+	p10.Parent = nil
+	task.spawn(Players.PlayerRemoving.fire, p10)
+	at(now + 2.5)
+	voiceDelay = 0
+	check("8w a player who leaves during the voice check is not checked further", chatCalls[3010] == nil
+		and accessOf(p10) == "checking")
+	chatBroken = true
+	local p11 = fakePlayer(3011)
+	arrive(p11)
+	at(now + Config.CHAT_CHECK_RETRIES[1] + Config.CHAT_CHECK_RETRIES[2] + 1)
+	chatBroken = false
+	check("8x in Studio a chat check that keeps failing still lets the tester try chat mode", accessOf(p11) == "yes")
+	workspaceAttributes.BW_ChatAccess = "yes"
+	local p12, p13 = fakePlayer(3012), fakePlayer(3013)
+	voiceEnabled[3012] = true
+	voiceEnabled[3013] = true
+	arrive(p12)
+	RunService.IsStudio = function() return false end
+	arrive(p13)
+	RunService.IsStudio = function() return true end
+	workspaceAttributes.BW_ChatAccess = nil
+	check("8y the Studio setting BW_ChatAccess forces the result (live servers ignore it)", accessOf(p12) == "yes"
+		and accessOf(p13) == "voice")
+
+	-- A round with two chat participants (one connects voice mid-round) and a voice player.
+	local ps = newPlayers(3)
+	join(ps[1], true)
+	join(ps[2], true)
+	local since = now
+	local play = begin(ps, 10, nil, nil)
+	local silenced = Voice.silenced or {}
+	check("8q chat participants play by chat and nobody hears their voice", #silenced == 2
+		and table.find(silenced, ps[1].UserId) ~= nil and table.find(silenced, ps[2].UserId) ~= nil
+		and Match.participants[ps[1]].chat == true and Match.participants[ps[3]].chat == false)
+	local calls = Voice.silencedCalls
+	join(ps[1], false)
+	ready(ps[1], true) -- their voice connects mid-round
+	check("8r the choice holds for the round (also when their voice connects)", Match.chatJoin[ps[1]] == true
+		and Match.participants[ps[1]].chat == true and Voice.silencedCalls == calls)
+	at(play + 2)
+	local devFling = NetStub.listeners.DevFling
+	devFling(ps[3], "out")
+	devFling(ps[2], "out")
+	advanceUntil(function() return Match.phase == "Result" end, 60)
+	check("8s at the result everyone is heard again", Voice.silenced ~= nil and #Voice.silenced == 0 and Voice.speakers == nil)
+	join(ps[2], false)
+	check("8t at the result the choice can change again", Match.chatJoin[ps[2]] == nil)
+	finish(since)
+	check("8u after the round, a chat player whose voice got ready joins by voice", Match.chatJoin[ps[1]] == nil
+		and ps[1]:GetAttribute("BW_ChatMode") == false)
+end
+
+---------------------------------------------------------------- 9. VoiceService (the real module): who hears whom
+do
+	local RealVoice = require(node("VoiceServiceReal"))
+	local function newInput()
+		local input = { AccessType = nil, list = nil }
+		function input:IsA(className) return className == "AudioDeviceInput" end
+		function input:SetUserIdAccessList(list) self.list = list end
+		return input
+	end
+	local function voicePlayer(id)
+		local p = { UserId = id, Name = "V" .. id, Parent = Players, Character = nil, CharacterAdded = signal(), ChildAdded = signal() }
+		p.input = newInput()
+		function p:FindFirstChildOfClass(className) return if className == "AudioDeviceInput" then self.input else nil end
+		return p
+	end
+	local alive, chatter, spectator, late = voicePlayer(4001), voicePlayer(4002), voicePlayer(4003), voicePlayer(4004)
+	late.input = nil -- connects voice later
+	playerList = { alive, chatter, spectator, late }
+	RealVoice.start()
+	RealVoice.setSpeakers({ alive.UserId, chatter.UserId })
+	RealVoice.setSilenced({ chatter.UserId })
+	local Allow, Deny = Enum.AccessModifierType.Allow, Enum.AccessModifierType.Deny
+	check("9a an alive participant is heard by everyone", alive.input.AccessType == Deny and #alive.input.list == 0)
+	check("9b a chat participant is heard by nobody, even while alive", chatter.input.AccessType == Allow and #chatter.input.list == 0)
+	check("9c spectators are heard by spectators only", spectator.input.AccessType == Allow
+		and table.find(spectator.input.list, spectator.UserId) ~= nil and table.find(spectator.input.list, late.UserId) ~= nil
+		and table.find(spectator.input.list, alive.UserId) == nil and table.find(spectator.input.list, chatter.UserId) == nil)
+	RealVoice.setSilenced({ chatter.UserId, late.UserId })
+	late.input = newInput()
+	late.ChildAdded.fire(late.input) -- their voice connects mid-round
+	check("9d a voice that connects mid-round gets the current setting (silenced)", late.input.AccessType == Allow
+		and #late.input.list == 0)
+	RealVoice.setSpeakers(nil)
+	RealVoice.setSilenced({})
+	local open = true
+	for _, p in playerList do
+		open = open and p.input.AccessType == Deny and #p.input.list == 0
+	end
+	check("9e round over: everyone is heard by everyone", open)
+	playerList = {}
+end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

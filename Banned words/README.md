@@ -5,7 +5,7 @@ MonCook과 별개인 로블록스 음성 파티 게임. V3: 밝은 실내 수영
 (V2는 원형 라운지 의자에서 받아쓰기로 판정했다.)
 
 **설계 기준: V3 (2026-10-22) — [docs/DESIGN_V3.md](docs/DESIGN_V3.md)** (실내 수영장 미션 + 진행자 + 금칙어, 1단계 구현 중).
-지금 코드는 V3 1단계 묶음 2b까지 — 판 규칙(목숨 3개·8분·결승): [docs/ROUND_RULES_2026-10-22.md](docs/ROUND_RULES_2026-10-22.md), 발사 연출: [docs/FLING_2026-10-22.md](docs/FLING_2026-10-22.md). 금칙어·진행자·실제 미션은 아직 없다(라이브 서버는 미션 없이 이야기만 하다가, 8분이 지나거나 퇴장으로 판이 정해지면 남은 사람이 결승 없이 우승). V2 규칙·코드 구조·테스트 기록은 [docs/DESIGN_V2.md](docs/DESIGN_V2.md), V2 마지막 상태는 git 태그 `banned-words-v2-final`.
+지금 코드는 V3 1단계 묶음 2c까지 — 채팅 참가(음성이 안 되는 사람, 말풍선 강조): [docs/CHAT_JOIN_2026-10-23.md](docs/CHAT_JOIN_2026-10-23.md), 판 규칙(목숨 3개·8분·결승): [docs/ROUND_RULES_2026-10-22.md](docs/ROUND_RULES_2026-10-22.md), 발사 연출: [docs/FLING_2026-10-22.md](docs/FLING_2026-10-22.md). 금칙어·진행자·실제 미션은 아직 없다(라이브 서버는 미션 없이 이야기만 하다가, 8분이 지나거나 퇴장으로 판이 정해지면 남은 사람이 결승 없이 우승). V2 규칙·코드 구조·테스트 기록은 [docs/DESIGN_V2.md](docs/DESIGN_V2.md), V2 마지막 상태는 git 태그 `banned-words-v2-final`.
 - V3 맵(밝은 실내 수영장, 맵 `tools/build_pool_hall.luau` → 조명 `tools/build_pool_lighting.luau`): [docs/VISUAL_V3_POOL_2026-10-22.md](docs/VISUAL_V3_POOL_2026-10-22.md)
 - 제작 내역 전체(처음부터 V2.1.1까지): [docs/HISTORY_2026-10-20.md](docs/HISTORY_2026-10-20.md)
 - 그래픽(A안 예능 토크 스튜디오 세트, 맵 `tools/build_lounge_map.luau` → 조명 `tools/build_lounge_lighting.luau`): [docs/VISUAL_PLAN_2026-10-21.md](docs/VISUAL_PLAN_2026-10-21.md)

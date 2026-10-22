@@ -6,8 +6,9 @@
 --   LifeLost    who lost a life / is out:    Sync        "send me the current state"
 --               { reason, players = {        Reaction    spectator emoji
 --               { userId, name, lives, out }  DevFling    Studio only: (mode) lose a life / "out" / "show"
---               }, final = they all fell at
+--               }, final = they all fell at   ChatJoin    (on) join rounds by text chat instead of voice
 --               once and play the final }
+--   ChatAccess  to one player only: may I join by chat? { state = checking / yes / no / voice / error }
 --   Notice      short toast text
 --   Reaction    emoji shown above a player
 --   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
@@ -19,7 +20,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Net = {}
 
 local NAMES = {
-	"RoundState", "LifeLost", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling",
+	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
 	"Words", "WordWarn", "Settle", "Transcript", "VoicePing", "Settled",
 }
 

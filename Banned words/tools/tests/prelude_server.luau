@@ -108,6 +108,35 @@ local Players = {
 	PlayerAdded = signal(),
 }
 local RunService = { IsStudio = function() return true end }
+-- TextChatService:CanUserChatAsync / VoiceChatService:IsVoiceEnabledForUserIdAsync: every user may chat and has no
+-- voice unless chatAllowed[userId] == false / voiceEnabled[userId] == true. chatBroken / voiceBroken make the calls
+-- fail, chatDelay / voiceDelay make the checks yield that long, chatCalls counts chat checks per user.
+local chatAllowed, voiceEnabled, chatCalls = {}, {}, {}
+local chatBroken, voiceBroken, chatDelay, voiceDelay = false, false, 0, 0
+local TextChatService = {
+	CanUserChatAsync = function(_, userId)
+		chatCalls[userId] = (chatCalls[userId] or 0) + 1
+		if chatDelay > 0 then
+			task.wait(chatDelay)
+		end
+		if chatBroken then
+			error("chat permission service unavailable")
+		end
+		return chatAllowed[userId] ~= false
+	end,
+}
+local VoiceChatService = {
+	IsVoiceEnabledForUserIdAsync = function(_, userId)
+		if voiceDelay > 0 then
+			task.wait(voiceDelay)
+		end
+		if voiceBroken then
+			error("voice service unavailable")
+		end
+		return voiceEnabled[userId] == true
+	end,
+}
+local Enum = { AccessModifierType = { Allow = "Allow", Deny = "Deny" } }
 
 local loaders = {}
 local cache = {}
@@ -138,6 +167,10 @@ local game = {
 			return Players
 		elseif n == "RunService" then
 			return RunService
+		elseif n == "TextChatService" then
+			return TextChatService
+		elseif n == "VoiceChatService" then
+			return VoiceChatService
 		end
 		return node(n)
 	end,

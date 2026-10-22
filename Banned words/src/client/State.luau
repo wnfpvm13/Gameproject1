@@ -18,6 +18,8 @@ local State = {
 	-- userId string -> visible words (nil words = my own, hidden). Empty until the banned words come back (bundle 5).
 	words = {} :: { [string]: WordsEntry },
 	micTested = false,
+	-- May I join by chat? The server tells only me: checking / yes / no / voice (a voice account) / error.
+	chatAccess = "checking",
 }
 
 function State.myId(): number

@@ -70,6 +70,15 @@ return {
 	GETUP_RETRY_SECONDS = 0.2, -- after a launch my client stands my character up, retrying until it took
 	GETUP_TRIES = 5, -- (the network ownership comes back with or after PlatformStand)
 
+	-- Chat participants (docs/DESIGN_V3.md §7): their bubbles stand out and every bubble stays readable from the show
+	-- camera (43-49 studs from the chairs) and the far stands (about 120 studs).
+	CHAT_BUBBLE_MINIMIZE_DISTANCE = 150, -- studs; farther bubbles shrink to "..." (Roblox default 40)
+	CHAT_BUBBLE_MAX_DISTANCE = 200, -- farther bubbles are hidden (default 100)
+	CHAT_BUBBLE_TEXT_SIZE = 22, -- chat participants' bubbles (other bubbles keep the default 16)
+	-- Chat bubbles go up by this many studs so they sit above the name + hearts tag (client Billboards: 1.6 + 1.7
+	-- studs over the head). The banned words of bundle 5 add 1 stud per word row to that tag: raise this then.
+	CHAT_BUBBLE_VERTICAL_OFFSET = 2.5,
+
 	-- Transcript intake guards (client-side STT). 10 s of Korean speech is roughly 70 syllables = 210 bytes.
 	TRANSCRIPT_MAX_BYTES = 600,
 	TRANSCRIPT_BURST = 6, -- at most this many transcripts per window per player (spam guard)
@@ -79,7 +88,7 @@ return {
 	-- Fixed UI texts players may read aloud (checked against the word bank by tools/check_content.luau).
 	-- %s / %d are filled in by the code (names, numbers).
 	TEXT = {
-		NEED_READY = "마이크 준비된 플레이어 %d명 더 필요해요",
+		NEED_READY = "참가 준비된 플레이어 %d명 더 필요해요", -- voice ready or joining by chat
 		NEED_PLAYERS = "플레이어 %d명 더 필요해요",
 		COUNTDOWN = "곧 시작해요",
 		RECOVERING = "잠시 문제가 생겨서 다음 판을 준비해요",
@@ -100,6 +109,25 @@ return {
 		NO_WINNER = "우승자 없이 끝났어요",
 		SETTLING = "마지막 말을 확인하고 있어요…",
 		RECOGNITION_UNSTABLE = "음성 인식이 불안정해요 · 마이크 연결을 확인해 주세요",
+		-- Getting ready (MicPanel, docs/DESIGN_V3.md §2, §7): voice, or chat for players who cannot use voice.
+		VOICE_NONE = "음성 채팅을 쓸 수 없는 계정이에요 (만 13세 이상 + 연령 인증 필요)",
+		VOICE_CONNECT = "음성 채팅 연결 필요 · 왼쪽 위 ≡ 메뉴(또는 ESC) → 설정 → 음성 채팅 연결",
+		VOICE_MUTED = "마이크가 꺼져 있어요",
+		CONNECT_TO_PLAY = "음성을 연결하면 다음 판부터 참가할 수 있어요",
+		MIC_ON = "마이크를 켜 주세요",
+		MIC_TEST = "마이크 테스트 · 아무 말이나 해 보세요",
+		MIC_TESTED = "마이크 확인 완료!",
+		READY = "준비 완료!",
+		READY_COUNT = "준비 완료! (준비된 사람 %d명)",
+		HEADSET_TIP = "헤드셋을 쓰면 억울한 탈락을 막을 수 있어요", -- speakers feed others' voices back into the mic
+		OR_CHAT = "음성 대신 채팅으로 참가할 수 있어요",
+		NO_VOICE_NO_CHAT = "음성도 채팅도 쓸 수 없는 계정이라 관전만 할 수 있어요",
+		CHAT_CHECKING = "채팅으로 참가할 수 있는지 확인하고 있어요",
+		CHAT_CHECK_FAILED = "채팅 권한을 확인하지 못해서 지금은 관전만 할 수 있어요",
+		CHAT_JOIN = "⌨ 채팅으로 참가",
+		CHAT_CANCEL = "채팅 참가 취소",
+		CHAT_JOINED = "채팅으로 참가해요 · 판 중에는 음성이 꺼져요",
+		CHAT_TAG = "[채팅]", -- before a chat participant's name in the chat window
 	},
 
 	-- Scoring (session leaderstats, casual only).
@@ -114,6 +142,8 @@ return {
 	STAND_SPOTS_PER_ROW = 10, -- spectator spots along the stands marker, per tier row
 	REACTION_COOLDOWN = 1.2,
 	SYNC_COOLDOWN = 1, -- seconds between two "send me the state" requests from one player
+	CHAT_JOIN_COOLDOWN = 1, -- seconds between two "join by chat / stop" requests from one player (each one broadcasts)
+	CHAT_CHECK_RETRIES = { 5, 20 }, -- seconds before retrying a failed chat permission check (then: no chat for now)
 
 	-- Roblox-licensed Pro Sound Effects (public, free).
 	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)

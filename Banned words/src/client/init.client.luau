@@ -1,5 +1,5 @@
 -- 금칙어 게임 Korean client entry point: only wiring. Server events update State, then refresh() redraws
--- every part from State (HUD, head bubbles, camera, reaction bar, recognizer on/off, seat lock).
+-- every part from State (HUD, head bubbles, camera, reaction bar, getting ready, recognizer on/off, seat lock).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -15,6 +15,7 @@ local FlatVoice = require(script:WaitForChild("FlatVoice"))
 local ShowCamera = require(script:WaitForChild("ShowCamera"))
 local GetUp = require(script:WaitForChild("GetUp"))
 local Billboards = require(script:WaitForChild("Billboards"))
+local ChatLook = require(script:WaitForChild("ChatLook"))
 local Fx = require(script:WaitForChild("Fx"))
 local UI = script:WaitForChild("UI")
 local Hud = require(UI:WaitForChild("Hud"))
@@ -40,7 +41,8 @@ local function applySeatLock()
 end
 
 -- Ready = voice connected + said something once. The recognizer runs only for that mic test (docs/DESIGN_V3.md §2;
--- judging speech comes back in phase 2).
+-- judging speech comes back in phase 2). Accounts without voice may join by chat instead (§7; the server decides,
+-- tells me alone what I may do ("ChatAccess") and everyone who joins by chat (attribute BW_ChatMode)).
 local function refreshVoice()
 	local status = Speech.status()
 	local isReady = State.micTested and (status == "Listening" or status == "Speaking")
@@ -49,8 +51,14 @@ local function refreshVoice()
 		remotes.Ready:FireServer(isReady)
 	end
 	Speech.setEnabled(not State.micTested)
-	MicPanel.setVoice(status)
-	MicPanel.setTest(status, State.micTested, State.inRound() and State.isParticipant(State.myId()), State.round.readyCount)
+	MicPanel.set({
+		status = status,
+		micTested = State.micTested,
+		inMyRound = State.inRound() and State.isParticipant(State.myId()),
+		readyCount = State.round.readyCount,
+		chatAccess = State.chatAccess,
+		chatMode = player:GetAttribute("BW_ChatMode") == true,
+	})
 end
 
 -- Everyone on the chairs gets a head bubble (name + hearts) during a round, every participant in the result.
@@ -79,23 +87,27 @@ end
 -- Build UI and systems.
 Hud.build()
 Toast.build()
-MicPanel.build()
+MicPanel.build(function(on)
+	remotes.ChatJoin:FireServer(on)
+end)
 ReactionBar.build(function(index)
 	remotes.Reaction:FireServer(index)
 end)
 Fx.init()
 FlatVoice.start()
 GetUp.start()
+ChatLook.start()
 Speech.onStatus(function()
 	refreshVoice()
 end)
 Speech.onText(function()
 	if not State.micTested then
 		State.micTested = true
-		Toast.show("마이크 확인 완료!", "info")
+		Toast.show(Config.TEXT.MIC_TESTED, "info")
 		refreshVoice()
 	end
 end)
+player:GetAttributeChangedSignal("BW_ChatMode"):Connect(refreshVoice)
 Speech.onUnstable(function()
 	if not State.micTested then
 		Toast.show(Config.TEXT.RECOGNITION_UNSTABLE, "near")
@@ -127,6 +139,11 @@ end)
 remotes.Words.OnClientEvent:Connect(function(words)
 	State.words = words
 	refresh()
+end)
+
+remotes.ChatAccess.OnClientEvent:Connect(function(info)
+	State.chatAccess = info.state
+	refreshVoice()
 end)
 
 -- One event's lives lost (docs/DESIGN_V3.md §4): the bubbles pop, one toast names everyone (my own line first; when

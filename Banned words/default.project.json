@@ -28,6 +28,11 @@
         "UseAudioApi": "Enabled"
       }
     },
+    "TextChatService": {
+      "$properties": {
+        "ChatVersion": "TextChatService"
+      }
+    },
     "StarterGui": {
       "$ignoreUnknownInstances": true,
       "$properties": {

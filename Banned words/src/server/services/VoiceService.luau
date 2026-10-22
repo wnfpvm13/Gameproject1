@@ -4,6 +4,8 @@
 --    the flat curve set here replicates to every listener (src/client/FlatVoice.luau covers client-made emitters).
 -- 2. Players who are out and spectators are silent to the table: during a round their AudioDeviceInput is only
 --    audible to each other (docs/DESIGN_V3.md §13; with banned words they know every word).
+-- 3. Chat participants are heard by nobody during their round, even if their voice connects meanwhile (§7: speaking
+--    would get around the chat judging).
 local Players = game:GetService("Players")
 
 local VoiceService = {}
@@ -11,6 +13,7 @@ local VoiceService = {}
 local FLAT_CURVE = { [0] = 1, [2000] = 1 }
 
 local speakers: { [number]: boolean }? = nil -- userIds allowed to talk to the table; nil = no round, everyone open
+local silenced: { [number]: boolean } = {} -- userIds nobody hears (chat participants of the round)
 
 local function flatten(child: Instance)
 	if child:IsA("AudioEmitter") then
@@ -39,7 +42,10 @@ local function apply()
 	for _, player in Players:GetPlayers() do
 		local input = inputOf(player)
 		if input then
-			if speakers == nil or speakers[player.UserId] then
+			if silenced[player.UserId] then
+				input.AccessType = Enum.AccessModifierType.Allow
+				input:SetUserIdAccessList({}) -- nobody allowed: nobody hears
+			elseif speakers == nil or speakers[player.UserId] then
 				input.AccessType = Enum.AccessModifierType.Deny
 				input:SetUserIdAccessList({}) -- nobody denied: the whole server hears
 			else
@@ -60,6 +66,15 @@ function VoiceService.setSpeakers(userIds: { number }?)
 		speakers = set
 	else
 		speakers = nil
+	end
+	apply()
+end
+
+-- The chat participants of the round being played (an empty list when it is over).
+function VoiceService.setSilenced(userIds: { number })
+	table.clear(silenced)
+	for _, id in userIds do
+		silenced[id] = true
 	end
 	apply()
 end

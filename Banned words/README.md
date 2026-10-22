@@ -1,10 +1,12 @@
 # Banned words — 금칙어 게임 Korean
 
-MonCook과 별개인 로블록스 음성 파티 게임. 마이크 음성을 로블록스 `AudioSpeechToText`로 받아써서,
-자기 머리 위 금칙어(본인만 못 봄)를 말하면 원형 라운지 의자에서 날아가 "펑" 하고 탈락한다.
+MonCook과 별개인 로블록스 음성 파티 게임. V3: 밝은 실내 수영장의 플라잉 체어에 앉아 미션을 하고, 자기만 모르는
+금칙어(머리 위, 본인만 못 봄)를 피한다. 실패하면 의자가 뒤로 젖혀지며 "펑" 하고 래그돌로 수영장에 날아간다.
+(V2는 원형 라운지 의자에서 받아쓰기로 판정했다.)
 
 **설계 기준: V3 (2026-10-22) — [docs/DESIGN_V3.md](docs/DESIGN_V3.md)** (실내 수영장 미션 + 진행자 + 금칙어, 1단계 구현 중).
 지금 코드는 아직 V2.1.2 — [docs/DESIGN_V2.md](docs/DESIGN_V2.md) (규칙, 코드 구조, 테스트 기록). V2 마지막 상태는 git 태그 `banned-words-v2-final`.
+- V3 맵(밝은 실내 수영장, 맵 `tools/build_pool_hall.luau` → 조명 `tools/build_pool_lighting.luau`): [docs/VISUAL_V3_POOL_2026-10-22.md](docs/VISUAL_V3_POOL_2026-10-22.md)
 - 제작 내역 전체(처음부터 V2.1.1까지): [docs/HISTORY_2026-10-20.md](docs/HISTORY_2026-10-20.md)
 - 그래픽(A안 예능 토크 스튜디오 세트, 맵 `tools/build_lounge_map.luau` → 조명 `tools/build_lounge_lighting.luau`): [docs/VISUAL_PLAN_2026-10-21.md](docs/VISUAL_PLAN_2026-10-21.md)
 - 가상 시계 테스트 + 의존 방향 검사(Studio 없이): `python -I tools/tests/run_tests.py` (luau CLI 필요)

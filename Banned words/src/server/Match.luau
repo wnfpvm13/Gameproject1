@@ -35,7 +35,6 @@ local Match = {
 	saidCount = 0, -- launches for saying a word (tells a real win from a walkover)
 	lastEndedAt = -math.huge, -- os.clock() when the last result finished (rematch countdown)
 	ready = {} :: { [Player]: boolean },
-	loading = {} :: { [Player]: boolean }, -- character being reloaded (not eligible until it is in place)
 	hostHeldUntil = 0, -- os.clock(): no new mission stage / vote / event before this (one big thing at a time)
 	nextWordWarnAt = math.huge, -- os.clock() of the next (public, scheduled) word warning
 	theme = nil :: string?,
@@ -77,7 +76,7 @@ function Match.eligiblePlayers(): { Player }
 		local character = player.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 		local placed = character ~= nil and character.Parent == workspace and character:FindFirstChild("HumanoidRootPart") ~= nil
-		if humanoid and humanoid.Health > 0 and placed and not Match.loading[player] and (Match.ready[player] or not Config.REQUIRE_VOICE_READY) then
+		if humanoid and humanoid.Health > 0 and placed and (Match.ready[player] or not Config.REQUIRE_VOICE_READY) then
 			table.insert(list, player)
 		end
 	end

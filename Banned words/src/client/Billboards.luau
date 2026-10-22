@@ -1,6 +1,7 @@
 --!strict
 -- Word bubbles above heads: each other alive participant's words (up to 3, newest flashes) and name.
 -- My own bubble is never drawn while I play (the HUD shows "??? × n"); in the result everyone's words show.
+-- The V3 pool hall is white, so the cards carry a thick navy outline and the name sits on a navy pill.
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
@@ -8,11 +9,13 @@ local Billboards = {}
 
 local WORD_FONT = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Heavy)
 local NAME_FONT = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold)
-local WIDTH = 4.6 -- studs; chairs on the ring are ~6.3 studs apart
+local WIDTH = 4.6 -- studs; the flying chairs are 5 studs apart
 local ROW = 1.0 -- studs per word row
 local NAME_ROW = 0.9
 local CARD_COLOR = Color3.fromRGB(255, 255, 255)
 local NEW_COLOR = Color3.fromRGB(255, 225, 90)
+local OUTLINE = Color3.fromRGB(22, 34, 64)
+local NAME_PILL = Color3.fromRGB(22, 34, 64)
 
 local ALARM_SECONDS = 1.2
 
@@ -46,8 +49,8 @@ local function wordRow(parent: Instance, text: string, order: number, fresh: boo
 	corner.CornerRadius = UDim.new(0.25, 0)
 	corner.Parent = row
 	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 2.5
-	stroke.Color = Color3.fromRGB(40, 40, 48)
+	stroke.Thickness = 3
+	stroke.Color = OUTLINE
 	stroke.Parent = row
 	local label = Instance.new("TextLabel")
 	label.Name = "Text"
@@ -107,15 +110,24 @@ local function build(player: Player, words: { string }, caption: string, previou
 
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "Caption"
-	nameLabel.BackgroundTransparency = 1
-	nameLabel.Position = UDim2.fromScale(0, list.Size.Y.Scale + 0.02)
-	nameLabel.Size = UDim2.fromScale(1, 1 - list.Size.Y.Scale - 0.02)
+	nameLabel.BackgroundColor3 = NAME_PILL
+	nameLabel.BackgroundTransparency = 0.1
+	nameLabel.Position = UDim2.fromScale(0.1, list.Size.Y.Scale + 0.03)
+	nameLabel.Size = UDim2.fromScale(0.8, 1 - list.Size.Y.Scale - 0.03)
 	nameLabel.FontFace = NAME_FONT
 	nameLabel.TextScaled = true
 	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	nameLabel.TextStrokeTransparency = 0.3
 	nameLabel.Text = caption
 	nameLabel.Parent = gui
+	local pillCorner = Instance.new("UICorner")
+	pillCorner.CornerRadius = UDim.new(0.5, 0)
+	pillCorner.Parent = nameLabel
+	local namePad = Instance.new("UIPadding")
+	namePad.PaddingTop = UDim.new(0.12, 0)
+	namePad.PaddingBottom = UDim.new(0.12, 0)
+	namePad.PaddingLeft = UDim.new(0.06, 0)
+	namePad.PaddingRight = UDim.new(0.06, 0)
+	namePad.Parent = nameLabel
 
 	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 	if humanoid then

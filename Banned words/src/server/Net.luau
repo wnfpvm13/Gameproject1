@@ -9,16 +9,18 @@
 --   Host        theme, mission card, topic,  Reaction    ghost/spectator emoji
 --               event                        Vote        (voteKey, option id) mission vote
 --   VoteState   vote opened / closed         Settled     (key) my speech from before the cutoff is sent
---   Notice      short toast text
+--   Notice      short toast text                DevFling    Studio only: launch me (tests the flying chair)
 --   Reaction    emoji shown above a player
 --   Settle      round decided: { key, cutoff }
+--   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
+--   Splash      that player hit the water: { userId, position }
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = {}
 
 local NAMES = {
-	"RoundState", "Words", "WordWarn", "Eliminated", "Host", "VoteState", "Notice", "Reaction", "Settle",
-	"Transcript", "VoicePing", "Ready", "Sync", "Vote", "Settled",
+	"RoundState", "Words", "WordWarn", "Eliminated", "Host", "VoteState", "Notice", "Reaction", "Settle", "Fling",
+	"Splash", "Transcript", "VoicePing", "Ready", "Sync", "Vote", "Settled", "DevFling",
 }
 
 local folder: Folder

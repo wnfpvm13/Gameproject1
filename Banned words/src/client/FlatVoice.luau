@@ -10,6 +10,8 @@ local FLAT_CURVE = { [0] = 1, [2000] = 1 }
 
 local function flatten(emitter: Instance)
 	if emitter:IsA("AudioEmitter") then
+		-- The curve only counts in Custom mode (the default, but a preset would silently ignore it).
+		emitter.DistanceAttenuationMode = Enum.DistanceAttenuationMode.Custom
 		emitter:SetDistanceAttenuation(FLAT_CURVE)
 	end
 end

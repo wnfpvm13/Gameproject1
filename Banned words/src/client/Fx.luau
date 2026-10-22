@@ -1,6 +1,10 @@
 --!strict
--- Effects: elimination (buzzer, red flash, confetti "펑" where the body vanishes) and floating emoji reactions.
+-- Effects: the flying chair firing (seat flap snapping back on its hinge, "펑", smoke and confetti), the splash where
+-- the player hits the water, the elimination buzzer and red flash, and floating emoji reactions.
+-- The server only sends signals; every client animates the flap itself (a server-moved flap would stutter).
+local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
@@ -15,6 +19,29 @@ local CONFETTI = {
 
 local flash: Frame
 local buzzer: Sound
+local bang: Sound
+local splashSound: Sound
+local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
+local playing: { [BasePart]: number } = {} -- hinge -> current animation number
+
+local function sound(name: string, id: string, volume: number): Sound
+	local s = Instance.new("Sound")
+	s.Name = name
+	s.SoundId = id
+	s.Volume = volume
+	s.Parent = SoundService
+	return s
+end
+
+-- Plays a copy, so two launches close together do not cut each other's bang or splash (both sounds are under 4 s;
+-- the copy goes away after SOUND_COPY_SECONDS even if it never loaded).
+local SOUND_COPY_SECONDS = 8
+local function playCopy(template: Sound)
+	local copy = template:Clone()
+	copy.Parent = SoundService
+	copy:Play()
+	Debris:AddItem(copy, SOUND_COPY_SECONDS)
+end
 
 function Fx.init()
 	local gui = Instance.new("ScreenGui")
@@ -30,11 +57,9 @@ function Fx.init()
 	flash.BorderSizePixel = 0
 	flash.Parent = gui
 
-	buzzer = Instance.new("Sound")
-	buzzer.Name = "Buzzer"
-	buzzer.SoundId = Config.SOUND_BUZZER
-	buzzer.Volume = 0.6
-	buzzer.Parent = SoundService
+	buzzer = sound("Buzzer", Config.SOUND_BUZZER, 0.6)
+	bang = sound("Bang", Config.SOUND_BANG, 0.8)
+	splashSound = sound("Splash", Config.SOUND_SPLASH, 0.8)
 end
 
 local function anchorAt(position: Vector3, lifetime: number): Part
@@ -53,48 +78,168 @@ local function anchorAt(position: Vector3, lifetime: number): Part
 	return anchor
 end
 
-local function pop(position: Vector3)
-	local anchor = anchorAt(position, 4)
-	for _, color in CONFETTI do
-		local bits = Instance.new("ParticleEmitter")
-		bits.Color = ColorSequence.new(color)
-		bits.Size = NumberSequence.new(0.35)
-		bits.Lifetime = NumberRange.new(1, 1.8)
-		bits.Speed = NumberRange.new(14, 28)
-		bits.SpreadAngle = Vector2.new(180, 180)
-		bits.Acceleration = Vector3.new(0, -30, 0)
-		bits.RotSpeed = NumberRange.new(-300, 300)
-		bits.Rotation = NumberRange.new(0, 360)
-		bits.Shape = Enum.ParticleEmitterShape.Sphere
-		bits.Rate = 0
-		bits.Parent = anchor
-		bits:Emit(14)
+local function emitter(parent: Instance, props: { [string]: any }, count: number)
+	local e = Instance.new("ParticleEmitter")
+	e.Rate = 0
+	for key, value in props do
+		(e :: any)[key] = value
 	end
-	local smoke = Instance.new("ParticleEmitter")
-	smoke.Color = ColorSequence.new(Color3.fromRGB(245, 245, 245))
-	smoke.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 5) })
-	smoke.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
-	smoke.Lifetime = NumberRange.new(0.5, 0.8)
-	smoke.Speed = NumberRange.new(4, 8)
-	smoke.SpreadAngle = Vector2.new(180, 180)
-	smoke.Rate = 0
-	smoke.Parent = anchor
-	smoke:Emit(10)
+	e.Parent = parent
+	e:Emit(count)
 end
 
--- Someone said a word: buzzer + red flash now, confetti where the body vanishes.
-function Fx.elimination(player: Player?)
+-- The bang at the chair: a white smoke puff, sparks and a little confetti.
+local function burst(position: Vector3)
+	local anchor = anchorAt(position, 3)
+	emitter(anchor, {
+		Color = ColorSequence.new(Color3.fromRGB(242, 242, 242)),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.5), NumberSequenceKeypoint.new(1, 7) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 1) }),
+		Lifetime = NumberRange.new(0.6, 1.1),
+		Speed = NumberRange.new(6, 14),
+		Drag = 4,
+		SpreadAngle = Vector2.new(180, 180),
+	}, 16)
+	emitter(anchor, {
+		Color = ColorSequence.new(Color3.fromRGB(255, 225, 130), Color3.fromRGB(255, 120, 40)),
+		LightEmission = 1,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 0) }),
+		Lifetime = NumberRange.new(0.3, 0.6),
+		Speed = NumberRange.new(25, 45),
+		EmissionDirection = Enum.NormalId.Top,
+		SpreadAngle = Vector2.new(70, 70),
+	}, 24)
+	for _, color in CONFETTI do
+		emitter(anchor, {
+			Color = ColorSequence.new(color),
+			Size = NumberSequence.new(0.35),
+			Lifetime = NumberRange.new(1, 1.8),
+			Speed = NumberRange.new(14, 28),
+			SpreadAngle = Vector2.new(180, 180),
+			Acceleration = Vector3.new(0, -30, 0),
+			RotSpeed = NumberRange.new(-300, 300),
+			Rotation = NumberRange.new(0, 360),
+		}, 6)
+	end
+end
+
+local function chairOf(seatIndex: number): (BasePart?, BasePart?)
+	local hall = workspace:FindFirstChild("PoolHall")
+	local chairs = hall and hall:FindFirstChild("Chairs")
+	if not chairs then
+		return nil, nil
+	end
+	for _, chair in chairs:GetChildren() do
+		local seat = chair:FindFirstChild("Seat") :: BasePart?
+		if seat and seat:GetAttribute("SeatIndex") == seatIndex then
+			local flap = chair:FindFirstChild("Flap")
+			return seat, flap and flap:FindFirstChild("Hinge") :: BasePart?
+		end
+	end
+	return nil, nil
+end
+
+-- Flap angle (degrees) t seconds after the launch: snap open with a small overshoot, settle, hold, ease back down.
+local function flapAngle(t: number): number
+	local open, overshoot = Config.CHAIR_FLAP_DEGREES, Config.CHAIR_OVERSHOOT_DEGREES
+	local snapEnd = Config.CHAIR_SNAP_SECONDS
+	local settleEnd = snapEnd + Config.CHAIR_SETTLE_SECONDS
+	local holdEnd = settleEnd + Config.CHAIR_HOLD_SECONDS
+	local recoverEnd = holdEnd + Config.CHAIR_RECOVER_SECONDS
+	if t < snapEnd then
+		return (open + overshoot) * (1 - (1 - t / snapEnd) ^ 3)
+	elseif t < settleEnd then
+		return open + overshoot * (1 - (t - snapEnd) / Config.CHAIR_SETTLE_SECONDS)
+	elseif t < holdEnd then
+		return open
+	elseif t < recoverEnd then
+		local a = (t - holdEnd) / Config.CHAIR_RECOVER_SECONDS
+		return open * (1 + math.cos(math.pi * a)) / 2
+	end
+	return 0
+end
+
+local function snapFlap(hinge: BasePart)
+	local rest = restOf[hinge] or hinge.CFrame
+	restOf[hinge] = rest
+	local number = (playing[hinge] or 0) + 1
+	playing[hinge] = number
+	local started = os.clock()
+	local total = Config.CHAIR_SNAP_SECONDS + Config.CHAIR_SETTLE_SECONDS + Config.CHAIR_HOLD_SECONDS + Config.CHAIR_RECOVER_SECONDS
+	local connection: RBXScriptConnection
+	connection = RunService.RenderStepped:Connect(function()
+		if playing[hinge] ~= number or not hinge.Parent then
+			connection:Disconnect()
+			return
+		end
+		local t = os.clock() - started
+		if t >= total then
+			hinge.CFrame = rest
+			playing[hinge] = nil
+			connection:Disconnect()
+			return
+		end
+		hinge.CFrame = rest * CFrame.Angles(math.rad(flapAngle(t)), 0, 0)
+	end)
+end
+
+-- A flying chair fired: the flap snaps back, "펑", smoke at the seat.
+function Fx.fling(info: { seatIndex: number? })
+	playCopy(bang)
+	local seat: BasePart?, hinge: BasePart? = nil, nil
+	if info.seatIndex then
+		seat, hinge = chairOf(info.seatIndex)
+	end
+	if hinge then
+		snapFlap(hinge)
+	end
+	if seat then
+		burst(seat.Position + Vector3.new(0, 1, 0))
+	end
+end
+
+-- The player hit the water: a white column, a spray of drops and a ring of mist, sized to read from the show camera
+-- (the landing zone is 95-130 studs away).
+function Fx.splash(position: Vector3)
+	playCopy(splashSound)
+	local anchor = anchorAt(position + Vector3.new(0, 0.5, 0), 3)
+	emitter(anchor, {
+		Color = ColorSequence.new(Color3.fromRGB(255, 255, 255)),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 6) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.05), NumberSequenceKeypoint.new(1, 1) }),
+		Lifetime = NumberRange.new(0.6, 0.9),
+		Speed = NumberRange.new(45, 60),
+		EmissionDirection = Enum.NormalId.Top,
+		SpreadAngle = Vector2.new(6, 6),
+		Acceleration = Vector3.new(0, -60, 0),
+	}, 20)
+	emitter(anchor, {
+		Color = ColorSequence.new(Color3.fromRGB(235, 250, 255), Color3.fromRGB(150, 215, 240)),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.4), NumberSequenceKeypoint.new(1, 1) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 0.8) }),
+		Lifetime = NumberRange.new(1, 1.5),
+		Speed = NumberRange.new(34, 52),
+		EmissionDirection = Enum.NormalId.Top,
+		SpreadAngle = Vector2.new(18, 18),
+		Acceleration = Vector3.new(0, -70, 0),
+	}, 60)
+	emitter(anchor, {
+		Color = ColorSequence.new(Color3.fromRGB(255, 255, 255)),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 8), NumberSequenceKeypoint.new(1, 18) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) }),
+		Lifetime = NumberRange.new(0.8, 1.3),
+		Speed = NumberRange.new(10, 16),
+		Drag = 3,
+		EmissionDirection = Enum.NormalId.Top,
+		SpreadAngle = Vector2.new(80, 80),
+	}, 18)
+end
+
+-- Someone said a word: buzzer + red flash (the launch itself comes with the "Fling" signal).
+function Fx.elimination()
 	buzzer:Play()
 	flash.BackgroundTransparency = 0.55
 	TweenService:Create(flash, TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
-	local character = player and player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not root then
-		return
-	end
-	task.delay(Config.LAUNCH_POP_TIME, function()
-		pop(root.Position)
-	end)
 end
 
 -- An emoji floats up from above the player's head and fades.

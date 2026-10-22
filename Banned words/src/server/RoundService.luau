@@ -3,11 +3,13 @@
 --   Lobby -> Countdown -> Assign (seats, first word, theme) -> Talk (free talk, words pile up, host helps)
 --   -> Result -> Countdown (quick rematch) ...
 -- Rules live in the services: words in WordService, judging in JudgeService, theme/missions in MissionService,
--- mission votes in VoteService, ghosts in GhostService, chairs in SeatService, voice routing in VoiceService,
--- score in Scores.
--- Nobody is eliminated for staying quiet; only saying one of your words launches you.
+-- mission votes in VoteService, spectators in SpectatorService, flying chairs in SeatService, voice routing in
+-- VoiceService, score in Scores.
+-- Nobody is eliminated for staying quiet; only saying one of your words launches you. (V3 bundle 2a: the V2 rules
+-- still run here, with the V3 pool hall, flying-chair launch, stands and show camera; docs/DESIGN_V3.md.)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Match = require(script.Parent:WaitForChild("Match"))
@@ -17,7 +19,7 @@ local WordService = require(services:WaitForChild("WordService"))
 local JudgeService = require(services:WaitForChild("JudgeService"))
 local MissionService = require(services:WaitForChild("MissionService"))
 local VoteService = require(services:WaitForChild("VoteService"))
-local GhostService = require(services:WaitForChild("GhostService"))
+local SpectatorService = require(services:WaitForChild("SpectatorService"))
 local SeatService = require(services:WaitForChild("SeatService"))
 local VoiceService = require(services:WaitForChild("VoiceService"))
 local Scores = require(services:WaitForChild("Scores"))
@@ -25,7 +27,6 @@ local Scores = require(services:WaitForChild("Scores"))
 local RoundService = {}
 
 local rng = Random.new() -- words, seats (missions get fresh generators every round, see runRound)
-local lastLaunchAt = -math.huge
 
 -- Alive participants are heard by everyone; ghosts and spectators only by each other.
 local function refreshSpeakers()
@@ -73,14 +74,28 @@ local function eliminate(player: Player, reason: string, word: string?)
 	end
 	if reason == "said" then
 		Match.saidCount += 1
-		lastLaunchAt = os.clock()
 		Match.holdHost(Config.AFTER_LAUNCH_QUIET)
-		SeatService.launch(player)
+		SeatService.fling(player, Match.roundId) -- back from the pool into the stands (onFlightOver)
 	end
-	GhostService.markGhost(player)
 	refreshSpeakers()
 	Match.broadcast()
 	WordService.sendAll() -- the eliminated player may now see their own words
+end
+
+-- FLING_RETURN_SECONDS after a launch (docs/DESIGN_V3.md §10 step 4): undo the ragdoll, then back on the chair if
+-- the player is still in this round's game, else into the stands. A flight from an older round, or of a character
+-- the player no longer has, only gets undone.
+local function onFlightOver(player: Player, roundId: any, character: Model)
+	SeatService.endFling(player)
+	if not player.Parent or player.Character ~= character or roundId ~= Match.roundId then
+		return
+	end
+	if not (Match.phase == "Assign" or Match.phase == "Talk") then
+		return
+	end
+	if not (Match.isAlive(player) and SeatService.reseat(player)) then
+		SpectatorService.toStands(player)
+	end
 end
 
 local function talking(myRound: number): () -> boolean
@@ -148,7 +163,7 @@ local function cleanup()
 	JudgeService.setOpen(false)
 	SeatService.releaseAll()
 	VoiceService.setSpeakers(nil)
-	GhostService.endRound()
+	SpectatorService.endRound()
 	MissionService.clear()
 	VoteService.clear()
 	Match.resetRound()
@@ -187,7 +202,7 @@ local function runRound()
 	Match.startedWith = #Match.aliveList()
 	WordService.assignFirst(rng)
 	MissionService.setup(Random.new()) -- theme: never depends on the words or on earlier rounds
-	GhostService.beginRound()
+	SpectatorService.beginRound()
 	refreshSpeakers()
 	Match.setPhase("Assign", Config.ASSIGN_TIME, "내 금칙어는 나만 몰라요! 다른 사람이 말하게 만드세요")
 	WordService.sendAll()
@@ -211,7 +226,9 @@ local function runRound()
 	Match.cutoffAt = math.min(Match.cutoffAt, Match.now(), Match.endsAt)
 	JudgeService.settle(Match.cutoffAt)
 	JudgeService.setOpen(false)
-	while os.clock() - lastLaunchAt < Config.LAUNCH_POP_TIME + 0.6 do
+	-- The result waits for flights in progress (they land and go to the stands first).
+	local flightsDeadline = os.clock() + Config.FLING_RETURN_SECONDS + 1
+	while SeatService.anyFlying() and os.clock() < flightsDeadline do
 		task.wait(0.1)
 	end
 
@@ -239,17 +256,42 @@ end
 function RoundService.start()
 	VoiceService.start()
 	Scores.start()
-	GhostService.start()
+	SpectatorService.start(SeatService.isFlying)
 	VoteService.start()
-	SeatService.init()
+	SeatService.init(onFlightOver)
 	JudgeService.start(function(player, word)
 		eliminate(player, "said", word)
 	end, Scores.noteSpeech)
 	Net.listen("Ready", function(player, isReady)
-		Match.ready[player] = isReady == true
-		Match.broadcast()
+		local value = isReady == true
+		if (Match.ready[player] == true) ~= value then -- repeats change nothing and send nothing
+			Match.ready[player] = value
+			Match.broadcast()
+		end
 	end)
-	Net.listen("Sync", onSync)
+	local lastSync: { [Player]: number } = {}
+	Net.listen("Sync", function(player)
+		local now = os.clock()
+		if now - (lastSync[player] or -math.huge) >= Config.SYNC_COOLDOWN then
+			lastSync[player] = now
+			onSync(player)
+		end
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		lastSync[player] = nil
+	end)
+	-- Studio only (there is no speech-to-text in Studio; live servers ignore it): a seated player launches themselves
+	-- and comes back to the chair, or with "out" is eliminated (launch, then the stands).
+	Net.listen("DevFling", function(player, mode)
+		if not (RunService:IsStudio() and Match.isAlive(player) and (Match.phase == "Assign" or Match.phase == "Talk")) then
+			return
+		end
+		if mode == "out" then
+			eliminate(player, "said", "테스트")
+		else
+			SeatService.fling(player, Match.roundId)
+		end
+	end)
 	Players.PlayerRemoving:Connect(function(player)
 		eliminate(player, "left")
 		Match.participants[player] = nil

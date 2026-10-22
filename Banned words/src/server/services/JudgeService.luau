@@ -90,7 +90,8 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 		return
 	end
 	countRequest()
-	if typeof(textId) == "number" then
+	-- A table key must be a real number: NaN would throw, and infinities or fractions are never real ids.
+	if typeof(textId) == "number" and textId == textId and math.abs(textId) < math.huge and textId % 1 == 0 then
 		local seen = seenTexts[player] or {}
 		seenTexts[player] = seen
 		if seen[textId] then

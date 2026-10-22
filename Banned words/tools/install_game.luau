@@ -54,8 +54,26 @@ return {
 	END_TOLERANCE = 0,
 	SETTLE_MAX = 5,
 	SETTLE_NOTICE_AFTER = 1.2,
-	LAUNCH_POP_TIME = 0.5, -- seconds from launch to the "펑" (the body vanishes there)
 	RESPAWN_TIME = 3,
+
+	-- V3 flying chair (docs/DESIGN_V3.md §10, owner 2026-10-22): the seat flap snaps back with a bang, the player flies
+	-- off as a ragdoll far into the pool and is back on the seat FLING_RETURN_SECONDS after the launch.
+	FLING_RETURN_SECONDS = 5,
+	FLING_APEX_HEIGHT = 20, -- studs above the launch point at the top of the arc (keeps it under the show camera's
+	-- top edge and the HUD; also capped under PoolHall CeilingY)
+	FLING_BODY_TOP = 4, -- studs from the root to the top of a tumbling body (keeps the whole body under CeilingY)
+	FLING_SPIN = 7, -- rad/s backward tumble at the launch
+	FLING_FLOAT_DENSITY = 0.45, -- body density while flying, so it floats on the water (avatars sink otherwise)
+	FLING_COLLIDE_DELAY = 0.2, -- body parts start colliding this long after the launch (seated feet touch the carpet,
+	-- and colliding from the first frame cost ~10% of the throw in the Studio test)
+	CHAIR_FLAP_DEGREES = 80, -- how far the seat flap snaps back
+	CHAIR_SNAP_SECONDS = 0.12, -- the snap itself, overshooting by CHAIR_OVERSHOOT_DEGREES
+	CHAIR_OVERSHOOT_DEGREES = 10,
+	CHAIR_SETTLE_SECONDS = 0.15, -- back from the overshoot
+	CHAIR_HOLD_SECONDS = 0.8, -- the flap stays up this long
+	CHAIR_RECOVER_SECONDS = 2.5, -- then eases back down (done before the player is back)
+	GETUP_RETRY_SECONDS = 0.2, -- after a launch my client stands my character up, retrying until it took
+	GETUP_TRIES = 5, -- (the network ownership comes back with or after PlatformStand)
 
 	-- Transcript intake guards (client-side STT). 10 s of Korean speech is roughly 70 syllables = 210 bytes.
 	TRANSCRIPT_MAX_BYTES = 600,
@@ -93,14 +111,18 @@ return {
 	SCORE_ASSIST = 1,
 	SCORE_SURVIVE = 3,
 
-	-- Ghosts: eliminated players stay in the lounge, see-through, outside the chair ring, with reactions.
-	GHOST_TRANSPARENCY = 0.6,
+	-- Spectators (V3): players who are out and late joiners watch from the stands, with reactions.
 	REACTIONS = { "👏", "😂", "😱", "😮", "❤️" },
-	GHOST_RING_CHECK = 1, -- seconds between "is an outsider inside the ring?" checks (backs up the barrier)
+	STAGE_GUARD_CHECK = 1, -- seconds between "is a spectator on the stage?" checks
+	STAGE_BEHIND_ROW = 8, -- studs behind the chair row that still count as the stage
+	STAND_SPOTS_PER_ROW = 10, -- spectator spots along the stands marker, per tier row
 	REACTION_COOLDOWN = 1.2,
+	SYNC_COOLDOWN = 1, -- seconds between two "send me the state" requests from one player
 
 	-- Roblox-licensed Pro Sound Effects (public, free).
 	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)
+	SOUND_BANG = "rbxassetid://9114086657", -- Dirt Explosion 1: sharp bang (SFX), the flying chair firing
+	SOUND_SPLASH = "rbxassetid://9120585252", -- Water Splash, Big Water Splash, Dive In 1 (SFX), the landing
 }
 ]====]; s.Parent = n1 end
 do local s = Instance.new("ModuleScript"); s.Name = "Judge"; s.Source = [====[--!strict
@@ -205,7 +227,6 @@ local Match = {
 	saidCount = 0, -- launches for saying a word (tells a real win from a walkover)
 	lastEndedAt = -math.huge, -- os.clock() when the last result finished (rematch countdown)
 	ready = {} :: { [Player]: boolean },
-	loading = {} :: { [Player]: boolean }, -- character being reloaded (not eligible until it is in place)
 	hostHeldUntil = 0, -- os.clock(): no new mission stage / vote / event before this (one big thing at a time)
 	nextWordWarnAt = math.huge, -- os.clock() of the next (public, scheduled) word warning
 	theme = nil :: string?,
@@ -247,7 +268,7 @@ function Match.eligiblePlayers(): { Player }
 		local character = player.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 		local placed = character ~= nil and character.Parent == workspace and character:FindFirstChild("HumanoidRootPart") ~= nil
-		if humanoid and humanoid.Health > 0 and placed and not Match.loading[player] and (Match.ready[player] or not Config.REQUIRE_VOICE_READY) then
+		if humanoid and humanoid.Health > 0 and placed and (Match.ready[player] or not Config.REQUIRE_VOICE_READY) then
 			table.insert(list, player)
 		end
 	end
@@ -330,16 +351,18 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 --   Host        theme, mission card, topic,  Reaction    ghost/spectator emoji
 --               event                        Vote        (voteKey, option id) mission vote
 --   VoteState   vote opened / closed         Settled     (key) my speech from before the cutoff is sent
---   Notice      short toast text
+--   Notice      short toast text                DevFling    Studio only: launch me (tests the flying chair)
 --   Reaction    emoji shown above a player
 --   Settle      round decided: { key, cutoff }
+--   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
+--   Splash      that player hit the water: { userId, position }
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = {}
 
 local NAMES = {
-	"RoundState", "Words", "WordWarn", "Eliminated", "Host", "VoteState", "Notice", "Reaction", "Settle",
-	"Transcript", "VoicePing", "Ready", "Sync", "Vote", "Settled",
+	"RoundState", "Words", "WordWarn", "Eliminated", "Host", "VoteState", "Notice", "Reaction", "Settle", "Fling",
+	"Splash", "Transcript", "VoicePing", "Ready", "Sync", "Vote", "Settled", "DevFling",
 }
 
 local folder: Folder
@@ -393,11 +416,13 @@ do local s = Instance.new("ModuleScript"); s.Name = "RoundService"; s.Source = [
 --   Lobby -> Countdown -> Assign (seats, first word, theme) -> Talk (free talk, words pile up, host helps)
 --   -> Result -> Countdown (quick rematch) ...
 -- Rules live in the services: words in WordService, judging in JudgeService, theme/missions in MissionService,
--- mission votes in VoteService, ghosts in GhostService, chairs in SeatService, voice routing in VoiceService,
--- score in Scores.
--- Nobody is eliminated for staying quiet; only saying one of your words launches you.
+-- mission votes in VoteService, spectators in SpectatorService, flying chairs in SeatService, voice routing in
+-- VoiceService, score in Scores.
+-- Nobody is eliminated for staying quiet; only saying one of your words launches you. (V3 bundle 2a: the V2 rules
+-- still run here, with the V3 pool hall, flying-chair launch, stands and show camera; docs/DESIGN_V3.md.)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Match = require(script.Parent:WaitForChild("Match"))
@@ -407,7 +432,7 @@ local WordService = require(services:WaitForChild("WordService"))
 local JudgeService = require(services:WaitForChild("JudgeService"))
 local MissionService = require(services:WaitForChild("MissionService"))
 local VoteService = require(services:WaitForChild("VoteService"))
-local GhostService = require(services:WaitForChild("GhostService"))
+local SpectatorService = require(services:WaitForChild("SpectatorService"))
 local SeatService = require(services:WaitForChild("SeatService"))
 local VoiceService = require(services:WaitForChild("VoiceService"))
 local Scores = require(services:WaitForChild("Scores"))
@@ -415,7 +440,6 @@ local Scores = require(services:WaitForChild("Scores"))
 local RoundService = {}
 
 local rng = Random.new() -- words, seats (missions get fresh generators every round, see runRound)
-local lastLaunchAt = -math.huge
 
 -- Alive participants are heard by everyone; ghosts and spectators only by each other.
 local function refreshSpeakers()
@@ -463,14 +487,28 @@ local function eliminate(player: Player, reason: string, word: string?)
 	end
 	if reason == "said" then
 		Match.saidCount += 1
-		lastLaunchAt = os.clock()
 		Match.holdHost(Config.AFTER_LAUNCH_QUIET)
-		SeatService.launch(player)
+		SeatService.fling(player, Match.roundId) -- back from the pool into the stands (onFlightOver)
 	end
-	GhostService.markGhost(player)
 	refreshSpeakers()
 	Match.broadcast()
 	WordService.sendAll() -- the eliminated player may now see their own words
+end
+
+-- FLING_RETURN_SECONDS after a launch (docs/DESIGN_V3.md §10 step 4): undo the ragdoll, then back on the chair if
+-- the player is still in this round's game, else into the stands. A flight from an older round, or of a character
+-- the player no longer has, only gets undone.
+local function onFlightOver(player: Player, roundId: any, character: Model)
+	SeatService.endFling(player)
+	if not player.Parent or player.Character ~= character or roundId ~= Match.roundId then
+		return
+	end
+	if not (Match.phase == "Assign" or Match.phase == "Talk") then
+		return
+	end
+	if not (Match.isAlive(player) and SeatService.reseat(player)) then
+		SpectatorService.toStands(player)
+	end
 end
 
 local function talking(myRound: number): () -> boolean
@@ -538,7 +576,7 @@ local function cleanup()
 	JudgeService.setOpen(false)
 	SeatService.releaseAll()
 	VoiceService.setSpeakers(nil)
-	GhostService.endRound()
+	SpectatorService.endRound()
 	MissionService.clear()
 	VoteService.clear()
 	Match.resetRound()
@@ -577,7 +615,7 @@ local function runRound()
 	Match.startedWith = #Match.aliveList()
 	WordService.assignFirst(rng)
 	MissionService.setup(Random.new()) -- theme: never depends on the words or on earlier rounds
-	GhostService.beginRound()
+	SpectatorService.beginRound()
 	refreshSpeakers()
 	Match.setPhase("Assign", Config.ASSIGN_TIME, "내 금칙어는 나만 몰라요! 다른 사람이 말하게 만드세요")
 	WordService.sendAll()
@@ -601,7 +639,9 @@ local function runRound()
 	Match.cutoffAt = math.min(Match.cutoffAt, Match.now(), Match.endsAt)
 	JudgeService.settle(Match.cutoffAt)
 	JudgeService.setOpen(false)
-	while os.clock() - lastLaunchAt < Config.LAUNCH_POP_TIME + 0.6 do
+	-- The result waits for flights in progress (they land and go to the stands first).
+	local flightsDeadline = os.clock() + Config.FLING_RETURN_SECONDS + 1
+	while SeatService.anyFlying() and os.clock() < flightsDeadline do
 		task.wait(0.1)
 	end
 
@@ -629,17 +669,42 @@ end
 function RoundService.start()
 	VoiceService.start()
 	Scores.start()
-	GhostService.start()
+	SpectatorService.start(SeatService.isFlying)
 	VoteService.start()
-	SeatService.init()
+	SeatService.init(onFlightOver)
 	JudgeService.start(function(player, word)
 		eliminate(player, "said", word)
 	end, Scores.noteSpeech)
 	Net.listen("Ready", function(player, isReady)
-		Match.ready[player] = isReady == true
-		Match.broadcast()
+		local value = isReady == true
+		if (Match.ready[player] == true) ~= value then -- repeats change nothing and send nothing
+			Match.ready[player] = value
+			Match.broadcast()
+		end
 	end)
-	Net.listen("Sync", onSync)
+	local lastSync: { [Player]: number } = {}
+	Net.listen("Sync", function(player)
+		local now = os.clock()
+		if now - (lastSync[player] or -math.huge) >= Config.SYNC_COOLDOWN then
+			lastSync[player] = now
+			onSync(player)
+		end
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		lastSync[player] = nil
+	end)
+	-- Studio only (there is no speech-to-text in Studio; live servers ignore it): a seated player launches themselves
+	-- and comes back to the chair, or with "out" is eliminated (launch, then the stands).
+	Net.listen("DevFling", function(player, mode)
+		if not (RunService:IsStudio() and Match.isAlive(player) and (Match.phase == "Assign" or Match.phase == "Talk")) then
+			return
+		end
+		if mode == "out" then
+			eliminate(player, "said", "테스트")
+		else
+			SeatService.fling(player, Match.roundId)
+		end
+	end)
 	Players.PlayerRemoving:Connect(function(player)
 		eliminate(player, "left")
 		Match.participants[player] = nil
@@ -1125,213 +1190,6 @@ return WordBank
 ]====]; s.Parent = n3 end
 n3.Parent = n2
 local n4 = Instance.new("Folder"); n4.Name = "services"
-do local s = Instance.new("ModuleScript"); s.Name = "GhostService"; s.Source = [====[--!strict
--- Ghosts and spectators. During a round, eliminated players come back see-through, and everyone who is not an
--- alive participant (ghosts + late joiners) is kept outside the chair ring by a barrier only they collide with.
--- They can send emoji reactions. Their voice is handled by VoiceService (only other ghosts/spectators hear it).
-local Players = game:GetService("Players")
-local PhysicsService = game:GetService("PhysicsService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
-local Match = require(script.Parent.Parent:WaitForChild("Match"))
-local Net = require(script.Parent.Parent:WaitForChild("Net"))
-
-local GhostService = {}
-
-local OUTSIDER_GROUP = "Outsiders"
-local BARRIER_GROUP = "RingBarrier"
-
-local roundActive = false
-local ghosts: { [Player]: boolean } = {}
-local launchedBody: { [Player]: Model } = {} -- the character that was launched (not a ghost yet)
-local lastReaction: { [Player]: number } = {}
-local connections: { [Player]: RBXScriptConnection } = {}
-local moveOutOfRing: (Player) -> () -- defined below (used by the ring guard started in start())
-
-local function isOutsider(player: Player): boolean
-	return roundActive and not Match.isAlive(player)
-end
-
-local function styleBasePart(part: BasePart, ghost: boolean)
-	part.CollisionGroup = OUTSIDER_GROUP
-	if ghost and part.Name ~= "HumanoidRootPart" then
-		part.Transparency = math.max(part.Transparency, Config.GHOST_TRANSPARENCY)
-		part.CastShadow = false
-	end
-end
-
-local function styleInstance(instance: Instance, ghost: boolean)
-	if instance:IsA("BasePart") then
-		styleBasePart(instance, ghost)
-	elseif ghost and instance:IsA("Decal") then
-		instance.Transparency = math.max(instance.Transparency, Config.GHOST_TRANSPARENCY)
-	end
-end
-
--- Outsider: barrier group (+ see-through if a ghost). Keeps styling parts added later (accessories load late).
-local function applyOutsider(player: Player)
-	local character = player.Character
-	if not character then
-		return
-	end
-	local ghost = ghosts[player] == true
-	for _, d in character:GetDescendants() do
-		styleInstance(d, ghost)
-	end
-	if connections[player] then
-		connections[player]:Disconnect()
-	end
-	connections[player] = character.DescendantAdded:Connect(function(d)
-		if isOutsider(player) then
-			styleInstance(d, ghosts[player] == true)
-		end
-	end)
-end
-
-local function onCharacterAdded(player: Player)
-	if isOutsider(player) then
-		task.defer(applyOutsider, player)
-	end
-end
-
-local function onReaction(player: Player, index: any)
-	if typeof(index) ~= "number" or not Config.REACTIONS[index] then
-		return
-	end
-	local inRound = Match.phase == "Assign" or Match.phase == "Talk"
-	if inRound and Match.isAlive(player) then
-		return -- players at the table talk; reactions are for ghosts and spectators
-	end
-	local now = os.clock()
-	if now - (lastReaction[player] or 0) < Config.REACTION_COOLDOWN then
-		return
-	end
-	lastReaction[player] = now
-	Net.toAll("Reaction", { userId = player.UserId, emoji = Config.REACTIONS[index] })
-end
-
-function GhostService.start()
-	PhysicsService:RegisterCollisionGroup(OUTSIDER_GROUP)
-	PhysicsService:RegisterCollisionGroup(BARRIER_GROUP)
-	PhysicsService:CollisionGroupSetCollidable(BARRIER_GROUP, "Default", false)
-	PhysicsService:CollisionGroupSetCollidable(BARRIER_GROUP, OUTSIDER_GROUP, true)
-	local map = workspace:WaitForChild("LoungeMap")
-	local barrier = map:WaitForChild("RingBarrier")
-	for _, part in barrier:GetDescendants() do
-		if part:IsA("BasePart") then
-			part.CollisionGroup = BARRIER_GROUP
-		end
-	end
-	Players.RespawnTime = Config.RESPAWN_TIME
-
-	local function watch(player: Player)
-		player.CharacterAdded:Connect(function()
-			onCharacterAdded(player)
-		end)
-	end
-	for _, player in Players:GetPlayers() do
-		watch(player)
-	end
-	Players.PlayerAdded:Connect(watch)
-	Players.PlayerRemoving:Connect(function(player)
-		ghosts[player] = nil
-		launchedBody[player] = nil
-		lastReaction[player] = nil
-		if connections[player] then
-			connections[player]:Disconnect()
-			connections[player] = nil
-		end
-	end)
-	Net.listen("Reaction", onReaction)
-
-	-- Backup for the barrier (stacked players or furniture jumps): outsiders found inside the ring go back out.
-	task.spawn(function()
-		while true do
-			task.wait(Config.GHOST_RING_CHECK)
-			if roundActive then
-				for _, player in Players:GetPlayers() do
-					if isOutsider(player) and player.Character ~= launchedBody[player] then
-						moveOutOfRing(player)
-					end
-				end
-			end
-		end
-	end)
-end
-
--- Anyone inside the ring who should not be there is moved to the spawn (the barrier would trap them inside).
-moveOutOfRing = function(player: Player)
-	local map = workspace:WaitForChild("LoungeMap")
-	local center = (map:WaitForChild("Center") :: BasePart).Position
-	local radius = (map:WaitForChild("RingBarrier"):GetAttribute("Radius") or 14) :: number
-	local spawn = map:FindFirstChild("Spawn") :: BasePart?
-	local character = player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not (character and root and spawn) then
-		return
-	end
-	local offset = root.Position - center
-	if Vector3.new(offset.X, 0, offset.Z).Magnitude < radius + 1.5 then
-		character:PivotTo(spawn.CFrame * CFrame.new(math.random(-3, 3), 3, math.random(-3, 3)))
-	end
-end
-
--- Round start: everyone not seated becomes an outsider.
-function GhostService.beginRound()
-	roundActive = true
-	table.clear(ghosts)
-	for _, player in Players:GetPlayers() do
-		if isOutsider(player) then
-			moveOutOfRing(player)
-			applyOutsider(player)
-		end
-	end
-end
-
--- The player was eliminated: from their next character on they are a ghost.
-function GhostService.markGhost(player: Player)
-	ghosts[player] = true
-	launchedBody[player] = player.Character
-end
-
--- Round over: ghosts get a fresh, normal character at the lounge spawn; spectators just leave the barrier group.
-function GhostService.endRound()
-	roundActive = false
-	for player, connection in connections do
-		connection:Disconnect()
-		connections[player] = nil
-	end
-	for _, player in Players:GetPlayers() do
-		if ghosts[player] then
-			Match.loading[player] = true
-			task.spawn(function()
-				pcall(function()
-					player:LoadCharacter()
-				end)
-				local character = player.Character
-				local deadline = os.clock() + 10
-				while os.clock() < deadline and not (character and character.Parent == workspace and character:FindFirstChild("HumanoidRootPart")) do
-					task.wait(0.1)
-					character = player.Character
-				end
-				task.wait(0.5) -- let the engine finish placing it at the spawn
-				Match.loading[player] = nil
-			end)
-		elseif player.Character then
-			for _, d in player.Character:GetDescendants() do
-				if d:IsA("BasePart") and d.CollisionGroup == OUTSIDER_GROUP then
-					d.CollisionGroup = "Default"
-				end
-			end
-		end
-	end
-	table.clear(ghosts)
-	table.clear(launchedBody)
-end
-
-return GhostService
-]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "JudgeService"; s.Source = [====[--!strict
 -- Transcript intake and judging. Every alive participant is judged on everything they say during the talk
 -- (no turns). The client cannot prove a transcript is real speech; these checks only stop spam and mix-ups.
@@ -1424,7 +1282,8 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 		return
 	end
 	countRequest()
-	if typeof(textId) == "number" then
+	-- A table key must be a real number: NaN would throw, and infinities or fractions are never real ids.
+	if typeof(textId) == "number" and textId == textId and math.abs(textId) < math.huge and textId % 1 == 0 then
 		local seen = seenTexts[player] or {}
 		seenTexts[player] = seen
 		if seen[textId] then
@@ -1831,32 +1690,56 @@ end
 return Scores
 ]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "SeatService"; s.Source = [====[--!strict
--- Chairs in a ring around the lounge centre: seat participants (spread evenly), keep them seated during a round,
--- and launch whoever says a word: up and outward over the ring, then "펑" (hidden + killed at the top of the arc).
+-- Flying chairs in a row at the near edge of the pool (docs/DESIGN_V3.md §9-10): seat the players of a round in the
+-- middle chairs, keep them seated, and launch a failed player. A launch turns the character into a ragdoll and throws
+-- it far into the pool's landing zone; the clients draw the seat flap snapping back, the bang and the splash from the
+-- "Fling" / "Splash" signals. SeatService only says when the player is due back (FLING_RETURN_SECONDS after the
+-- launch, with the character that flew); RoundService then calls endFling() and picks reseat() or the stands.
+-- A flight whose character dies or leaves the world is undone at once and never comes back.
 local Players = game:GetService("Players")
+local PhysicsService = game:GetService("PhysicsService")
 local RunService = game:GetService("RunService")
 
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("BannedWords"):WaitForChild("Config"))
+local Net = require(script.Parent.Parent:WaitForChild("Net"))
 
 local SeatService = {}
 
 local DEFAULT_JUMP_HEIGHT = 7.2
-local LAUNCH_UP = 80 -- studs/s upward (top of the arc after ~0.4 s, about 16 studs high)
-local LAUNCH_OUT = 16 -- studs/s away from the centre
+local FLYING_GROUP = "BW_Flying" -- flying bodies: no chairs, no other flying bodies, no own limbs
+local CHAIR_GROUP = "BW_Chairs"
 
+type Flight = {
+	character: Model,
+	humanoid: Humanoid,
+	token: number,
+	requiresNeck: boolean,
+	breakJoints: boolean,
+	motors: { Motor6D },
+	added: { Instance }, -- ragdoll attachments and sockets
+	parts: { [BasePart]: { group: string, collide: boolean, physics: PhysicalProperties? } },
+	body: { BasePart }, -- body parts that collide once the body is off the chair
+	watches: { RBXScriptConnection }, -- the character dying or leaving undoes the flight
+}
+
+local rng = Random.new()
 local assigned: { [Seat]: Humanoid } = {}
+local homeSeat: { [Player]: Seat } = {}
 local locked = false
+local flights: { [Player]: Flight } = {}
+local nextToken = 0
+local returnDue: ((Player, any, Model) -> ())? = nil
 
-local function map(): Instance
-	return workspace:WaitForChild("LoungeMap")
+local function hall(): Instance
+	return workspace:WaitForChild("PoolHall")
 end
 
--- Seats ordered by SeatIndex (1..N clockwise around the ring).
+-- Seats ordered by SeatIndex (1..10 from the show camera's left).
 function SeatService.getSeats(): { Seat }
 	local seats = {}
-	for _, chair in map():WaitForChild("Chairs"):GetChildren() do
-		local seat = chair:FindFirstChildWhichIsA("Seat")
-		if seat then
+	for _, chair in hall():WaitForChild("Chairs"):GetChildren() do
+		local seat = chair:FindFirstChild("Seat")
+		if seat and seat:IsA("Seat") then
 			table.insert(seats, seat)
 		end
 	end
@@ -1864,11 +1747,6 @@ function SeatService.getSeats(): { Seat }
 		return (a:GetAttribute("SeatIndex") or 0) < (b:GetAttribute("SeatIndex") or 0)
 	end)
 	return seats
-end
-
-function SeatService.center(): Vector3
-	local marker = map():FindFirstChild("Center") :: BasePart?
-	return if marker then marker.Position else Vector3.zero
 end
 
 local function sit(seat: Seat, humanoid: Humanoid)
@@ -1894,28 +1772,48 @@ local function watch(seat: Seat)
 	end)
 end
 
-function SeatService.init()
+-- returnDue(player, tag, character): FLING_RETURN_SECONDS after a launch (tag = what the caller passed to fling,
+-- character = the one that flew).
+function SeatService.init(onReturnDue: (Player, any, Model) -> ())
+	returnDue = onReturnDue
+	PhysicsService:RegisterCollisionGroup(FLYING_GROUP)
+	PhysicsService:RegisterCollisionGroup(CHAIR_GROUP)
+	PhysicsService:CollisionGroupSetCollidable(FLYING_GROUP, FLYING_GROUP, false)
+	PhysicsService:CollisionGroupSetCollidable(FLYING_GROUP, CHAIR_GROUP, false)
+	for _, chair in hall():WaitForChild("Chairs"):GetChildren() do
+		for _, d in chair:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.CollisionGroup = CHAIR_GROUP
+			end
+		end
+	end
 	for _, seat in SeatService.getSeats() do
 		seat.Disabled = true
 		watch(seat)
 	end
 end
 
--- Spread n players evenly around the ring (2 players sit opposite each other). Returns the seat per player.
+local function lockJump(humanoid: Humanoid, on: boolean)
+	humanoid.UseJumpPower = false
+	humanoid.JumpHeight = if on then 0 else DEFAULT_JUMP_HEIGHT
+end
+
+-- Seats n players in the middle n chairs (the show camera always frames the whole row). Returns the seat per player.
 function SeatService.seatPlayers(players: { Player }): { [Player]: Seat }
 	local seats = SeatService.getSeats()
 	local result: { [Player]: Seat } = {}
 	local n = math.min(#players, #seats)
+	local first = math.floor((#seats - n) / 2) + 1
 	for i = 1, n do
 		local player = players[i]
-		local seat = seats[math.floor((i - 1) * #seats / n) + 1]
+		local seat = seats[first + i - 1]
 		local character = player.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 		if seat and humanoid and humanoid.Health > 0 then
 			assigned[seat] = humanoid
+			homeSeat[player] = seat
 			seat.Disabled = false
-			humanoid.UseJumpPower = false
-			humanoid.JumpHeight = 0
+			lockJump(humanoid, true)
 			sit(seat, humanoid)
 			result[player] = seat
 		end
@@ -1924,68 +1822,302 @@ function SeatService.seatPlayers(players: { Player }): { [Player]: Seat }
 	return result
 end
 
+function SeatService.isFlying(player: Player): boolean
+	return flights[player] ~= nil
+end
+
+function SeatService.anyFlying(): boolean
+	return next(flights) ~= nil
+end
+
+local function isRootJoint(motor: Motor6D, root: BasePart): boolean
+	return motor.Part0 == root or motor.Part1 == root
+end
+
+-- Ragdoll (docs/DESIGN_V3.md §10 step 1): no death on a loose neck, PlatformStand (replicates), every joint but the
+-- root one swapped for a ball socket, body parts colliding with the pool but not with chairs or each other, and
+-- light enough to float on the water where it lands (Studio test 2026-10-22: avatars sank to the pool floor).
+local function ragdoll(flight: Flight, root: BasePart)
+	local character, humanoid = flight.character, flight.humanoid
+	humanoid.RequiresNeck = false
+	humanoid.BreakJointsOnDeath = false
+	humanoid.PlatformStand = true
+	for _, motor in character:GetDescendants() do
+		if motor:IsA("Motor6D") and motor.Enabled and motor.Part0 and motor.Part1 and not isRootJoint(motor, root) then
+			local a0 = Instance.new("Attachment")
+			a0.Name = "BW_RagdollA"
+			a0.CFrame = motor.C0
+			a0.Parent = motor.Part0
+			local a1 = Instance.new("Attachment")
+			a1.Name = "BW_RagdollB"
+			a1.CFrame = motor.C1
+			a1.Parent = motor.Part1
+			local socket = Instance.new("BallSocketConstraint")
+			socket.Name = "BW_RagdollSocket"
+			socket.Attachment0 = a0
+			socket.Attachment1 = a1
+			socket.LimitsEnabled = true
+			socket.UpperAngle = 70
+			socket.TwistLimitsEnabled = true
+			socket.TwistLowerAngle = -60
+			socket.TwistUpperAngle = 60
+			socket.Parent = motor.Part0
+			table.insert(flight.added, a0)
+			table.insert(flight.added, a1)
+			table.insert(flight.added, socket)
+			motor.Enabled = false
+			table.insert(flight.motors, motor)
+		end
+	end
+	local float = PhysicalProperties.new(Config.FLING_FLOAT_DENSITY, 0.3, 0.2)
+	for _, part in character:GetDescendants() do
+		if part:IsA("BasePart") then
+			flight.parts[part] = { group = part.CollisionGroup, collide = part.CanCollide, physics = part.CustomPhysicalProperties }
+			part.CollisionGroup = FLYING_GROUP
+			if part.Parent == character then
+				part.CustomPhysicalProperties = float
+				-- Body parts must hit the pool floor and walls (from FLING_COLLIDE_DELAY on); accessories and the
+				-- root box stay soft.
+				if part ~= root then
+					table.insert(flight.body, part)
+				end
+			end
+		end
+	end
+end
+
+-- A random point on the water of the landing zone (several flying players land apart).
+local function landingTarget(): Vector3
+	local landing = hall():WaitForChild("Landing") :: BasePart
+	local waterY = (landing:GetAttribute("WaterY") or landing.Position.Y) :: number
+	local half = landing.Size / 2
+	return Vector3.new(
+		landing.Position.X + rng:NextNumber(-half.X, half.X),
+		waterY,
+		landing.Position.Z + rng:NextNumber(-half.Z, half.Z)
+	)
+end
+
+-- Initial velocity of a ballistic arc from `from` to `target` whose top (plus the body's own height) stays under the
+-- hall's CeilingY. Returns the velocity and the flight time. (The arc always rises at least 4 studs: only a seat
+-- higher than CeilingY - FLING_BODY_TOP - 4 could break the ceiling rule, which no chair of the map is.)
+local function arcVelocity(from: Vector3, target: Vector3): (Vector3, number)
+	local ceiling = (hall():GetAttribute("CeilingY") or 40) :: number
+	local gravity = workspace.Gravity
+	local apexY = math.max(from.Y + 4, math.min(from.Y + Config.FLING_APEX_HEIGHT, ceiling - Config.FLING_BODY_TOP))
+	local up = math.sqrt(2 * gravity * (apexY - from.Y))
+	local flightTime = up / gravity + math.sqrt(2 * (apexY - target.Y) / gravity)
+	local flat = Vector3.new(target.X - from.X, 0, target.Z - from.Z)
+	return flat / flightTime + Vector3.new(0, up, 0), flightTime
+end
+
+local function setOwner(root: BasePart, owner: Player?)
+	local ok, why = root:CanSetNetworkOwnership()
+	if ok then
+		root:SetNetworkOwner(owner)
+	else
+		warn("[BannedWords] flying chair: cannot set network ownership:", why)
+	end
+end
+
+-- Launches a player off their chair (no-op unless they are alive, seated on a chair we gave them and not flying).
+-- `tag` comes back with the return signal (RoundService passes the round id). Returns whether a launch started.
+function SeatService.fling(player: Player, tag: any): boolean
+	if flights[player] then
+		return false
+	end
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not (character and humanoid and root and humanoid.Health > 0) then
+		return false
+	end
+	local seat: Seat? = nil
+	for candidate, owner in assigned do
+		if owner == humanoid then
+			seat = candidate
+		end
+	end
+	if not seat then
+		return false
+	end
+	assigned[seat] = nil
+	local seatIndex = seat:GetAttribute("SeatIndex") :: number?
+	seat.Disabled = true
+	-- The seat weld must be gone before the impulse (and before taking ownership: a body welded to an anchored seat
+	-- is part of an anchored assembly).
+	local weld = seat:FindFirstChild("SeatWeld")
+	if weld then
+		weld:Destroy()
+	end
+	humanoid.Sit = false
+	nextToken += 1
+	local flight: Flight = {
+		character = character,
+		humanoid = humanoid,
+		token = nextToken,
+		requiresNeck = humanoid.RequiresNeck,
+		breakJoints = humanoid.BreakJointsOnDeath,
+		motors = {},
+		added = {},
+		parts = {},
+		body = {},
+		watches = {},
+	}
+	flights[player] = flight
+	-- A death or a character leaving the world (reset, respawn, removal) undoes the flight right away, so the return
+	-- signal can never move the next character.
+	local function abandon()
+		if flights[player] == flight then
+			SeatService.endFling(player)
+		end
+	end
+	table.insert(flight.watches, humanoid.Died:Connect(abandon))
+	table.insert(flight.watches, character.AncestryChanged:Connect(function()
+		if not character:IsDescendantOf(workspace) then
+			abandon()
+		end
+	end))
+	ragdoll(flight, root)
+	setOwner(root, nil)
+	local landAt = landingTarget()
+	local _, flightTime = arcVelocity(root.Position, landAt)
+	Net.toAll("Fling", { userId = player.UserId, seatIndex = seatIndex, flightTime = flightTime, landAt = landAt })
+	task.spawn(function()
+		-- The throw waits one frame: the humanoid must already be PlatformStanding, or its walking controller brakes
+		-- the first step (Studio test 2026-10-22: ~6 studs/s of the horizontal speed lost, landings 5 studs short).
+		RunService.Heartbeat:Wait()
+		if flights[player] ~= flight then
+			return
+		end
+		local velocity = arcVelocity(root.Position, landAt)
+		-- A backflip: about the seated body's right axis, head going back toward the pool (like the flap).
+		local spin = root.CFrame.RightVector * Config.FLING_SPIN
+		for part in flight.parts do
+			if not part.Anchored then
+				part.AssemblyLinearVelocity = velocity
+				part.AssemblyAngularVelocity = spin
+			end
+		end
+	end)
+	task.delay(Config.FLING_COLLIDE_DELAY, function()
+		if flights[player] == flight then
+			for _, part in flight.body do
+				part.CanCollide = true
+			end
+		end
+	end)
+
+	local token = flight.token
+	task.spawn(function()
+		-- The splash: the first moment the body reaches the water after leaving the chair.
+		local waterY = landAt.Y
+		local started = os.clock()
+		while flights[player] == flight and os.clock() - started < Config.FLING_RETURN_SECONDS do
+			if os.clock() - started > flightTime * 0.5 and root.Parent and root.Position.Y < waterY + 1.5 then
+				Net.toAll("Splash", { userId = player.UserId, position = Vector3.new(root.Position.X, waterY, root.Position.Z) })
+				break
+			end
+			RunService.Heartbeat:Wait()
+		end
+	end)
+	task.delay(Config.FLING_RETURN_SECONDS, function()
+		local current = flights[player]
+		if current and current.token == token and returnDue then
+			returnDue(player, tag, character)
+		end
+	end)
+	return true
+end
+
+-- Undoes a launch (docs/DESIGN_V3.md §10 step 5): joints back (neck first), no leftover speed, collisions and humanoid
+-- settings back (jumping too: a player sent to the stands must be able to climb), network ownership back to the
+-- player while the body is still free. The caller then reseats the player or moves them. Safe to call when the
+-- player is not flying.
+function SeatService.endFling(player: Player)
+	local flight = flights[player]
+	if not flight then
+		return
+	end
+	flights[player] = nil
+	for _, connection in flight.watches do
+		connection:Disconnect()
+	end
+	local character, humanoid = flight.character, flight.humanoid
+	table.sort(flight.motors, function(a, b)
+		return a.Name == "Neck" and b.Name ~= "Neck"
+	end)
+	for _, motor in flight.motors do
+		if motor.Parent then
+			motor.Enabled = true
+		end
+	end
+	for _, instance in flight.added do
+		instance:Destroy()
+	end
+	for part, saved in flight.parts do
+		if part.Parent then
+			part.AssemblyLinearVelocity = Vector3.zero
+			part.AssemblyAngularVelocity = Vector3.zero
+			part.CollisionGroup = saved.group
+			part.CanCollide = saved.collide
+			-- nil puts the material's own physics back; the API type does not allow nil, hence the cast.
+			local untyped: any = part
+			untyped.CustomPhysicalProperties = saved.physics
+		end
+	end
+	if humanoid.Parent then
+		humanoid.PlatformStand = false
+		humanoid.RequiresNeck = flight.requiresNeck
+		humanoid.BreakJointsOnDeath = flight.breakJoints
+		lockJump(humanoid, false) -- reseat() locks it again
+	end
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if root and player.Parent and player.Character == character and character:IsDescendantOf(workspace) then
+		setOwner(root, player)
+	end
+end
+
+-- Puts a player back on the chair they had this round (after endFling) and locks it again.
+function SeatService.reseat(player: Player): boolean
+	local seat = homeSeat[player]
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not (seat and humanoid and humanoid.Health > 0) or flights[player] then
+		return false
+	end
+	assigned[seat] = humanoid
+	seat.Disabled = false
+	lockJump(humanoid, true)
+	sit(seat, humanoid)
+	return true
+end
+
+-- Round over: every flight undone, everyone off the chairs, jumping back on.
 function SeatService.releaseAll()
 	locked = false
+	for player in flights do
+		SeatService.endFling(player)
+	end
 	for seat, humanoid in assigned do
 		if humanoid.Parent then
-			humanoid.JumpHeight = DEFAULT_JUMP_HEIGHT
 			humanoid.Sit = false
 		end
 		seat.Disabled = true
 	end
+	for player in homeSeat do
+		local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			lockJump(humanoid, false)
+		end
+	end
 	table.clear(assigned)
-end
-
-local function hide(character: Model)
-	for _, d in character:GetDescendants() do
-		if d:IsA("BasePart") then
-			d.Transparency = 1
-		elseif d:IsA("Decal") then
-			d.Transparency = 1
-		end
-	end
-end
-
--- Up and outward from the chair; at LAUNCH_POP_TIME the body vanishes (clients play the "펑") and dies.
-function SeatService.launch(player: Player)
-	local character = player.Character
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not (character and humanoid and root) then
-		return
-	end
-	for seat, owner in assigned do
-		if owner == humanoid then
-			assigned[seat] = nil
-			seat.Disabled = true
-			-- The seat weld must be gone before the impulse, or the chair absorbs most of it.
-			local weld = seat:FindFirstChild("SeatWeld")
-			if weld then
-				weld:Destroy()
-			end
-		end
-	end
-	humanoid.Sit = false
-	humanoid.PlatformStand = true
-	root:SetNetworkOwner(nil)
-
-	task.spawn(function()
-		RunService.Heartbeat:Wait()
-		local outward = root.Position - SeatService.center()
-		outward = Vector3.new(outward.X, 0, outward.Z)
-		outward = if outward.Magnitude > 0.1 then outward.Unit else Vector3.new(0, 0, 1)
-		root.AssemblyLinearVelocity = outward * LAUNCH_OUT + Vector3.new(0, LAUNCH_UP, 0)
-		root.AssemblyAngularVelocity = Vector3.new(math.random(-10, 10), math.random(-10, 10), math.random(-10, 10))
-		task.wait(Config.LAUNCH_POP_TIME)
-		if humanoid.Parent then
-			root.Anchored = true
-			hide(character)
-			humanoid.Health = 0
-		end
-	end)
+	table.clear(homeSeat)
 end
 
 Players.PlayerRemoving:Connect(function(player)
+	SeatService.endFling(player)
+	homeSeat[player] = nil
 	for seat, humanoid in assigned do
 		if humanoid.Parent == player.Character then
 			assigned[seat] = nil
@@ -1995,6 +2127,201 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 
 return SeatService
+]====]; s.Parent = n4 end
+do local s = Instance.new("ModuleScript"); s.Name = "SpectatorService"; s.Source = [====[--!strict
+-- Spectators (docs/DESIGN_V3.md §8-10, was GhostService in V2): during a round everyone who is not an alive
+-- participant (players who are out, late joiners, anyone who respawns) watches from the stands. Anyone found on the
+-- stage (the chair row and the floor up to the show camera) is moved back to the stands, except players SeatService
+-- still owns (flying). When the round is over the stands empty into the lobby. Spectators can send emoji reactions;
+-- their voice is VoiceService's job. (The presenter, bundle 3, will stand at the podium on the stage and must be
+-- exempted then.)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local Net = require(script.Parent.Parent:WaitForChild("Net"))
+
+local SpectatorService = {}
+
+type Box = { min: Vector3, max: Vector3 }
+
+local roundActive = false
+local busy: (Player) -> boolean = function(_player: Player): boolean
+	return false -- until start() gets the real check
+end
+local inStands: { [Player]: number } = {} -- player -> spot number
+local lastReaction: { [Player]: number } = {}
+local stage: Box? = nil
+
+local function hall(): Instance
+	return workspace:WaitForChild("PoolHall")
+end
+
+-- The stage from the map contract: across the row's HalfWidth (ShowCamera attribute), from the show camera to
+-- STAGE_BEHIND_ROW studs behind the chairs, from below the deck up to the ceiling.
+local function stageBox(): Box
+	if stage then
+		return stage
+	end
+	local map = hall()
+	local camera = map:WaitForChild("ShowCamera") :: BasePart
+	local halfWidth = (camera:GetAttribute("HalfWidth") or 30) :: number
+	local ceiling = (map:GetAttribute("CeilingY") or 40) :: number
+	local centerX, rowZ, count = 0, -math.huge, 0
+	for _, chair in map:WaitForChild("Chairs"):GetChildren() do
+		local seat = chair:FindFirstChild("Seat") :: BasePart?
+		if seat then
+			centerX += seat.Position.X
+			count += 1
+			rowZ = math.max(rowZ, seat.Position.Z)
+		end
+	end
+	centerX = if count > 0 then centerX / count else 0
+	local box: Box = {
+		min = Vector3.new(centerX - halfWidth, -20, math.min(camera.Position.Z, rowZ)),
+		max = Vector3.new(centerX + halfWidth, ceiling, rowZ + Config.STAGE_BEHIND_ROW),
+	}
+	stage = box
+	return box
+end
+
+local function onStage(player: Player): boolean
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root then
+		return false
+	end
+	local p, box = root.Position, stageBox()
+	return p.X > box.min.X and p.X < box.max.X and p.Y > box.min.Y and p.Y < box.max.Y and p.Z > box.min.Z and p.Z < box.max.Z
+end
+
+local function freeSpot(): number
+	local used: { [number]: boolean } = {}
+	for _, taken in inStands do
+		used[taken] = true
+	end
+	local spot = 1
+	while used[spot] do
+		spot += 1
+	end
+	return spot
+end
+
+-- Moves a player to their own spot in the stands, facing the pool. The Stands marker covers two tiers: spots run
+-- along its length on the middle of each tier; past both rows each further pass sits a quarter spot further along.
+function SpectatorService.toStands(player: Player)
+	local character = player.Character
+	local marker = hall():FindFirstChild("Stands") :: BasePart?
+	if not (character and character:FindFirstChild("HumanoidRootPart") and marker) then
+		return
+	end
+	local spot = inStands[player] or freeSpot()
+	inStands[player] = spot
+	local perRow = Config.STAND_SPOTS_PER_ROW
+	local index = (spot - 1) % perRow
+	local row = ((spot - 1) // perRow) % 2
+	local pass = (spot - 1) // (perRow * 2)
+	local face = (marker:GetAttribute("FaceX") or -1) :: number
+	local spacing = marker.Size.Z / perRow
+	-- Tier middles: the marker's centre (front tier) and half its width further back (the marker spans two tiers).
+	local x = marker.Position.X - row * face * marker.Size.X / 2
+	local z = marker.Position.Z - marker.Size.Z / 2 + (index + 0.5) * spacing + (pass % 4) * spacing / 4
+	local position = Vector3.new(x, marker.Position.Y + 4, z) -- drops onto the tier below
+	character:PivotTo(CFrame.lookAt(position, position + Vector3.new(face, 0, 0)))
+end
+
+local function onReaction(player: Player, index: any)
+	if typeof(index) ~= "number" or not Config.REACTIONS[index] then
+		return
+	end
+	local inRound = Match.phase == "Assign" or Match.phase == "Talk"
+	if inRound and Match.isAlive(player) then
+		return -- players on the chairs talk; reactions are for spectators
+	end
+	local now = os.clock()
+	if now - (lastReaction[player] or 0) < Config.REACTION_COOLDOWN then
+		return
+	end
+	lastReaction[player] = now
+	Net.toAll("Reaction", { userId = player.UserId, emoji = Config.REACTIONS[index] })
+end
+
+-- Sends a player to the stands once their character is in place, if by then a round is running and they are still
+-- only watching it. Covers late joiners, respawns and characters still loading when a round starts (the round may
+-- begin while the character waits, so the check comes after the wait).
+local function standsWhenReady(player: Player, character: Model)
+	task.spawn(function()
+		character:WaitForChild("HumanoidRootPart", 10)
+		task.wait(0.5) -- let the engine finish placing it at the spawn
+		if roundActive and player.Character == character and not Match.isAlive(player) and not busy(player) then
+			SpectatorService.toStands(player)
+		end
+	end)
+end
+
+-- isBusy(player): true while another service owns the player's body (a flight); the stage guard skips them.
+function SpectatorService.start(isBusy: (Player) -> boolean)
+	busy = isBusy
+	Players.RespawnTime = Config.RESPAWN_TIME
+	local function watch(player: Player)
+		player.CharacterAdded:Connect(function(character)
+			standsWhenReady(player, character)
+		end)
+	end
+	for _, player in Players:GetPlayers() do
+		watch(player)
+	end
+	Players.PlayerAdded:Connect(watch)
+	Players.PlayerRemoving:Connect(function(player)
+		inStands[player] = nil
+		lastReaction[player] = nil
+	end)
+	Net.listen("Reaction", onReaction)
+	task.spawn(function()
+		while true do
+			task.wait(Config.STAGE_GUARD_CHECK)
+			if roundActive then
+				for _, player in Players:GetPlayers() do
+					if not Match.isAlive(player) and not busy(player) and onStage(player) then
+						SpectatorService.toStands(player)
+					end
+				end
+			end
+		end
+	end)
+end
+
+-- Round start: everyone who did not get a chair goes to the stands (a character still loading goes once it is in
+-- place).
+function SpectatorService.beginRound()
+	roundActive = true
+	table.clear(inStands)
+	for _, player in Players:GetPlayers() do
+		local character = player.Character
+		if not Match.isAlive(player) and character then
+			if character:FindFirstChild("HumanoidRootPart") then
+				SpectatorService.toStands(player)
+			else
+				standsWhenReady(player, character)
+			end
+		end
+	end
+end
+
+-- Round over: the stands empty into the lobby (around the Lobby spawn).
+function SpectatorService.endRound()
+	roundActive = false
+	local lobby = hall():FindFirstChild("Lobby") :: BasePart?
+	for player in inStands do
+		local character = player.Character
+		if lobby and character and character:FindFirstChild("HumanoidRootPart") then
+			character:PivotTo(lobby.CFrame * CFrame.new(math.random(-4, 4), 3, math.random(-3, 3)))
+		end
+	end
+	table.clear(inStands)
+end
+
+return SpectatorService
 ]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "VoiceService"; s.Source = [====[--!strict
 -- Voice routing.
@@ -2357,6 +2684,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
 
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
 local remotes = shared:WaitForChild("Remotes")
@@ -2365,7 +2693,8 @@ local Judge = require(shared:WaitForChild("Judge"))
 local State = require(script:WaitForChild("State"))
 local Speech = require(script:WaitForChild("Speech"))
 local FlatVoice = require(script:WaitForChild("FlatVoice"))
-local RingCamera = require(script:WaitForChild("RingCamera"))
+local ShowCamera = require(script:WaitForChild("ShowCamera"))
+local GetUp = require(script:WaitForChild("GetUp"))
 local Billboards = require(script:WaitForChild("Billboards"))
 local Fx = require(script:WaitForChild("Fx"))
 local UI = script:WaitForChild("UI")
@@ -2379,6 +2708,7 @@ local VotePanel = require(UI:WaitForChild("VotePanel"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
+local myFlightEndsAt = 0 -- os.clock(): while my own launch lasts I keep the show camera (I watch myself fly off)
 
 -- Seated players cannot jump out or reset during a round.
 local function applySeatLock()
@@ -2427,7 +2757,7 @@ local function refresh()
 	Hud.setAlive(#round.alive, round.total)
 	Hud.setMyWords(if State.inRound() and State.meAlive() then State.myWordCount() else 0)
 	Billboards.render({ show = bubbleTargets(), words = State.words })
-	RingCamera.set(State.inRound() and State.meAlive())
+	ShowCamera.set((State.inRound() and State.meAlive()) or os.clock() < myFlightEndsAt)
 	ReactionBar.setVisible(not (State.inRound() and State.meAlive()))
 	VotePanel.setCanVote(State.round.phase == "Talk" and State.meAlive())
 	refreshVoice()
@@ -2448,6 +2778,7 @@ VotePanel.build(function(voteKey, optionId)
 end)
 Fx.init()
 FlatVoice.start()
+GetUp.start()
 Speech.onStatus(function()
 	refreshVoice()
 end)
@@ -2531,7 +2862,7 @@ remotes.Eliminated.OnClientEvent:Connect(function(info)
 	local isMe = info.userId == State.myId()
 	if info.reason == "said" then
 		Billboards.alarm(info.userId)
-		Fx.elimination(Players:GetPlayerByUserId(info.userId))
+		Fx.elimination()
 		local who = if isMe then "내가" else info.name .. "님이"
 		local word = info.word or ""
 		local text = string.format("삐! %s 금칙어 \"%s\"%s 말했어요", who, word, Judge.josa(word, "을", "를"))
@@ -2563,9 +2894,34 @@ remotes.Reaction.OnClientEvent:Connect(function(info)
 	Fx.reaction(Players:GetPlayerByUserId(info.userId), info.emoji)
 end)
 
+-- A flying chair fired (docs/DESIGN_V3.md §10): everyone sees the flap snap back and hears the bang.
+remotes.Fling.OnClientEvent:Connect(function(info)
+	Fx.fling(info)
+	if info.userId == State.myId() then
+		myFlightEndsAt = os.clock() + Config.FLING_RETURN_SECONDS + 0.5
+		refresh()
+		task.delay(Config.FLING_RETURN_SECONDS + 0.6, refresh)
+	end
+end)
+
+remotes.Splash.OnClientEvent:Connect(function(info)
+	Fx.splash(info.position)
+end)
+
+-- Studio only: F launches me from my chair (no speech-to-text in Studio; the server ignores it on live servers).
+if RunService:IsStudio() then
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if not processed and input.KeyCode == Enum.KeyCode.F then
+			remotes.DevFling:FireServer()
+		end
+	end)
+end
+
 player.CharacterAdded:Connect(function()
+	myFlightEndsAt = 0 -- a launch of my previous character is over
 	task.wait(0.5)
-	RingCamera.reapply()
+	refresh()
+	ShowCamera.reapply()
 end)
 
 -- Anyone's new character needs its bubble again (e.g. the last one launched respawns during the result).
@@ -2602,6 +2958,7 @@ remotes.Sync:FireServer()
 do local s = Instance.new("ModuleScript"); s.Name = "Billboards"; s.Source = [====[--!strict
 -- Word bubbles above heads: each other alive participant's words (up to 3, newest flashes) and name.
 -- My own bubble is never drawn while I play (the HUD shows "??? × n"); in the result everyone's words show.
+-- The V3 pool hall is white, so the cards carry a thick navy outline and the name sits on a navy pill.
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
@@ -2609,11 +2966,13 @@ local Billboards = {}
 
 local WORD_FONT = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Heavy)
 local NAME_FONT = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold)
-local WIDTH = 4.6 -- studs; chairs on the ring are ~6.3 studs apart
+local WIDTH = 4.6 -- studs; the flying chairs are 5 studs apart
 local ROW = 1.0 -- studs per word row
 local NAME_ROW = 0.9
 local CARD_COLOR = Color3.fromRGB(255, 255, 255)
 local NEW_COLOR = Color3.fromRGB(255, 225, 90)
+local OUTLINE = Color3.fromRGB(22, 34, 64)
+local NAME_PILL = Color3.fromRGB(22, 34, 64)
 
 local ALARM_SECONDS = 1.2
 
@@ -2647,8 +3006,8 @@ local function wordRow(parent: Instance, text: string, order: number, fresh: boo
 	corner.CornerRadius = UDim.new(0.25, 0)
 	corner.Parent = row
 	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 2.5
-	stroke.Color = Color3.fromRGB(40, 40, 48)
+	stroke.Thickness = 3
+	stroke.Color = OUTLINE
 	stroke.Parent = row
 	local label = Instance.new("TextLabel")
 	label.Name = "Text"
@@ -2708,15 +3067,24 @@ local function build(player: Player, words: { string }, caption: string, previou
 
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "Caption"
-	nameLabel.BackgroundTransparency = 1
-	nameLabel.Position = UDim2.fromScale(0, list.Size.Y.Scale + 0.02)
-	nameLabel.Size = UDim2.fromScale(1, 1 - list.Size.Y.Scale - 0.02)
+	nameLabel.BackgroundColor3 = NAME_PILL
+	nameLabel.BackgroundTransparency = 0.1
+	nameLabel.Position = UDim2.fromScale(0.1, list.Size.Y.Scale + 0.03)
+	nameLabel.Size = UDim2.fromScale(0.8, 1 - list.Size.Y.Scale - 0.03)
 	nameLabel.FontFace = NAME_FONT
 	nameLabel.TextScaled = true
 	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	nameLabel.TextStrokeTransparency = 0.3
 	nameLabel.Text = caption
 	nameLabel.Parent = gui
+	local pillCorner = Instance.new("UICorner")
+	pillCorner.CornerRadius = UDim.new(0.5, 0)
+	pillCorner.Parent = nameLabel
+	local namePad = Instance.new("UIPadding")
+	namePad.PaddingTop = UDim.new(0.12, 0)
+	namePad.PaddingBottom = UDim.new(0.12, 0)
+	namePad.PaddingLeft = UDim.new(0.06, 0)
+	namePad.PaddingRight = UDim.new(0.06, 0)
+	namePad.Parent = nameLabel
 
 	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
@@ -2815,6 +3183,8 @@ local FLAT_CURVE = { [0] = 1, [2000] = 1 }
 
 local function flatten(emitter: Instance)
 	if emitter:IsA("AudioEmitter") then
+		-- The curve only counts in Custom mode (the default, but a preset would silently ignore it).
+		emitter.DistanceAttenuationMode = Enum.DistanceAttenuationMode.Custom
 		emitter:SetDistanceAttenuation(FLAT_CURVE)
 	end
 end
@@ -2843,8 +3213,12 @@ end
 return FlatVoice
 ]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "Fx"; s.Source = [====[--!strict
--- Effects: elimination (buzzer, red flash, confetti "펑" where the body vanishes) and floating emoji reactions.
+-- Effects: the flying chair firing (seat flap snapping back on its hinge, "펑", smoke and confetti), the splash where
+-- the player hits the water, the elimination buzzer and red flash, and floating emoji reactions.
+-- The server only sends signals; every client animates the flap itself (a server-moved flap would stutter).
+local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
@@ -2859,6 +3233,29 @@ local CONFETTI = {
 
 local flash: Frame
 local buzzer: Sound
+local bang: Sound
+local splashSound: Sound
+local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
+local playing: { [BasePart]: number } = {} -- hinge -> current animation number
+
+local function sound(name: string, id: string, volume: number): Sound
+	local s = Instance.new("Sound")
+	s.Name = name
+	s.SoundId = id
+	s.Volume = volume
+	s.Parent = SoundService
+	return s
+end
+
+-- Plays a copy, so two launches close together do not cut each other's bang or splash (both sounds are under 4 s;
+-- the copy goes away after SOUND_COPY_SECONDS even if it never loaded).
+local SOUND_COPY_SECONDS = 8
+local function playCopy(template: Sound)
+	local copy = template:Clone()
+	copy.Parent = SoundService
+	copy:Play()
+	Debris:AddItem(copy, SOUND_COPY_SECONDS)
+end
 
 function Fx.init()
 	local gui = Instance.new("ScreenGui")
@@ -2874,11 +3271,9 @@ function Fx.init()
 	flash.BorderSizePixel = 0
 	flash.Parent = gui
 
-	buzzer = Instance.new("Sound")
-	buzzer.Name = "Buzzer"
-	buzzer.SoundId = Config.SOUND_BUZZER
-	buzzer.Volume = 0.6
-	buzzer.Parent = SoundService
+	buzzer = sound("Buzzer", Config.SOUND_BUZZER, 0.6)
+	bang = sound("Bang", Config.SOUND_BANG, 0.8)
+	splashSound = sound("Splash", Config.SOUND_SPLASH, 0.8)
 end
 
 local function anchorAt(position: Vector3, lifetime: number): Part
@@ -2897,48 +3292,168 @@ local function anchorAt(position: Vector3, lifetime: number): Part
 	return anchor
 end
 
-local function pop(position: Vector3)
-	local anchor = anchorAt(position, 4)
-	for _, color in CONFETTI do
-		local bits = Instance.new("ParticleEmitter")
-		bits.Color = ColorSequence.new(color)
-		bits.Size = NumberSequence.new(0.35)
-		bits.Lifetime = NumberRange.new(1, 1.8)
-		bits.Speed = NumberRange.new(14, 28)
-		bits.SpreadAngle = Vector2.new(180, 180)
-		bits.Acceleration = Vector3.new(0, -30, 0)
-		bits.RotSpeed = NumberRange.new(-300, 300)
-		bits.Rotation = NumberRange.new(0, 360)
-		bits.Shape = Enum.ParticleEmitterShape.Sphere
-		bits.Rate = 0
-		bits.Parent = anchor
-		bits:Emit(14)
+local function emitter(parent: Instance, props: { [string]: any }, count: number)
+	local e = Instance.new("ParticleEmitter")
+	e.Rate = 0
+	for key, value in props do
+		(e :: any)[key] = value
 	end
-	local smoke = Instance.new("ParticleEmitter")
-	smoke.Color = ColorSequence.new(Color3.fromRGB(245, 245, 245))
-	smoke.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 5) })
-	smoke.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
-	smoke.Lifetime = NumberRange.new(0.5, 0.8)
-	smoke.Speed = NumberRange.new(4, 8)
-	smoke.SpreadAngle = Vector2.new(180, 180)
-	smoke.Rate = 0
-	smoke.Parent = anchor
-	smoke:Emit(10)
+	e.Parent = parent
+	e:Emit(count)
 end
 
--- Someone said a word: buzzer + red flash now, confetti where the body vanishes.
-function Fx.elimination(player: Player?)
+-- The bang at the chair: a white smoke puff, sparks and a little confetti.
+local function burst(position: Vector3)
+	local anchor = anchorAt(position, 3)
+	emitter(anchor, {
+		Color = ColorSequence.new(Color3.fromRGB(242, 242, 242)),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.5), NumberSequenceKeypoint.new(1, 7) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 1) }),
+		Lifetime = NumberRange.new(0.6, 1.1),
+		Speed = NumberRange.new(6, 14),
+		Drag = 4,
+		SpreadAngle = Vector2.new(180, 180),
+	}, 16)
+	emitter(anchor, {
+		Color = ColorSequence.new(Color3.fromRGB(255, 225, 130), Color3.fromRGB(255, 120, 40)),
+		LightEmission = 1,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 0) }),
+		Lifetime = NumberRange.new(0.3, 0.6),
+		Speed = NumberRange.new(25, 45),
+		EmissionDirection = Enum.NormalId.Top,
+		SpreadAngle = Vector2.new(70, 70),
+	}, 24)
+	for _, color in CONFETTI do
+		emitter(anchor, {
+			Color = ColorSequence.new(color),
+			Size = NumberSequence.new(0.35),
+			Lifetime = NumberRange.new(1, 1.8),
+			Speed = NumberRange.new(14, 28),
+			SpreadAngle = Vector2.new(180, 180),
+			Acceleration = Vector3.new(0, -30, 0),
+			RotSpeed = NumberRange.new(-300, 300),
+			Rotation = NumberRange.new(0, 360),
+		}, 6)
+	end
+end
+
+local function chairOf(seatIndex: number): (BasePart?, BasePart?)
+	local hall = workspace:FindFirstChild("PoolHall")
+	local chairs = hall and hall:FindFirstChild("Chairs")
+	if not chairs then
+		return nil, nil
+	end
+	for _, chair in chairs:GetChildren() do
+		local seat = chair:FindFirstChild("Seat") :: BasePart?
+		if seat and seat:GetAttribute("SeatIndex") == seatIndex then
+			local flap = chair:FindFirstChild("Flap")
+			return seat, flap and flap:FindFirstChild("Hinge") :: BasePart?
+		end
+	end
+	return nil, nil
+end
+
+-- Flap angle (degrees) t seconds after the launch: snap open with a small overshoot, settle, hold, ease back down.
+local function flapAngle(t: number): number
+	local open, overshoot = Config.CHAIR_FLAP_DEGREES, Config.CHAIR_OVERSHOOT_DEGREES
+	local snapEnd = Config.CHAIR_SNAP_SECONDS
+	local settleEnd = snapEnd + Config.CHAIR_SETTLE_SECONDS
+	local holdEnd = settleEnd + Config.CHAIR_HOLD_SECONDS
+	local recoverEnd = holdEnd + Config.CHAIR_RECOVER_SECONDS
+	if t < snapEnd then
+		return (open + overshoot) * (1 - (1 - t / snapEnd) ^ 3)
+	elseif t < settleEnd then
+		return open + overshoot * (1 - (t - snapEnd) / Config.CHAIR_SETTLE_SECONDS)
+	elseif t < holdEnd then
+		return open
+	elseif t < recoverEnd then
+		local a = (t - holdEnd) / Config.CHAIR_RECOVER_SECONDS
+		return open * (1 + math.cos(math.pi * a)) / 2
+	end
+	return 0
+end
+
+local function snapFlap(hinge: BasePart)
+	local rest = restOf[hinge] or hinge.CFrame
+	restOf[hinge] = rest
+	local number = (playing[hinge] or 0) + 1
+	playing[hinge] = number
+	local started = os.clock()
+	local total = Config.CHAIR_SNAP_SECONDS + Config.CHAIR_SETTLE_SECONDS + Config.CHAIR_HOLD_SECONDS + Config.CHAIR_RECOVER_SECONDS
+	local connection: RBXScriptConnection
+	connection = RunService.RenderStepped:Connect(function()
+		if playing[hinge] ~= number or not hinge.Parent then
+			connection:Disconnect()
+			return
+		end
+		local t = os.clock() - started
+		if t >= total then
+			hinge.CFrame = rest
+			playing[hinge] = nil
+			connection:Disconnect()
+			return
+		end
+		hinge.CFrame = rest * CFrame.Angles(math.rad(flapAngle(t)), 0, 0)
+	end)
+end
+
+-- A flying chair fired: the flap snaps back, "펑", smoke at the seat.
+function Fx.fling(info: { seatIndex: number? })
+	playCopy(bang)
+	local seat: BasePart?, hinge: BasePart? = nil, nil
+	if info.seatIndex then
+		seat, hinge = chairOf(info.seatIndex)
+	end
+	if hinge then
+		snapFlap(hinge)
+	end
+	if seat then
+		burst(seat.Position + Vector3.new(0, 1, 0))
+	end
+end
+
+-- The player hit the water: a white column, a spray of drops and a ring of mist, sized to read from the show camera
+-- (the landing zone is 95-130 studs away).
+function Fx.splash(position: Vector3)
+	playCopy(splashSound)
+	local anchor = anchorAt(position + Vector3.new(0, 0.5, 0), 3)
+	emitter(anchor, {
+		Color = ColorSequence.new(Color3.fromRGB(255, 255, 255)),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 6) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.05), NumberSequenceKeypoint.new(1, 1) }),
+		Lifetime = NumberRange.new(0.6, 0.9),
+		Speed = NumberRange.new(45, 60),
+		EmissionDirection = Enum.NormalId.Top,
+		SpreadAngle = Vector2.new(6, 6),
+		Acceleration = Vector3.new(0, -60, 0),
+	}, 20)
+	emitter(anchor, {
+		Color = ColorSequence.new(Color3.fromRGB(235, 250, 255), Color3.fromRGB(150, 215, 240)),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.4), NumberSequenceKeypoint.new(1, 1) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 0.8) }),
+		Lifetime = NumberRange.new(1, 1.5),
+		Speed = NumberRange.new(34, 52),
+		EmissionDirection = Enum.NormalId.Top,
+		SpreadAngle = Vector2.new(18, 18),
+		Acceleration = Vector3.new(0, -70, 0),
+	}, 60)
+	emitter(anchor, {
+		Color = ColorSequence.new(Color3.fromRGB(255, 255, 255)),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 8), NumberSequenceKeypoint.new(1, 18) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) }),
+		Lifetime = NumberRange.new(0.8, 1.3),
+		Speed = NumberRange.new(10, 16),
+		Drag = 3,
+		EmissionDirection = Enum.NormalId.Top,
+		SpreadAngle = Vector2.new(80, 80),
+	}, 18)
+end
+
+-- Someone said a word: buzzer + red flash (the launch itself comes with the "Fling" signal).
+function Fx.elimination()
 	buzzer:Play()
 	flash.BackgroundTransparency = 0.55
 	TweenService:Create(flash, TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
-	local character = player and player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not root then
-		return
-	end
-	task.delay(Config.LAUNCH_POP_TIME, function()
-		pop(root.Position)
-	end)
 end
 
 -- An emoji floats up from above the player's head and fades.
@@ -2970,98 +3485,192 @@ end
 
 return Fx
 ]====]; s.Parent = n5 end
-do local s = Instance.new("ModuleScript"); s.Name = "RingCamera"; s.Source = [====[--!strict
--- Seated players look across the ring from just behind and above their own chair, so every other chair
--- (faces + word bubbles) is on screen. The FOV widens on narrow screens so the side chairs still fit.
--- Rig numbers live as attributes on LoungeMap.CameraRig (Back, Up, LookY, HalfAngle) for easy tuning.
--- Ghosts and spectators keep the normal camera and walk around.
+do local s = Instance.new("ModuleScript"); s.Name = "GetUp"; s.Source = [====[--!strict
+-- After a launch the server ends the ragdoll (PlatformStand off) and hands my character back to me. Only the owning
+-- client may change its humanoid's state (docs/DESIGN_V3.md §10 step 5), so this stands my character back up unless
+-- the server has put it back on a chair. The ownership may arrive with or after PlatformStand, so it retries
+-- (GETUP_TRIES times, GETUP_RETRY_SECONDS apart) until the humanoid has left the lying states.
 local Players = game:GetService("Players")
 
-local RingCamera = {}
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("BannedWords"):WaitForChild("Config"))
 
-local DEFAULT_FOV = 70
-local MIN_FOV, MAX_FOV = 40, 90
+local GetUp = {}
 
-local active = false
-local viewportConnection: RBXScriptConnection? = nil
+local LYING: { [Enum.HumanoidStateType]: boolean } = {
+	[Enum.HumanoidStateType.PlatformStanding] = true,
+	[Enum.HumanoidStateType.Physics] = true,
+	[Enum.HumanoidStateType.FallingDown] = true,
+	[Enum.HumanoidStateType.Ragdoll] = true,
+}
 
-local function rig(): (BasePart?, BasePart?)
-	local map = workspace:FindFirstChild("LoungeMap")
-	if not map then
-		return nil, nil
+local function watch(character: Model)
+	local humanoid = character:WaitForChild("Humanoid", 10) :: Humanoid?
+	if not humanoid then
+		return
 	end
-	return map:FindFirstChild("Center") :: BasePart?, map:FindFirstChild("CameraRig") :: BasePart?
-end
-
-local function mySeat(): Seat?
-	local character = Players.LocalPlayer.Character
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	local seat = humanoid and humanoid.SeatPart
-	return if seat and seat:IsA("Seat") then seat else nil
-end
-
--- Vertical FOV that shows `halfAngle` degrees to each side at the current aspect ratio.
-local function fovFor(halfAngle: number, camera: Camera): number
-	local viewport = camera.ViewportSize
-	local aspect = if viewport.Y > 0 then viewport.X / viewport.Y else 16 / 9
-	local vertical = 2 * math.deg(math.atan(math.tan(math.rad(halfAngle)) / aspect))
-	return math.clamp(vertical, MIN_FOV, MAX_FOV)
-end
-
-local function place(): boolean
-	local camera = workspace.CurrentCamera
-	local center, cameraRig = rig()
-	local seat = mySeat()
-	if not (center and cameraRig and seat) then
-		return false
-	end
-	local back = (cameraRig:GetAttribute("Back") or 9) :: number
-	local up = (cameraRig:GetAttribute("Up") or 11) :: number
-	local lookY = (cameraRig:GetAttribute("LookY") or 6) :: number
-	local halfAngle = (cameraRig:GetAttribute("HalfAngle") or 42) :: number
-	local outward = seat.Position - center.Position
-	outward = Vector3.new(outward.X, 0, outward.Z)
-	outward = if outward.Magnitude > 0.1 then outward.Unit else Vector3.new(0, 0, 1)
-	local position = Vector3.new(seat.Position.X, center.Position.Y, seat.Position.Z) + outward * back + Vector3.new(0, up, 0)
-	camera.CameraType = Enum.CameraType.Scriptable
-	camera.CFrame = CFrame.lookAt(position, center.Position + Vector3.new(0, lookY, 0))
-	camera.FieldOfView = fovFor(halfAngle, camera)
-	if not viewportConnection then
-		viewportConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-			if active then
-				camera.FieldOfView = fovFor(halfAngle, camera)
+	local attempt = 0 -- a newer PlatformStand change cancels an older retry chain
+	humanoid:GetPropertyChangedSignal("PlatformStand"):Connect(function()
+		if humanoid.PlatformStand then
+			return
+		end
+		attempt += 1
+		local mine = attempt
+		task.spawn(function()
+			for _ = 1, Config.GETUP_TRIES do
+				task.wait(Config.GETUP_RETRY_SECONDS)
+				local still = attempt == mine and humanoid.Parent ~= nil and humanoid.Health > 0
+				if not still or humanoid.PlatformStand or humanoid.Sit or humanoid.SeatPart ~= nil then
+					return
+				end
+				if not LYING[humanoid:GetState()] then
+					return -- up already
+				end
+				humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 			end
 		end)
-	end
-	return true
+	end)
 end
 
--- on = I'm an alive participant in a round. Retries until I'm actually seated.
-function RingCamera.set(on: boolean)
-	local camera = workspace.CurrentCamera
-	if on then
-		active = true
-		if not place() then
-			task.delay(0.3, function()
+function GetUp.start()
+	local player = Players.LocalPlayer
+	if player.Character then
+		task.spawn(watch, player.Character)
+	end
+	player.CharacterAdded:Connect(watch)
+end
+
+return GetUp
+]====]; s.Parent = n5 end
+do local s = Instance.new("ModuleScript"); s.Name = "ShowCamera"; s.Source = [====[--!strict
+-- The show camera (docs/DESIGN_V3.md §10, owner 2026-10-22): seated participants watch the chair row from the front,
+-- so every other participant (faces and word bubbles) is on screen with the pool behind, including anyone flying off.
+-- The FOV makes the row's HalfWidth fit the screen width at the current aspect ratio (the game is landscape only).
+-- Rig numbers live on PoolHall.ShowCamera (attributes HalfWidth, MinFov, MaxFov). Everyone else keeps the normal camera.
+local ShowCamera = {}
+
+local DEFAULT_FOV = 70
+
+local active = false
+local bound: Camera? = nil -- the camera the change listeners below watch
+local connections: { RBXScriptConnection } = {}
+
+local function rig(): (BasePart?, Instance?)
+	local hall = workspace:FindFirstChild("PoolHall")
+	if not hall then
+		return nil, nil
+	end
+	return hall:FindFirstChild("ShowCamera") :: BasePart?, hall:FindFirstChild("Chairs")
+end
+
+-- Distance from the camera to the chair row along the view direction (the row's centre = the seats' average).
+local function rowDepth(marker: BasePart, chairs: Instance): number
+	local sum, count = Vector3.zero, 0
+	for _, chair in chairs:GetChildren() do
+		local seat = chair:FindFirstChild("Seat") :: BasePart?
+		if seat then
+			sum += seat.Position
+			count += 1
+		end
+	end
+	if count == 0 then
+		return 40
+	end
+	return math.max((sum / count - marker.Position):Dot(marker.CFrame.LookVector), 1)
+end
+
+-- Vertical FOV that shows HalfWidth studs to each side of the row centre at the current aspect ratio.
+local function fovFor(marker: BasePart, chairs: Instance, camera: Camera): number
+	local halfWidth = (marker:GetAttribute("HalfWidth") or 29) :: number
+	local minFov = (marker:GetAttribute("MinFov") or 40) :: number
+	local maxFov = (marker:GetAttribute("MaxFov") or 70) :: number
+	local viewport = camera.ViewportSize
+	local aspect = if viewport.Y > 0 then viewport.X / viewport.Y else 16 / 9
+	local halfAngle = math.atan(halfWidth / rowDepth(marker, chairs))
+	local vertical = 2 * math.deg(math.atan(math.tan(halfAngle) / aspect))
+	return math.clamp(vertical, minFov, maxFov)
+end
+
+local place: () -> boolean -- defined below (the listeners need it)
+
+-- Watches the current camera: a new aspect ratio refits the FOV, and anything else putting CameraType back (a
+-- respawn; in the Studio test 2026-10-22 the MCP execute_luau tool, which restores a camera type it saw change during
+-- a call) is undone while the show camera is on. The check runs again when the deferred call fires, so turning the
+-- show camera off in between wins.
+local function bind(camera: Camera)
+	if bound == camera then
+		return
+	end
+	for _, connection in connections do
+		connection:Disconnect()
+	end
+	table.clear(connections)
+	bound = camera
+	table.insert(connections, camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+		local marker, chairs = rig()
+		if active and marker and chairs then
+			camera.FieldOfView = fovFor(marker, chairs, camera)
+		end
+	end))
+	table.insert(connections, camera:GetPropertyChangedSignal("CameraType"):Connect(function()
+		if active and camera.CameraType ~= Enum.CameraType.Scriptable then
+			task.defer(function()
 				if active then
 					place()
 				end
 			end)
 		end
+	end))
+end
+
+place = function(): boolean
+	local camera = workspace.CurrentCamera
+	local marker, chairs = rig()
+	if not (camera and marker and chairs) then
+		return false
+	end
+	bind(camera)
+	camera.CameraType = Enum.CameraType.Scriptable
+	camera.CFrame = marker.CFrame
+	camera.FieldOfView = fovFor(marker, chairs, camera)
+	return true
+end
+
+-- A replaced CurrentCamera gets the show camera again if it should be on.
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+	if active then
+		place()
+	end
+end)
+
+-- on = I'm an alive participant in a round (seated, or flying and coming back). Retries once if the map is late.
+function ShowCamera.set(on: boolean)
+	if on then
+		if not active then
+			active = true
+			if not place() then
+				task.delay(0.5, function()
+					if active then
+						place()
+					end
+				end)
+			end
+		end
 	elseif active then
 		active = false
+		local camera = workspace.CurrentCamera
 		camera.CameraType = Enum.CameraType.Custom
 		camera.FieldOfView = DEFAULT_FOV
 	end
 end
 
-function RingCamera.reapply()
+-- A new character resets the camera type; put the show camera back if it should be on.
+function ShowCamera.reapply()
 	if active then
 		place()
 	end
 end
 
-return RingCamera
+return ShowCamera
 ]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "Speech"; s.Source = [====[--!strict
 -- Transcribes the local player's own mic. Roblox only runs AudioSpeechToText on clients, so every client

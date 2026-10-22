@@ -4,6 +4,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
 
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
 local remotes = shared:WaitForChild("Remotes")
@@ -12,7 +13,8 @@ local Judge = require(shared:WaitForChild("Judge"))
 local State = require(script:WaitForChild("State"))
 local Speech = require(script:WaitForChild("Speech"))
 local FlatVoice = require(script:WaitForChild("FlatVoice"))
-local RingCamera = require(script:WaitForChild("RingCamera"))
+local ShowCamera = require(script:WaitForChild("ShowCamera"))
+local GetUp = require(script:WaitForChild("GetUp"))
 local Billboards = require(script:WaitForChild("Billboards"))
 local Fx = require(script:WaitForChild("Fx"))
 local UI = script:WaitForChild("UI")
@@ -26,6 +28,7 @@ local VotePanel = require(UI:WaitForChild("VotePanel"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
+local myFlightEndsAt = 0 -- os.clock(): while my own launch lasts I keep the show camera (I watch myself fly off)
 
 -- Seated players cannot jump out or reset during a round.
 local function applySeatLock()
@@ -74,7 +77,7 @@ local function refresh()
 	Hud.setAlive(#round.alive, round.total)
 	Hud.setMyWords(if State.inRound() and State.meAlive() then State.myWordCount() else 0)
 	Billboards.render({ show = bubbleTargets(), words = State.words })
-	RingCamera.set(State.inRound() and State.meAlive())
+	ShowCamera.set((State.inRound() and State.meAlive()) or os.clock() < myFlightEndsAt)
 	ReactionBar.setVisible(not (State.inRound() and State.meAlive()))
 	VotePanel.setCanVote(State.round.phase == "Talk" and State.meAlive())
 	refreshVoice()
@@ -95,6 +98,7 @@ VotePanel.build(function(voteKey, optionId)
 end)
 Fx.init()
 FlatVoice.start()
+GetUp.start()
 Speech.onStatus(function()
 	refreshVoice()
 end)
@@ -178,7 +182,7 @@ remotes.Eliminated.OnClientEvent:Connect(function(info)
 	local isMe = info.userId == State.myId()
 	if info.reason == "said" then
 		Billboards.alarm(info.userId)
-		Fx.elimination(Players:GetPlayerByUserId(info.userId))
+		Fx.elimination()
 		local who = if isMe then "내가" else info.name .. "님이"
 		local word = info.word or ""
 		local text = string.format("삐! %s 금칙어 \"%s\"%s 말했어요", who, word, Judge.josa(word, "을", "를"))
@@ -210,9 +214,34 @@ remotes.Reaction.OnClientEvent:Connect(function(info)
 	Fx.reaction(Players:GetPlayerByUserId(info.userId), info.emoji)
 end)
 
+-- A flying chair fired (docs/DESIGN_V3.md §10): everyone sees the flap snap back and hears the bang.
+remotes.Fling.OnClientEvent:Connect(function(info)
+	Fx.fling(info)
+	if info.userId == State.myId() then
+		myFlightEndsAt = os.clock() + Config.FLING_RETURN_SECONDS + 0.5
+		refresh()
+		task.delay(Config.FLING_RETURN_SECONDS + 0.6, refresh)
+	end
+end)
+
+remotes.Splash.OnClientEvent:Connect(function(info)
+	Fx.splash(info.position)
+end)
+
+-- Studio only: F launches me from my chair (no speech-to-text in Studio; the server ignores it on live servers).
+if RunService:IsStudio() then
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if not processed and input.KeyCode == Enum.KeyCode.F then
+			remotes.DevFling:FireServer()
+		end
+	end)
+end
+
 player.CharacterAdded:Connect(function()
+	myFlightEndsAt = 0 -- a launch of my previous character is over
 	task.wait(0.5)
-	RingCamera.reapply()
+	refresh()
+	ShowCamera.reapply()
 end)
 
 -- Anyone's new character needs its bubble again (e.g. the last one launched respawns during the result).

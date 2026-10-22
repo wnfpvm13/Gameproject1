@@ -41,8 +41,26 @@ return {
 	END_TOLERANCE = 0,
 	SETTLE_MAX = 5,
 	SETTLE_NOTICE_AFTER = 1.2,
-	LAUNCH_POP_TIME = 0.5, -- seconds from launch to the "펑" (the body vanishes there)
 	RESPAWN_TIME = 3,
+
+	-- V3 flying chair (docs/DESIGN_V3.md §10, owner 2026-10-22): the seat flap snaps back with a bang, the player flies
+	-- off as a ragdoll far into the pool and is back on the seat FLING_RETURN_SECONDS after the launch.
+	FLING_RETURN_SECONDS = 5,
+	FLING_APEX_HEIGHT = 20, -- studs above the launch point at the top of the arc (keeps it under the show camera's
+	-- top edge and the HUD; also capped under PoolHall CeilingY)
+	FLING_BODY_TOP = 4, -- studs from the root to the top of a tumbling body (keeps the whole body under CeilingY)
+	FLING_SPIN = 7, -- rad/s backward tumble at the launch
+	FLING_FLOAT_DENSITY = 0.45, -- body density while flying, so it floats on the water (avatars sink otherwise)
+	FLING_COLLIDE_DELAY = 0.2, -- body parts start colliding this long after the launch (seated feet touch the carpet,
+	-- and colliding from the first frame cost ~10% of the throw in the Studio test)
+	CHAIR_FLAP_DEGREES = 80, -- how far the seat flap snaps back
+	CHAIR_SNAP_SECONDS = 0.12, -- the snap itself, overshooting by CHAIR_OVERSHOOT_DEGREES
+	CHAIR_OVERSHOOT_DEGREES = 10,
+	CHAIR_SETTLE_SECONDS = 0.15, -- back from the overshoot
+	CHAIR_HOLD_SECONDS = 0.8, -- the flap stays up this long
+	CHAIR_RECOVER_SECONDS = 2.5, -- then eases back down (done before the player is back)
+	GETUP_RETRY_SECONDS = 0.2, -- after a launch my client stands my character up, retrying until it took
+	GETUP_TRIES = 5, -- (the network ownership comes back with or after PlatformStand)
 
 	-- Transcript intake guards (client-side STT). 10 s of Korean speech is roughly 70 syllables = 210 bytes.
 	TRANSCRIPT_MAX_BYTES = 600,
@@ -80,12 +98,16 @@ return {
 	SCORE_ASSIST = 1,
 	SCORE_SURVIVE = 3,
 
-	-- Ghosts: eliminated players stay in the lounge, see-through, outside the chair ring, with reactions.
-	GHOST_TRANSPARENCY = 0.6,
+	-- Spectators (V3): players who are out and late joiners watch from the stands, with reactions.
 	REACTIONS = { "👏", "😂", "😱", "😮", "❤️" },
-	GHOST_RING_CHECK = 1, -- seconds between "is an outsider inside the ring?" checks (backs up the barrier)
+	STAGE_GUARD_CHECK = 1, -- seconds between "is a spectator on the stage?" checks
+	STAGE_BEHIND_ROW = 8, -- studs behind the chair row that still count as the stage
+	STAND_SPOTS_PER_ROW = 10, -- spectator spots along the stands marker, per tier row
 	REACTION_COOLDOWN = 1.2,
+	SYNC_COOLDOWN = 1, -- seconds between two "send me the state" requests from one player
 
 	-- Roblox-licensed Pro Sound Effects (public, free).
 	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)
+	SOUND_BANG = "rbxassetid://9114086657", -- Dirt Explosion 1: sharp bang (SFX), the flying chair firing
+	SOUND_SPLASH = "rbxassetid://9120585252", -- Water Splash, Big Water Splash, Dive In 1 (SFX), the landing
 }

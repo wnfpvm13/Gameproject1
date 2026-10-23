@@ -1,5 +1,5 @@
 -- Squash and run math tests (run by tools/tests/run_tests.py, which puts Config, SquashSpring, SquashPose,
--- CrankMotion and CourseMath above this).
+-- CrankMotion, CourseMath and CrewBook above this).
 -- Uses the real Config numbers, so a tuning change that breaks the feel (too slow, no bounce, flying parts) fails.
 local passed, failed = 0, 0
 local function check(name: string, ok: boolean, detail: string?)
@@ -255,13 +255,52 @@ do
 	local roof = L.DeckHeight + L.CabHeight + L.RoofThickness
 	check("the standing cab roof hits the girder", roof > B.Clearance)
 	check("the flat cab roof passes under it", roof * c.HeightAtFull < B.Clearance)
+	check("the car roofs are as high as the cab roof (walk across)", math.abs(Config.Cars.RoofTop - roof) < 0.01)
+	check("a cowboy lying flat on a flat roof passes under the girder", roof * c.HeightAtFull + Config.Cowboy.FlatHeight < B.Clearance)
 	local smallest = math.huge
 	for _, gap in gaps do
 		smallest = math.min(smallest, gap)
 	end
-	local length = 17 -- about the locomotive's length (cowcatcher to soles); the real value is a model attribute
-	check("a restart starts after the bridge before", R.RestartLead < smallest - B.Depth - length)
+	local cars = Config.Cars
+	-- About the train's length: the locomotive (cowcatcher to soles, about 17) and its cars; the real value is a model attribute.
+	local length = 17 + cars.Count * (cars.Length + cars.Gap)
+	-- The run distance is measured at the train's middle: a restart RestartLead before a bridge puts the train's back
+	-- past the bridge before (smallest gap), and leaves its front a fair way from the bridge (time to react).
+	check("a restart starts after the bridge before", R.RestartLead < smallest - B.Depth / 2 - length / 2)
+	check("a restart leaves over a second before the front meets the bridge", (R.RestartLead - B.Depth / 2 - length / 2) / R.Speed >= 1.2,
+		tostring((R.RestartLead - B.Depth / 2 - length / 2) / R.Speed))
 	check("the time under a bridge is longer than the delay allowance", (B.Depth + length) / R.Speed > R.PassTolerance * 2)
+end
+
+-- 9. Who drives and who rides.
+do
+	local book = CrewBook.new(2)
+	local s1, r1 = book:join("A", false)
+	local s2, r2 = book:join("B", false)
+	local s3, r3 = book:join("C", false)
+	check("the first player drives, the next rides that train", s1 == 1 and r1 == "driver" and s2 == 1 and r2 == "cowboy")
+	check("the third drives the next train", s3 == 2 and r3 == "driver")
+	local slot, change, promoted = book:leave("A")
+	check("a driver leaving hands the train to the cowboy", slot == 1 and change == "promoted" and promoted == "B" and select(2, book:find("B")) == "driver")
+	local _, gone = book:leave("C")
+	check("a driver alone leaving frees the track", gone == "freed" and book:crew(2) == nil)
+	local s4, r4 = book:join("D", false)
+	check("a new player rides a train that has no cowboy", s4 == 1 and r4 == "cowboy")
+	local _, left = book:leave("D")
+	check("a cowboy leaving leaves the train without one", left == "nocowboy" and book:crew(1).cowboy == nil)
+	local solo = CrewBook.new(1)
+	local ss, sr = solo:join("E", true)
+	check("a lone tester rides a train with the stand-in driver", ss == 1 and sr == "cowboy" and solo:crew(1).bot == true)
+	local ts, tr, took = solo:join("F", false)
+	check("the next player takes over from the stand-in driver", ts == 1 and tr == "driver" and took == true and solo:crew(1).bot == false)
+	local again, againRole = solo:join("F", false)
+	check("joining twice changes nothing", again == 1 and againRole == "driver" and solo:crew(1).cowboy == "E")
+	local full = solo:join("G", false)
+	check("no track left: no slot", full == nil)
+	local botBook = CrewBook.new(1)
+	botBook:join("H", true)
+	local _, botGone = botBook:leave("H")
+	check("the stand-in driver's train goes with its cowboy", botGone == "freed" and botBook:crew(1) == nil)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

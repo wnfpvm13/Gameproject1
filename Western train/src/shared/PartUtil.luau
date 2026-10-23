@@ -52,6 +52,46 @@ function PartUtil.avatarOf(locomotive: Model): Model?
 	return nil
 end
 
+-- The last roof floor of a train (the walkable part furthest back at rest): where the cowboy is put. `walkable` and
+-- `restCFrame` are the attribute names (Names.Walkable, Names.RestCFrame), passed in because this module requires nothing.
+function PartUtil.lastRoofFloor(train: Model, walkable: string, restCFrame: string): BasePart?
+	local best: BasePart? = nil
+	local bestZ = -math.huge
+	for _, item in train:GetDescendants() do
+		local rest = item:GetAttribute(restCFrame)
+		if item:IsA("BasePart") and item:GetAttribute(walkable) == true and typeof(rest) == "CFrame" and rest.Z > bestZ then
+			best = item
+			bestZ = rest.Z
+		end
+	end
+	return best
+end
+
+-- Where a character's root goes to stand on a floor part (its centre's CFrame and size), `lift` above the floor's
+-- top, facing the way the floor faces.
+function PartUtil.aboveFloor(floor: CFrame, size: Vector3, lift: number): CFrame
+	return floor * CFrame.new(0, size.Y / 2 + lift, 0)
+end
+
+-- Moves a character that has just been made to `at`. CharacterAdded fires before Roblox puts the new character on
+-- its spawn (still unparented), which would undo a move made then, so it is moved again once the character is in
+-- the world. Returns a function that cancels the second move.
+function PartUtil.pivotAfterSpawn(character: Model, at: CFrame): () -> ()
+	character:PivotTo(at)
+	local cancelled = false
+	task.defer(function()
+		if not character.Parent and not cancelled then
+			character.AncestryChanged:Wait()
+		end
+		if not cancelled and character.Parent then
+			character:PivotTo(at)
+		end
+	end)
+	return function()
+		cancelled = true
+	end
+end
+
 -- A number attribute, or nil when it is missing or not a number.
 function PartUtil.number(instance: Instance, name: string): number?
 	local value = instance:GetAttribute(name)

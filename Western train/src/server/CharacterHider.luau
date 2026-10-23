@@ -39,22 +39,11 @@ function CharacterHider.hide(character: Model, at: CFrame): Hidden
 	for _, item in character:GetDescendants() do
 		hide(item)
 	end
-	character:PivotTo(at)
+	local cancelPivot = PartUtil.pivotAfterSpawn(character, at)
 	local connection = character.DescendantAdded:Connect(hide)
-	local stopped = false
-	-- CharacterAdded fires before Roblox puts the new character on its spawn (still unparented), so move it again once
-	-- the character is in the world.
-	task.defer(function()
-		if not character.Parent and not stopped then
-			character.AncestryChanged:Wait()
-		end
-		if not stopped and character.Parent then
-			character:PivotTo(at)
-		end
-	end)
 
 	local function stop()
-		stopped = true
+		cancelPivot()
 		connection:Disconnect()
 	end
 	local function restore()

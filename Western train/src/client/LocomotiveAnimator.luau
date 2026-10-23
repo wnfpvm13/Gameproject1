@@ -100,7 +100,12 @@ function LocomotiveAnimator.new(locomotive: Model): Animator?
 			if entry then
 				-- The avatar's Humanoid turns collisions back on for its torso parts when the model arrives on this
 				-- client too (no change signal; seen in Studio), and Roblox's camera would then zoom in behind the cab.
+				-- The roof floors the cowboy stands on keep theirs (they are invisible, so the camera ignores them).
 				PartUtil.ghost(item)
+				if item:GetAttribute(Names.Walkable) == true then
+					item.CanCollide = true
+					item.CanQuery = true
+				end
 				table.insert(entries, entry)
 				if entry.crank then
 					table.insert(cranks, entry)
@@ -141,6 +146,11 @@ end
 -- The locomotive's current height above the rails (its highest part's top, as last drawn).
 function LocomotiveAnimator.height(self: Animator): number
 	return self.top
+end
+
+-- How flat the train is drawn right now: 0 standing, 1 fully flat (the bounce's overshoot is cut off).
+function LocomotiveAnimator.flatness(self: Animator): number
+	return math.clamp(self.spring.value, 0, 1)
 end
 
 function LocomotiveAnimator.setTarget(self: Animator, squashed: boolean)

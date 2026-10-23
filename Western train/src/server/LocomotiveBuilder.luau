@@ -4,7 +4,8 @@
 -- backward, toward the play camera), the arms are the coupling rods between the driving wheels (the hands are big
 -- fists on the front crank pins) and the legs stick straight out of the back, the soles as the rear buffers. The
 -- boiler is a real cylinder in Config's boiler colour; frame, red wheels, crank pins, chimney, dome, lamp, buffer
--- beam and a slatted cowcatcher are added. Every moving part gets its rest pose as attributes (Names.Rest*,
+-- beam and a slatted cowcatcher are added, and boxcars behind (Config.Cars) for the cowboy to run on. The roofs get
+-- invisible floors that keep their collisions (Names.Walkable). Every moving part gets its rest pose as attributes (Names.Rest*,
 -- Names.Crank* for the parts that circle with the wheels, Names.Kick* for the legs that swing about the hip) for the
 -- client's LocomotiveAnimator. Locomotive space: X right, Y up, Z back (forward is -Z), origin on the rails under the middle.
 local CollectionService = game:GetService("CollectionService")
@@ -41,6 +42,7 @@ type Placement = {
 	exponent: number?, -- nil = 1
 	crank: CrankMotion.Crank?,
 	kick: { pivot: Vector3, side: number }?, -- a leg: swings about this hip point, each side the other way
+	walkable: boolean?, -- an invisible roof floor the cowboy stands on: keeps its collisions
 }
 type Add = (Placement) -> ()
 
@@ -185,6 +187,22 @@ local function placeAvatar(avatar: Model, add: Add): (number, number)
 	return cabBack, rearEnd
 end
 
+-- A wheel on the rails: an iron tyre with a red centre a little proud of it on both sides.
+local function addWheel(model: Model, add: Add, x: number, r: number, z: number)
+	local L = Config.Locomotive
+	add({ part = cylinder("Wheel", L.Colors.Iron, model), size = Vector3.new(r * 2, L.WheelWidth, r * 2), rest = CFrame.new(x, r, z) * ACROSS })
+	local inner = (r - L.TyreThickness) * 2
+	add({ part = cylinder("WheelCentre", L.Colors.Wheel, model), size = Vector3.new(inner, L.WheelWidth + 0.04, inner), rest = CFrame.new(x, r, z) * ACROSS })
+end
+
+-- An invisible floor on a roof: its top is the top of what is drawn there, so the cowboy stands on it.
+local function addRoofFloor(model: Model, add: Add, width: number, length: number, top: number, z: number)
+	local thickness = Config.Cowboy.FloorThickness
+	local floor = newPart("Part", "RoofFloor", Color3.new(), Enum.Material.SmoothPlastic, model)
+	floor.Transparency = 1
+	add({ part = floor, size = Vector3.new(width, thickness, length), rest = CFrame.new(0, top - thickness / 2, z), walkable = true })
+end
+
 -- Boiler, wheels, crank pins, frame and fittings. Returns the cowcatcher's front (Z).
 local function addTrainParts(model: Model, cabBack: number, add: Add): number
 	local L = Config.Locomotive
@@ -203,12 +221,9 @@ local function addTrainParts(model: Model, cabBack: number, add: Add): number
 	add({ part = door, size = Vector3.new(L.DoorDiameter, L.DoorThickness, L.DoorDiameter), rest = CFrame.new(0, centreY, -L.DoorThickness / 2) * ALONG_TRACK })
 
 	-- Wheels stay still (a squashed round wheel turning would wobble); the crank pins and the arms show the turning.
-	-- Each wheel is an iron tyre with a red centre a little proud of it on both sides.
 	local wheelX = L.WheelTrack
 	local function wheel(x: number, r: number, z: number)
-		add({ part = cylinder("Wheel", colors.Iron, model), size = Vector3.new(r * 2, L.WheelWidth, r * 2), rest = CFrame.new(x, r, z) * ACROSS })
-		local inner = (r - L.TyreThickness) * 2
-		add({ part = cylinder("WheelCentre", colors.Wheel, model), size = Vector3.new(inner, L.WheelWidth + 0.04, inner), rest = CFrame.new(x, r, z) * ACROSS })
+		addWheel(model, add, x, r, z)
 	end
 	for _, sign in { -1, 1 } do
 		local crank = CrankMotion.forSide(sign, L.CrankRadius) -- the same circle as that side's arm
@@ -223,13 +238,14 @@ local function addTrainParts(model: Model, cabBack: number, add: Add): number
 		wheel(sign * wheelX, L.LeadRadius, L.LeadAt)
 	end
 
-	-- Cab roof over the standing torso (the cowboy's floor later).
+	-- Cab roof over the standing torso, with a floor for the cowboy.
 	local overhang = L.RoofOverhang * 2
 	add({
 		part = newPart("Part", "CabRoof", colors.Iron, Enum.Material.Metal, model),
 		size = Vector3.new(L.CabWidth + overhang, L.RoofThickness, L.CabDepth + overhang),
 		rest = CFrame.new(0, deck + L.CabHeight + L.RoofThickness / 2, cabBack - L.CabDepth / 2),
 	})
+	addRoofFloor(model, add, L.CabWidth + overhang, L.CabDepth + overhang, deck + L.CabHeight + L.RoofThickness, cabBack - L.CabDepth / 2)
 
 	-- Frame between the wheels, from the buffer beam to the cab back.
 	local frameWidth = (L.WheelTrack - L.WheelWidth / 2) * 2 - 0.2
@@ -299,7 +315,73 @@ local function addTrainParts(model: Model, cabBack: number, add: Add): number
 	return catcherFront
 end
 
--- The finished locomotive at `base` (on the rails, facing -Z). The avatar model becomes its child.
+-- The boxcars, one after another from `start` (Z) backward: plank body with a dark sill, end posts and a framed
+-- sliding door on each side, an iron roof with a plank walkway and a floor for the cowboy, four wheels a side. A
+-- narrow gangplank crosses from the cab roof (its back at `cabBack`) over the legs to the first car's walkway.
+-- Every car part is marked Names.CarPart (the face window leaves them out). Returns the last car's back (Z).
+local function addCars(model: Model, start: number, cabBack: number, add: Add): number
+	local C = Config.Cars
+	local L = Config.Locomotive
+	local colors = C.Colors
+	local walkTop = C.RoofTop + C.WalkThickness
+	local z = start
+	local function addCar(placement: Placement)
+		placement.part:SetAttribute(Names.CarPart, true)
+		add(placement)
+	end
+	local firstFront = start + C.Gap - C.RoofOverhang
+	local plankLength = firstFront - cabBack + 0.6 -- overlapping both roofs a little
+	local plankZ = cabBack - 0.3 + plankLength / 2
+	addCar({ part = newPart("Part", "Gangplank", L.Colors.Wood, Enum.Material.WoodPlanks, model), size = Vector3.new(C.WalkWidth, C.WalkThickness, plankLength), rest = CFrame.new(0, walkTop - C.WalkThickness / 2, plankZ) })
+	local gangFloor = newPart("Part", "RoofFloor", Color3.new(), Enum.Material.SmoothPlastic, model)
+	gangFloor.Transparency = 1
+	gangFloor:SetAttribute(Names.CarPart, true)
+	local thickness = Config.Cowboy.FloorThickness
+	add({ part = gangFloor, size = Vector3.new(C.WalkWidth, thickness, plankLength), rest = CFrame.new(0, walkTop - thickness / 2, plankZ), walkable = true })
+	for _ = 1, C.Count do
+		local front = z + C.Gap
+		local middle = front + C.Length / 2
+		local bodyTop = C.RoofTop - C.RoofThickness
+		local bodyHeight = bodyTop - C.FloorHeight
+		local bodyY = C.FloorHeight + bodyHeight / 2
+		addCar({ part = newPart("Part", "CarBody", colors.Body, Enum.Material.WoodPlanks, model), size = Vector3.new(C.Width, bodyHeight, C.Length), rest = CFrame.new(0, bodyY, middle) })
+		addCar({ part = newPart("Part", "CarFrame", L.Colors.Iron, Enum.Material.Metal, model), size = Vector3.new(C.Width - 0.6, 0.6, C.Length + 0.4), rest = CFrame.new(0, C.FloorHeight - 0.3, middle) })
+		for _, sign in { -1, 1 } do
+			local side = sign * (C.Width / 2 + 0.06)
+			addCar({ part = newPart("Part", "CarSill", colors.Trim, Enum.Material.Wood, model), size = Vector3.new(0.14, 0.45, C.Length), rest = CFrame.new(side, C.FloorHeight + 0.22, middle) })
+			for _, endZ in { front + 0.2, front + C.Length - 0.2 } do
+				addCar({ part = newPart("Part", "CarPost", colors.Trim, Enum.Material.Wood, model), size = Vector3.new(0.14, bodyHeight, 0.4), rest = CFrame.new(side, bodyY, endZ) })
+			end
+			-- The sliding door: a frame of four strips and a bar across the middle.
+			local doorHeight = bodyHeight * 0.82
+			local doorY = C.FloorHeight + 0.45 + doorHeight / 2
+			local doorSide = sign * (C.Width / 2 + 0.1)
+			for _, dz in { -C.DoorWidth / 2, C.DoorWidth / 2 } do
+				addCar({ part = newPart("Part", "CarDoor", colors.Trim, Enum.Material.Wood, model), size = Vector3.new(0.14, doorHeight, 0.25), rest = CFrame.new(doorSide, doorY, middle + dz) })
+			end
+			for _, dy in { -doorHeight / 2, 0, doorHeight / 2 } do
+				addCar({ part = newPart("Part", "CarDoor", colors.Trim, Enum.Material.Wood, model), size = Vector3.new(0.14, 0.25, C.DoorWidth), rest = CFrame.new(doorSide, doorY + dy, middle) })
+			end
+			for _, fromEnd in C.WheelsAt do
+				addWheel(model, addCar, sign * L.WheelTrack, C.WheelRadius, front + fromEnd)
+				addWheel(model, addCar, sign * L.WheelTrack, C.WheelRadius, front + C.Length - fromEnd)
+			end
+		end
+		local roofWidth = C.Width + C.RoofOverhang * 2
+		local roofLength = C.Length + C.RoofOverhang * 2
+		addCar({ part = newPart("Part", "CarRoof", colors.Roof, Enum.Material.Metal, model), size = Vector3.new(roofWidth, C.RoofThickness, roofLength), rest = CFrame.new(0, bodyTop + C.RoofThickness / 2, middle) })
+		addCar({ part = newPart("Part", "CarWalk", L.Colors.Wood, Enum.Material.WoodPlanks, model), size = Vector3.new(C.WalkWidth, C.WalkThickness, roofLength), rest = CFrame.new(0, C.RoofTop + C.WalkThickness / 2, middle) })
+		-- The floor's top is the walkway's top (the cowboy's feet rest on the planks, not in them).
+		addRoofFloor(model, addCar, roofWidth, roofLength, walkTop, middle)
+		-- A coupler block in the gap in front of the car.
+		addCar({ part = newPart("Part", "Coupler", L.Colors.Iron, Enum.Material.Metal, model), size = Vector3.new(0.6, 0.5, C.Gap + 0.4), rest = CFrame.new(0, C.FloorHeight - 0.35, front - C.Gap / 2) })
+		z = front + C.Length
+	end
+	return z
+end
+
+-- The finished train at `base` (on the rails, facing -Z): the locomotive and its boxcars. The avatar model becomes
+-- the locomotive's child.
 function LocomotiveBuilder.build(avatar: Model, base: CFrame): Model
 	local model = Instance.new("Model")
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic -- the animator needs every part at once
@@ -314,14 +396,21 @@ function LocomotiveBuilder.build(avatar: Model, base: CFrame): Model
 		placed[placement.part] = true
 	end
 	local front = addTrainParts(model, cabBack, add)
+	local locomotiveBack = back
+	back = addCars(model, back, cabBack, add)
 
-	-- Centre the locomotive over the base, then put every part in its rest pose.
+	-- Centre the train over the base, then put every part in its rest pose.
 	local shift = CFrame.new(0, 0, -(front + back) / 2)
 	for _, placement in placements do
 		local part = placement.part
 		local rest = shift * placement.rest
 		resize(part, placement.size)
 		PartUtil.ghost(part)
+		if placement.walkable then
+			part.CanCollide = true
+			part.CanQuery = true -- the cowboy's client looks for the roof under its feet
+			part:SetAttribute(Names.Walkable, true)
+		end
 		part.CFrame = base * rest
 		part:SetAttribute(Names.RestCFrame, rest)
 		part:SetAttribute(Names.RestSize, placement.size)
@@ -371,7 +460,9 @@ function LocomotiveBuilder.build(avatar: Model, base: CFrame): Model
 	model:SetAttribute(Names.SpanBack, (back - front) / 2)
 	local focus = newPart("Part", Names.CameraFocus, Color3.new(), Enum.Material.SmoothPlastic, model)
 	focus.Size = Vector3.new(1, 1, 1)
-	focus.CFrame = base * CFrame.new(0, Config.Locomotive.DeckHeight + Config.Locomotive.BoilerDiameter, 0)
+	-- Over the locomotive's middle (the cars trail behind it): the driver's camera looks at the locomotive.
+	local focusZ = (front + locomotiveBack) / 2 - (front + back) / 2
+	focus.CFrame = base * CFrame.new(0, Config.Locomotive.DeckHeight + Config.Locomotive.BoilerDiameter, focusZ)
 	for _, helper in { basePart, focus } do
 		helper.Transparency = 1
 		PartUtil.ghost(helper)

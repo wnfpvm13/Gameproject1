@@ -91,9 +91,55 @@ Config.Locomotive = {
 	},
 }
 
+-- The boxcars behind the locomotive: the cowboy's roofs to run on. They squash with the locomotive (Z distances are
+-- from each car's front end).
+Config.Cars = {
+	Count = 2,
+	Length = 10,
+	Gap = 0.8, -- between the cars, and between the locomotive's shoes and the first car
+	Width = 4.6,
+	RoofTop = 7.7, -- the same height as the cab roof; a gangplank crosses from the cab roof over the legs to the first car
+	RoofThickness = 0.3,
+	RoofOverhang = 0.3,
+	WalkWidth = 1.6, -- the plank walkway along the middle of each roof, and the gangplank from the cab roof
+	WalkThickness = 0.12,
+	FloorHeight = 2.0, -- the car floor (the same deck height as the locomotive)
+	WheelRadius = 0.9,
+	WheelsAt = { 1.4, 3.2 }, -- each end's two wheels, from that end
+	DoorWidth = 3.2,
+	Colors = {
+		Body = Color3.fromRGB(122, 50, 34), -- oxide-red boxcar
+		Trim = Color3.fromRGB(64, 36, 26),
+		Roof = Color3.fromRGB(70, 66, 64),
+	},
+}
+
+-- The cowboy on the roof.
+Config.Cowboy = {
+	FlatHeight = 1.4, -- lying flat on a squashed roof, the cowboy is this tall above it (measured 1.38 in Studio)
+	FlatDrop = 1.4, -- the lying body is drawn this far further down (turned face down it lies about 1.1 below the
+	-- root, which stands 3 above the roof; 1.4 more puts it on the roof - measured in Studio)
+	OnRoof = 0.6, -- the feet within this of a roof count as standing on it
+	OthersReach = 3, -- other players' cowboys: extra reach down to their roof (their place arrives a little late)
+	FloorThickness = 0.6, -- the invisible roof floors
+	BridgeMargin = 0.5, -- a bridge counts as over the cowboy this much beyond its girder (along and across)
+	SplatSeconds = 1.2, -- after a bridge hits the cowboy or the cowboy falls off: back on the last car after this
+	KnockBack = 28, -- studs per second backward when a bridge hits the cowboy
+	KnockUp = 14,
+	FellBelow = 1.0, -- feet lower than this above the rail tops, on no roof: the cowboy is off the train
+	SpawnLift = 3.5, -- the root above a roof when the cowboy is put on the last car
+}
+
+-- A stand-in driver for a cowboy without a partner (Studio testing: set the Workspace attribute Names.SoloCowboy): it
+-- squashes a little before each bridge and lets go a little after.
+Config.Bot = {
+	LeadStuds = 8, -- squash when the front is this far from the bridge
+	TrailStuds = 2, -- let go when the back is this far past it
+}
+
 -- Prototype ground and rails (the server's), and the scenery each client slides past the locomotives.
 Config.Stage = {
-	Slots = 4, -- one locomotive track per player
+	Slots = 4, -- one track per crew (a driver and a cowboy)
 	SlotSpacing = 36,
 	RailHeight = 0.4, -- rail top above the ground
 	RailLength = 480, -- longer than the view ahead and behind (Config.Run)
@@ -125,8 +171,9 @@ Config.Run = {
 	StartDelay = 3, -- seconds after the locomotive appears before the world starts moving
 	CrashSeconds = 2.2, -- the stamp gag; then the run jumps back to a little before that bridge
 	ResumeDelay = 1.0, -- after the jump back, a moment before moving again
-	RestartLead = 50, -- studs before the crashed bridge the run starts again (less than the smallest gap minus the
-	-- locomotive and the bridge, so the bridge before it does not come again)
+	RestartLead = 60, -- run distance before the crashed bridge where the run starts again: the train's front is then
+	-- about 38 studs from it (the run distance is measured at the train's middle), and the bridge before it is behind
+	-- the train's back (the smallest gap allows up to about 77)
 	HoldSeconds = 1.0, -- after a hit seen on this client, how long it waits for the server's crash before following on
 	PassTolerance = 0.35, -- seconds of network delay the server allows for a press when it checks a pass
 	ReleaseGrace = 0.15, -- and for a release just before the bridge's end (the body takes about 0.05 s to rise above it)
@@ -149,9 +196,9 @@ Config.Run = {
 -- The low bridges over the track.
 Config.Bridge = {
 	FirstAt = 150, -- run distance of the first bridge (about 6 s after the start)
-	Gaps = { 110, 90, 130, 80, 100 }, -- between bridges, repeating (uneven, so the rhythm does not lull)
-	Clearance = 5.0, -- the girder's underside above the rails: the standing locomotive (7.7 to the cab roof, 8.6 to
-	-- the chimney cap) hits it, a flat one (about 3.1) passes
+	Gaps = { 130, 110, 150, 100, 120 }, -- between bridges, repeating (uneven, so the rhythm does not lull)
+	Clearance = 5.0, -- the girder's underside above the rails: the standing train (7.7 to the roofs, 8.6 to the
+	-- chimney cap) hits it, a flat one (about 3.1) passes, and so does a cowboy lying flat on it (about 4.5)
 	GirderHeight = 3.0,
 	Depth = 6, -- along the track
 	Span = 10, -- between the piers (the wheels and rods are about 6.7 wide)

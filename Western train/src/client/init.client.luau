@@ -1,9 +1,14 @@
 --!strict
--- Western train client entry point (squash prototype): only wiring. Every locomotive gets an animator, a steam
--- puff, its run (RunTracker) and the moving world drawn around it (CourseView bridges, TrackScroll scenery). The
--- player's own locomotive follows the squash key at once (and tells the server), shows in the face window and has
--- its bridges judged here (reported to the server); other locomotives follow their Squashed attribute. A crash on
--- any locomotive (its CrashIndex attribute, or our own judgement first) plays the stamp, stars and a jolt.
+-- Western train client entry point: only wiring. Every train gets an animator, a steam puff, its run (RunTracker),
+-- the moving world drawn around it (CourseView bridges, TrackScroll scenery) and a RoofRider for its cowboy, who is
+-- laid flat on a squashed roof (CowboyPose). The player is a train's driver (Names.OwnerUserId) or its cowboy
+-- (Names.CowboyUserId):
+-- - driving: the squash key folds the train at once (and tells the server), the bridges are judged here and reported,
+--   and the face window shows the train;
+-- - riding: the character is carried with the roof and follows the cowboy's rules (CowboyRules), and the face window
+--   shows the driver's face.
+-- Other trains follow their Squashed attribute. A crash on any train (its CrashIndex attribute, or our own judgement
+-- first) plays the stamp, stars and a jolt.
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -22,6 +27,9 @@ local RunTracker = require(script:WaitForChild("RunTracker"))
 local CourseView = require(script:WaitForChild("CourseView"))
 local TrackScroll = require(script:WaitForChild("TrackScroll"))
 local RunFeedback = require(script:WaitForChild("RunFeedback"))
+local RoofRider = require(script:WaitForChild("RoofRider"))
+local CowboyRules = require(script:WaitForChild("CowboyRules"))
+local CowboyPose = require(script:WaitForChild("CowboyPose"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
@@ -31,25 +39,53 @@ local faceCam = FaceCam.new(player:WaitForChild("PlayerGui"))
 
 local CRASH_WORD = Color3.fromRGB(255, 120, 70)
 local PASS_WORD = Color3.fromRGB(255, 230, 120)
+local SPLAT_WORD = Color3.fromRGB(255, 160, 200)
 
 type Tracked = {
+	base: BasePart,
 	animator: LocomotiveAnimator.Animator,
 	puff: SteamPuff.Puff?,
 	squashed: boolean,
 	run: RunTracker.Tracker,
 	course: CourseView.View,
 	scenery: TrackScroll.Scroll,
-	predicted: { index: number, at: number }?, -- own locomotive: a crash our judgement already played (os.clock)
+	rider: RoofRider.Rider,
+	rules: CowboyRules.Rules?, -- while the player rides this train
+	predicted: { index: number, at: number }?, -- own train: a crash our judgement already played (os.clock)
 	connections: { RBXScriptConnection },
 }
 local tracked: { [Model]: Tracked } = {}
-local mine: Model? = nil
-local inputDown = false -- still held when a new locomotive arrives (respawn), so it starts flat
+local mine: Model? = nil -- the train the player drives
+local riding: Model? = nil -- the train the player rides as the cowboy
+local shownInWindow: Model? = nil
+local inputDown = false -- the squash key is still held when a new train arrives (respawn), so it starts flat
 local ownCrashing = false
 local crashGags = 0 -- counts own crash gags, so an older one's time-out leaves a newer one alone
+local unbindSquash: (() -> ())? = nil
 
 local function refreshFaceSize()
 	faceCam:setBig(inputDown or ownCrashing)
+end
+
+local function showScore(locomotive: Model)
+	local passed, crashes = locomotive:GetAttribute(Names.Passed), locomotive:GetAttribute(Names.Crashes)
+	faceCam:setScore(if typeof(passed) == "number" then passed else 0, if typeof(crashes) == "number" then crashes else 0)
+end
+
+-- The face window shows the train the player drives or rides.
+local function refreshWindow()
+	local show = mine or riding
+	if show == shownInWindow then
+		return
+	end
+	shownInWindow = show
+	if show then
+		faceCam:show(show)
+		showScore(show)
+	else
+		faceCam:hide()
+	end
+	refreshFaceSize()
 end
 
 local function setSquashed(locomotive: Model, squashed: boolean)
@@ -61,6 +97,28 @@ local function setSquashed(locomotive: Model, squashed: boolean)
 	entry.animator:setTarget(squashed)
 	if entry.puff then
 		entry.puff:burst()
+	end
+end
+
+local function onSquashKey(isDown: boolean)
+	inputDown = isDown
+	local own = mine
+	if own then
+		setSquashed(own, isDown)
+	end
+	refreshFaceSize()
+	squashRemote:FireServer(isDown) -- even without a train, so the server's latest state is never a stale one
+end
+
+-- The squash key belongs to drivers only (a cowboy walks backward with S). It stays bound while a driver has no
+-- train for a moment (respawn), so a key held across it still counts.
+local function refreshInput()
+	if mine and not unbindSquash then
+		unbindSquash = SquashInput.bind(onSquashKey)
+	elseif riding and unbindSquash then
+		local unbind = unbindSquash
+		unbindSquash = nil
+		unbind()
 	end
 end
 
@@ -84,12 +142,9 @@ local function playCrash(locomotive: Model, entry: Tracked, index: number)
 				refreshFaceSize()
 			end
 		end)
+	elseif locomotive == riding then
+		faceCam:flash("쾅!", CRASH_WORD)
 	end
-end
-
-local function showScore(locomotive: Model)
-	local passed, crashes = locomotive:GetAttribute(Names.Passed), locomotive:GetAttribute(Names.Crashes)
-	faceCam:setScore(if typeof(passed) == "number" then passed else 0, if typeof(crashes) == "number" then crashes else 0)
 end
 
 local function track(instance: Instance)
@@ -106,17 +161,19 @@ local function track(instance: Instance)
 		return
 	end
 	local entry: Tracked = {
+		base = base,
 		animator = animator,
 		puff = SteamPuff.new(locomotive),
 		squashed = false,
 		run = RunTracker.new(locomotive),
 		course = CourseView.new(locomotive, base),
 		scenery = TrackScroll.new(locomotive, base),
+		rider = RoofRider.new(locomotive),
+		rules = nil,
 		predicted = nil,
 		connections = {},
 	}
 	tracked[locomotive] = entry
-	local isMine = locomotive:GetAttribute(Names.OwnerUserId) == player.UserId
 	local function onCrashIndex()
 		local index = locomotive:GetAttribute(Names.CrashIndex)
 		if typeof(index) ~= "number" or index <= 0 then
@@ -131,20 +188,45 @@ local function track(instance: Instance)
 		end
 	end
 	table.insert(entry.connections, locomotive:GetAttributeChangedSignal(Names.CrashIndex):Connect(onCrashIndex))
-	if isMine then
+	for _, name in { Names.Passed, Names.Crashes } do
+		table.insert(entry.connections, locomotive:GetAttributeChangedSignal(name):Connect(function()
+			if locomotive == shownInWindow then
+				showScore(locomotive)
+			end
+		end))
+	end
+	-- Riding: this train's cowboy is the player (the server can name the cowboy after the train is built).
+	local function onCowboy()
+		local isCowboy = locomotive:GetAttribute(Names.CowboyUserId) == player.UserId
+		if isCowboy and riding ~= locomotive then
+			-- A new train can be named before the old one goes (the order is not guaranteed): let go of the old first.
+			local old = riding and tracked[riding]
+			if old and old.rules then
+				old.rules:stop(player.Character)
+				old.rules = nil
+			end
+			riding = locomotive
+			entry.rules = CowboyRules.new(locomotive, base)
+		elseif not isCowboy and riding == locomotive then
+			riding = nil
+			local rules = entry.rules
+			entry.rules = nil
+			if rules then
+				rules:stop(player.Character)
+			end
+		end
+		refreshInput()
+		refreshWindow()
+	end
+	table.insert(entry.connections, locomotive:GetAttributeChangedSignal(Names.CowboyUserId):Connect(onCowboy))
+	if locomotive:GetAttribute(Names.OwnerUserId) == player.UserId then
 		mine = locomotive
 		ownCrashing = false
 		DriverCamera.follow(locomotive)
-		faceCam:show(locomotive)
-		refreshFaceSize()
-		showScore(locomotive)
-		for _, name in { Names.Passed, Names.Crashes } do
-			table.insert(entry.connections, locomotive:GetAttributeChangedSignal(name):Connect(function()
-				showScore(locomotive)
-			end))
-		end
+		refreshInput()
+		refreshWindow()
 		setSquashed(locomotive, inputDown)
-		squashRemote:FireServer(inputDown) -- also replaces a state the server still holds back from the old locomotive
+		squashRemote:FireServer(inputDown) -- also replaces a state the server still holds back from the old train
 	else
 		local function follow()
 			setSquashed(locomotive, locomotive:GetAttribute(Names.Squashed) == true)
@@ -152,7 +234,8 @@ local function track(instance: Instance)
 		table.insert(entry.connections, locomotive:GetAttributeChangedSignal(Names.Squashed):Connect(follow))
 		follow()
 	end
-	onCrashIndex() -- a locomotive that arrives in the middle of a crash (joining late) shows it too
+	onCowboy()
+	onCrashIndex() -- a train that arrives in the middle of a crash (joining late) shows it too
 end
 
 CollectionService:GetInstanceAddedSignal(Names.LocomotiveTag):Connect(function(instance)
@@ -178,31 +261,51 @@ CollectionService:GetInstanceRemovedSignal(Names.LocomotiveTag):Connect(function
 	if mine == instance then
 		mine = nil
 		ownCrashing = false
-		faceCam:hide()
 	end
+	if riding == instance then
+		riding = nil
+		if entry and entry.rules then
+			entry.rules:stop(player.Character)
+		end
+	end
+	refreshInput()
+	refreshWindow()
 end)
 for _, instance in CollectionService:GetTagged(Names.LocomotiveTag) do
 	task.spawn(track, instance)
 end
 
-SquashInput.bind(function(isDown: boolean)
-	inputDown = isDown
-	local own = mine
-	if own then
-		setSquashed(own, isDown)
-	end
-	refreshFaceSize()
-	squashRemote:FireServer(isDown) -- even without a locomotive, so the server's latest state is never a stale one
-end)
+local function cowboyCharacter(locomotive: Model): Model?
+	local id = locomotive:GetAttribute(Names.CowboyUserId)
+	local cowboy = if typeof(id) == "number" and id ~= 0 then Players:GetPlayerByUserId(id) else nil
+	return cowboy and cowboy.Character
+end
 
 RunService.RenderStepped:Connect(function(dt: number)
 	local now = Workspace:GetServerTimeNow()
-	for _, entry in tracked do
+	for locomotive, entry in tracked do
 		entry.animator:setRunSpeed(entry.run:speed(now))
 		entry.animator:update(dt)
 		local distance = entry.run:distance(now)
 		entry.course:update(distance)
 		entry.scenery:update(distance)
+		-- The cowboy rides the roof just drawn, lying flat while it is flat.
+		local character = cowboyCharacter(locomotive)
+		if character then
+			local isMe = locomotive == riding
+			local floor = entry.rider:update(character, isMe)
+			local lie = if floor then entry.animator:flatness() else 0
+			CowboyPose.set(character, lie)
+			local rules = entry.rules
+			if isMe and rules then
+				local event = rules:update(character, floor, lie, distance)
+				if event == "splat" then
+					faceCam:flash("철퍽!", SPLAT_WORD)
+				elseif event == "fell" then
+					faceCam:flash("앗!", SPLAT_WORD)
+				end
+			end
+		end
 	end
 	-- Our own bridges, judged from the shape just drawn; the server confirms.
 	local own = mine

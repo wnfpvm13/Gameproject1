@@ -210,7 +210,8 @@ function FaceCam.show(self: FaceCam, locomotive: Model)
 	-- The train parts, one copy each.
 	for _, item in locomotive:GetDescendants() do
 		local inAvatar = avatar ~= nil and item:IsDescendantOf(avatar)
-		if item:IsA("BasePart") and not inAvatar and item:GetAttribute(Names.RestCFrame) ~= nil then
+		local seen = item:GetAttribute(Names.CarPart) ~= true and item:GetAttribute(Names.Walkable) ~= true -- the locomotive only
+		if item:IsA("BasePart") and not inAvatar and seen and item:GetAttribute(Names.RestCFrame) ~= nil then
 			local copy = item:Clone()
 			stripToLooks(copy)
 			for _, child in copy:GetChildren() do

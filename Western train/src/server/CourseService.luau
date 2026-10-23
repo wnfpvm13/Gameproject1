@@ -1,5 +1,5 @@
 --!strict
--- Each driver's run toward the low bridges, judged on the server. The run's clock lives on the locomotive as
+-- Each train's run toward the low bridges, judged on the server. The run's clock lives on the locomotive as
 -- attributes (Names.RunStart/RunFrom/RunSpeed), so every client draws the same moving world from the shared server
 -- time. The driver's client judges each bridge at once from the real squash shape and reports it: a hit is taken as
 -- it is; a pass is checked, once the bridge has gone by, against the squash states the server received
@@ -19,13 +19,16 @@ local PartUtil = require(shared:WaitForChild("PartUtil"))
 local CourseService = {}
 
 export type Service = {
-	begin: (player: Player, locomotive: Model) -> (), -- a new locomotive: its run starts after Config.Run.StartDelay
-	finish: (player: Player) -> (),
+	-- A new train: its run starts after Config.Run.StartDelay. driver = the player whose reports count (nil for the
+	-- stand-in driver: its bridges are judged by the server alone).
+	begin: (locomotive: Model, driver: Player?) -> (),
+	finish: (locomotive: Model) -> (),
 	stop: () -> (),
 }
 
 type State = {
 	locomotive: Model,
+	driver: Player?,
 	run: CourseMath.Run,
 	front: number, -- the locomotive's ends in its own Z (Names.SpanFront/SpanBack)
 	back: number,
@@ -56,7 +59,15 @@ end
 
 function CourseService.start(remote: RemoteEvent): Service
 	local run, bridges = Config.Run, Config.Bridge
-	local states: { [Player]: State } = {}
+	local states: { [Model]: State } = {}
+	local function stateOf(player: Player): State?
+		for _, state in states do
+			if state.driver == player then
+				return state
+			end
+		end
+		return nil
+	end
 
 	local function bridgeAt(i: number): number
 		return CourseMath.bridgeAt(i, bridges.FirstAt, bridges.Gaps)
@@ -65,7 +76,7 @@ function CourseService.start(remote: RemoteEvent): Service
 		return CourseMath.under(bridgeAt(i), bridges.Depth, state.front, state.back)
 	end
 
-	local function crash(player: Player, state: State, index: number, distance: number)
+	local function crash(state: State, index: number, distance: number)
 		state.crashed = true
 		state.generation += 1
 		local generation = state.generation
@@ -74,7 +85,7 @@ function CourseService.start(remote: RemoteEvent): Service
 		count(state.locomotive, Names.Crashes)
 		state.locomotive:SetAttribute(Names.CrashIndex, index)
 		task.delay(run.CrashSeconds, function()
-			if states[player] ~= state or state.generation ~= generation then
+			if states[state.locomotive] ~= state or state.generation ~= generation then
 				return
 			end
 			state.crashed = false
@@ -89,7 +100,7 @@ function CourseService.start(remote: RemoteEvent): Service
 	-- A pass stands when the server saw the locomotive flat for the whole time the bridge was over it, allowing for
 	-- the delay before a press reached the server and for a release in the last moment (the body is still low then);
 	-- otherwise the front hit the bridge.
-	local function judge(player: Player, state: State, index: number)
+	local function judge(state: State, index: number)
 		local enter, exit = window(state, index)
 		local from = CourseMath.timeAt(state.run, enter) + run.PassTolerance
 		local to = CourseMath.timeAt(state.run, exit) - run.ReleaseGrace
@@ -98,12 +109,12 @@ function CourseService.start(remote: RemoteEvent): Service
 			state.next = index + 1
 			count(state.locomotive, Names.Passed)
 		else
-			crash(player, state, index, enter)
+			crash(state, index, enter)
 		end
 	end
 
 	local received = remote.OnServerEvent:Connect(function(player: Player, index: unknown, hit: unknown, distance: unknown)
-		local state = states[player]
+		local state = stateOf(player)
 		if not state or state.crashed or typeof(index) ~= "number" or typeof(hit) ~= "boolean" or index ~= state.next then
 			return
 		end
@@ -112,7 +123,7 @@ function CourseService.start(remote: RemoteEvent): Service
 			-- Not before the front can have reached the bridge (small clock differences allowed).
 			if now() >= CourseMath.timeAt(state.run, enter) - run.PassTolerance then
 				local at = if typeof(distance) == "number" and distance == distance then distance else enter
-				crash(player, state, index, math.clamp(at, enter, exit))
+				crash(state, index, math.clamp(at, enter, exit))
 			end
 		else
 			state.reported = true -- judged by the ticker below once the bridge has gone by and the history is in
@@ -124,30 +135,31 @@ function CourseService.start(remote: RemoteEvent): Service
 	-- client).
 	local ticking = RunService.Heartbeat:Connect(function()
 		local t = now()
-		for player, state in states do
+		for _, state in states do
 			if not state.crashed and state.run.speed > 0 then
 				local _, exit = window(state, state.next)
 				local passedAt = CourseMath.timeAt(state.run, exit)
 				if t >= passedAt + (if state.reported then run.PassTolerance else run.ReportTimeout) then
-					judge(player, state, state.next)
+					judge(state, state.next)
 				end
 			end
 		end
 	end)
 
-	local function finish(player: Player)
-		local state = states[player]
-		states[player] = nil
+	local function finish(locomotive: Model)
+		local state = states[locomotive]
+		states[locomotive] = nil
 		if state then
 			state.watch:Disconnect()
 		end
 	end
 
-	local function begin(player: Player, locomotive: Model)
-		finish(player)
+	local function begin(locomotive: Model, driver: Player?)
+		finish(locomotive)
 		local history = { { time = now(), squashed = locomotive:GetAttribute(Names.Squashed) == true } }
 		local state: State = {
 			locomotive = locomotive,
+			driver = driver,
 			run = { start = now() + run.StartDelay, from = 0, speed = run.Speed },
 			front = PartUtil.number(locomotive, Names.SpanFront) or 0,
 			back = PartUtil.number(locomotive, Names.SpanBack) or 0,
@@ -164,7 +176,7 @@ function CourseService.start(remote: RemoteEvent): Service
 				end
 			end),
 		}
-		states[player] = state
+		states[locomotive] = state
 		locomotive:SetAttribute(Names.CrashIndex, 0)
 		locomotive:SetAttribute(Names.Passed, 0)
 		locomotive:SetAttribute(Names.Crashes, 0)
@@ -177,8 +189,8 @@ function CourseService.start(remote: RemoteEvent): Service
 		stop = function()
 			received:Disconnect()
 			ticking:Disconnect()
-			for player in states do
-				finish(player)
+			for locomotive in states do
+				finish(locomotive)
 			end
 		end,
 	}

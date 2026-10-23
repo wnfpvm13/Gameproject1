@@ -15,7 +15,13 @@ type Ctx = {
 	fail: (players: { Player }, key: string) -> (),
 	show: (text: string) -> (),
 	cancelled: () -> boolean,
+	stopped: () -> boolean,
 	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 }
 
 local TestMission = {

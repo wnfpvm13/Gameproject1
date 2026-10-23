@@ -1,6 +1,6 @@
 -- 금칙어 게임 Korean client entry point: only wiring. Server events update State, then refresh() redraws
 -- every part from State (HUD, head bubbles, camera, reaction bar, getting ready, presenter controls, recognizer on/off,
--- seat lock).
+-- seat lock). The mission card shows what the server's "Mission" says.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -24,6 +24,7 @@ local Toast = require(UI:WaitForChild("Toast"))
 local MicPanel = require(UI:WaitForChild("MicPanel"))
 local ReactionBar = require(UI:WaitForChild("ReactionBar"))
 local PresenterPanel = require(UI:WaitForChild("PresenterPanel"))
+local MissionPanel = require(UI:WaitForChild("MissionPanel"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
@@ -122,6 +123,9 @@ end, function(id)
 end, function(index)
 	remotes.PresenterSound:FireServer(index)
 end)
+MissionPanel.build(function(questionId, choice)
+	remotes.MissionAnswer:FireServer(questionId, choice)
+end)
 Fx.init()
 FlatVoice.start()
 GetUp.start()
@@ -204,6 +208,16 @@ remotes.Sound.OnClientEvent:Connect(function(info)
 	Fx.presenterSound(info.index)
 end)
 
+-- The mission card (quiz, roulette). My answer buttons work while I am alive and not flying.
+remotes.Mission.OnClientEvent:Connect(function(payload)
+	local names = {}
+	for _, userId in payload.ids or {} do
+		table.insert(names, nameOf(userId))
+	end
+	local canAnswer = State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
+	MissionPanel.show(payload, canAnswer, names)
+end)
+
 remotes.Words.OnClientEvent:Connect(function(words)
 	State.words = words
 	refresh()
@@ -232,6 +246,14 @@ remotes.LifeLost.OnClientEvent:Connect(function(info)
 	end
 	if info.reason == "left" then
 		Toast.show(string.format(Config.TEXT.LEFT, table.concat(out, ", ")), "near")
+		return
+	end
+	if info.reason == "afk" then
+		local names = {}
+		for _, entry in info.players do
+			table.insert(names, entry.name)
+		end
+		Toast.show(string.format(Config.TEXT.AFK_OUT, table.concat(names, ", ")), "elim")
 		return
 	end
 	if #lost > 0 then
@@ -304,6 +326,7 @@ RunService.Heartbeat:Connect(function()
 	local remaining = State.round.endsAt - workspace:GetServerTimeNow()
 	Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
 	PresenterPanel.tick(workspace:GetServerTimeNow())
+	MissionPanel.tick(workspace:GetServerTimeNow())
 end)
 
 -- Ask for the current state now that every handler is connected (late joiners miss earlier broadcasts).

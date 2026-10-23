@@ -4,9 +4,8 @@
 --   -> Final (sudden death) -> Result -> Countdown (quick rematch) ...
 -- Rules live in the services: lives in LifeService, the time budget and the final trigger in Timeline, missions in
 -- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
--- join by chat in ChatService, the presenter in PresenterService, score in Scores. Up to bundle 3: no banned words
--- yet, and the only mission is the Studio test mission (live servers just talk until the main game is over, then the
--- survivors win without a final).
+-- join by chat in ChatService, the presenter in PresenterService, score in Scores. Up to bundle 4a: no banned words
+-- yet; the missions are the quiz (also the final) and the roulette (plus the Studio-only test mission).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -27,7 +26,7 @@ local Scores = require(services:WaitForChild("Scores"))
 
 local RoundService = {}
 
-type Reason = "fail" | "final" | "left" | "dev"
+type Reason = "fail" | "final" | "left" | "dev" | "afk"
 
 local rng = Random.new() -- seat order and mission draws
 local runs = 0 -- every mission run (and every Studio fail) gets its own number for the event ids
@@ -128,17 +127,49 @@ end
 -- `settled()`: the outcome is already fixed, so the running mission stops and later results are dropped (§2 "확정 뒤에
 -- 도착한 결과는 버린다").
 local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, string) -> (), settled: () -> boolean): MissionRunner.Ctx
+	-- Who answered the last answer mission and who did not: counted with the fail that follows (the same event), so
+	-- an AFK player going out cannot decide the round before the same question's wrong answers are taken.
+	local pending: { answered: { Player }, missed: { Player } }? = nil
+	local function countAnswers()
+		local counted = pending
+		pending = nil
+		if not counted then
+			return
+		end
+		for _, player in counted.answered do
+			LifeService.noteAnswer(player, true)
+		end
+		local outcomes: { LifeService.Outcome } = {}
+		for _, player in counted.missed do
+			if LifeService.noteAnswer(player, false) then
+				table.insert(outcomes, { player = player, livesLeft = 0, out = true })
+			end
+		end
+		announce(outcomes, "afk", false)
+	end
 	return {
 		final = final,
 		players = Match.aliveList,
 		rng = rng,
-		fail = onFail,
+		fail = function(players: { Player }, key: string)
+			countAnswers()
+			onFail(players, key)
+		end,
 		show = function(text: string)
 			Match.setMessage(text)
 			Net.notice(text)
 		end,
 		cancelled = function()
 			return Match.roundId ~= myRound or settled()
+		end,
+		stopped = function()
+			return Match.roundId ~= myRound
+		end,
+		flying = SeatService.isFlying,
+		-- Two answer missions missed in a row make a player a spectator (docs/DESIGN_V3.md §4). Counted when the
+		-- mission reports its fail (before the launches: a launched player's miss would not count any more).
+		answers = function(answered: { Player }, missed: { Player })
+			pending = { answered = answered, missed = missed }
 		end,
 	}
 end
@@ -226,15 +257,15 @@ local function playFinal(myRound: number)
 	end
 	while not settled() and os.clock() < deadline and Match.roundId == myRound do
 		local wrong: { Player } = {}
-		local ok = MissionRunner.run(mission, missionCtx(myRound, true, function(players, _key)
+		local ok, played = MissionRunner.run(mission, missionCtx(myRound, true, function(players, _key)
 			for _, player in players do
 				if not table.find(wrong, player) then
 					table.insert(wrong, player)
 				end
 			end
 		end, settled))
-		if not ok or Match.roundId ~= myRound or settled() then
-			return
+		if not ok or not played or Match.roundId ~= myRound or settled() then
+			return -- (a final that cannot ask anything more: the survivors share the win)
 		end
 		local alive = Match.aliveList()
 		local out: { Player } = {}
@@ -418,6 +449,7 @@ local function onSync(player: Player)
 	Net.to(player, "RoundState", Match.payload())
 	ChatService.sendAccess(player)
 	PresenterService.sendMenu(player)
+	MissionRunner.sendScreen(player)
 end
 
 -- The player plays in or presents the round being played: their way of joining (voice or chat) holds until it is over.
@@ -435,6 +467,7 @@ function RoundService.start()
 	Scores.start()
 	ChatService.start()
 	PresenterService.start(onPresenterChange, SeatService.isFlying)
+	MissionRunner.start()
 	LifeService.start(SeatService.isFlying)
 	SpectatorService.start(busy)
 	SeatService.init(onFlightOver)

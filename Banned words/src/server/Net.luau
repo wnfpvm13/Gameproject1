@@ -12,6 +12,9 @@
 --   PresenterMenu to the presenter: { options = { {id, title, recommended} } | nil (closed), endsAt }
 --   Sound       a presenter sound button: { index } (Config.PRESENTER_SOUNDS)
 --   (client -> server: Volunteer (on), PresenterPick (mission id), PresenterSound (index))
+--   Mission     the running mission's screen (MissionRunner): { kind = "quiz", final, question, choices, endsAt?, id? }
+--               | { kind = "quizResult", ..., answer } | { kind = "roulette", ids, pick, spinSeconds } | { kind = "none" }
+--   (client -> server: MissionAnswer (question id, choice number) while a question is open)
 --   Notice      short toast text
 --   Reaction    emoji shown above a player
 --   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
@@ -24,7 +27,7 @@ local Net = {}
 
 local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
-	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound",
+	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer",
 	"Words", "WordWarn", "Settle", "Transcript", "VoicePing", "Settled",
 }
 

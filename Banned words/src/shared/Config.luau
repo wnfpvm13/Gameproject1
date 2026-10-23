@@ -30,6 +30,17 @@ return {
 	-- "public" / "private" overrides it while testing).
 	STUDIO_SERVER_KIND = "public",
 
+	-- Missions (docs/DESIGN_V3.md §5; bundle 4a, owner 2026-10-23). The quiz: everyone alive answers at once (four
+	-- choices); a wrong answer or none is a fail. The final asks harder questions the same way. The roulette picks one
+	-- alive player (once a round).
+	QUIZ_INTRO_SECONDS = 2, -- the question shows before the buttons work
+	QUIZ_SECONDS = 10, -- answer time
+	QUIZ_REVEAL_SECONDS = 3, -- the right answer stays on screen
+	ROULETTE_SPIN_SECONDS = 6,
+	ROULETTE_REVEAL_SECONDS = 2,
+	ROULETTE_MIN_PLAYERS = 2,
+	ROULETTE_PER_ROUND = 1,
+
 	-- The Studio-only test mission (bundle 2b, until the real missions of bundle 4): everyone alive fails with
 	-- TEST_FAIL_CHANCE; a final question knocks out each finalist with TEST_FINAL_FAIL_CHANCE.
 	TEST_MISSION_SECONDS = 8,
@@ -159,6 +170,15 @@ return {
 		PICK_RECOMMENDED = "추천",
 		PICK_AUTO = "시간이 지나서 추천 미션으로 진행해요",
 		TEST_MISSION_TITLE = "연습 미션",
+		QUIZ_TITLE = "퀴즈",
+		QUIZ_START = "퀴즈 · 정답을 골라요 · 틀리거나 안 고르면 날아가요",
+		FINAL_QUIZ = "결승 퀴즈 · 틀리면 바로 탈락",
+		QUIZ_ANSWER = "정답: %s",
+		QUIZ_ALL_RIGHT = "모두 정답!",
+		ROULETTE_TITLE = "룰렛",
+		ROULETTE_START = "룰렛이 돌아가요 · 걸린 한 명이 날아가요",
+		ROULETTE_HIT = "%s 당첨!",
+		AFK_OUT = "%s 님은 두 번 연속 답하지 않아 관전으로 바뀌었어요",
 		SOUND_DRUMROLL = "두구두구",
 		SOUND_APPLAUSE = "박수",
 		SOUND_LAUGH = "웃음",

@@ -11,6 +11,8 @@ the REAL module sources from src/ + the test file. The modules run unchanged; on
           text (Config.TEXT) containing a word-bank word
   round   Config, Match, LifeService, Timeline, MissionRunner, ChatService, RoundService (+ stub chairs, stands, voice,
           scores and a scripted mission): lives rules, the time budget, the final triggers, whole rounds, joining by chat
+  mission Config, Match, QuizBank, Quiz, Roulette, TestMission, MissionRunner (+ a fake ctx): the quiz (answers, fails,
+          the AFK report, no repeats, no words in play, the final bank), the roulette, the menu order, the real bank
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
 """
 import io, os, subprocess, sys, tempfile
@@ -37,6 +39,16 @@ ROUND_MODULES = [
     ("PresenterService", "src/server/services/PresenterService.luau"),
     ("VoiceServiceReal", "src/server/services/VoiceService.luau"),  # section 9 (RoundService gets a stub)
     ("RoundService", "src/server/RoundService.luau"),
+]
+
+MISSION_MODULES = [
+    ("Config", "src/shared/Config.luau"),
+    ("Match", "src/server/Match.luau"),
+    ("QuizBank", "src/server/content/QuizBank.luau"),
+    ("Quiz", "src/server/missions/Quiz.luau"),
+    ("Roulette", "src/server/missions/Roulette.luau"),
+    ("TestMission", "src/server/missions/TestMission.luau"),
+    ("MissionRunner", "src/server/services/MissionRunner.luau"),
 ]
 
 
@@ -72,11 +84,16 @@ def build_round():
     return build_with_modules(ROUND_MODULES, "round_tests.luau")
 
 
+def build_mission():
+    return build_with_modules(MISSION_MODULES, "mission_tests.luau")
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     failed = False
     with tempfile.TemporaryDirectory() as tmp:
-        for name, build in (("speech", build_speech), ("server", build_server), ("round", build_round)):
+        for name, build in (("speech", build_speech), ("server", build_server), ("round", build_round),
+                            ("mission", build_mission)):
             path = os.path.join(tmp, name + ".luau")
             io.open(path, "w", encoding="utf-8", newline="\n").write(build())
             result = subprocess.run(["luau", path], capture_output=True, text=True, encoding="utf-8")

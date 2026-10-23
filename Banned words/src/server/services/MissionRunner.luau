@@ -4,12 +4,18 @@
 -- ctx (missions cannot require services, so everything they may do comes through the ctx RoundService builds). A
 -- mission stops as soon as it is cancelled (the round was decided or is over): its waits wake up and its fails and
 -- notices are dropped. Only this service requires the modules under server/missions (tools/tests/check_deps.py
--- checks it). Bundle 2b has one mission, the Studio-only test mission, so the round flow can be tried before the
--- real missions (bundle 4).
+-- checks it). It alone listens to the answer remote ("MissionAnswer") and hands answers to the running mission's
+-- question (docs/DESIGN_V3.md §13: Net.listen cannot disconnect, so missions never listen themselves). What a mission
+-- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
+-- Bundle 4a: the quiz (also the final), the roulette, and the Studio-only test mission.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local Net = require(script.Parent.Parent:WaitForChild("Net"))
 local missionFolder = script.Parent.Parent:WaitForChild("missions")
+local Quiz = require(missionFolder:WaitForChild("Quiz"))
+local Roulette = require(missionFolder:WaitForChild("Roulette"))
 local TestMission = require(missionFolder:WaitForChild("TestMission"))
 
 local MissionRunner = {}
@@ -26,6 +32,10 @@ export type Ctx = {
 	fail: (players: { Player }, key: string) -> (),
 	show: (text: string) -> (), -- the status line and a toast
 	cancelled: () -> boolean, -- the round was decided or another one began: stop
+	stopped: () -> boolean, -- another round began (or the round broke): not even a result may stay on screen
+	flying: (player: Player) -> boolean, -- launched and not back yet (cannot answer, takes no penalty)
+	-- An answer mission closed: who answered and who did not (the AFK rule, docs/DESIGN_V3.md §4).
+	answers: (answered: { Player }, missed: { Player }) -> (),
 }
 
 -- What a mission gets: the same, with fail/show that do nothing once cancelled, and wait().
@@ -36,8 +46,20 @@ export type MissionCtx = {
 	fail: (players: { Player }, key: string) -> (),
 	show: (text: string) -> (),
 	cancelled: () -> boolean,
+	stopped: () -> boolean,
 	-- Waits `seconds`; returns false at once if the mission is cancelled meanwhile (then the mission should return).
 	wait: (seconds: number) -> boolean,
+	-- Keeps a result already given on screen for `seconds`, also when that result decided the round (only a new round
+	-- cuts it short).
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	-- Everyone's mission screen (a table with `kind`; nil clears it). Cleared when the mission ends.
+	screen: (payload: { [string]: any }?) -> (),
+	-- Shows `payload` (with `endsAt` and the question number `id` added) and collects one answer (a choice
+	-- 1..`choices`, sent with that number) from each of `from` for `seconds`, or until all of them still alive answered
+	-- or the mission is cancelled. Returns the answers.
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 }
 
 export type Mission = {
@@ -47,15 +69,20 @@ export type Mission = {
 	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
 	minPlayers: number?, -- alive participants it needs (nil = any)
 	available: (final: boolean) -> boolean,
-	run: (ctx: MissionCtx) -> (),
+	run: (ctx: MissionCtx) -> boolean?, -- false: it had nothing to play (a quiz with no clean question left)
 }
 
 -- An entry of the presenter's menu.
 export type Option = { id: string, title: string, recommended: boolean }
 
-local MISSIONS: { Mission } = { TestMission }
+local MISSIONS: { Mission } = { Quiz, Roulette, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
+local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
+-- The open question: its number, who may answer, how many choices, until when (server time), the answers so far.
+type Question = { id: number, from: { [Player]: boolean }, choices: number, endsAt: number, answers: { [Player]: number } }
+local question: Question? = nil
+local questions = 0 -- question numbers so far (an answer sent for an older question never counts for a newer one)
 
 local function fits(mission: Mission, secondsLeft: number): boolean
 	return mission.expectedSeconds + Config.FLING_RETURN_SECONDS <= secondsLeft
@@ -121,12 +148,71 @@ function MissionRunner.finalMission(): Mission?
 	return nil
 end
 
+local function setScreen(payload: { [string]: any }?)
+	screenNow = payload
+	Net.toAll("Mission", payload or { kind = "none" })
+end
+
+local function waitOrCancel(ctx: Ctx, seconds: number, done: (() -> boolean)?, stop: (() -> boolean)?): boolean
+	local untilAt = os.clock() + seconds
+	local stopNow = stop or ctx.cancelled
+	while os.clock() < untilAt do
+		if stopNow() then
+			return false
+		end
+		if done and done() then
+			return true
+		end
+		task.wait(math.min(POLL, untilAt - os.clock()))
+	end
+	return not stopNow()
+end
+
 local function missionCtx(ctx: Ctx): MissionCtx
 	return {
 		final = ctx.final,
 		players = ctx.players,
 		rng = ctx.rng,
 		cancelled = ctx.cancelled,
+		stopped = ctx.stopped,
+		flying = ctx.flying,
+		answers = function(answered: { Player }, missed: { Player })
+			if not ctx.cancelled() then
+				ctx.answers(answered, missed)
+			end
+		end,
+		screen = function(payload: { [string]: any }?)
+			if not ctx.cancelled() then
+				setScreen(payload)
+			end
+		end,
+		ask = function(payload: { [string]: any }, choices: number, seconds: number, from: { Player }): { [Player]: number }
+			questions += 1
+			local open: Question = { id = questions, from = {}, choices = choices, endsAt = Match.now() + seconds, answers = {} }
+			for _, player in from do
+				open.from[player] = true
+			end
+			question = open
+			local shown = table.clone(payload)
+			shown.endsAt = open.endsAt
+			shown.id = open.id
+			if not ctx.cancelled() then
+				setScreen(shown)
+			end
+			waitOrCancel(ctx, seconds, function()
+				local alive = ctx.players()
+				for player in open.from do
+					if not open.answers[player] and table.find(alive, player) then
+						return false -- (someone who left or went out meanwhile is not waited for)
+					end
+				end
+				return true
+			end)
+			if question == open then
+				question = nil
+			end
+			return open.answers
+		end,
 		fail = function(players: { Player }, key: string)
 			if not ctx.cancelled() then
 				ctx.fail(players, key)
@@ -138,32 +224,58 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			end
 		end,
 		wait = function(seconds: number): boolean
-			local untilAt = os.clock() + seconds
-			while os.clock() < untilAt do
-				if ctx.cancelled() then
-					return false
-				end
-				task.wait(math.min(POLL, untilAt - os.clock()))
-			end
-			return not ctx.cancelled()
+			return waitOrCancel(ctx, seconds, nil)
+		end,
+		reveal = function(seconds: number)
+			waitOrCancel(ctx, seconds, nil, ctx.stopped)
 		end,
 	}
 end
 
--- Runs one mission to its end. Returns false if it raised an error (reported; that run is over).
-function MissionRunner.run(mission: Mission, ctx: Ctx): boolean
+-- Runs one mission to its end. Returns false if it raised an error (reported; that run is over), and whether it
+-- played (false when it had nothing to play).
+function MissionRunner.run(mission: Mission, ctx: Ctx): (boolean, boolean)
 	if not ctx.final then
 		played[mission.id] = (played[mission.id] or 0) + 1
 	end
 	local runCtx = missionCtx(ctx)
+	local didPlay = true
 	local ok, err = pcall(function(): any
-		mission.run(runCtx)
+		didPlay = mission.run(runCtx) ~= false
 		return nil -- one return value, so the type checker reads pcall's results as (ok, error)
 	end)
 	if not ok then
 		warn("[BannedWords] mission " .. mission.id .. " failed:", err)
 	end
-	return ok
+	question = nil
+	if screenNow then
+		setScreen(nil)
+	end
+	return ok, didPlay
+end
+
+-- Answers to the open question: its number, a whole number in 1..choices, from someone asked, before the end; the
+-- first one counts.
+function MissionRunner.start()
+	Net.listen("MissionAnswer", function(player, id, choice)
+		local open = question
+		if not open or id ~= open.id or not open.from[player] or open.answers[player] or typeof(choice) ~= "number" then
+			return
+		end
+		if Match.now() > open.endsAt then
+			return
+		end
+		if choice % 1 == 0 and choice >= 1 and choice <= open.choices then
+			open.answers[player] = choice
+		end
+	end)
+end
+
+-- A player asked for the whole state again: the mission screen too.
+function MissionRunner.sendScreen(player: Player)
+	if screenNow then
+		Net.to(player, "Mission", screenNow)
+	end
 end
 
 return MissionRunner

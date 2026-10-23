@@ -239,6 +239,9 @@ function Scripted.run(ctx)
 	if not ctx.wait(Scripted.expectedSeconds) then
 		return
 	end
+	if Scripted.missed and not ctx.final then -- an answer mission: these players did not answer (the AFK rule)
+		ctx.answers({}, Scripted.missed(ctx.players()))
+	end
 	local pick = if ctx.final then Scripted.finalPick else Scripted.pick
 	ctx.fail(if pick then pick(#list, ctx.players()) else {}, "result")
 	local second = if ctx.final then nil else Scripted.secondPick
@@ -247,6 +250,13 @@ function Scripted.run(ctx)
 	end
 end
 loaders.TestMission = function() return Scripted end
+-- The real quiz and roulette have their own suite (mission_tests.luau); here they never run, so every round plays
+-- the scripted mission.
+local function never(id)
+	return { id = id, title = id, expectedSeconds = 1, available = function(_final) return false end, run = function(_ctx) end }
+end
+loaders.Quiz = function() return never("quiz") end
+loaders.Roulette = function() return never("roulette") end
 
 local function advanceUntil(cond, limit)
 	local deadline = now + limit
@@ -334,6 +344,7 @@ local function begin(players, expectedSeconds, pick, finalPick, secondPick)
 	Scripted.pick = pick
 	Scripted.finalPick = finalPick
 	Scripted.secondPick = secondPick
+	Scripted.missed = nil
 	playerList = players
 	local since = now
 	advanceUntil(function() return Match.phase == "Play" end, 60)
@@ -1122,6 +1133,35 @@ do
 	local first = choose({ c[1], c[2], others[1] })
 	local second = choose({ c[1], c[2], others[1] })
 	check("10s volunteers take turns (who presented least goes first)", first ~= nil and second ~= nil and first ~= second)
+end
+
+---------------------------------------------------------------- 11. answer missions missed in a row (the AFK rule)
+do
+	local ps = newPlayers(3)
+	local since = now
+	local play = begin(ps, 10, nil, nil)
+	Scripted.missed = function(_alive) return { ps[3] } end
+	local secondEnd = play + 2 * (Config.FREE_TALK_SECONDS + Scripted.expectedSeconds) + 1
+	at(play + Config.FREE_TALK_SECONDS + Scripted.expectedSeconds + 1)
+	local afterOne = Match.isAlive(ps[3])
+	at(secondEnd)
+	local afk = lifeLost(since, "afk")
+	check("11a two answer missions missed in a row make a player a spectator (one toast, reason afk)", afterOne
+		and not Match.isAlive(ps[3]) and #afk == 1 and afk[1].payload.players[1].userId == ps[3].UserId
+		and Match.isAlive(ps[1]) and Match.isAlive(ps[2]))
+	NetStub.listeners.DevFling(ps[2], "out")
+	finish(since)
+
+	-- The AFK player's going out and the same question's wrong answers are one event: with four at the start, an
+	-- AFK out leaving three decides the final, but the wrong answer still costs its life.
+	local qs = newPlayers(4)
+	local since2 = now
+	local play2 = begin(qs, 10, function(run, _alive) return if run == 2 then { qs[3] } else {} end, nil)
+	Scripted.missed = function(_alive) return { qs[4] } end
+	at(play2 + 2 * (Config.FREE_TALK_SECONDS + Scripted.expectedSeconds) + 1)
+	check("11b an AFK out that decides the final does not drop the same question's wrong answers",
+		not Match.isAlive(qs[4]) and Match.participants[qs[3]].lives == Config.LIVES - 1)
+	finish(since2)
 end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

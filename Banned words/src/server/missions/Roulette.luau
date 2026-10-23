@@ -1,0 +1,66 @@
+--!strict
+-- The roulette (docs/DESIGN_V3.md §5; bundle 4a, owner 2026-10-23: a 2D wheel on the screen): the server picks one
+-- alive player at random and everyone's screen spins to that name (a coin for two players). The one picked fails.
+-- Once a round; players flying when it starts are not on the wheel.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	stopped: () -> boolean,
+	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+}
+
+local Roulette = {
+	id = "roulette",
+	title = Config.TEXT.ROULETTE_TITLE,
+	expectedSeconds = Config.ROULETTE_SPIN_SECONDS + Config.ROULETTE_REVEAL_SECONDS,
+	maxPerRound = Config.ROULETTE_PER_ROUND :: number?,
+	minPlayers = Config.ROULETTE_MIN_PLAYERS :: number?,
+}
+
+function Roulette.available(final: boolean): boolean
+	return not final
+end
+
+function Roulette.run(ctx: Ctx)
+	local wheel = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(wheel, player)
+		end
+	end
+	if #wheel < Config.ROULETTE_MIN_PLAYERS then
+		return
+	end
+	local index = ctx.rng:NextInteger(1, #wheel)
+	local ids = {}
+	for _, player in wheel do
+		table.insert(ids, player.UserId)
+	end
+	ctx.show(Config.TEXT.ROULETTE_START)
+	ctx.screen({ kind = "roulette", ids = ids, pick = index, startsAt = Match.now(),
+		spinSeconds = Config.ROULETTE_SPIN_SECONDS })
+	if not ctx.wait(Config.ROULETTE_SPIN_SECONDS) then
+		return
+	end
+	local picked = wheel[index]
+	ctx.show(string.format(Config.TEXT.ROULETTE_HIT, picked.DisplayName))
+	ctx.fail({ picked }, "spin")
+	ctx.reveal(Config.ROULETTE_REVEAL_SECONDS) -- the wheel stays on the name, also when this decided the round
+end
+
+return Roulette

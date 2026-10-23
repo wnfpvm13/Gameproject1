@@ -43,6 +43,17 @@ return {
 	-- "public" / "private" overrides it while testing).
 	STUDIO_SERVER_KIND = "public",
 
+	-- Missions (docs/DESIGN_V3.md §5; bundle 4a, owner 2026-10-23). The quiz: everyone alive answers at once (four
+	-- choices); a wrong answer or none is a fail. The final asks harder questions the same way. The roulette picks one
+	-- alive player (once a round).
+	QUIZ_INTRO_SECONDS = 2, -- the question shows before the buttons work
+	QUIZ_SECONDS = 10, -- answer time
+	QUIZ_REVEAL_SECONDS = 3, -- the right answer stays on screen
+	ROULETTE_SPIN_SECONDS = 6,
+	ROULETTE_REVEAL_SECONDS = 2,
+	ROULETTE_MIN_PLAYERS = 2,
+	ROULETTE_PER_ROUND = 1,
+
 	-- The Studio-only test mission (bundle 2b, until the real missions of bundle 4): everyone alive fails with
 	-- TEST_FAIL_CHANCE; a final question knocks out each finalist with TEST_FINAL_FAIL_CHANCE.
 	TEST_MISSION_SECONDS = 8,
@@ -172,6 +183,15 @@ return {
 		PICK_RECOMMENDED = "추천",
 		PICK_AUTO = "시간이 지나서 추천 미션으로 진행해요",
 		TEST_MISSION_TITLE = "연습 미션",
+		QUIZ_TITLE = "퀴즈",
+		QUIZ_START = "퀴즈 · 정답을 골라요 · 틀리거나 안 고르면 날아가요",
+		FINAL_QUIZ = "결승 퀴즈 · 틀리면 바로 탈락",
+		QUIZ_ANSWER = "정답: %s",
+		QUIZ_ALL_RIGHT = "모두 정답!",
+		ROULETTE_TITLE = "룰렛",
+		ROULETTE_START = "룰렛이 돌아가요 · 걸린 한 명이 날아가요",
+		ROULETTE_HIT = "%s 당첨!",
+		AFK_OUT = "%s 님은 두 번 연속 답하지 않아 관전으로 바뀌었어요",
 		SOUND_DRUMROLL = "두구두구",
 		SOUND_APPLAUSE = "박수",
 		SOUND_LAUGH = "웃음",
@@ -475,6 +495,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 --   PresenterMenu to the presenter: { options = { {id, title, recommended} } | nil (closed), endsAt }
 --   Sound       a presenter sound button: { index } (Config.PRESENTER_SOUNDS)
 --   (client -> server: Volunteer (on), PresenterPick (mission id), PresenterSound (index))
+--   Mission     the running mission's screen (MissionRunner): { kind = "quiz", final, question, choices, endsAt?, id? }
+--               | { kind = "quizResult", ..., answer } | { kind = "roulette", ids, pick, spinSeconds } | { kind = "none" }
+--   (client -> server: MissionAnswer (question id, choice number) while a question is open)
 --   Notice      short toast text
 --   Reaction    emoji shown above a player
 --   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
@@ -487,7 +510,7 @@ local Net = {}
 
 local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
-	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound",
+	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer",
 	"Words", "WordWarn", "Settle", "Transcript", "VoicePing", "Settled",
 }
 
@@ -543,9 +566,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "RoundService"; s.Source = [
 --   -> Final (sudden death) -> Result -> Countdown (quick rematch) ...
 -- Rules live in the services: lives in LifeService, the time budget and the final trigger in Timeline, missions in
 -- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
--- join by chat in ChatService, the presenter in PresenterService, score in Scores. Up to bundle 3: no banned words
--- yet, and the only mission is the Studio test mission (live servers just talk until the main game is over, then the
--- survivors win without a final).
+-- join by chat in ChatService, the presenter in PresenterService, score in Scores. Up to bundle 4a: no banned words
+-- yet; the missions are the quiz (also the final) and the roulette (plus the Studio-only test mission).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -566,7 +588,7 @@ local Scores = require(services:WaitForChild("Scores"))
 
 local RoundService = {}
 
-type Reason = "fail" | "final" | "left" | "dev"
+type Reason = "fail" | "final" | "left" | "dev" | "afk"
 
 local rng = Random.new() -- seat order and mission draws
 local runs = 0 -- every mission run (and every Studio fail) gets its own number for the event ids
@@ -667,17 +689,49 @@ end
 -- `settled()`: the outcome is already fixed, so the running mission stops and later results are dropped (§2 "확정 뒤에
 -- 도착한 결과는 버린다").
 local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, string) -> (), settled: () -> boolean): MissionRunner.Ctx
+	-- Who answered the last answer mission and who did not: counted with the fail that follows (the same event), so
+	-- an AFK player going out cannot decide the round before the same question's wrong answers are taken.
+	local pending: { answered: { Player }, missed: { Player } }? = nil
+	local function countAnswers()
+		local counted = pending
+		pending = nil
+		if not counted then
+			return
+		end
+		for _, player in counted.answered do
+			LifeService.noteAnswer(player, true)
+		end
+		local outcomes: { LifeService.Outcome } = {}
+		for _, player in counted.missed do
+			if LifeService.noteAnswer(player, false) then
+				table.insert(outcomes, { player = player, livesLeft = 0, out = true })
+			end
+		end
+		announce(outcomes, "afk", false)
+	end
 	return {
 		final = final,
 		players = Match.aliveList,
 		rng = rng,
-		fail = onFail,
+		fail = function(players: { Player }, key: string)
+			countAnswers()
+			onFail(players, key)
+		end,
 		show = function(text: string)
 			Match.setMessage(text)
 			Net.notice(text)
 		end,
 		cancelled = function()
 			return Match.roundId ~= myRound or settled()
+		end,
+		stopped = function()
+			return Match.roundId ~= myRound
+		end,
+		flying = SeatService.isFlying,
+		-- Two answer missions missed in a row make a player a spectator (docs/DESIGN_V3.md §4). Counted when the
+		-- mission reports its fail (before the launches: a launched player's miss would not count any more).
+		answers = function(answered: { Player }, missed: { Player })
+			pending = { answered = answered, missed = missed }
 		end,
 	}
 end
@@ -765,15 +819,15 @@ local function playFinal(myRound: number)
 	end
 	while not settled() and os.clock() < deadline and Match.roundId == myRound do
 		local wrong: { Player } = {}
-		local ok = MissionRunner.run(mission, missionCtx(myRound, true, function(players, _key)
+		local ok, played = MissionRunner.run(mission, missionCtx(myRound, true, function(players, _key)
 			for _, player in players do
 				if not table.find(wrong, player) then
 					table.insert(wrong, player)
 				end
 			end
 		end, settled))
-		if not ok or Match.roundId ~= myRound or settled() then
-			return
+		if not ok or not played or Match.roundId ~= myRound or settled() then
+			return -- (a final that cannot ask anything more: the survivors share the win)
 		end
 		local alive = Match.aliveList()
 		local out: { Player } = {}
@@ -957,6 +1011,7 @@ local function onSync(player: Player)
 	Net.to(player, "RoundState", Match.payload())
 	ChatService.sendAccess(player)
 	PresenterService.sendMenu(player)
+	MissionRunner.sendScreen(player)
 end
 
 -- The player plays in or presents the round being played: their way of joining (voice or chat) holds until it is over.
@@ -974,6 +1029,7 @@ function RoundService.start()
 	Scores.start()
 	ChatService.start()
 	PresenterService.start(onPresenterChange, SeatService.isFlying)
+	MissionRunner.start()
 	LifeService.start(SeatService.isFlying)
 	SpectatorService.start(busy)
 	SeatService.init(onFlightOver)
@@ -1074,6 +1130,184 @@ end
 return RoundService
 ]====]; s.Parent = n2 end
 local n3 = Instance.new("Folder"); n3.Name = "content"
+do local s = Instance.new("ModuleScript"); s.Name = "QuizBank"; s.Source = [====[--!strict
+-- Quiz bank (docs/DESIGN_V3.md §5, bundle 4a, owner 2026-10-23: general knowledge mixed with light fun, no sensitive
+-- topics, around age 17). Data only. `main`: the main-game quiz (four choices, one right); `final`: harder questions
+-- for the sudden-death final. Questions whose text or any choice contains a banned word in play are skipped at run
+-- time (missions/Quiz). `answer` is the index of the right choice.
+
+export type Question = { q: string, choices: { string }, answer: number }
+
+local QuizBank = {}
+
+QuizBank.main = {
+	{ q = "물의 화학식은?", choices = { "CO2", "O2", "NaCl", "H2O" }, answer = 4 },
+	{ q = "식물이 빛으로 양분을 만드는 과정은?", choices = { "광합성", "호흡", "증산 작용", "발효" }, answer = 1 },
+	{ q = "소리가 전달되지 않는 곳은?", choices = { "진공", "물속", "공기 중", "쇠막대" }, answer = 1 },
+	{ q = "무지개 색은 흔히 몇 가지라고 할까?", choices = { "5가지", "6가지", "7가지", "8가지" }, answer = 3 },
+	{ q = "얼음이 녹아 물이 되는 현상은?", choices = { "응고", "융해", "기화", "승화" }, answer = 2 },
+	{ q = "공기 중에 가장 많은 기체는?", choices = { "산소", "이산화탄소", "수소", "질소" }, answer = 4 },
+	{ q = "빛의 삼원색이 아닌 것은?", choices = { "빨강", "초록", "파랑", "노랑" }, answer = 4 },
+	{ q = "드라이아이스는 무엇이 얼어서 굳은 것?", choices = { "물", "질소", "이산화탄소", "산소" }, answer = 3 },
+	{ q = "사과가 땅으로 떨어지게 하는 힘은?", choices = { "마찰력", "자기력", "부력", "중력" }, answer = 4 },
+	{ q = "산성 용액에 푸른 리트머스 종이를 넣으면?", choices = { "노랗게 변한다", "붉게 변한다", "그대로다", "검게 변한다" }, answer = 2 },
+	{ q = "낮과 밤이 생기는 까닭은?", choices = { "지구의 공전", "달의 공전", "구름의 이동", "지구의 자전" }, answer = 4 },
+	{ q = "지구 표면의 약 70%를 차지하는 것은?", choices = { "육지", "바다", "사막", "숲" }, answer = 2 },
+	{ q = "물속에서 물체를 위로 밀어 올리는 힘은?", choices = { "부력", "장력", "마찰력", "탄성력" }, answer = 1 },
+	{ q = "태양계에서 가장 큰 행성은?", choices = { "토성", "목성", "지구", "해왕성" }, answer = 2 },
+	{ q = "태양에서 가장 가까운 행성은?", choices = { "수성", "금성", "화성", "지구" }, answer = 1 },
+	{ q = "뚜렷하고 큰 고리로 유명한 행성은?", choices = { "토성", "화성", "금성", "수성" }, answer = 1 },
+	{ q = "'붉은 행성'이라고 불리는 행성은?", choices = { "목성", "금성", "천왕성", "화성" }, answer = 4 },
+	{ q = "지구가 태양을 한 바퀴 도는 데 걸리는 시간은?", choices = { "하루", "한 달", "약 1년", "약 10년" }, answer = 3 },
+	{ q = "태양은 다음 중 무엇일까?", choices = { "행성", "위성", "혜성", "항성" }, answer = 4 },
+	{ q = "달이 지구 그림자에 가려지는 현상은?", choices = { "일식", "유성우", "오로라", "월식" }, answer = 4 },
+	{ q = "거의 움직이지 않아 북쪽을 알려 주는 별은?", choices = { "시리우스", "견우성", "북극성", "직녀성" }, answer = 3 },
+	{ q = "새벽 동쪽 하늘의 '샛별'은 어느 행성?", choices = { "화성", "목성", "토성", "금성" }, answer = 4 },
+	{ q = "빛조차 빠져나오지 못하는 천체는?", choices = { "블랙홀", "혜성", "성운", "소행성" }, answer = 1 },
+	{ q = "사람의 심장은 몇 개의 방으로 나뉠까?", choices = { "2개", "3개", "4개", "6개" }, answer = 3 },
+	{ q = "혈액 속에서 산소를 나르는 세포는?", choices = { "백혈구", "적혈구", "혈소판", "신경 세포" }, answer = 2 },
+	{ q = "음식의 영양분을 가장 많이 흡수하는 기관은?", choices = { "위", "식도", "작은창자", "큰창자" }, answer = 3 },
+	{ q = "사랑니를 포함한 어른의 영구치는 몇 개?", choices = { "28개", "30개", "32개", "36개" }, answer = 3 },
+	{ q = "우리 몸에서 가장 단단한 부분은?", choices = { "치아 법랑질", "넓적다리뼈", "손톱", "머리뼈" }, answer = 1 },
+	{ q = "사람의 정상 체온은 약 몇 도?", choices = { "33도", "35도", "36.5도", "39도" }, answer = 3 },
+	{ q = "눈으로 들어오는 빛의 양을 조절하는 곳은?", choices = { "홍채", "수정체", "망막", "각막" }, answer = 1 },
+	{ q = "소변을 만드는 기관은?", choices = { "간", "쓸개", "이자", "콩팥" }, answer = 4 },
+	{ q = "프랑스의 수도는?", choices = { "파리", "런던", "로마", "베를린" }, answer = 1 },
+	{ q = "일본의 수도는?", choices = { "오사카", "도쿄", "교토", "삿포로" }, answer = 2 },
+	{ q = "호주의 수도는?", choices = { "시드니", "멜버른", "퍼스", "캔버라" }, answer = 4 },
+	{ q = "캐나다의 수도는?", choices = { "오타와", "토론토", "밴쿠버", "몬트리올" }, answer = 1 },
+	{ q = "태국의 수도는?", choices = { "방콕", "치앙마이", "푸껫", "파타야" }, answer = 1 },
+	{ q = "이집트의 수도는?", choices = { "카이로", "알렉산드리아", "룩소르", "아스완" }, answer = 1 },
+	{ q = "세계에서 가장 넓은 대양은?", choices = { "태평양", "대서양", "인도양", "북극해" }, answer = 1 },
+	{ q = "세계에서 가장 큰 대륙은?", choices = { "아프리카", "아시아", "유럽", "남극" }, answer = 2 },
+	{ q = "세계에서 가장 높은 산은?", choices = { "후지산", "킬리만자로산", "몽블랑", "에베레스트산" }, answer = 4 },
+	{ q = "남한에서 가장 높은 산은?", choices = { "한라산", "설악산", "지리산", "태백산" }, answer = 1 },
+	{ q = "우리나라에서 가장 큰 섬은?", choices = { "제주도", "울릉도", "거제도", "강화도" }, answer = 1 },
+	{ q = "아마존강이 흐르는 대륙은?", choices = { "아프리카", "유럽", "오세아니아", "남아메리카" }, answer = 4 },
+	{ q = "지구를 남반구와 북반구로 나누는 선은?", choices = { "날짜 변경선", "본초 자오선", "회귀선", "적도" }, answer = 4 },
+	{ q = "'가는 말이 고와야 ___' 빈칸은?", choices = { "발이 빠르다", "길이 멀다", "말이 많다", "오는 말이 곱다" }, answer = 4 },
+	{ q = "'소 잃고 ___ 고친다' 빈칸은?", choices = { "지붕", "대문", "외양간", "울타리" }, answer = 3 },
+	{ q = "맞춤법에 맞게 쓴 것은?", choices = { "어떻게", "어떡게", "어떻해", "어떻케" }, answer = 1 },
+	{ q = "'되다'를 바르게 쓴 것은?", choices = { "돼요", "되요", "되여", "돼여" }, answer = 1 },
+	{ q = "'설상가상'과 뜻이 비슷한 속담은?", choices = { "누워서 침 뱉기", "제 눈에 안경", "엎친 데 덮친 격", "땅 짚고 헤엄치기" }, answer = 3 },
+	{ q = "아주 쉬운 일을 뜻하는 속담은?", choices = { "하늘의 별 따기", "그림의 떡", "산 넘어 산", "식은 죽 먹기" }, answer = 4 },
+	{ q = "'우물 안 개구리'는 어떤 사람을 뜻할까?", choices = { "견문이 좁은 사람", "부지런한 사람", "노래 잘하는 사람", "겁 많은 사람" }, answer = 1 },
+	{ q = "'티끌 모아 ___' 빈칸은?", choices = { "바다", "부자", "보물", "태산" }, answer = 4 },
+	{ q = "'등잔 밑이 어둡다'의 뜻은?", choices = { "가까운 일을 더 모른다", "밤이 길다", "불을 조심하라", "일찍 자라" }, answer = 1 },
+	{ q = "'작심삼일'의 뜻은?", choices = { "결심이 오래 못 간다", "사흘 동안 쉰다", "마음이 넓다", "셋이 힘을 합친다" }, answer = 1 },
+	{ q = "그릇 씻는 일을 바르게 쓴 것은?", choices = { "설겆이", "설걷이", "설거찌", "설거지" }, answer = 4 },
+	{ q = "날짜를 묻는 말을 바르게 쓴 것은?", choices = { "몇 일", "며칠", "몇일", "몇칠" }, answer = 2 },
+	{ q = "'곧, 금방'을 뜻하는 바른 말은?", choices = { "금세", "금새", "끔세", "금쎄" }, answer = 1 },
+	{ q = "'아주 드물고 신기하다'의 바른 말은?", choices = { "희안하다", "히한하다", "희얀하다", "희한하다" }, answer = 4 },
+	{ q = "'동문서답'의 뜻은?", choices = { "묻는 말에 엉뚱한 답", "동쪽 문으로 나감", "서로 돕는 것", "아주 빠른 대답" }, answer = 1 },
+	{ q = "거꾸로 읽어도 똑같은 낱말은?", choices = { "오리", "참새", "기러기", "비둘기" }, answer = 3 },
+	{ q = "현대 한글의 기본 자음은 몇 개?", choices = { "10개", "14개", "19개", "24개" }, answer = 2 },
+	{ q = "윤년이 아닌 해의 날 수는?", choices = { "360일", "364일", "365일", "366일" }, answer = 3 },
+	{ q = "윤년의 2월 마지막 날은?", choices = { "28일", "29일", "30일", "31일" }, answer = 2 },
+	{ q = "음력 8월 15일에 지내는 명절은?", choices = { "설날", "단오", "한식", "추석" }, answer = 4 },
+	{ q = "설날에 먹는 대표 음식은?", choices = { "송편", "팥죽", "오곡밥", "떡국" }, answer = 4 },
+	{ q = "솔잎을 깔고 쪄 먹는 반달 모양 떡은?", choices = { "송편", "인절미", "가래떡", "시루떡" }, answer = 1 },
+	{ q = "동지에 먹는 대표 음식은?", choices = { "냉면", "떡국", "삼계탕", "팥죽" }, answer = 4 },
+	{ q = "한글날은 언제일까?", choices = { "7월 17일", "8월 15일", "10월 3일", "10월 9일" }, answer = 4 },
+	{ q = "어린이날은 언제일까?", choices = { "5월 1일", "5월 5일", "5월 8일", "6월 6일" }, answer = 2 },
+	{ q = "우리나라에서 낮이 가장 긴 절기는?", choices = { "춘분", "하지", "추분", "동지" }, answer = 2 },
+	{ q = "지구에서 가장 큰 동물은?", choices = { "코끼리", "기린", "고래상어", "대왕고래" }, answer = 4 },
+	{ q = "땅 위에서 가장 빨리 달리는 동물은?", choices = { "사자", "말", "치타", "타조" }, answer = 3 },
+	{ q = "다리가 여덟 개인 동물은?", choices = { "개미", "거미", "나비", "잠자리" }, answer = 2 },
+	{ q = "곤충의 다리는 몇 개?", choices = { "4개", "6개", "8개", "10개" }, answer = 2 },
+	{ q = "도롱뇽은 어느 무리에 속할까?", choices = { "양서류", "파충류", "조류", "어류" }, answer = 1 },
+	{ q = "낙타의 혹에 주로 저장된 것은?", choices = { "물", "공기", "피", "지방" }, answer = 4 },
+	{ q = "판다가 주로 먹는 것은?", choices = { "물고기", "바나나", "당근", "대나무" }, answer = 4 },
+	{ q = "알을 낳는 포유류는?", choices = { "오리너구리", "캥거루", "고래", "박쥐" }, answer = 1 },
+	{ q = "캥거루 새끼가 자라는 곳은?", choices = { "나무 위 둥지", "땅굴", "물속", "어미의 주머니" }, answer = 4 },
+	{ q = "문어의 다리는 몇 개?", choices = { "6개", "8개", "10개", "12개" }, answer = 2 },
+	{ q = "타조에 대해 맞는 것은?", choices = { "하늘을 날 수 있다", "알이 아주 작다", "다리가 4개다", "새 중에서 가장 크다" }, answer = 4 },
+	{ q = "펭귄은 어느 무리에 속할까?", choices = { "포유류", "조류", "어류", "양서류" }, answer = 2 },
+	{ q = "꿀벌 집의 한 칸은 어떤 모양?", choices = { "원", "육각형", "삼각형", "사각형" }, answer = 2 },
+	{ q = "쌀국수 '포'로 유명한 나라는?", choices = { "태국", "베트남", "인도", "몽골" }, answer = 2 },
+	{ q = "김치에 가장 흔히 쓰는 채소는?", choices = { "배추", "당근", "감자", "양파" }, answer = 1 },
+	{ q = "두부는 무엇으로 만들까?", choices = { "쌀", "밀", "콩", "옥수수" }, answer = 3 },
+	{ q = "보통 식빵을 만드는 주재료 가루는?", choices = { "밀가루", "옥수수가루", "콩가루", "메밀가루" }, answer = 1 },
+	{ q = "치즈는 무엇으로 만들까?", choices = { "달걀", "콩", "우유", "쌀" }, answer = 3 },
+	{ q = "카레가 시작된 나라로 알려진 곳은?", choices = { "인도", "프랑스", "멕시코", "러시아" }, answer = 1 },
+	{ q = "깍두기의 주재료는?", choices = { "배추", "무", "오이", "파" }, answer = 2 },
+	{ q = "팝콘은 무엇을 튀겨 만들까?", choices = { "쌀", "보리", "콩", "옥수수" }, answer = 4 },
+	{ q = "요구르트를 만드는 미생물은?", choices = { "곰팡이", "유산균", "효모", "이끼" }, answer = 2 },
+	{ q = "축구 한 팀은 경기장에 몇 명이 뛸까?", choices = { "9명", "10명", "11명", "12명" }, answer = 3 },
+	{ q = "농구 한 팀은 코트에 몇 명이 뛸까?", choices = { "5명", "6명", "7명", "9명" }, answer = 1 },
+	{ q = "야구에서 삼진은 스트라이크 몇 개일까?", choices = { "2개", "3개", "4개", "5개" }, answer = 2 },
+	{ q = "실내 배구 한 팀은 코트에 몇 명이 설까?", choices = { "5명", "6명", "8명", "11명" }, answer = 2 },
+	{ q = "테니스에서 0점을 부르는 말은?", choices = { "제로", "러브", "듀스", "에이스" }, answer = 2 },
+	{ q = "마라톤 풀코스는 약 몇 km일까?", choices = { "21km", "32km", "42km", "50km" }, answer = 3 },
+	{ q = "올림픽 오륜기의 고리는 몇 개?", choices = { "4개", "5개", "6개", "7개" }, answer = 2 },
+	{ q = "축구에서 자기 페널티 구역 안에서 공을 손으로 잡는 선수는?", choices = { "공격수", "수비수", "미드필더", "골키퍼" }, answer = 4 },
+	{ q = "볼링에서 세워 두는 핀은 몇 개?", choices = { "8개", "9개", "10개", "12개" }, answer = 3 },
+	{ q = "축구 경기 전후반을 합친 정규 시간은?", choices = { "60분", "80분", "90분", "120분" }, answer = 3 },
+	{ q = "7 × 8 = ?", choices = { "54", "56", "58", "64" }, answer = 2 },
+	{ q = "삼각형 세 각의 크기를 더하면?", choices = { "90도", "180도", "270도", "360도" }, answer = 2 },
+	{ q = "12 × 12 = ?", choices = { "124", "132", "144", "156" }, answer = 3 },
+	{ q = "1 + 3 + 5 + 7 = ?", choices = { "14", "15", "16", "18" }, answer = 3 },
+	{ q = "정육면체의 면은 몇 개?", choices = { "4개", "6개", "8개", "12개" }, answer = 2 },
+	{ q = "200의 25%는?", choices = { "25", "40", "50", "75" }, answer = 3 },
+	{ q = "한 변이 5cm인 정사각형의 둘레는?", choices = { "10cm", "15cm", "20cm", "25cm" }, answer = 3 },
+	{ q = "원주율에 가장 가까운 수는?", choices = { "2.14", "3.14", "3.41", "4.13" }, answer = 2 },
+	{ q = "0.25를 분수로 나타내면?", choices = { "1/2", "1/3", "1/4", "1/5" }, answer = 3 },
+	{ q = "1,000,000을 한글로 읽으면?", choices = { "만", "십만", "백만", "천만" }, answer = 3 },
+	{ q = "가위바위보에서 가위를 이기는 것은?", choices = { "바위", "가위", "보", "비기기" }, answer = 1 },
+	{ q = "주사위에서 마주 보는 두 면의 눈을 더하면?", choices = { "5", "6", "7", "8" }, answer = 3 },
+	{ q = "체스판은 모두 몇 칸일까?", choices = { "36칸", "49칸", "64칸", "81칸" }, answer = 3 },
+	{ q = "포커용 트럼프 카드 한 벌(조커 빼고)은 몇 장?", choices = { "48장", "50장", "52장", "54장" }, answer = 3 },
+	{ q = "윷놀이에서 윷가락 넷이 다 엎어지면?", choices = { "도", "모", "개", "윷" }, answer = 2 },
+	{ q = "바둑판의 가로줄은 몇 줄일까?", choices = { "15줄", "17줄", "19줄", "21줄" }, answer = 3 },
+	{ q = "공기놀이에 보통 쓰는 공깃돌 수는?", choices = { "3개", "4개", "5개", "7개" }, answer = 3 },
+	{ q = "바둑에서 먼저 두는 쪽의 돌은?", choices = { "흰 돌", "검은 돌", "아무나", "빨간 돌" }, answer = 2 },
+} :: { Question }
+
+QuizBank.final = {
+	{ q = "원소 기호 'Au'는 무엇일까?", choices = { "금", "은", "구리", "알루미늄" }, answer = 1 },
+	{ q = "빛은 1초에 약 몇 km를 갈까?", choices = { "3만 km", "30만 km", "300만 km", "3억 km" }, answer = 2 },
+	{ q = "태양계에서 표면이 가장 뜨거운 행성은?", choices = { "수성", "화성", "목성", "금성" }, answer = 4 },
+	{ q = "사람 몸에서 가장 긴 뼈는?", choices = { "넓적다리뼈", "정강이뼈", "위팔뼈", "갈비뼈" }, answer = 1 },
+	{ q = "어른의 뼈는 모두 약 몇 개일까?", choices = { "106개", "156개", "206개", "306개" }, answer = 3 },
+	{ q = "기린의 목뼈는 몇 개일까?", choices = { "7개", "12개", "18개", "25개" }, answer = 1 },
+	{ q = "달걀이 병아리로 부화하는 데 걸리는 기간은?", choices = { "약 1주", "약 3주", "약 6주", "약 10주" }, answer = 2 },
+	{ q = "뉴질랜드의 수도는?", choices = { "오클랜드", "크라이스트처치", "퀸스타운", "웰링턴" }, answer = 4 },
+	{ q = "튀르키예의 수도는?", choices = { "이스탄불", "이즈미르", "안탈리아", "앙카라" }, answer = 4 },
+	{ q = "스위스 연방정부와 의회가 있는 도시는?", choices = { "취리히", "베른", "제네바", "바젤" }, answer = 2 },
+	{ q = "'각주구검'의 뜻은?", choices = { "배를 잘 젓는 솜씨", "칼을 잘 다룸", "융통성 없이 고집함", "강을 건너는 지혜" }, answer = 3 },
+	{ q = "'조삼모사'의 뜻은?", choices = { "잔꾀로 남을 속임", "아침에 일찍 일어남", "세 번 생각함", "넷이 셋을 이김" }, answer = 1 },
+	{ q = "'오십보백보'의 뜻은?", choices = { "차이가 아주 크다", "빨리 걷는다", "멀리 간다", "별 차이가 없다" }, answer = 4 },
+	{ q = "'청출어람'의 뜻은?", choices = { "제자가 스승보다 나음", "푸른 하늘을 봄", "맑은 물이 흐름", "쪽빛 옷을 입음" }, answer = 1 },
+	{ q = "'왜 그런지 모르게'를 뜻하는 바른 말은?", choices = { "웬지", "왼지", "웨지", "왠지" }, answer = 4 },
+	{ q = "'오래간만에'를 줄인 바른 말은?", choices = { "오랜만에", "오랫만에", "오랜만애", "오랫만애" }, answer = 1 },
+	{ q = "'고집을 부려 구태여'를 뜻하는 바른 말은?", choices = { "굳이", "구지", "궂이", "굿이" }, answer = 1 },
+	{ q = "전기 저항의 단위는?", choices = { "볼트", "암페어", "와트", "옴" }, answer = 4 },
+	{ q = "오존층이 있는 대기층은?", choices = { "성층권", "대류권", "중간권", "열권" }, answer = 1 },
+	{ q = "지구에 계절이 생기는 주된 까닭은?", choices = { "태양과의 거리", "자전축의 기울기", "달의 인력", "구름의 양" }, answer = 2 },
+	{ q = "햇빛이 지구까지 오는 데 걸리는 시간은?", choices = { "약 8초", "약 8분", "약 8시간", "약 8일" }, answer = 2 },
+	{ q = "다음 중 위성(달)이 하나도 없는 행성은?", choices = { "화성", "목성", "수성", "토성" }, answer = 3 },
+	{ q = "문어의 심장은 몇 개일까?", choices = { "1개", "2개", "3개", "4개" }, answer = 3 },
+	{ q = "날개로 하늘을 날 수 있는 포유류는?", choices = { "하늘다람쥐", "날치", "타조", "박쥐" }, answer = 4 },
+	{ q = "골프에서 기준 타수보다 1타 적게 치면?", choices = { "보기", "버디", "이글", "파" }, answer = 2 },
+	{ q = "정십이면체의 면은 어떤 도형일까?", choices = { "삼각형", "사각형", "육각형", "오각형" }, answer = 4 },
+	{ q = "2를 10번 곱하면?", choices = { "512", "1000", "1024", "2048" }, answer = 3 },
+	{ q = "1부터 100까지 모두 더하면?", choices = { "4950", "5000", "5050", "5100" }, answer = 3 },
+	{ q = "로마 숫자 'L'이 나타내는 수는?", choices = { "5", "10", "50", "500" }, answer = 3 },
+	{ q = "다음 중 소수는?", choices = { "21", "27", "29", "33" }, answer = 3 },
+	{ q = "24절기 가운데 첫 번째 절기는?", choices = { "입춘", "우수", "경칩", "춘분" }, answer = 1 },
+	{ q = "줄이 12개인 우리 전통 현악기는?", choices = { "거문고", "가야금", "해금", "아쟁" }, answer = 2 },
+	{ q = "귀에서 몸의 회전을 느끼는 곳은?", choices = { "달팽이관", "반고리관", "고막", "귓바퀴" }, answer = 2 },
+	{ q = "체스에서 L자 모양으로 움직이는 말은?", choices = { "나이트", "룩", "비숍", "퀸" }, answer = 1 },
+	{ q = "핼리 혜성은 약 몇 년마다 다시 올까?", choices = { "약 7년", "약 26년", "약 76년", "약 150년" }, answer = 3 },
+	{ q = "북극곰의 털 아래 피부색은?", choices = { "흰색", "분홍색", "노란색", "검은색" }, answer = 4 },
+	{ q = "'광년'은 무엇을 재는 단위일까?", choices = { "시간", "거리", "밝기", "무게" }, answer = 2 },
+	{ q = "지구의 나이는 약 몇 년일까?", choices = { "약 4600만 년", "약 4억 6천만 년", "약 46억 년", "약 460억 년" }, answer = 3 },
+	{ q = "'모순'이라는 말이 나온 두 물건은?", choices = { "칼과 칼집", "활과 화살", "북과 장구", "창과 방패" }, answer = 4 },
+	{ q = "'군계일학'의 뜻은?", choices = { "닭이 학을 이김", "무리 중 뛰어난 사람", "무리 지어 다님", "새를 기르는 일" }, answer = 2 },
+} :: { Question }
+
+return QuizBank
+]====]; s.Parent = n3 end
 do local s = Instance.new("ModuleScript"); s.Name = "WordBank"; s.Source = [====[--!strict
 -- Word bank (version 2, server only, never replicated). Data + drawing only.
 -- Nouns: everyday 2-5 syllable words. Habits: speech habits for the third word (무한도전 세븐's '에이' idea).
@@ -1153,6 +1387,204 @@ return WordBank
 ]====]; s.Parent = n3 end
 n3.Parent = n2
 local n4 = Instance.new("Folder"); n4.Name = "missions"
+do local s = Instance.new("ModuleScript"); s.Name = "Quiz"; s.Source = [====[--!strict
+-- The quiz (docs/DESIGN_V3.md §5; bundle 4a): everyone alive answers one four-choice question at once; the right
+-- answer stays on the server until the time is up. A wrong answer or none is a fail. As a final question it uses the
+-- harder questions and a wrong answer is out (RoundService decides that). Players flying when the question opens
+-- cannot answer and are neither failed nor counted as missing (§4). Questions never repeat until the bank runs out,
+-- and a question whose text or any choice contains a banned word in play is skipped.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local QuizBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("QuizBank"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	stopped: () -> boolean,
+	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+}
+
+local Quiz = {
+	id = "quiz",
+	title = Config.TEXT.QUIZ_TITLE,
+	expectedSeconds = Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.QUIZ_REVEAL_SECONDS,
+	maxPerRound = nil :: number?, -- the basic mission: no limit (§5)
+	minPlayers = nil :: number?,
+}
+
+local used: { [QuizBank.Question]: boolean } = {} -- asked on this server (main and final banks alike)
+
+local function mentions(question: QuizBank.Question, words: { string }): boolean
+	for _, word in words do
+		if string.find(question.q, word, 1, true) then
+			return true
+		end
+		for _, choice in question.choices do
+			if string.find(choice, word, 1, true) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- A question from `bank` not asked yet and free of the words in play; when every clean one was asked, they may come
+-- again. nil if none is clean.
+local function pick(bank: { QuizBank.Question }, rng: Random): QuizBank.Question?
+	local words = Match.wordsInPlay()
+	local clean, fresh = {}, {}
+	for _, question in bank do
+		if not mentions(question, words) then
+			table.insert(clean, question)
+			if not used[question] then
+				table.insert(fresh, question)
+			end
+		end
+	end
+	if #fresh == 0 then
+		for _, question in clean do
+			used[question] = nil
+		end
+		fresh = clean
+	end
+	if #fresh == 0 then
+		return nil
+	end
+	local question = fresh[rng:NextInteger(1, #fresh)]
+	used[question] = true
+	return question
+end
+
+function Quiz.available(final: boolean): boolean
+	return #(if final then QuizBank.final else QuizBank.main) > 0
+end
+
+-- Returns false when no clean question is left (nothing was asked).
+function Quiz.run(ctx: Ctx): boolean?
+	local question = pick(if ctx.final then QuizBank.final else QuizBank.main, ctx.rng)
+	if not question then
+		return false
+	end
+	ctx.show(if ctx.final then Config.TEXT.FINAL_QUIZ else Config.TEXT.QUIZ_START)
+	local shown = { kind = "quiz", final = ctx.final, question = question.q, choices = question.choices }
+	ctx.screen(shown)
+	if not ctx.wait(Config.QUIZ_INTRO_SECONDS) then
+		return nil
+	end
+	local asked = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(asked, player)
+		end
+	end
+	local answers = ctx.ask(shown, #question.choices, Config.QUIZ_SECONDS, asked)
+	if ctx.cancelled() then
+		return nil
+	end
+	local answered, missed, wrong = {}, {}, {}
+	for _, player in asked do
+		local choice = answers[player]
+		if choice then
+			table.insert(answered, player)
+		else
+			table.insert(missed, player)
+		end
+		if choice ~= question.answer then
+			table.insert(wrong, player)
+		end
+	end
+	ctx.screen({ kind = "quizResult", final = ctx.final, question = question.q, choices = question.choices, answer = question.answer })
+	ctx.show(if #wrong == 0 then Config.TEXT.QUIZ_ALL_RIGHT
+		else string.format(Config.TEXT.QUIZ_ANSWER, question.choices[question.answer]))
+	if not ctx.final then
+		ctx.answers(answered, missed) -- before the fail: a launched player's miss would not count any more
+	end
+	ctx.fail(wrong, "answer")
+	ctx.reveal(Config.QUIZ_REVEAL_SECONDS) -- also when this answer decided the round
+	return nil
+end
+
+return Quiz
+]====]; s.Parent = n4 end
+do local s = Instance.new("ModuleScript"); s.Name = "Roulette"; s.Source = [====[--!strict
+-- The roulette (docs/DESIGN_V3.md §5; bundle 4a, owner 2026-10-23: a 2D wheel on the screen): the server picks one
+-- alive player at random and everyone's screen spins to that name (a coin for two players). The one picked fails.
+-- Once a round; players flying when it starts are not on the wheel.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	stopped: () -> boolean,
+	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+}
+
+local Roulette = {
+	id = "roulette",
+	title = Config.TEXT.ROULETTE_TITLE,
+	expectedSeconds = Config.ROULETTE_SPIN_SECONDS + Config.ROULETTE_REVEAL_SECONDS,
+	maxPerRound = Config.ROULETTE_PER_ROUND :: number?,
+	minPlayers = Config.ROULETTE_MIN_PLAYERS :: number?,
+}
+
+function Roulette.available(final: boolean): boolean
+	return not final
+end
+
+function Roulette.run(ctx: Ctx)
+	local wheel = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(wheel, player)
+		end
+	end
+	if #wheel < Config.ROULETTE_MIN_PLAYERS then
+		return
+	end
+	local index = ctx.rng:NextInteger(1, #wheel)
+	local ids = {}
+	for _, player in wheel do
+		table.insert(ids, player.UserId)
+	end
+	ctx.show(Config.TEXT.ROULETTE_START)
+	ctx.screen({ kind = "roulette", ids = ids, pick = index, startsAt = Match.now(),
+		spinSeconds = Config.ROULETTE_SPIN_SECONDS })
+	if not ctx.wait(Config.ROULETTE_SPIN_SECONDS) then
+		return
+	end
+	local picked = wheel[index]
+	ctx.show(string.format(Config.TEXT.ROULETTE_HIT, picked.DisplayName))
+	ctx.fail({ picked }, "spin")
+	ctx.reveal(Config.ROULETTE_REVEAL_SECONDS) -- the wheel stays on the name, also when this decided the round
+end
+
+return Roulette
+]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "TestMission"; s.Source = [====[--!strict
 -- The Studio-only test mission (bundle 2b): stands in for the real missions until bundle 4, so the round flow (lives,
 -- launches, the final, the time budget) can be tried in Studio. In the main game every alive player fails with
@@ -1170,7 +1602,13 @@ type Ctx = {
 	fail: (players: { Player }, key: string) -> (),
 	show: (text: string) -> (),
 	cancelled: () -> boolean,
+	stopped: () -> boolean,
 	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 }
 
 local TestMission = {
@@ -1679,12 +2117,18 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionRunner"; s.Source = 
 -- ctx (missions cannot require services, so everything they may do comes through the ctx RoundService builds). A
 -- mission stops as soon as it is cancelled (the round was decided or is over): its waits wake up and its fails and
 -- notices are dropped. Only this service requires the modules under server/missions (tools/tests/check_deps.py
--- checks it). Bundle 2b has one mission, the Studio-only test mission, so the round flow can be tried before the
--- real missions (bundle 4).
+-- checks it). It alone listens to the answer remote ("MissionAnswer") and hands answers to the running mission's
+-- question (docs/DESIGN_V3.md §13: Net.listen cannot disconnect, so missions never listen themselves). What a mission
+-- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
+-- Bundle 4a: the quiz (also the final), the roulette, and the Studio-only test mission.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local Net = require(script.Parent.Parent:WaitForChild("Net"))
 local missionFolder = script.Parent.Parent:WaitForChild("missions")
+local Quiz = require(missionFolder:WaitForChild("Quiz"))
+local Roulette = require(missionFolder:WaitForChild("Roulette"))
 local TestMission = require(missionFolder:WaitForChild("TestMission"))
 
 local MissionRunner = {}
@@ -1701,6 +2145,10 @@ export type Ctx = {
 	fail: (players: { Player }, key: string) -> (),
 	show: (text: string) -> (), -- the status line and a toast
 	cancelled: () -> boolean, -- the round was decided or another one began: stop
+	stopped: () -> boolean, -- another round began (or the round broke): not even a result may stay on screen
+	flying: (player: Player) -> boolean, -- launched and not back yet (cannot answer, takes no penalty)
+	-- An answer mission closed: who answered and who did not (the AFK rule, docs/DESIGN_V3.md §4).
+	answers: (answered: { Player }, missed: { Player }) -> (),
 }
 
 -- What a mission gets: the same, with fail/show that do nothing once cancelled, and wait().
@@ -1711,8 +2159,20 @@ export type MissionCtx = {
 	fail: (players: { Player }, key: string) -> (),
 	show: (text: string) -> (),
 	cancelled: () -> boolean,
+	stopped: () -> boolean,
 	-- Waits `seconds`; returns false at once if the mission is cancelled meanwhile (then the mission should return).
 	wait: (seconds: number) -> boolean,
+	-- Keeps a result already given on screen for `seconds`, also when that result decided the round (only a new round
+	-- cuts it short).
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	-- Everyone's mission screen (a table with `kind`; nil clears it). Cleared when the mission ends.
+	screen: (payload: { [string]: any }?) -> (),
+	-- Shows `payload` (with `endsAt` and the question number `id` added) and collects one answer (a choice
+	-- 1..`choices`, sent with that number) from each of `from` for `seconds`, or until all of them still alive answered
+	-- or the mission is cancelled. Returns the answers.
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 }
 
 export type Mission = {
@@ -1722,15 +2182,20 @@ export type Mission = {
 	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
 	minPlayers: number?, -- alive participants it needs (nil = any)
 	available: (final: boolean) -> boolean,
-	run: (ctx: MissionCtx) -> (),
+	run: (ctx: MissionCtx) -> boolean?, -- false: it had nothing to play (a quiz with no clean question left)
 }
 
 -- An entry of the presenter's menu.
 export type Option = { id: string, title: string, recommended: boolean }
 
-local MISSIONS: { Mission } = { TestMission }
+local MISSIONS: { Mission } = { Quiz, Roulette, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
+local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
+-- The open question: its number, who may answer, how many choices, until when (server time), the answers so far.
+type Question = { id: number, from: { [Player]: boolean }, choices: number, endsAt: number, answers: { [Player]: number } }
+local question: Question? = nil
+local questions = 0 -- question numbers so far (an answer sent for an older question never counts for a newer one)
 
 local function fits(mission: Mission, secondsLeft: number): boolean
 	return mission.expectedSeconds + Config.FLING_RETURN_SECONDS <= secondsLeft
@@ -1796,12 +2261,71 @@ function MissionRunner.finalMission(): Mission?
 	return nil
 end
 
+local function setScreen(payload: { [string]: any }?)
+	screenNow = payload
+	Net.toAll("Mission", payload or { kind = "none" })
+end
+
+local function waitOrCancel(ctx: Ctx, seconds: number, done: (() -> boolean)?, stop: (() -> boolean)?): boolean
+	local untilAt = os.clock() + seconds
+	local stopNow = stop or ctx.cancelled
+	while os.clock() < untilAt do
+		if stopNow() then
+			return false
+		end
+		if done and done() then
+			return true
+		end
+		task.wait(math.min(POLL, untilAt - os.clock()))
+	end
+	return not stopNow()
+end
+
 local function missionCtx(ctx: Ctx): MissionCtx
 	return {
 		final = ctx.final,
 		players = ctx.players,
 		rng = ctx.rng,
 		cancelled = ctx.cancelled,
+		stopped = ctx.stopped,
+		flying = ctx.flying,
+		answers = function(answered: { Player }, missed: { Player })
+			if not ctx.cancelled() then
+				ctx.answers(answered, missed)
+			end
+		end,
+		screen = function(payload: { [string]: any }?)
+			if not ctx.cancelled() then
+				setScreen(payload)
+			end
+		end,
+		ask = function(payload: { [string]: any }, choices: number, seconds: number, from: { Player }): { [Player]: number }
+			questions += 1
+			local open: Question = { id = questions, from = {}, choices = choices, endsAt = Match.now() + seconds, answers = {} }
+			for _, player in from do
+				open.from[player] = true
+			end
+			question = open
+			local shown = table.clone(payload)
+			shown.endsAt = open.endsAt
+			shown.id = open.id
+			if not ctx.cancelled() then
+				setScreen(shown)
+			end
+			waitOrCancel(ctx, seconds, function()
+				local alive = ctx.players()
+				for player in open.from do
+					if not open.answers[player] and table.find(alive, player) then
+						return false -- (someone who left or went out meanwhile is not waited for)
+					end
+				end
+				return true
+			end)
+			if question == open then
+				question = nil
+			end
+			return open.answers
+		end,
 		fail = function(players: { Player }, key: string)
 			if not ctx.cancelled() then
 				ctx.fail(players, key)
@@ -1813,32 +2337,58 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			end
 		end,
 		wait = function(seconds: number): boolean
-			local untilAt = os.clock() + seconds
-			while os.clock() < untilAt do
-				if ctx.cancelled() then
-					return false
-				end
-				task.wait(math.min(POLL, untilAt - os.clock()))
-			end
-			return not ctx.cancelled()
+			return waitOrCancel(ctx, seconds, nil)
+		end,
+		reveal = function(seconds: number)
+			waitOrCancel(ctx, seconds, nil, ctx.stopped)
 		end,
 	}
 end
 
--- Runs one mission to its end. Returns false if it raised an error (reported; that run is over).
-function MissionRunner.run(mission: Mission, ctx: Ctx): boolean
+-- Runs one mission to its end. Returns false if it raised an error (reported; that run is over), and whether it
+-- played (false when it had nothing to play).
+function MissionRunner.run(mission: Mission, ctx: Ctx): (boolean, boolean)
 	if not ctx.final then
 		played[mission.id] = (played[mission.id] or 0) + 1
 	end
 	local runCtx = missionCtx(ctx)
+	local didPlay = true
 	local ok, err = pcall(function(): any
-		mission.run(runCtx)
+		didPlay = mission.run(runCtx) ~= false
 		return nil -- one return value, so the type checker reads pcall's results as (ok, error)
 	end)
 	if not ok then
 		warn("[BannedWords] mission " .. mission.id .. " failed:", err)
 	end
-	return ok
+	question = nil
+	if screenNow then
+		setScreen(nil)
+	end
+	return ok, didPlay
+end
+
+-- Answers to the open question: its number, a whole number in 1..choices, from someone asked, before the end; the
+-- first one counts.
+function MissionRunner.start()
+	Net.listen("MissionAnswer", function(player, id, choice)
+		local open = question
+		if not open or id ~= open.id or not open.from[player] or open.answers[player] or typeof(choice) ~= "number" then
+			return
+		end
+		if Match.now() > open.endsAt then
+			return
+		end
+		if choice % 1 == 0 and choice >= 1 and choice <= open.choices then
+			open.answers[player] = choice
+		end
+	end)
+end
+
+-- A player asked for the whole state again: the mission screen too.
+function MissionRunner.sendScreen(player: Player)
+	if screenNow then
+		Net.to(player, "Mission", screenNow)
+	end
 end
 
 return MissionRunner
@@ -3198,7 +3748,7 @@ n5.Parent = n2
 n2.Parent = parents[2]
 local n6 = Instance.new("LocalScript"); n6.Name = "BannedWordsClient"; n6.Source = [====[-- 금칙어 게임 Korean client entry point: only wiring. Server events update State, then refresh() redraws
 -- every part from State (HUD, head bubbles, camera, reaction bar, getting ready, presenter controls, recognizer on/off,
--- seat lock).
+-- seat lock). The mission card shows what the server's "Mission" says.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -3222,6 +3772,7 @@ local Toast = require(UI:WaitForChild("Toast"))
 local MicPanel = require(UI:WaitForChild("MicPanel"))
 local ReactionBar = require(UI:WaitForChild("ReactionBar"))
 local PresenterPanel = require(UI:WaitForChild("PresenterPanel"))
+local MissionPanel = require(UI:WaitForChild("MissionPanel"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
@@ -3320,6 +3871,9 @@ end, function(id)
 end, function(index)
 	remotes.PresenterSound:FireServer(index)
 end)
+MissionPanel.build(function(questionId, choice)
+	remotes.MissionAnswer:FireServer(questionId, choice)
+end)
 Fx.init()
 FlatVoice.start()
 GetUp.start()
@@ -3402,6 +3956,16 @@ remotes.Sound.OnClientEvent:Connect(function(info)
 	Fx.presenterSound(info.index)
 end)
 
+-- The mission card (quiz, roulette). My answer buttons work while I am alive and not flying.
+remotes.Mission.OnClientEvent:Connect(function(payload)
+	local names = {}
+	for _, userId in payload.ids or {} do
+		table.insert(names, nameOf(userId))
+	end
+	local canAnswer = State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
+	MissionPanel.show(payload, canAnswer, names)
+end)
+
 remotes.Words.OnClientEvent:Connect(function(words)
 	State.words = words
 	refresh()
@@ -3430,6 +3994,14 @@ remotes.LifeLost.OnClientEvent:Connect(function(info)
 	end
 	if info.reason == "left" then
 		Toast.show(string.format(Config.TEXT.LEFT, table.concat(out, ", ")), "near")
+		return
+	end
+	if info.reason == "afk" then
+		local names = {}
+		for _, entry in info.players do
+			table.insert(names, entry.name)
+		end
+		Toast.show(string.format(Config.TEXT.AFK_OUT, table.concat(names, ", ")), "elim")
 		return
 	end
 	if #lost > 0 then
@@ -3502,6 +4074,7 @@ RunService.Heartbeat:Connect(function()
 	local remaining = State.round.endsAt - workspace:GetServerTimeNow()
 	Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
 	PresenterPanel.tick(workspace:GetServerTimeNow())
+	MissionPanel.tick(workspace:GetServerTimeNow())
 end)
 
 -- Ask for the current state now that every handler is connected (late joiners miss earlier broadcasts).
@@ -4943,6 +5516,318 @@ function MicPanel.set(r: Ready)
 end
 
 return MicPanel
+]====]; s.Parent = n7 end
+do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [====[--!strict
+-- The mission card in the middle of the screen (docs/DESIGN_V3.md §5; bundle 4a):
+--   - quiz: the question, four answer buttons (only for players who may answer) and the seconds left; afterwards the
+--     right answer turns green and my wrong pick red;
+--   - roulette (owner 2026-10-23: a 2D wheel): the names on a ring and a pointer that spins and slows down onto the
+--     name the server picked; with two players a coin flips between the two names instead.
+-- It only shows what it is told and reports the button pressed; the server checks every answer.
+local Style = require(script.Parent:WaitForChild("Style"))
+
+local MissionPanel = {}
+
+local TWO_PI = 2 * math.pi
+local RING_RADIUS = 112 -- pixels from the wheel centre to the names (up to RING_FULL names; more push it out)
+local RING_FULL = 6
+local PILL_WIDTH = 104
+local SPIN_TURNS = 4 -- whole turns before the pointer stops
+local COIN_SIZE = 170
+local SLICE_COLORS = { Color3.fromRGB(40, 92, 170), Color3.fromRGB(62, 66, 92) } -- name pills, alternating
+
+local card: Frame
+local cardScale: UIScale
+local title: TextLabel
+local timer: TextLabel
+local answerGrid: Frame
+local buttons: { TextButton } = {}
+local wheel: Frame
+local pointer: Frame
+local disc: Frame
+local needle: Frame
+local arrow: TextLabel
+local coin: TextLabel
+local ringPills: { Frame } = {}
+local onAnswer: (number, number) -> () = function(_id, _choice) end
+
+local state = {
+	kind = "none",
+	endsAt = 0,
+	canAnswer = false,
+	question = "",
+	id = 0, -- the open question's number (sent back with the answer)
+	myPick = nil :: number?,
+	-- roulette
+	names = {} :: { string },
+	pick = 1,
+	startsAt = 0,
+	spinSeconds = 1,
+}
+
+local function answerButton(index: number): TextButton
+	local b = Instance.new("TextButton")
+	b.BackgroundColor3 = Style.PANEL
+	b.BackgroundTransparency = 0.1
+	b.FontFace = Style.BOLD
+	b.TextScaled = true
+	b.TextColor3 = Style.WHITE
+	b.AutoButtonColor = true
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = b
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 8)
+	pad.PaddingRight = UDim.new(0, 8)
+	pad.PaddingTop = UDim.new(0, 4)
+	pad.PaddingBottom = UDim.new(0, 4)
+	pad.Parent = b
+	local size = Instance.new("UITextSizeConstraint")
+	size.MaxTextSize = 22
+	size.Parent = b
+	b.LayoutOrder = index
+	b.Activated:Connect(function()
+		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt -- (not while the question shows first)
+		if state.kind == "quiz" and state.canAnswer and open and not state.myPick then
+			state.myPick = index
+			onAnswer(state.id, index)
+			for i, other in buttons do
+				other.BackgroundColor3 = if i == index then Style.AMBER else Style.PANEL
+				other.TextColor3 = if i == index then Style.PANEL else Style.WHITE
+			end
+		end
+	end)
+	b.Parent = answerGrid
+	return b
+end
+
+-- onPick(questionId, choice): I pressed an answer button.
+function MissionPanel.build(onPick: (number, number) -> ())
+	onAnswer = onPick
+	card = Style.panel(Style.gui(), Style.PANEL, 0.2, 16)
+	card.Name = "MissionCard"
+	card.AnchorPoint = Vector2.new(0.5, 0.5)
+	card.Position = UDim2.fromScale(0.5, 0.56) -- a little low: the status board sits above
+	card.Size = UDim2.fromScale(0.5, 0)
+	card.AutomaticSize = Enum.AutomaticSize.Y
+	card.Visible = false
+	Style.limit(card, Vector2.new(320, 0), Vector2.new(580, 600))
+	cardScale = Instance.new("UIScale") -- shrinks the card on short screens (tick)
+	cardScale.Parent = card
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0, 12)
+	pad.PaddingBottom = UDim.new(0, 14)
+	pad.PaddingLeft = UDim.new(0, 14)
+	pad.PaddingRight = UDim.new(0, 14)
+	pad.Parent = card
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Padding = UDim.new(0, 10)
+	layout.Parent = card
+
+	timer = Style.label(card, Style.BOLD, 20, Style.AMBER)
+	timer.Size = UDim2.new(1, 0, 0, 22)
+	timer.LayoutOrder = 0
+	title = Style.label(card, Style.BOLD, 26, Style.WHITE)
+	title.Size = UDim2.new(1, 0, 0, 64)
+	title.LayoutOrder = 1
+
+	answerGrid = Instance.new("Frame")
+	answerGrid.BackgroundTransparency = 1
+	answerGrid.Size = UDim2.new(1, 0, 0, 2 * 52 + 8)
+	answerGrid.LayoutOrder = 2
+	answerGrid.Parent = card
+	local grid = Instance.new("UIGridLayout")
+	grid.CellSize = UDim2.new(0.5, -4, 0, 52)
+	grid.CellPadding = UDim2.fromOffset(8, 8)
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.Parent = answerGrid
+	for i = 1, 4 do
+		buttons[i] = answerButton(i)
+	end
+
+	-- The wheel: a round disc with an amber rim, the names as pills on a ring, a needle from the hub.
+	wheel = Instance.new("Frame")
+	wheel.BackgroundTransparency = 1
+	wheel.Size = UDim2.fromOffset(2 * RING_RADIUS + 120, 2 * RING_RADIUS + 50)
+	wheel.LayoutOrder = 3
+	wheel.Parent = card
+	disc = Style.panel(wheel, Color3.fromRGB(26, 32, 46), 0, 1000)
+	disc.AnchorPoint = Vector2.new(0.5, 0.5)
+	disc.Position = UDim2.fromScale(0.5, 0.5)
+	disc.Size = UDim2.fromOffset(2 * RING_RADIUS + 44, 2 * RING_RADIUS + 44)
+	local rim = Instance.new("UIStroke")
+	rim.Color = Style.AMBER
+	rim.Thickness = 4
+	rim.Parent = disc
+	pointer = Instance.new("Frame")
+	pointer.BackgroundTransparency = 1
+	pointer.AnchorPoint = Vector2.new(0.5, 0.5)
+	pointer.Position = UDim2.fromScale(0.5, 0.5)
+	pointer.Size = UDim2.fromOffset(2 * RING_RADIUS, 2 * RING_RADIUS)
+	pointer.ZIndex = 3
+	pointer.Parent = wheel
+	needle = Style.panel(pointer, Style.AMBER, 0, 3)
+	needle.AnchorPoint = Vector2.new(0.5, 1)
+	needle.Position = UDim2.fromScale(0.5, 0.5)
+	needle.Size = UDim2.fromOffset(6, RING_RADIUS - 40)
+	needle.ZIndex = 3
+	arrow = Style.label(pointer, Style.BOLD, 30, Style.AMBER)
+	arrow.Text = "▲"
+	arrow.AnchorPoint = Vector2.new(0.5, 1)
+	arrow.Position = UDim2.new(0.5, 0, 0.5, -(RING_RADIUS - 40) + 6)
+	arrow.Size = UDim2.fromOffset(30, 26)
+	arrow.ZIndex = 3
+	local hub = Style.panel(wheel, Style.AMBER, 0, 100)
+	hub.AnchorPoint = Vector2.new(0.5, 0.5)
+	hub.Position = UDim2.fromScale(0.5, 0.5)
+	hub.Size = UDim2.fromOffset(26, 26)
+	hub.ZIndex = 4
+
+	coin = Style.label(card, Style.BOLD, 30, Style.PANEL)
+	coin.BackgroundColor3 = Style.AMBER
+	coin.BackgroundTransparency = 0
+	coin.Size = UDim2.fromOffset(COIN_SIZE, COIN_SIZE)
+	coin.LayoutOrder = 4
+	local round = Instance.new("UICorner")
+	round.CornerRadius = UDim.new(1, 0)
+	round.Parent = coin
+end
+
+-- Sizes the wheel for a ring of this radius (more names need a wider ring so the pills do not overlap).
+local function sizeWheel(radius: number)
+	wheel.Size = UDim2.fromOffset(2 * radius + PILL_WIDTH + 16, 2 * radius + 50)
+	disc.Size = UDim2.fromOffset(2 * radius + 44, 2 * radius + 44)
+	pointer.Size = UDim2.fromOffset(2 * radius, 2 * radius)
+	needle.Size = UDim2.fromOffset(6, radius - 40)
+	arrow.Position = UDim2.new(0.5, 0, 0.5, -(radius - 40) + 6)
+end
+
+local function setRing(names: { string })
+	-- Neighbouring pills sit 2*r*sin(pi/n) apart; keep that at least the pill width once there are many names.
+	local radius = math.max(RING_RADIUS, (PILL_WIDTH + 6) / (2 * math.sin(math.pi / math.max(#names, RING_FULL))))
+	sizeWheel(radius)
+	for _, pill in ringPills do
+		pill:Destroy()
+	end
+	table.clear(ringPills)
+	for i, name in names do
+		local angle = (i - 1) / #names * TWO_PI -- clockwise from the top
+		local pill = Style.panel(wheel, SLICE_COLORS[(i - 1) % 2 + 1], 0, 14)
+		pill.AnchorPoint = Vector2.new(0.5, 0.5)
+		pill.Position = UDim2.new(0.5, math.sin(angle) * radius, 0.5, -math.cos(angle) * radius)
+		pill.Size = UDim2.fromOffset(PILL_WIDTH, 30)
+		pill.ZIndex = 2
+		local label = Style.label(pill, Style.BOLD, 18, Style.WHITE)
+		label.Size = UDim2.new(1, -8, 1, -4)
+		label.Position = UDim2.fromOffset(4, 2)
+		label.Text = name
+		label.ZIndex = 2
+		table.insert(ringPills, pill)
+	end
+end
+
+local function easeOut(t: number): number
+	return 1 - (1 - t) ^ 3
+end
+
+-- What the server says the mission shows now. `canAnswer`: I am alive and on the ground (my buttons work);
+-- `names`: the roulette's names in the server's order.
+function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names: { string })
+	local kind = payload.kind
+	local quizLike = kind == "quiz" or kind == "quizResult"
+	if not quizLike or payload.question ~= state.question then
+		state.myPick = nil -- a new question (it comes twice: before and once the buttons work) or no quiz
+	end
+	state.question = if quizLike then payload.question else ""
+	state.id = payload.id or 0
+	state.kind = kind
+	state.endsAt = payload.endsAt or 0
+	state.canAnswer = canAnswer
+	card.Visible = kind == "quiz" or kind == "quizResult" or kind == "roulette"
+	answerGrid.Visible = quizLike
+	title.Visible = quizLike
+	timer.Visible = quizLike
+	wheel.Visible = kind == "roulette" and #names > 2
+	coin.Visible = kind == "roulette" and #names <= 2
+	if kind == "quiz" or kind == "quizResult" then
+		title.Text = payload.question
+		local choices = payload.choices :: { string }
+		for i, b in buttons do
+			b.Visible = choices[i] ~= nil
+			b.Text = choices[i] or ""
+			local open = kind == "quiz" and canAnswer and payload.endsAt ~= nil and not state.myPick
+			b.AutoButtonColor = open
+			if kind == "quizResult" then
+				local right = i == payload.answer
+				b.BackgroundColor3 = if right then Style.GREEN elseif i == state.myPick then Style.RED else Style.PANEL
+				b.TextColor3 = if right or i == state.myPick then Style.PANEL else Style.GREY
+			elseif i ~= state.myPick then
+				b.BackgroundColor3 = Style.PANEL
+				b.TextColor3 = if open then Style.WHITE else Style.GREY
+			end
+		end
+	elseif kind == "roulette" then
+		title.Text = ""
+		state.names = names
+		state.pick = payload.pick
+		state.startsAt = payload.startsAt or workspace:GetServerTimeNow()
+		state.spinSeconds = payload.spinSeconds or 1
+		if #names > 2 then
+			setRing(names)
+		end
+	end
+	MissionPanel.tick(workspace:GetServerTimeNow())
+end
+
+-- Every frame (server time): the quiz countdown, the spinning pointer or the flipping coin, and the card's size.
+function MissionPanel.tick(now: number)
+	if card.Visible then
+		-- Keep the card within 80% of the screen height and 90% of its width (a big wheel on a small phone screen).
+		local camera = workspace.CurrentCamera
+		local scale = math.max(cardScale.Scale, 0.01)
+		local height = card.AbsoluteSize.Y / scale
+		local width = math.max(card.AbsoluteSize.X, if wheel.Visible then wheel.AbsoluteSize.X + 28 else 0) / scale
+		if camera and height > 0 and width > 0 then
+			local view = camera.ViewportSize
+			cardScale.Scale = math.min(1, view.Y * 0.8 / height, view.X * 0.9 / width)
+		end
+	end
+	if state.kind == "quiz" then
+		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
+	elseif state.kind == "roulette" then
+		timer.Text = ""
+		local t = math.clamp((now - state.startsAt) / state.spinSeconds, 0, 1)
+		local count = #state.names
+		if count > 2 then
+			local target = SPIN_TURNS * 360 + (state.pick - 1) / count * 360
+			local angle = target * easeOut(t)
+			pointer.Rotation = angle
+			local nearest = math.round((angle % 360) / 360 * count) % count + 1
+			for i, pill in ringPills do
+				local lit = i == nearest
+				pill.BackgroundColor3 = if lit then Style.AMBER else SLICE_COLORS[(i - 1) % 2 + 1]
+				local label = pill:FindFirstChildOfClass("TextLabel")
+				if label then
+					label.TextColor3 = if lit then Style.PANEL else Style.WHITE
+				end
+			end
+		elseif count > 0 then
+			-- The coin flips (its width follows the turn), showing each name in turn, slower and slower, and lands on
+			-- the pick.
+			local phase = easeOut(t) * (SPIN_TURNS * 4 + 1) * math.pi
+			local flips = math.floor(phase / math.pi + 0.5)
+			local shown = if t >= 1 then state.pick else ((state.pick - 1 + flips + 1) % count) + 1
+			coin.Text = state.names[shown]
+			coin.Size = UDim2.fromOffset(if t >= 1 then COIN_SIZE else math.max(8, COIN_SIZE * math.abs(math.cos(phase))), COIN_SIZE)
+		end
+	else
+		timer.Text = ""
+	end
+end
+
+return MissionPanel
 ]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "PresenterPanel"; s.Source = [====[--!strict
 -- The presenter's controls (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23):

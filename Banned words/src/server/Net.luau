@@ -21,8 +21,9 @@
 --   Reaction    emoji shown above a player
 --   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
 --   Splash      that player hit the water: { userId, position }
--- Kept for the speech judging and the banned words (JudgeService / WordService, not wired in V3 until phase 2 /
--- bundle 5): Words, WordWarn, Settle (server -> client), Transcript, VoicePing, Settled (client -> server).
+--   Words       to each player: the banned words they may see (WordService.payloadFor; bundle 5a)
+--   (client -> server: EarJudge (userId) the presenter heard a banned word, Reroll (userId) a new word; private servers)
+-- Kept for the speech judging (JudgeService, phase 2): Settle (server -> client), Transcript, VoicePing, Settled.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = {}
@@ -30,7 +31,8 @@ local Net = {}
 local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
 	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer", "Lever",
-	"Words", "WordWarn", "Settle", "Transcript", "VoicePing", "Settled",
+	"EarJudge", "Reroll",
+	"Words", "Settle", "Transcript", "VoicePing", "Settled",
 }
 
 local folder: Folder

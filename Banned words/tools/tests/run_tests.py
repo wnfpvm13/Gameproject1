@@ -33,6 +33,9 @@ SERVER_MODULES = [
 ROUND_MODULES = [
     ("Config", "src/shared/Config.luau"),
     ("Match", "src/server/Match.luau"),
+    ("Judge", "src/shared/Judge.luau"),
+    ("WordBank", "src/server/content/WordBank.luau"),
+    ("WordService", "src/server/services/WordService.luau"),
     ("LifeService", "src/server/services/LifeService.luau"),
     ("Timeline", "src/server/services/Timeline.luau"),
     ("MissionRunner", "src/server/services/MissionRunner.luau"),

@@ -104,6 +104,14 @@ end
 local playerList = {}
 local Players = {
 	GetPlayers = function() return playerList end,
+	GetPlayerByUserId = function(_, userId)
+		for _, p in playerList do
+			if p.UserId == userId then
+				return p
+			end
+		end
+		return nil
+	end,
 	PlayerRemoving = signal(),
 	PlayerAdded = signal(),
 }

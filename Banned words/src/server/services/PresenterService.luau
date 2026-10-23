@@ -7,8 +7,9 @@
 -- disqualifies on live servers; Studio allows it (GetChatGroupsAsync works only in Team Test there).
 -- During a round the presenter picks the next mission in the last PRESENTER_PICK_SECONDS of free talk and, in the
 -- one-word mission, who is launched (a menu of kind "judge"); a missed choice is made by the system (or a vote) and
--- PRESENTER_MISSES in a row hand the round to another presenter. The presenter also plays sound buttons and may step
--- down. A presenter who leaves or steps down is replaced by a volunteer who is not playing (not flying either, and
+-- PRESENTER_MISSES in a row hand the round to another presenter. The presenter also plays sound buttons, may step
+-- down, and on private servers judges banned words by ear ("EarJudge") and re-draws words at the start ("Reroll");
+-- this module checks who asks and how often, RoundService decides what happens. A presenter who leaves or steps down is replaced by a volunteer who is not playing (not flying either, and
 -- not someone who presented this round before), else the system runs the round. Who presents is Match.presenter;
 -- RoundService is told of every change during a round (voices, stands).
 local Players = game:GetService("Players")
@@ -41,6 +42,9 @@ local onChange: (Change, Player?, Player?) -> () = function(_reason, _old, _new)
 local unavailable: (Player) -> boolean = function(_player)
 	return false
 end
+local onHeard: (Player) -> () = function(_target) end
+local onReroll: (Player) -> () = function(_target) end
+local lastEar: { [Player]: number } = {}
 -- The open menu (one at a time).
 local menu: { kind: MenuKind, options: { Option }, endsAt: number, picked: string? }? = nil
 
@@ -248,11 +252,45 @@ local function setVolunteer(player: Player, on: boolean)
 	end
 end
 
--- changed(reason, old, new): the presenter changed during a round. isBusy(player): another service owns the player
--- now (flying), so they cannot take over.
-function PresenterService.start(changed: (Change, Player?, Player?) -> (), isBusy: (Player) -> boolean)
-	onChange = changed
-	unavailable = isBusy
+export type Hooks = {
+	changed: (Change, Player?, Player?) -> (), -- the presenter changed during a round
+	busy: (Player) -> boolean, -- another service owns the player now (flying), so they cannot take over
+	heard: (Player) -> (), -- the presenter heard this player say their banned word (private servers)
+	reroll: (Player) -> (), -- the presenter asks a new word for this player (private servers, at the start)
+}
+
+function PresenterService.start(hooks: Hooks)
+	onChange = hooks.changed
+	unavailable = hooks.busy
+	onHeard = hooks.heard
+	onReroll = hooks.reroll
+	-- The presenter names a player (by UserId) for an ear judgment or a re-draw; at most one press per EAR_COOLDOWN.
+	local function named(player: Player, userId: any): Player?
+		if player ~= Match.presenter or typeof(userId) ~= "number" or userId ~= userId then
+			return nil
+		end
+		local now = os.clock()
+		if now - (lastEar[player] or -math.huge) < Config.EAR_COOLDOWN then
+			return nil
+		end
+		local target = Players:GetPlayerByUserId(userId)
+		if target then
+			lastEar[player] = now -- (only a press that names someone uses up the cooldown)
+		end
+		return target
+	end
+	Net.listen("EarJudge", function(player, userId)
+		local target = named(player, userId)
+		if target then
+			onHeard(target)
+		end
+	end)
+	Net.listen("Reroll", function(player, userId)
+		local target = named(player, userId)
+		if target then
+			onReroll(target)
+		end
+	end)
 	Net.listen("Volunteer", function(player, on)
 		if typeof(on) ~= "boolean" then
 			return
@@ -293,6 +331,7 @@ function PresenterService.start(changed: (Change, Player?, Player?) -> (), isBus
 		presented[player] = nil
 		lastVolunteer[player] = nil
 		formers[player] = nil
+		lastEar[player] = nil
 		if Match.presenter == player and Match.inRound() then
 			task.spawn(function()
 				replace("left")

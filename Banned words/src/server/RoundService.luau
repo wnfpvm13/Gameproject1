@@ -4,8 +4,9 @@
 --   -> Final (sudden death) -> Result -> Countdown (quick rematch) ...
 -- Rules live in the services: lives in LifeService, the time budget and the final trigger in Timeline, missions in
 -- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
--- join by chat in ChatService, the presenter in PresenterService, score in Scores. Up to bundle 4a: no banned words
--- yet; the missions are the quiz (also the final) and the roulette (plus the Studio-only test mission).
+-- join by chat in ChatService, the presenter in PresenterService, banned words in WordService, score in Scores.
+-- Up to bundle 5a: banned words on private servers (stage 1), judged by the presenter's ear; the missions are the quiz
+-- (also the final), the roulette, "a word to everyone" (plus the Studio-only test mission).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -17,6 +18,7 @@ local services = script.Parent:WaitForChild("services")
 local LifeService = require(services:WaitForChild("LifeService"))
 local Timeline = require(services:WaitForChild("Timeline"))
 local MissionRunner = require(services:WaitForChild("MissionRunner"))
+local WordService = require(services:WaitForChild("WordService"))
 local SeatService = require(services:WaitForChild("SeatService"))
 local SpectatorService = require(services:WaitForChild("SpectatorService"))
 local VoiceService = require(services:WaitForChild("VoiceService"))
@@ -59,8 +61,14 @@ local function detectServerKind(): string
 	return if game.PrivateServerOwnerId ~= 0 then "private" else "public"
 end
 
+-- Banned words play on private servers in stage 1 (docs/DESIGN_V3.md §3); public servers get them in stage 2.
+local function wordsOn(): boolean
+	return Match.serverKind == "private"
+end
+
 -- Tells everyone who lost a life or is out (one message per event, so the toast names them together; `final`: they
 -- all fell at once and play the final among themselves).
+
 local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean)
 	local list = {}
 	for _, outcome in outcomes do
@@ -74,6 +82,9 @@ local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: bo
 	Net.toAll("LifeLost", { reason = reason, players = list, final = final })
 	refreshSpeakers()
 	Match.broadcast()
+	if wordsOn() then
+		WordService.sendAll() -- who is out now sees every word, their own too
+	end
 end
 
 -- Launches everyone who lost a life. Players who are out reach the stands after their flight (onFlightOver), or
@@ -257,26 +268,58 @@ end
 -- Final: sudden-death questions for the survivors until one is left or FINAL_MAX_SECONDS have passed (a question
 -- begun before that is played to its end); a question everyone gets wrong puts nobody out. A question that breaks
 -- ends the final (the survivors share the win).
+-- The final's ear judgments go into the bucket of the question they were pressed in (`finalHits`, a fresh table per
+-- question; nil when no question is coming). A closed bucket takes no late arrivals.
+local finalHits: { Player }? = nil
+local pendingIn: { [{ Player }]: number } = {} -- bucket -> judgments pressed into it whose lever is still moving
+local closedBuckets: { [{ Player }]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+
+-- A final question is over: its bucket is swapped for a new one, then the judgments pressed during it land (at most a
+-- lever's time) before it is closed and judged.
+local function closeBucket(): { Player }
+	local bucket = finalHits or {}
+	finalHits = {}
+	local deadline = os.clock() + Config.LEVER_SECONDS + 0.2
+	while (pendingIn[bucket] or 0) > 0 and os.clock() < deadline do
+		task.wait(0.05)
+	end
+	closedBuckets[bucket] = true
+	pendingIn[bucket] = nil
+	return bucket
+end
+
 local function playFinal(myRound: number)
 	local mission = MissionRunner.finalMission()
 	if not mission or #Match.aliveList() < 2 or Match.roundId ~= myRound then
 		return
 	end
+	if toFinal and wordsOn() then
+		-- Everyone left fell at once: they play the final with new words (docs/DESIGN_V3.md §2).
+		for _, player in Match.aliveList() do
+			WordService.replace(player, nil, rng)
+		end
+		WordService.sendAll()
+	end
+	finalHits = {}
 	Match.setPhase("Final", Config.FINAL_MAX_SECONDS, Config.TEXT.FINAL)
 	local deadline = os.clock() + Config.FINAL_MAX_SECONDS
 	local function settled(): boolean
 		return #Match.aliveList() < 2 -- the others left: the last one wins
 	end
 	while not settled() and os.clock() < deadline and Match.roundId == myRound do
-		local wrong: { Player } = {}
+		-- Wrong answers and banned words heard during this question are out together (§2 "동시 탈락").
 		local ok, played = MissionRunner.run(mission, missionCtx(myRound, true, function(players, _key)
+			local hits = finalHits or {}
 			for _, player in players do
-				if not table.find(wrong, player) then
-					table.insert(wrong, player)
+				if not table.find(hits, player) then
+					table.insert(hits, player)
 				end
 			end
+			finalHits = hits
 		end, settled))
+		local wrong = closeBucket()
 		if not ok or not played or Match.roundId ~= myRound or settled() then
+			finalHits = nil
 			return -- (a final that cannot ask anything more: the survivors share the win)
 		end
 		local alive = Match.aliveList()
@@ -290,10 +333,14 @@ local function playFinal(myRound: number)
 			Net.notice(Config.TEXT.ALL_WRONG)
 		elseif #out > 0 then
 			announce(LifeService.eliminate(out), "final", false)
+			if os.clock() >= deadline or settled() then
+				finalHits = nil -- no question is coming: ear judgments are closed before the last flights land
+			end
 			waitFlights()
 		end
 		task.wait() -- every question yields at least once, even one that returns at once
 	end
+	finalHits = nil
 end
 
 -- Who won (everyone still in) and who presented to the end, with the session score.
@@ -392,13 +439,19 @@ local function runRound()
 	end
 	Match.startedWith = #Match.aliveList()
 	LifeService.beginRound()
+	if wordsOn() then
+		WordService.assign(rng)
+	end
 	if Match.presenter then
 		PresenterService.place(Match.presenter)
 	end
 	SpectatorService.beginRound()
 	VoiceService.setSilenced(chatIds)
 	refreshSpeakers()
-	Match.setPhase("Assign", Config.ASSIGN_TIME, string.format(Config.TEXT.ASSIGN, Config.LIVES))
+	-- With words and a presenter the assignment lasts longer: the presenter may re-draw words (§2 step 4).
+	local assignSeconds = if wordsOn() and Match.presenter then Config.ASSIGN_REROLL_SECONDS else Config.ASSIGN_TIME
+	Match.setPhase("Assign", assignSeconds, string.format(Config.TEXT.ASSIGN, Config.LIVES))
+	WordService.sendAll() -- (after the Assign state: clients clear their words on the Countdown state)
 	waitPhase()
 
 	playMain(myRound)
@@ -412,6 +465,9 @@ local function runRound()
 	PresenterService.endRound()
 	openVoices()
 	Match.setPhase("Result", Config.RESULT_TIME, text)
+	if wordsOn() then
+		WordService.sendAll() -- the result shows everyone their own word too
+	end
 	waitPhase()
 	cleanup()
 	lastEndedAt = os.clock()
@@ -455,6 +511,9 @@ local function onPresenterChange(_reason: PresenterService.Change, old: Player?,
 	end
 	refreshSpeakers()
 	Match.broadcast()
+	if wordsOn() then
+		WordService.sendAll()
+	end
 end
 
 local function onSync(player: Player)
@@ -462,6 +521,69 @@ local function onSync(player: Player)
 	ChatService.sendAccess(player)
 	PresenterService.sendMenu(player)
 	MissionRunner.sendScreen(player)
+	WordService.send(player)
+end
+
+-- The presenter heard `target` say their banned word (private servers, docs/DESIGN_V3.md §3-4): the lever, then a
+-- launch and a new word at once (no rescue for ear judgments). In the final the hit joins the current question's
+-- wrong answers (they go out together).
+local earEvents = 0
+-- Whether an ear judgment may count now: the main game not yet decided, or a final question still to come; the
+-- player alive and on the ground (a result after the outcome is fixed is dropped, §2).
+local function earOpen(target: Player): boolean
+	if not wordsOn() or not Match.isAlive(target) or SeatService.isFlying(target) then
+		return false
+	end
+	if Match.phase == "Play" then
+		return not mainSettled()
+	end
+	-- The final: while questions go on (two or more left; one left has won).
+	return Match.phase == "Final" and finalHits ~= nil and #Match.aliveList() >= 2
+end
+
+local function onHeard(target: Player)
+	if not earOpen(target) then
+		return
+	end
+	earEvents += 1
+	local event = "ear" .. earEvents
+	local myRound = Match.roundId
+	local pressedIn = Match.phase -- the rule of the stage it was heard in (§4); a stage change meanwhile drops it
+	local bucket = if pressedIn == "Final" then finalHits else nil -- (the final question it was heard in)
+	if bucket then
+		pendingIn[bucket] = (pendingIn[bucket] or 0) + 1
+	end
+	Net.toAll("Lever", {})
+	task.delay(Config.LEVER_SECONDS, function()
+		if bucket then
+			pendingIn[bucket] = (pendingIn[bucket] or 1) - 1
+			if closedBuckets[bucket] then
+				return -- its question was judged already
+			end
+		end
+		if Match.roundId ~= myRound or Match.phase ~= pressedIn or not earOpen(target) then
+			return
+		end
+		Net.notice(string.format(Config.TEXT.EAR_HIT, target.DisplayName))
+		WordService.replace(target, MissionRunner.screenTexts(), rng)
+		if bucket then
+			if not table.find(bucket, target) then
+				table.insert(bucket, target)
+			end
+			WordService.sendAll()
+		else
+			failPlayers({ target }, event, "fail")
+			WordService.sendAll()
+		end
+	end)
+end
+
+-- The presenter re-draws `target`'s word during the assignment (private servers, one player at a time).
+local function onReroll(target: Player)
+	if wordsOn() and Match.phase == "Assign" and Match.participants[target] then
+		WordService.replace(target, nil, rng)
+		WordService.sendAll()
+	end
 end
 
 -- The player plays in or presents the round being played: their way of joining (voice or chat) holds until it is over.
@@ -478,7 +600,12 @@ function RoundService.start()
 	VoiceService.start()
 	Scores.start()
 	ChatService.start()
-	PresenterService.start(onPresenterChange, SeatService.isFlying)
+	PresenterService.start({
+		changed = onPresenterChange,
+		busy = SeatService.isFlying,
+		heard = onHeard,
+		reroll = onReroll,
+	})
 	MissionRunner.start()
 	LifeService.start(SeatService.isFlying)
 	SpectatorService.start(busy)

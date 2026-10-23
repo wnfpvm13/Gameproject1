@@ -1,45 +1,118 @@
 --!strict
--- Forbidden words: first word at the start, then one more for everyone alive at WORD_STEPS (max 3 words),
--- and what each viewer may see. Nobody ever receives their own words while alive.
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- Banned words (V3, docs/DESIGN_V3.md §6; bundle 5a): one word per participant, a speech habit (진짜, 대박 ...) with
+-- HABIT_WORD_CHANCE drawn for each player on their own (a kind shared by everyone could be read off the others'
+-- heads), never overlapping another word in play. A word is replaced after it was said, or by the presenter's re-draw;
+-- a new word also avoids `avoid` (the running mission's screen texts). What each viewer may see: everyone's words,
+-- except an alive participant's own (shown as hidden until the result). Stage 1 plays words on private servers only
+-- (RoundService decides); this module only keeps them in Match.participants.
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Judge = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Judge"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local Net = require(script.Parent.Parent:WaitForChild("Net"))
 local WordBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("WordBank"))
 
 local WordService = {}
 
-local function addWord(p: Match.Participant, kind: "noun" | "habit", effectiveAt: number, rng: Random): boolean
-	local entry = WordBank.draw(kind, Match.wordsInPlay(), rng)
+local DRAW_TRIES = 20 -- words tried before giving up on one that avoids the screen texts
+
+-- The words in play except `player`'s own (theirs is being replaced).
+local function takenBy(except: Player?): { string }
+	local list = {}
+	for player, p in Match.participants do
+		if player ~= except then
+			for _, word in p.words do
+				table.insert(list, word.text)
+			end
+		end
+	end
+	return list
+end
+
+-- A word for one player: their own kind draw, not overlapping `taken`, not inside any `avoid` text.
+local function draw(taken: { string }, avoid: { string }?, rng: Random): WordBank.Entry?
+	local kind: "noun" | "habit" = if rng:NextNumber() < Config.HABIT_WORD_CHANCE then "habit" else "noun"
+	local blocked = table.clone(taken)
+	for _ = 1, DRAW_TRIES do
+		local entry = WordBank.draw(kind, blocked, rng)
+		if not entry then
+			return nil
+		end
+		local clean = true
+		local texts: { string } = avoid or {}
+		local forms = table.clone(entry.aliases)
+		table.insert(forms, entry.word)
+		for _, text in texts do
+			for _, form in forms do
+				if string.find(Judge.normalize(text), Judge.normalize(form), 1, true) then
+					clean = false
+				end
+			end
+		end
+		if clean then
+			return entry
+		end
+		table.insert(blocked, entry.word) -- try another
+	end
+	return nil
+end
+
+-- Round start: one word for each participant (any old words are dropped).
+function WordService.assign(rng: Random)
+	for _, p in Match.participants do
+		table.clear(p.words)
+	end
+	for _, p in Match.participants do
+		local entry = draw(takenBy(nil), nil, rng)
+		if entry then
+			table.insert(p.words, { text = entry.word, aliases = entry.aliases, effectiveAt = 0 })
+		end
+	end
+end
+
+-- `player` gets a new word (said theirs, or the presenter re-drew it). Returns false if none could be drawn (the old
+-- one stays).
+function WordService.replace(player: Player, avoid: { string }?, rng: Random): boolean
+	local p = Match.participants[player]
+	if not p then
+		return false
+	end
+	local old = {}
+	for _, word in p.words do
+		table.insert(old, word.text)
+	end
+	local taken = takenBy(player)
+	for _, text in old do
+		table.insert(taken, text) -- never the same word again
+	end
+	-- If nothing avoids the screen texts, a new word still beats keeping the one just said.
+	local entry = draw(taken, avoid, rng) or draw(taken, nil, rng)
 	if not entry then
 		return false
 	end
-	table.insert(p.words, { text = entry.word, aliases = entry.aliases, effectiveAt = effectiveAt })
+	table.clear(p.words)
+	table.insert(p.words, { text = entry.word, aliases = entry.aliases, effectiveAt = Match.now() })
 	return true
 end
 
--- One noun per participant, none overlapping another.
-function WordService.assignFirst(rng: Random)
+-- Everyone's words go (between rounds, or on a public server in stage 1).
+function WordService.clear()
 	for _, p in Match.participants do
-		addWord(p, "noun", 0, rng)
+		table.clear(p.words)
 	end
 end
 
--- What `viewer` sees: { [userId] = { words = {...} | nil (own, while alive), count = n } }.
--- Words become visible at their effective time, so nobody can steer toward a word before it counts.
+-- What `viewer` sees: { [userId] = { words = {...} | nil (own, while playing), count = n } }.
 function WordService.payloadFor(viewer: Player)
-	local now = Match.now()
 	local result = {}
 	for player, p in Match.participants do
 		local visible = {}
 		for _, word in p.words do
-			if word.effectiveAt <= now then
-				table.insert(visible, word.text)
-			end
+			table.insert(visible, word.text)
 		end
-		local hidden = player == viewer and p.alive and Match.phase ~= "Result"
+		local hidden = player == viewer and p.alive and Match.phase ~= "Result" and #visible > 0 -- (no word: nothing to hide)
 		result[tostring(player.UserId)] = { words = if hidden then nil else visible, count = #visible }
 	end
 	return result
@@ -52,64 +125,6 @@ end
 function WordService.sendAll()
 	for _, player in Players:GetPlayers() do
 		WordService.send(player)
-	end
-end
-
--- Runs alongside the talk: warns, then adds a word to everyone alive. `stillTalking()` stops it.
--- Nothing else reacts to a new word (a card changing right then would hint at it).
--- A burst of eliminations (2+ in WORD_DELAY_WINDOW) pushes the step back, also after the warning, up to WORD_DELAY_MAX.
-function WordService.runSchedule(talkSeconds: number, stillTalking: () -> boolean, rng: Random)
-	local start = Match.now()
-	for index, fraction in Config.WORD_STEPS do
-		local wordCount = index + 1
-		local effectiveAt = start + talkSeconds * fraction
-		local delayed = 0
-		local warned = false
-		local lastCheck = os.clock()
-		while true do
-			if not stillTalking() then
-				return
-			end
-			local burst = Match.recentLaunches(Config.WORD_DELAY_WINDOW) >= 2
-			if burst and delayed < Config.WORD_DELAY_MAX and Match.now() >= effectiveAt - Config.WORD_WARNING then
-				local step = os.clock() - lastCheck
-				delayed += step
-				effectiveAt += step
-				if warned and math.floor(delayed) ~= math.floor(delayed - step) then
-					Net.toAll("WordWarn", { at = effectiveAt, count = wordCount }) -- the countdown moves back (1/s)
-				end
-			end
-			lastCheck = os.clock()
-			Match.nextWordWarnAt = if warned then math.huge else os.clock() + (effectiveAt - Config.WORD_WARNING - Match.now())
-			if effectiveAt > Match.endsAt - Config.WORD_WARNING then
-				Match.nextWordWarnAt = math.huge
-				if warned then
-					Net.toAll("WordWarn", { at = 0, count = wordCount }) -- cancelled
-				end
-				return -- too close to the end to matter
-			end
-			if not warned and Match.now() >= effectiveAt - Config.WORD_WARNING then
-				warned = true
-				Net.toAll("WordWarn", { at = effectiveAt, count = wordCount })
-			end
-			if warned then
-				Match.holdHost(effectiveAt - Match.now() + Config.HOLD_AFTER_WORD) -- the countdown has the stage
-			end
-			if Match.now() >= effectiveAt then
-				break -- checked above in this same step: still talking, no burst delay pending
-			end
-			task.wait(0.25)
-		end
-		Match.nextWordWarnAt = math.huge
-		for _, p in Match.participants do
-			if p.alive then
-				-- Drawn per player: one kind for everyone would let anyone read theirs off the others' heads.
-				local kind: "noun" | "habit" = if wordCount == 3 and rng:NextNumber() < Config.HABIT_WORD_CHANCE then "habit" else "noun"
-				addWord(p, kind, effectiveAt, rng)
-			end
-		end
-		WordService.sendAll()
-		Net.notice(string.format("금칙어가 %d개가 됐어요! 머리 위를 다시 확인하세요", wordCount))
 	end
 end
 

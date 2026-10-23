@@ -79,6 +79,11 @@ local function bubbleTargets(): { number }
 	return {}
 end
 
+local function nameOf(userId: number?): string
+	local other = userId and Players:GetPlayerByUserId(userId)
+	return if other then other.DisplayName else "?"
+end
+
 local function refresh()
 	local round = State.round
 	local me = State.myId()
@@ -103,6 +108,23 @@ local function refresh()
 	local chatMode = player:GetAttribute("BW_ChatMode") == true
 	PresenterPanel.setVolunteer(not playing and not chatMode, player:GetAttribute("BW_Volunteer") == true, presenting)
 	PresenterPanel.setPresenting(presenting)
+	-- Private servers: the presenter's banned-word list (re-draw during the assignment, ear judging in the round).
+	local wordMode = nil
+	if presenting and round.serverKind == "private" then
+		wordMode = if round.phase == "Assign" then "reroll" elseif round.phase == "Play" or round.phase == "Final" then "heard"
+			else nil
+	end
+	local rows = {}
+	if wordMode then
+		for _, userId in round.alive do
+			local entry = State.words[tostring(userId)]
+			local word = if entry and entry.words then table.concat(entry.words, ", ") else ""
+			if word ~= "" then
+				table.insert(rows, { userId = userId, name = nameOf(userId), word = word })
+			end
+		end
+	end
+	PresenterPanel.setWords(rows, wordMode)
 	refreshVoice()
 	applySeatLock()
 end
@@ -122,6 +144,12 @@ end, function(id)
 	remotes.PresenterPick:FireServer(id)
 end, function(index)
 	remotes.PresenterSound:FireServer(index)
+end, function(mode, userId)
+	if mode == "reroll" then
+		remotes.Reroll:FireServer(userId)
+	else
+		remotes.EarJudge:FireServer(userId)
+	end
 end)
 MissionPanel.build(function(questionId, choice)
 	remotes.MissionAnswer:FireServer(questionId, choice)
@@ -156,10 +184,6 @@ Speech.start(script) -- this LocalScript lives in PlayerScripts and survives res
 
 -- Server events.
 local stateSeen = false -- the first state after joining only sets things up (no "it started" toast for late joiners)
-local function nameOf(userId: number?): string
-	local other = userId and Players:GetPlayerByUserId(userId)
-	return if other then other.DisplayName else "?"
-end
 
 -- The presenter the last toast named (or the round started with). While the server looks for a replacement
 -- (`presenterPending`) nobody is named yet, so a change gets one toast with where it ended up.
@@ -223,8 +247,22 @@ remotes.Lever.OnClientEvent:Connect(function()
 	Fx.lever()
 end)
 
+-- Once out (or at the result), my own word comes in: say it once, since my head no longer shows a bubble.
+local myWordShown = false
+local MY_WORD_TOAST_DELAY = 2.5 -- seconds
 remotes.Words.OnClientEvent:Connect(function(words)
 	State.words = words
+	local mine = words[tostring(State.myId())]
+	if State.round.phase == "Assign" then
+		myWordShown = false
+	elseif not myWordShown and State.isParticipant(State.myId()) and mine and mine.words and #mine.words > 0 then
+		myWordShown = true
+		-- A little later, so the toasts of the same event (who flew, who is out) do not cover it.
+		local text = string.format(Config.TEXT.MY_WORD_WAS, table.concat(mine.words, ", "))
+		task.delay(MY_WORD_TOAST_DELAY, function()
+			Toast.show(text, "info")
+		end)
+	end
 	refresh()
 end)
 

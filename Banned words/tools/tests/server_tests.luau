@@ -1,5 +1,6 @@
--- Server tests on the real modules: judge range rule, settle, per-player habit draw (JudgeService and WordService are
--- kept for the speech judging of phase 2 and the banned words of bundle 5; the V3 round rules are in round_tests.luau).
+-- Server tests on the real modules: judge range rule, settle, banned words (JudgeService and WordService are
+-- kept for the speech judging of phase 2; WordService holds the V3 banned words; the V3 round rules are in
+-- round_tests.luau).
 local Config = require(node("Config"))
 local Match = require(node("Match"))
 local JudgeService = require(node("JudgeService"))
@@ -123,12 +124,13 @@ at(2031)
 check("2g only alive players are waited for", done ~= nil and done <= 2030.35 and #NetStub.notices == 0, tostring(done))
 JudgeService.setOpen(false)
 
----------------------------------------------------------------- 3. per-player habit draw
+---------------------------------------------------------------- 3. banned words (V3: one each, per-player habit draw)
 local HABITS = {}
-for _, w in { "진짜", "대박", "완전", "솔직히", "아무튼", "약간", "그러니까", "근데", "혹시", "제발", "미안", "엄청", "게임", "웃겨" } do
+for _, w in { "진짜", "대박", "완전", "솔직히", "아무튼", "약간", "그러니까", "근데", "혹시", "제발", "미안", "엄청", "웃겨" } do
 	HABITS[w] = true
 end
-local mixed, total, habitCount, allThree = 0, 0, 0, true
+local mixed, total, habitCount, oneEach, noOverlap = 0, 0, 0, true, true
+local JudgeForWords = require(node("Judge"))
 for seed = 1, 20 do
 	Match.resetRound()
 	local list = {}
@@ -138,18 +140,21 @@ for seed = 1, 20 do
 		Match.participants[p] = { player = p, alive = true, words = {} }
 	end
 	playerList = list
-	local rng = Random.new(seed * 7919)
-	WordService.assignFirst(rng)
-	local start = now
-	Match.phase = "Talk"
-	Match.endsAt = start + 200
-	task.spawn(WordService.runSchedule, 200, function() return now < Match.endsAt end, rng)
-	at(start + 201)
+	WordService.assign(Random.new(seed * 7919))
 	local habits = 0
+	local texts = {}
 	for _, p in Match.participants do
-		allThree = allThree and #p.words == 3
-		if p.words[3] and HABITS[p.words[3].text] then
-			habits += 1
+		oneEach = oneEach and #p.words == 1
+		if p.words[1] then
+			table.insert(texts, p.words[1].text)
+			if HABITS[p.words[1].text] then
+				habits += 1
+			end
+		end
+	end
+	for i = 1, #texts do
+		for j = i + 1, #texts do
+			noOverlap = noOverlap and not JudgeForWords.overlaps(texts[i], texts[j])
 		end
 	end
 	total += 10
@@ -158,9 +163,46 @@ for seed = 1, 20 do
 		mixed += 1
 	end
 end
-check("3a every player got 3 words", allThree)
-check("3b kinds are mixed within matches (not one kind for all)", mixed >= 18, mixed .. "/20 matches mixed")
-check("3c about half the third words are habits", habitCount >= 70 and habitCount <= 130, habitCount .. "/" .. total)
+check("3a every player gets exactly one word, none overlapping another", oneEach and noOverlap)
+check("3b kinds are mixed within rounds (drawn per player, not one kind for all)", mixed >= 15, mixed .. "/20 rounds mixed")
+check("3c about HABIT_WORD_CHANCE of the words are habits", habitCount >= total * (Config.HABIT_WORD_CHANCE - 0.12)
+	and habitCount <= total * (Config.HABIT_WORD_CHANCE + 0.12), habitCount .. "/" .. total)
+do
+	local someone = playerList[1]
+	local before = Match.participants[someone].words[1].text
+	local okReplace = true
+	for k = 1, 30 do
+		WordService.replace(someone, { "오늘의 문제: 사과와 바나나와 치킨" }, Random.new(k))
+		local word = Match.participants[someone].words[1].text
+		okReplace = okReplace and #Match.participants[someone].words == 1 and word ~= before
+			and not string.find("오늘의문제:사과와바나나와치킨", word, 1, true)
+		for other, p in Match.participants do
+			if other ~= someone then
+				okReplace = okReplace and not JudgeForWords.overlaps(word, p.words[1].text)
+			end
+		end
+		before = word
+	end
+	check("3d a new word: one word, never the old one, nowhere in the screen texts, overlapping nobody", okReplace)
+	Match.phase = "Play"
+	local seen = WordService.payloadFor(someone)
+	local other = playerList[2]
+	check("3e an alive player sees everyone's word but their own", seen[tostring(someone.UserId)].words == nil
+		and seen[tostring(other.UserId)].words[1] == Match.participants[other].words[1].text)
+	Match.participants[someone].alive = false
+	local outView = WordService.payloadFor(someone)
+	Match.participants[someone].alive = true
+	local spectator = fakePlayer(999)
+	local specView = WordService.payloadFor(spectator)
+	Match.phase = "Result"
+	local resultView = WordService.payloadFor(someone)
+	check("3f out players and spectators (and the presenter) see every word; the result shows your own",
+		outView[tostring(someone.UserId)].words ~= nil and specView[tostring(someone.UserId)].words ~= nil
+		and resultView[tostring(someone.UserId)].words ~= nil)
+	WordService.clear()
+	check("3g clear drops every word", #Match.participants[someone].words == 0)
+	Match.phase = "Lobby"
+end
 
 ---------------------------------------------------------------- 4. fixed texts never contain a word-bank word
 -- Players may read them aloud, so the same rule as the judge applies (tools/check_content.luau does this in Studio).

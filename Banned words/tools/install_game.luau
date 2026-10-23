@@ -80,14 +80,11 @@ return {
 	TEST_FAIL_CHANCE = 0.3,
 	TEST_FINAL_FAIL_CHANCE = 0.4,
 
-	-- V2 word schedule and speech judging (WordService / JudgeService). Not used by the V3 round until the banned
-	-- words come back (bundle 5) and speech judging (phase 2); kept for those modules and their tests.
-	WORD_STEPS = { 0.30, 0.65 },
-	WORD_WARNING = 10, -- seconds of notice before a new word takes effect
-	WORD_DELAY_WINDOW = 30, -- two or more launches in this window push the next word back (at most WORD_DELAY_MAX)
-	WORD_DELAY_MAX = 30,
-	HOLD_AFTER_WORD = 8,
-	HABIT_WORD_CHANCE = 0.5, -- per player: chance that a word is a speech habit (진짜, 대박 ...) instead of a noun
+	-- Banned words (docs/DESIGN_V3.md §6; bundle 5a): one each; per player, a speech habit with this chance.
+	HABIT_WORD_CHANCE = 0.3, -- per player: chance that a word is a speech habit (진짜, 대박 ...) instead of a noun
+	ASSIGN_REROLL_SECONDS = 15, -- the assignment with words and a presenter: time to re-draw words (private servers)
+	EAR_COOLDOWN = 1, -- seconds between two "I heard a banned word" presses of the presenter
+	-- Speech judging (JudgeService, phase 2 public servers): kept for that module and its tests.
 	-- Speech still counts if it began before the moment the round was decided and ended no later than END_TOLERANCE
 	-- after it; judging waits until every alive player's client says that speech has been sent (SETTLE_MAX at most).
 	END_TOLERANCE = 0,
@@ -226,6 +223,11 @@ return {
 		VOTE_ABSTAIN = "안 들려요",
 		NOBODY_FLUNG = "아무도 안 날아가요",
 		FLUNG = "%s 날아가요!",
+		EAR_HIT = "🔔 금칙어! %s",
+		MY_WORD_WAS = "내 금칙어는 '%s'였어요",
+		WORDS_TITLE = "금칙어 명단",
+		WORDS_REROLL = "다시 뽑기",
+		WORDS_HEARD = "🔔 들었다",
 		AFK_OUT = "%s 님은 두 번 연속 답하지 않아 관전으로 바뀌었어요",
 		SOUND_DRUMROLL = "두구두구",
 		SOUND_APPLAUSE = "박수",
@@ -441,13 +443,10 @@ local Match = {
 	startedWith = 0,
 	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
 	chatJoin = {} :: { [Player]: boolean }, -- joins by text chat instead (ChatService decides who may)
-	-- Speech judging and the V2 word schedule (JudgeService / WordService, back in phase 2 / bundle 5):
+	-- Speech judging (JudgeService, phase 2):
 	talkStartedAt = math.huge, -- Match.now() when the talk began; speech from before it is ignored
 	cutoffAt = math.huge, -- Match.now() when the round is decided; later speech is ignored
 	lastActivityAt = 0, -- os.clock() of the last speech heard from an alive participant
-	launches = {} :: { number }, -- os.clock() of each launch this round
-	hostHeldUntil = 0, -- os.clock(): the word schedule waits until then
-	nextWordWarnAt = math.huge, -- os.clock() of the next (public, scheduled) word warning
 }
 
 function Match.now(): number
@@ -499,23 +498,6 @@ function Match.eligiblePlayers(): { Player }
 	return list
 end
 
--- The word schedule waits `seconds` before its next step (V2; WordService).
-function Match.holdHost(seconds: number)
-	Match.hostHeldUntil = math.max(Match.hostHeldUntil, os.clock() + seconds)
-end
-
--- Launches in the last `seconds` (V2: the word schedule waits after a burst of launches).
-function Match.recentLaunches(seconds: number): number
-	local count = 0
-	local now = os.clock()
-	for _, at in Match.launches do
-		if now - at <= seconds then
-			count += 1
-		end
-	end
-	return count
-end
-
 function Match.payload()
 	local ids, alive, lives = {}, {}, {}
 	for player, p in Match.participants do
@@ -562,14 +544,11 @@ end
 -- Clears everything that belongs to one round.
 function Match.resetRound()
 	table.clear(Match.participants)
-	table.clear(Match.launches)
 	Match.startedWith = 0
 	Match.presenter = nil
 	Match.presenterPending = false
 	Match.talkStartedAt = math.huge
 	Match.cutoffAt = math.huge
-	Match.hostHeldUntil = 0
-	Match.nextWordWarnAt = math.huge
 end
 
 return Match
@@ -597,8 +576,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 --   Reaction    emoji shown above a player
 --   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
 --   Splash      that player hit the water: { userId, position }
--- Kept for the speech judging and the banned words (JudgeService / WordService, not wired in V3 until phase 2 /
--- bundle 5): Words, WordWarn, Settle (server -> client), Transcript, VoicePing, Settled (client -> server).
+--   Words       to each player: the banned words they may see (WordService.payloadFor; bundle 5a)
+--   (client -> server: EarJudge (userId) the presenter heard a banned word, Reroll (userId) a new word; private servers)
+-- Kept for the speech judging (JudgeService, phase 2): Settle (server -> client), Transcript, VoicePing, Settled.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = {}
@@ -606,7 +586,8 @@ local Net = {}
 local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
 	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer", "Lever",
-	"Words", "WordWarn", "Settle", "Transcript", "VoicePing", "Settled",
+	"EarJudge", "Reroll",
+	"Words", "Settle", "Transcript", "VoicePing", "Settled",
 }
 
 local folder: Folder
@@ -661,8 +642,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "RoundService"; s.Source = [
 --   -> Final (sudden death) -> Result -> Countdown (quick rematch) ...
 -- Rules live in the services: lives in LifeService, the time budget and the final trigger in Timeline, missions in
 -- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
--- join by chat in ChatService, the presenter in PresenterService, score in Scores. Up to bundle 4a: no banned words
--- yet; the missions are the quiz (also the final) and the roulette (plus the Studio-only test mission).
+-- join by chat in ChatService, the presenter in PresenterService, banned words in WordService, score in Scores.
+-- Up to bundle 5a: banned words on private servers (stage 1), judged by the presenter's ear; the missions are the quiz
+-- (also the final), the roulette, "a word to everyone" (plus the Studio-only test mission).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -674,6 +656,7 @@ local services = script.Parent:WaitForChild("services")
 local LifeService = require(services:WaitForChild("LifeService"))
 local Timeline = require(services:WaitForChild("Timeline"))
 local MissionRunner = require(services:WaitForChild("MissionRunner"))
+local WordService = require(services:WaitForChild("WordService"))
 local SeatService = require(services:WaitForChild("SeatService"))
 local SpectatorService = require(services:WaitForChild("SpectatorService"))
 local VoiceService = require(services:WaitForChild("VoiceService"))
@@ -716,8 +699,14 @@ local function detectServerKind(): string
 	return if game.PrivateServerOwnerId ~= 0 then "private" else "public"
 end
 
+-- Banned words play on private servers in stage 1 (docs/DESIGN_V3.md §3); public servers get them in stage 2.
+local function wordsOn(): boolean
+	return Match.serverKind == "private"
+end
+
 -- Tells everyone who lost a life or is out (one message per event, so the toast names them together; `final`: they
 -- all fell at once and play the final among themselves).
+
 local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean)
 	local list = {}
 	for _, outcome in outcomes do
@@ -731,6 +720,9 @@ local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: bo
 	Net.toAll("LifeLost", { reason = reason, players = list, final = final })
 	refreshSpeakers()
 	Match.broadcast()
+	if wordsOn() then
+		WordService.sendAll() -- who is out now sees every word, their own too
+	end
 end
 
 -- Launches everyone who lost a life. Players who are out reach the stands after their flight (onFlightOver), or
@@ -914,26 +906,58 @@ end
 -- Final: sudden-death questions for the survivors until one is left or FINAL_MAX_SECONDS have passed (a question
 -- begun before that is played to its end); a question everyone gets wrong puts nobody out. A question that breaks
 -- ends the final (the survivors share the win).
+-- The final's ear judgments go into the bucket of the question they were pressed in (`finalHits`, a fresh table per
+-- question; nil when no question is coming). A closed bucket takes no late arrivals.
+local finalHits: { Player }? = nil
+local pendingIn: { [{ Player }]: number } = {} -- bucket -> judgments pressed into it whose lever is still moving
+local closedBuckets: { [{ Player }]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+
+-- A final question is over: its bucket is swapped for a new one, then the judgments pressed during it land (at most a
+-- lever's time) before it is closed and judged.
+local function closeBucket(): { Player }
+	local bucket = finalHits or {}
+	finalHits = {}
+	local deadline = os.clock() + Config.LEVER_SECONDS + 0.2
+	while (pendingIn[bucket] or 0) > 0 and os.clock() < deadline do
+		task.wait(0.05)
+	end
+	closedBuckets[bucket] = true
+	pendingIn[bucket] = nil
+	return bucket
+end
+
 local function playFinal(myRound: number)
 	local mission = MissionRunner.finalMission()
 	if not mission or #Match.aliveList() < 2 or Match.roundId ~= myRound then
 		return
 	end
+	if toFinal and wordsOn() then
+		-- Everyone left fell at once: they play the final with new words (docs/DESIGN_V3.md §2).
+		for _, player in Match.aliveList() do
+			WordService.replace(player, nil, rng)
+		end
+		WordService.sendAll()
+	end
+	finalHits = {}
 	Match.setPhase("Final", Config.FINAL_MAX_SECONDS, Config.TEXT.FINAL)
 	local deadline = os.clock() + Config.FINAL_MAX_SECONDS
 	local function settled(): boolean
 		return #Match.aliveList() < 2 -- the others left: the last one wins
 	end
 	while not settled() and os.clock() < deadline and Match.roundId == myRound do
-		local wrong: { Player } = {}
+		-- Wrong answers and banned words heard during this question are out together (§2 "동시 탈락").
 		local ok, played = MissionRunner.run(mission, missionCtx(myRound, true, function(players, _key)
+			local hits = finalHits or {}
 			for _, player in players do
-				if not table.find(wrong, player) then
-					table.insert(wrong, player)
+				if not table.find(hits, player) then
+					table.insert(hits, player)
 				end
 			end
+			finalHits = hits
 		end, settled))
+		local wrong = closeBucket()
 		if not ok or not played or Match.roundId ~= myRound or settled() then
+			finalHits = nil
 			return -- (a final that cannot ask anything more: the survivors share the win)
 		end
 		local alive = Match.aliveList()
@@ -947,10 +971,14 @@ local function playFinal(myRound: number)
 			Net.notice(Config.TEXT.ALL_WRONG)
 		elseif #out > 0 then
 			announce(LifeService.eliminate(out), "final", false)
+			if os.clock() >= deadline or settled() then
+				finalHits = nil -- no question is coming: ear judgments are closed before the last flights land
+			end
 			waitFlights()
 		end
 		task.wait() -- every question yields at least once, even one that returns at once
 	end
+	finalHits = nil
 end
 
 -- Who won (everyone still in) and who presented to the end, with the session score.
@@ -1049,13 +1077,19 @@ local function runRound()
 	end
 	Match.startedWith = #Match.aliveList()
 	LifeService.beginRound()
+	if wordsOn() then
+		WordService.assign(rng)
+	end
 	if Match.presenter then
 		PresenterService.place(Match.presenter)
 	end
 	SpectatorService.beginRound()
 	VoiceService.setSilenced(chatIds)
 	refreshSpeakers()
-	Match.setPhase("Assign", Config.ASSIGN_TIME, string.format(Config.TEXT.ASSIGN, Config.LIVES))
+	-- With words and a presenter the assignment lasts longer: the presenter may re-draw words (§2 step 4).
+	local assignSeconds = if wordsOn() and Match.presenter then Config.ASSIGN_REROLL_SECONDS else Config.ASSIGN_TIME
+	Match.setPhase("Assign", assignSeconds, string.format(Config.TEXT.ASSIGN, Config.LIVES))
+	WordService.sendAll() -- (after the Assign state: clients clear their words on the Countdown state)
 	waitPhase()
 
 	playMain(myRound)
@@ -1069,6 +1103,9 @@ local function runRound()
 	PresenterService.endRound()
 	openVoices()
 	Match.setPhase("Result", Config.RESULT_TIME, text)
+	if wordsOn() then
+		WordService.sendAll() -- the result shows everyone their own word too
+	end
 	waitPhase()
 	cleanup()
 	lastEndedAt = os.clock()
@@ -1112,6 +1149,9 @@ local function onPresenterChange(_reason: PresenterService.Change, old: Player?,
 	end
 	refreshSpeakers()
 	Match.broadcast()
+	if wordsOn() then
+		WordService.sendAll()
+	end
 end
 
 local function onSync(player: Player)
@@ -1119,6 +1159,69 @@ local function onSync(player: Player)
 	ChatService.sendAccess(player)
 	PresenterService.sendMenu(player)
 	MissionRunner.sendScreen(player)
+	WordService.send(player)
+end
+
+-- The presenter heard `target` say their banned word (private servers, docs/DESIGN_V3.md §3-4): the lever, then a
+-- launch and a new word at once (no rescue for ear judgments). In the final the hit joins the current question's
+-- wrong answers (they go out together).
+local earEvents = 0
+-- Whether an ear judgment may count now: the main game not yet decided, or a final question still to come; the
+-- player alive and on the ground (a result after the outcome is fixed is dropped, §2).
+local function earOpen(target: Player): boolean
+	if not wordsOn() or not Match.isAlive(target) or SeatService.isFlying(target) then
+		return false
+	end
+	if Match.phase == "Play" then
+		return not mainSettled()
+	end
+	-- The final: while questions go on (two or more left; one left has won).
+	return Match.phase == "Final" and finalHits ~= nil and #Match.aliveList() >= 2
+end
+
+local function onHeard(target: Player)
+	if not earOpen(target) then
+		return
+	end
+	earEvents += 1
+	local event = "ear" .. earEvents
+	local myRound = Match.roundId
+	local pressedIn = Match.phase -- the rule of the stage it was heard in (§4); a stage change meanwhile drops it
+	local bucket = if pressedIn == "Final" then finalHits else nil -- (the final question it was heard in)
+	if bucket then
+		pendingIn[bucket] = (pendingIn[bucket] or 0) + 1
+	end
+	Net.toAll("Lever", {})
+	task.delay(Config.LEVER_SECONDS, function()
+		if bucket then
+			pendingIn[bucket] = (pendingIn[bucket] or 1) - 1
+			if closedBuckets[bucket] then
+				return -- its question was judged already
+			end
+		end
+		if Match.roundId ~= myRound or Match.phase ~= pressedIn or not earOpen(target) then
+			return
+		end
+		Net.notice(string.format(Config.TEXT.EAR_HIT, target.DisplayName))
+		WordService.replace(target, MissionRunner.screenTexts(), rng)
+		if bucket then
+			if not table.find(bucket, target) then
+				table.insert(bucket, target)
+			end
+			WordService.sendAll()
+		else
+			failPlayers({ target }, event, "fail")
+			WordService.sendAll()
+		end
+	end)
+end
+
+-- The presenter re-draws `target`'s word during the assignment (private servers, one player at a time).
+local function onReroll(target: Player)
+	if wordsOn() and Match.phase == "Assign" and Match.participants[target] then
+		WordService.replace(target, nil, rng)
+		WordService.sendAll()
+	end
 end
 
 -- The player plays in or presents the round being played: their way of joining (voice or chat) holds until it is over.
@@ -1135,7 +1238,12 @@ function RoundService.start()
 	VoiceService.start()
 	Scores.start()
 	ChatService.start()
-	PresenterService.start(onPresenterChange, SeatService.isFlying)
+	PresenterService.start({
+		changed = onPresenterChange,
+		busy = SeatService.isFlying,
+		heard = onHeard,
+		reroll = onReroll,
+	})
 	MissionRunner.start()
 	LifeService.start(SeatService.isFlying)
 	SpectatorService.start(busy)
@@ -1489,7 +1597,8 @@ return QuizBank
 do local s = Instance.new("ModuleScript"); s.Name = "WordBank"; s.Source = [====[--!strict
 -- Word bank (version 2, server only, never replicated). Data + drawing only.
 -- Nouns: everyday 2-5 syllable words. Habits: speech habits for the third word (무한도전 세븐's '에이' idea).
--- Rules: no 1-syllable words; words that misheard in the 2026-10-17 STT probe (기린, 시계, 칠판) stay out.
+-- Rules: no 1-syllable words; words that misheard in the 2026-10-17 STT probe (기린, 시계, 칠판) stay out; words
+-- everyone says all round in V3 (의자, 수영장, 게임) stay out (docs/DESIGN_V3.md §6).
 -- Overlapping pairs (공원 / 놀이공원) may both be listed: draw() never puts overlapping words in play together.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -1511,11 +1620,11 @@ end
 add(NOUNS, "음식", { "치킨", "피자", "떡볶이", "라면", "김밥", "사과", "바나나", "아이스크림", "햄버거", "초콜릿", "삼겹살", "짜장면", "수박", "딸기", "만두", "케이크" })
 add(NOUNS, "동물", { "강아지", "고양이", "토끼", "호랑이", "코끼리", "원숭이", "펭귄", "거북이", "햄스터", "돌고래", "다람쥐", "앵무새" })
 add(NOUNS, "학교", { "숙제", "선생님", "교실", "시험", "연필", "지우개", "급식", "방학", "운동장", "공책", "체육", "졸업" })
-add(NOUNS, "물건", { "컴퓨터", "핸드폰", "의자", "책상", "우산", "냉장고", "텔레비전", "안경", "가방", "이어폰", "자전거", "지갑", "베개" })
-add(NOUNS, "장소", { "수영장", "놀이터", "병원", "편의점", "도서관", "바다", "공원", "영화관", "학원", "지하철", "놀이공원", "빵집", "미용실", "경찰서" })
+add(NOUNS, "물건", { "컴퓨터", "핸드폰", "책상", "우산", "냉장고", "텔레비전", "안경", "가방", "이어폰", "자전거", "지갑", "베개" })
+add(NOUNS, "장소", { "놀이터", "병원", "편의점", "도서관", "바다", "공원", "영화관", "학원", "지하철", "놀이공원", "빵집", "미용실", "경찰서" })
 add(NOUNS, "날씨", { "무지개", "눈사람", "장마", "태풍", "여름", "겨울", "봄비", "구름", "번개", "단풍", "소나기", "미세먼지" })
 add(NOUNS, "생활", { "월급", "용돈", "생일", "택배", "유튜브", "노래방", "주말", "여행", "사진", "선물", "계산서", "회의" })
-add(HABITS, "말버릇", { "진짜", "대박", "완전", "솔직히", "아무튼", "약간", "그러니까", "근데", "혹시", "제발", "미안", "엄청", "게임", "웃겨" })
+add(HABITS, "말버릇", { "진짜", "대박", "완전", "솔직히", "아무튼", "약간", "그러니까", "근데", "혹시", "제발", "미안", "엄청", "웃겨" })
 
 local function overlapsAny(word: string, taken: { string }): boolean
 	for _, other in taken do
@@ -2614,6 +2723,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionRunner"; s.Source = 
 -- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
 -- Bundle 4: the quiz (also the final), the roulette, "a word to everyone" (4b, only with a presenter), and the
 -- Studio-only test mission.
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -2899,6 +3009,34 @@ function MissionRunner.start()
 	end)
 end
 
+-- The texts on the mission screen now (a question and its choices, a topic): a new banned word must not appear in
+-- them (docs/DESIGN_V3.md §6).
+function MissionRunner.screenTexts(): { string }
+	local texts = {}
+	local shown = screenNow
+	if shown then
+		for _, key in { "question", "topic" } do
+			if typeof(shown[key]) == "string" then
+				table.insert(texts, shown[key])
+			end
+		end
+		if typeof(shown.choices) == "table" then
+			for _, choice in shown.choices do
+				table.insert(texts, tostring(choice))
+			end
+		end
+		if typeof(shown.ids) == "table" then -- names on the wheel, the performers, the vote (shown by name)
+			for _, userId in shown.ids do
+				local player = if typeof(userId) == "number" then Players:GetPlayerByUserId(userId) else nil
+				if player then
+					table.insert(texts, player.DisplayName)
+				end
+			end
+		end
+	end
+	return texts
+end
+
 -- A player asked for the whole state again: the mission screen too.
 function MissionRunner.sendScreen(player: Player)
 	if screenNow then
@@ -2917,8 +3055,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "PresenterService"; s.Source
 -- disqualifies on live servers; Studio allows it (GetChatGroupsAsync works only in Team Test there).
 -- During a round the presenter picks the next mission in the last PRESENTER_PICK_SECONDS of free talk and, in the
 -- one-word mission, who is launched (a menu of kind "judge"); a missed choice is made by the system (or a vote) and
--- PRESENTER_MISSES in a row hand the round to another presenter. The presenter also plays sound buttons and may step
--- down. A presenter who leaves or steps down is replaced by a volunteer who is not playing (not flying either, and
+-- PRESENTER_MISSES in a row hand the round to another presenter. The presenter also plays sound buttons, may step
+-- down, and on private servers judges banned words by ear ("EarJudge") and re-draws words at the start ("Reroll");
+-- this module checks who asks and how often, RoundService decides what happens. A presenter who leaves or steps down is replaced by a volunteer who is not playing (not flying either, and
 -- not someone who presented this round before), else the system runs the round. Who presents is Match.presenter;
 -- RoundService is told of every change during a round (voices, stands).
 local Players = game:GetService("Players")
@@ -2951,6 +3090,9 @@ local onChange: (Change, Player?, Player?) -> () = function(_reason, _old, _new)
 local unavailable: (Player) -> boolean = function(_player)
 	return false
 end
+local onHeard: (Player) -> () = function(_target) end
+local onReroll: (Player) -> () = function(_target) end
+local lastEar: { [Player]: number } = {}
 -- The open menu (one at a time).
 local menu: { kind: MenuKind, options: { Option }, endsAt: number, picked: string? }? = nil
 
@@ -3158,11 +3300,45 @@ local function setVolunteer(player: Player, on: boolean)
 	end
 end
 
--- changed(reason, old, new): the presenter changed during a round. isBusy(player): another service owns the player
--- now (flying), so they cannot take over.
-function PresenterService.start(changed: (Change, Player?, Player?) -> (), isBusy: (Player) -> boolean)
-	onChange = changed
-	unavailable = isBusy
+export type Hooks = {
+	changed: (Change, Player?, Player?) -> (), -- the presenter changed during a round
+	busy: (Player) -> boolean, -- another service owns the player now (flying), so they cannot take over
+	heard: (Player) -> (), -- the presenter heard this player say their banned word (private servers)
+	reroll: (Player) -> (), -- the presenter asks a new word for this player (private servers, at the start)
+}
+
+function PresenterService.start(hooks: Hooks)
+	onChange = hooks.changed
+	unavailable = hooks.busy
+	onHeard = hooks.heard
+	onReroll = hooks.reroll
+	-- The presenter names a player (by UserId) for an ear judgment or a re-draw; at most one press per EAR_COOLDOWN.
+	local function named(player: Player, userId: any): Player?
+		if player ~= Match.presenter or typeof(userId) ~= "number" or userId ~= userId then
+			return nil
+		end
+		local now = os.clock()
+		if now - (lastEar[player] or -math.huge) < Config.EAR_COOLDOWN then
+			return nil
+		end
+		local target = Players:GetPlayerByUserId(userId)
+		if target then
+			lastEar[player] = now -- (only a press that names someone uses up the cooldown)
+		end
+		return target
+	end
+	Net.listen("EarJudge", function(player, userId)
+		local target = named(player, userId)
+		if target then
+			onHeard(target)
+		end
+	end)
+	Net.listen("Reroll", function(player, userId)
+		local target = named(player, userId)
+		if target then
+			onReroll(target)
+		end
+	end)
 	Net.listen("Volunteer", function(player, on)
 		if typeof(on) ~= "boolean" then
 			return
@@ -3203,6 +3379,7 @@ function PresenterService.start(changed: (Change, Player?, Player?) -> (), isBus
 		presented[player] = nil
 		lastVolunteer[player] = nil
 		formers[player] = nil
+		lastEar[player] = nil
 		if Match.presenter == player and Match.inRound() then
 			task.spawn(function()
 				replace("left")
@@ -4145,47 +4322,120 @@ end
 return VoiceService
 ]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "WordService"; s.Source = [====[--!strict
--- Forbidden words: first word at the start, then one more for everyone alive at WORD_STEPS (max 3 words),
--- and what each viewer may see. Nobody ever receives their own words while alive.
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- Banned words (V3, docs/DESIGN_V3.md §6; bundle 5a): one word per participant, a speech habit (진짜, 대박 ...) with
+-- HABIT_WORD_CHANCE drawn for each player on their own (a kind shared by everyone could be read off the others'
+-- heads), never overlapping another word in play. A word is replaced after it was said, or by the presenter's re-draw;
+-- a new word also avoids `avoid` (the running mission's screen texts). What each viewer may see: everyone's words,
+-- except an alive participant's own (shown as hidden until the result). Stage 1 plays words on private servers only
+-- (RoundService decides); this module only keeps them in Match.participants.
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Judge = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Judge"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local Net = require(script.Parent.Parent:WaitForChild("Net"))
 local WordBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("WordBank"))
 
 local WordService = {}
 
-local function addWord(p: Match.Participant, kind: "noun" | "habit", effectiveAt: number, rng: Random): boolean
-	local entry = WordBank.draw(kind, Match.wordsInPlay(), rng)
+local DRAW_TRIES = 20 -- words tried before giving up on one that avoids the screen texts
+
+-- The words in play except `player`'s own (theirs is being replaced).
+local function takenBy(except: Player?): { string }
+	local list = {}
+	for player, p in Match.participants do
+		if player ~= except then
+			for _, word in p.words do
+				table.insert(list, word.text)
+			end
+		end
+	end
+	return list
+end
+
+-- A word for one player: their own kind draw, not overlapping `taken`, not inside any `avoid` text.
+local function draw(taken: { string }, avoid: { string }?, rng: Random): WordBank.Entry?
+	local kind: "noun" | "habit" = if rng:NextNumber() < Config.HABIT_WORD_CHANCE then "habit" else "noun"
+	local blocked = table.clone(taken)
+	for _ = 1, DRAW_TRIES do
+		local entry = WordBank.draw(kind, blocked, rng)
+		if not entry then
+			return nil
+		end
+		local clean = true
+		local texts: { string } = avoid or {}
+		local forms = table.clone(entry.aliases)
+		table.insert(forms, entry.word)
+		for _, text in texts do
+			for _, form in forms do
+				if string.find(Judge.normalize(text), Judge.normalize(form), 1, true) then
+					clean = false
+				end
+			end
+		end
+		if clean then
+			return entry
+		end
+		table.insert(blocked, entry.word) -- try another
+	end
+	return nil
+end
+
+-- Round start: one word for each participant (any old words are dropped).
+function WordService.assign(rng: Random)
+	for _, p in Match.participants do
+		table.clear(p.words)
+	end
+	for _, p in Match.participants do
+		local entry = draw(takenBy(nil), nil, rng)
+		if entry then
+			table.insert(p.words, { text = entry.word, aliases = entry.aliases, effectiveAt = 0 })
+		end
+	end
+end
+
+-- `player` gets a new word (said theirs, or the presenter re-drew it). Returns false if none could be drawn (the old
+-- one stays).
+function WordService.replace(player: Player, avoid: { string }?, rng: Random): boolean
+	local p = Match.participants[player]
+	if not p then
+		return false
+	end
+	local old = {}
+	for _, word in p.words do
+		table.insert(old, word.text)
+	end
+	local taken = takenBy(player)
+	for _, text in old do
+		table.insert(taken, text) -- never the same word again
+	end
+	-- If nothing avoids the screen texts, a new word still beats keeping the one just said.
+	local entry = draw(taken, avoid, rng) or draw(taken, nil, rng)
 	if not entry then
 		return false
 	end
-	table.insert(p.words, { text = entry.word, aliases = entry.aliases, effectiveAt = effectiveAt })
+	table.clear(p.words)
+	table.insert(p.words, { text = entry.word, aliases = entry.aliases, effectiveAt = Match.now() })
 	return true
 end
 
--- One noun per participant, none overlapping another.
-function WordService.assignFirst(rng: Random)
+-- Everyone's words go (between rounds, or on a public server in stage 1).
+function WordService.clear()
 	for _, p in Match.participants do
-		addWord(p, "noun", 0, rng)
+		table.clear(p.words)
 	end
 end
 
--- What `viewer` sees: { [userId] = { words = {...} | nil (own, while alive), count = n } }.
--- Words become visible at their effective time, so nobody can steer toward a word before it counts.
+-- What `viewer` sees: { [userId] = { words = {...} | nil (own, while playing), count = n } }.
 function WordService.payloadFor(viewer: Player)
-	local now = Match.now()
 	local result = {}
 	for player, p in Match.participants do
 		local visible = {}
 		for _, word in p.words do
-			if word.effectiveAt <= now then
-				table.insert(visible, word.text)
-			end
+			table.insert(visible, word.text)
 		end
-		local hidden = player == viewer and p.alive and Match.phase ~= "Result"
+		local hidden = player == viewer and p.alive and Match.phase ~= "Result" and #visible > 0 -- (no word: nothing to hide)
 		result[tostring(player.UserId)] = { words = if hidden then nil else visible, count = #visible }
 	end
 	return result
@@ -4198,64 +4448,6 @@ end
 function WordService.sendAll()
 	for _, player in Players:GetPlayers() do
 		WordService.send(player)
-	end
-end
-
--- Runs alongside the talk: warns, then adds a word to everyone alive. `stillTalking()` stops it.
--- Nothing else reacts to a new word (a card changing right then would hint at it).
--- A burst of eliminations (2+ in WORD_DELAY_WINDOW) pushes the step back, also after the warning, up to WORD_DELAY_MAX.
-function WordService.runSchedule(talkSeconds: number, stillTalking: () -> boolean, rng: Random)
-	local start = Match.now()
-	for index, fraction in Config.WORD_STEPS do
-		local wordCount = index + 1
-		local effectiveAt = start + talkSeconds * fraction
-		local delayed = 0
-		local warned = false
-		local lastCheck = os.clock()
-		while true do
-			if not stillTalking() then
-				return
-			end
-			local burst = Match.recentLaunches(Config.WORD_DELAY_WINDOW) >= 2
-			if burst and delayed < Config.WORD_DELAY_MAX and Match.now() >= effectiveAt - Config.WORD_WARNING then
-				local step = os.clock() - lastCheck
-				delayed += step
-				effectiveAt += step
-				if warned and math.floor(delayed) ~= math.floor(delayed - step) then
-					Net.toAll("WordWarn", { at = effectiveAt, count = wordCount }) -- the countdown moves back (1/s)
-				end
-			end
-			lastCheck = os.clock()
-			Match.nextWordWarnAt = if warned then math.huge else os.clock() + (effectiveAt - Config.WORD_WARNING - Match.now())
-			if effectiveAt > Match.endsAt - Config.WORD_WARNING then
-				Match.nextWordWarnAt = math.huge
-				if warned then
-					Net.toAll("WordWarn", { at = 0, count = wordCount }) -- cancelled
-				end
-				return -- too close to the end to matter
-			end
-			if not warned and Match.now() >= effectiveAt - Config.WORD_WARNING then
-				warned = true
-				Net.toAll("WordWarn", { at = effectiveAt, count = wordCount })
-			end
-			if warned then
-				Match.holdHost(effectiveAt - Match.now() + Config.HOLD_AFTER_WORD) -- the countdown has the stage
-			end
-			if Match.now() >= effectiveAt then
-				break -- checked above in this same step: still talking, no burst delay pending
-			end
-			task.wait(0.25)
-		end
-		Match.nextWordWarnAt = math.huge
-		for _, p in Match.participants do
-			if p.alive then
-				-- Drawn per player: one kind for everyone would let anyone read theirs off the others' heads.
-				local kind: "noun" | "habit" = if wordCount == 3 and rng:NextNumber() < Config.HABIT_WORD_CHANCE then "habit" else "noun"
-				addWord(p, kind, effectiveAt, rng)
-			end
-		end
-		WordService.sendAll()
-		Net.notice(string.format("금칙어가 %d개가 됐어요! 머리 위를 다시 확인하세요", wordCount))
 	end
 end
 
@@ -4344,6 +4536,11 @@ local function bubbleTargets(): { number }
 	return {}
 end
 
+local function nameOf(userId: number?): string
+	local other = userId and Players:GetPlayerByUserId(userId)
+	return if other then other.DisplayName else "?"
+end
+
 local function refresh()
 	local round = State.round
 	local me = State.myId()
@@ -4368,6 +4565,23 @@ local function refresh()
 	local chatMode = player:GetAttribute("BW_ChatMode") == true
 	PresenterPanel.setVolunteer(not playing and not chatMode, player:GetAttribute("BW_Volunteer") == true, presenting)
 	PresenterPanel.setPresenting(presenting)
+	-- Private servers: the presenter's banned-word list (re-draw during the assignment, ear judging in the round).
+	local wordMode = nil
+	if presenting and round.serverKind == "private" then
+		wordMode = if round.phase == "Assign" then "reroll" elseif round.phase == "Play" or round.phase == "Final" then "heard"
+			else nil
+	end
+	local rows = {}
+	if wordMode then
+		for _, userId in round.alive do
+			local entry = State.words[tostring(userId)]
+			local word = if entry and entry.words then table.concat(entry.words, ", ") else ""
+			if word ~= "" then
+				table.insert(rows, { userId = userId, name = nameOf(userId), word = word })
+			end
+		end
+	end
+	PresenterPanel.setWords(rows, wordMode)
 	refreshVoice()
 	applySeatLock()
 end
@@ -4387,6 +4601,12 @@ end, function(id)
 	remotes.PresenterPick:FireServer(id)
 end, function(index)
 	remotes.PresenterSound:FireServer(index)
+end, function(mode, userId)
+	if mode == "reroll" then
+		remotes.Reroll:FireServer(userId)
+	else
+		remotes.EarJudge:FireServer(userId)
+	end
 end)
 MissionPanel.build(function(questionId, choice)
 	remotes.MissionAnswer:FireServer(questionId, choice)
@@ -4421,10 +4641,6 @@ Speech.start(script) -- this LocalScript lives in PlayerScripts and survives res
 
 -- Server events.
 local stateSeen = false -- the first state after joining only sets things up (no "it started" toast for late joiners)
-local function nameOf(userId: number?): string
-	local other = userId and Players:GetPlayerByUserId(userId)
-	return if other then other.DisplayName else "?"
-end
 
 -- The presenter the last toast named (or the round started with). While the server looks for a replacement
 -- (`presenterPending`) nobody is named yet, so a change gets one toast with where it ended up.
@@ -4488,8 +4704,22 @@ remotes.Lever.OnClientEvent:Connect(function()
 	Fx.lever()
 end)
 
+-- Once out (or at the result), my own word comes in: say it once, since my head no longer shows a bubble.
+local myWordShown = false
+local MY_WORD_TOAST_DELAY = 2.5 -- seconds
 remotes.Words.OnClientEvent:Connect(function(words)
 	State.words = words
+	local mine = words[tostring(State.myId())]
+	if State.round.phase == "Assign" then
+		myWordShown = false
+	elseif not myWordShown and State.isParticipant(State.myId()) and mine and mine.words and #mine.words > 0 then
+		myWordShown = true
+		-- A little later, so the toasts of the same event (who flew, who is out) do not cover it.
+		local text = string.format(Config.TEXT.MY_WORD_WAS, table.concat(mine.words, ", "))
+		task.delay(MY_WORD_TOAST_DELAY, function()
+			Toast.show(text, "info")
+		end)
+	end
 	refresh()
 end)
 
@@ -6474,8 +6704,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "PresenterPanel"; s.Source =
 -- The presenter's controls (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23):
 --   - the "volunteer to present" button (row 3 under the status board), for anyone not playing the round;
 --   - while I present: the mission menu (right side, open during the last seconds of free talk; recommended missions
---     marked), the same menu for "who flies" after a one-word mission (bundle 4b: tap a name, then "날려!"), and the
---     sound buttons (bottom centre).
+--     marked), the same menu for "who flies" after a one-word mission (bundle 4b: tap a name, then "날려!"), the
+--     sound buttons (bottom centre), and on private servers the banned-word list (left side, bundle 5a): every alive
+--     player with their word and a button, "다시 뽑기" during the assignment, "🔔 들었다" during the round.
 -- It only shows what it is told and reports presses; the server checks every one of them.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -6493,6 +6724,10 @@ local menuTitle: TextLabel
 local menuList: Frame
 local flingButton: TextButton
 local soundBar: Frame
+local wordFrame: Frame
+local wordList: ScrollingFrame
+local wordKey = "" -- what the list shows now (rebuilt only when it changes)
+local onWordAction: (string, number) -> () = function(_mode, _userId) end
 local volunteered = false
 local menuEndsAt = 0
 local menuKind = "pick"
@@ -6515,9 +6750,14 @@ local function button(parent: Instance, text: string, width: number, height: num
 	return b
 end
 
--- onVolunteer(on), onPick(missionId), onSound(index): the player pressed one of the controls.
-function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> (), onSound: (number) -> ())
+export type WordRow = { userId: number, name: string, word: string }
+
+-- onVolunteer(on), onPick(missionId), onSound(index), onWord(mode, userId) ("reroll" / "heard"): the player pressed
+-- one of the controls.
+function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> (), onSound: (number) -> (),
+	onWord: (string, number) -> ())
 	onPickMission = onPick
+	onWordAction = onWord
 	volunteerButton = button(Style.gui(), TEXT.VOLUNTEER, 240, 34)
 	volunteerButton.Name = "Volunteer"
 	volunteerButton.AnchorPoint = Vector2.new(0.5, 0)
@@ -6587,6 +6827,87 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 		local b = button(soundBar, (TEXT :: any)[entry.text] or entry.text, 90, 44)
 		b.Activated:Connect(function()
 			onSound(index)
+		end)
+	end
+
+	wordFrame = Style.panel(Style.gui(), Style.PANEL, 0.15, 14)
+	wordFrame.Name = "WordList"
+	wordFrame.AnchorPoint = Vector2.new(0, 0.5)
+	wordFrame.Position = UDim2.new(0, 16, 0.55, 0)
+	wordFrame.Size = UDim2.fromOffset(300, 0)
+	wordFrame.AutomaticSize = Enum.AutomaticSize.Y
+	wordFrame.Visible = false
+	local wordPad = Instance.new("UIPadding")
+	wordPad.PaddingTop = UDim.new(0, 8)
+	wordPad.PaddingBottom = UDim.new(0, 8)
+	wordPad.PaddingLeft = UDim.new(0, 8)
+	wordPad.PaddingRight = UDim.new(0, 8)
+	wordPad.Parent = wordFrame
+	local wordLayout = Instance.new("UIListLayout")
+	wordLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	wordLayout.Padding = UDim.new(0, 6)
+	wordLayout.Parent = wordFrame
+	local wordTitle = Style.label(wordFrame, Style.BOLD, 18, Style.AMBER)
+	wordTitle.Size = UDim2.new(1, 0, 0, 22)
+	wordTitle.Text = TEXT.WORDS_TITLE
+	wordTitle.LayoutOrder = 0
+	-- Scrolls when ten names do not fit a short screen (the list's height is set in setWords).
+	wordList = Instance.new("ScrollingFrame")
+	wordList.BackgroundTransparency = 1
+	wordList.BorderSizePixel = 0
+	wordList.ScrollBarThickness = 6
+	wordList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	wordList.CanvasSize = UDim2.new()
+	wordList.Size = UDim2.fromScale(1, 0)
+	wordList.LayoutOrder = 1
+	wordList.Parent = wordFrame
+	local listLayout2 = Instance.new("UIListLayout")
+	listLayout2.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout2.Padding = UDim.new(0, 4)
+	listLayout2.Parent = wordList
+end
+
+-- The banned-word list (private servers, while I present): `mode` "reroll" (assignment) or "heard" (round), nil
+-- hides it.
+function PresenterPanel.setWords(rows: { WordRow }, mode: string?)
+	wordFrame.Visible = mode ~= nil and #rows > 0
+	if not mode then
+		return
+	end
+	local parts = { mode }
+	for _, row in rows do
+		table.insert(parts, row.userId .. ":" .. row.name .. ":" .. row.word)
+	end
+	local key = table.concat(parts, "|")
+	local camera = workspace.CurrentCamera
+	local room = if camera then camera.ViewportSize.Y * 0.5 else 300
+	wordList.Size = UDim2.new(1, 0, 0, math.min(#rows * 40, math.max(room, 120))) -- (each refresh: the window may change)
+	if key == wordKey then
+		return
+	end
+	wordKey = key
+	for _, child in wordList:GetChildren() do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+	for i, row in rows do
+		local line = Instance.new("Frame")
+		line.BackgroundTransparency = 1
+		line.Size = UDim2.new(1, 0, 0, 36)
+		line.LayoutOrder = i
+		line.Parent = wordList
+		local label = Style.label(line, Style.BOLD, 18, Style.WHITE)
+		label.Size = UDim2.new(1, -112, 1, 0)
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.Text = row.name .. " · " .. row.word
+		local action = button(line, if mode == "reroll" then TEXT.WORDS_REROLL else TEXT.WORDS_HEARD, 104, 32)
+		action.AnchorPoint = Vector2.new(1, 0.5)
+		action.Position = UDim2.fromScale(1, 0.5)
+		action.TextSize = 16
+		action.BackgroundColor3 = if mode == "reroll" then Style.PANEL else Style.RED
+		action.Activated:Connect(function()
+			onWordAction(mode, row.userId)
 		end)
 	end
 end

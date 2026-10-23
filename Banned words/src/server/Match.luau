@@ -37,13 +37,10 @@ local Match = {
 	startedWith = 0,
 	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
 	chatJoin = {} :: { [Player]: boolean }, -- joins by text chat instead (ChatService decides who may)
-	-- Speech judging and the V2 word schedule (JudgeService / WordService, back in phase 2 / bundle 5):
+	-- Speech judging (JudgeService, phase 2):
 	talkStartedAt = math.huge, -- Match.now() when the talk began; speech from before it is ignored
 	cutoffAt = math.huge, -- Match.now() when the round is decided; later speech is ignored
 	lastActivityAt = 0, -- os.clock() of the last speech heard from an alive participant
-	launches = {} :: { number }, -- os.clock() of each launch this round
-	hostHeldUntil = 0, -- os.clock(): the word schedule waits until then
-	nextWordWarnAt = math.huge, -- os.clock() of the next (public, scheduled) word warning
 }
 
 function Match.now(): number
@@ -95,23 +92,6 @@ function Match.eligiblePlayers(): { Player }
 	return list
 end
 
--- The word schedule waits `seconds` before its next step (V2; WordService).
-function Match.holdHost(seconds: number)
-	Match.hostHeldUntil = math.max(Match.hostHeldUntil, os.clock() + seconds)
-end
-
--- Launches in the last `seconds` (V2: the word schedule waits after a burst of launches).
-function Match.recentLaunches(seconds: number): number
-	local count = 0
-	local now = os.clock()
-	for _, at in Match.launches do
-		if now - at <= seconds then
-			count += 1
-		end
-	end
-	return count
-end
-
 function Match.payload()
 	local ids, alive, lives = {}, {}, {}
 	for player, p in Match.participants do
@@ -158,14 +138,11 @@ end
 -- Clears everything that belongs to one round.
 function Match.resetRound()
 	table.clear(Match.participants)
-	table.clear(Match.launches)
 	Match.startedWith = 0
 	Match.presenter = nil
 	Match.presenterPending = false
 	Match.talkStartedAt = math.huge
 	Match.cutoffAt = math.huge
-	Match.hostHeldUntil = 0
-	Match.nextWordWarnAt = math.huge
 end
 
 return Match

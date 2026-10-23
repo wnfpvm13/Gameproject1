@@ -67,14 +67,11 @@ return {
 	TEST_FAIL_CHANCE = 0.3,
 	TEST_FINAL_FAIL_CHANCE = 0.4,
 
-	-- V2 word schedule and speech judging (WordService / JudgeService). Not used by the V3 round until the banned
-	-- words come back (bundle 5) and speech judging (phase 2); kept for those modules and their tests.
-	WORD_STEPS = { 0.30, 0.65 },
-	WORD_WARNING = 10, -- seconds of notice before a new word takes effect
-	WORD_DELAY_WINDOW = 30, -- two or more launches in this window push the next word back (at most WORD_DELAY_MAX)
-	WORD_DELAY_MAX = 30,
-	HOLD_AFTER_WORD = 8,
-	HABIT_WORD_CHANCE = 0.5, -- per player: chance that a word is a speech habit (진짜, 대박 ...) instead of a noun
+	-- Banned words (docs/DESIGN_V3.md §6; bundle 5a): one each; per player, a speech habit with this chance.
+	HABIT_WORD_CHANCE = 0.3, -- per player: chance that a word is a speech habit (진짜, 대박 ...) instead of a noun
+	ASSIGN_REROLL_SECONDS = 15, -- the assignment with words and a presenter: time to re-draw words (private servers)
+	EAR_COOLDOWN = 1, -- seconds between two "I heard a banned word" presses of the presenter
+	-- Speech judging (JudgeService, phase 2 public servers): kept for that module and its tests.
 	-- Speech still counts if it began before the moment the round was decided and ended no later than END_TOLERANCE
 	-- after it; judging waits until every alive player's client says that speech has been sent (SETTLE_MAX at most).
 	END_TOLERANCE = 0,
@@ -213,6 +210,11 @@ return {
 		VOTE_ABSTAIN = "안 들려요",
 		NOBODY_FLUNG = "아무도 안 날아가요",
 		FLUNG = "%s 날아가요!",
+		EAR_HIT = "🔔 금칙어! %s",
+		MY_WORD_WAS = "내 금칙어는 '%s'였어요",
+		WORDS_TITLE = "금칙어 명단",
+		WORDS_REROLL = "다시 뽑기",
+		WORDS_HEARD = "🔔 들었다",
 		AFK_OUT = "%s 님은 두 번 연속 답하지 않아 관전으로 바뀌었어요",
 		SOUND_DRUMROLL = "두구두구",
 		SOUND_APPLAUSE = "박수",

@@ -9,6 +9,7 @@
 -- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
 -- Bundle 4: the quiz (also the final), the roulette, "a word to everyone" (4b, only with a presenter), and the
 -- Studio-only test mission.
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -292,6 +293,34 @@ function MissionRunner.start()
 			open.answers[player] = choice
 		end
 	end)
+end
+
+-- The texts on the mission screen now (a question and its choices, a topic): a new banned word must not appear in
+-- them (docs/DESIGN_V3.md §6).
+function MissionRunner.screenTexts(): { string }
+	local texts = {}
+	local shown = screenNow
+	if shown then
+		for _, key in { "question", "topic" } do
+			if typeof(shown[key]) == "string" then
+				table.insert(texts, shown[key])
+			end
+		end
+		if typeof(shown.choices) == "table" then
+			for _, choice in shown.choices do
+				table.insert(texts, tostring(choice))
+			end
+		end
+		if typeof(shown.ids) == "table" then -- names on the wheel, the performers, the vote (shown by name)
+			for _, userId in shown.ids do
+				local player = if typeof(userId) == "number" then Players:GetPlayerByUserId(userId) else nil
+				if player then
+					table.insert(texts, player.DisplayName)
+				end
+			end
+		end
+	end
+	return texts
 end
 
 -- A player asked for the whole state again: the mission screen too.

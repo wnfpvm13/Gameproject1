@@ -1231,4 +1231,140 @@ do
 	finish(since)
 end
 
+---------------------------------------------------------------- 13. banned words on private servers (bundle 5a)
+do
+	local volunteer = NetStub.listeners.Volunteer
+	local ear = NetStub.listeners.EarJudge
+	local reroll = NetStub.listeners.Reroll
+	local function wordOf(player)
+		local p = Match.participants[player]
+		return p and p.words[1] and p.words[1].text
+	end
+	local function lastWordsTo(player, since)
+		for i = #NetStub.sent, 1, -1 do
+			local m = NetStub.sent[i]
+			if m.at < since then
+				break
+			end
+			if m.name == "Words" and m.to == player then
+				return m.payload
+			end
+		end
+		return nil
+	end
+
+	-- 13A: a public round has no words.
+	local pub = newPlayers(2)
+	workspaceAttributes.BW_ServerKind = "public"
+	local sincePub = now
+	begin(pub, 10, nil, nil)
+	local pubView = lastWordsTo(pub[1], sincePub)
+	check("13a public servers (stage 1): no banned words, and nothing shows as hidden (no \"???\")", wordOf(pub[1]) == nil
+		and wordOf(pub[2]) == nil and pubView ~= nil and pubView[tostring(pub[1].UserId)].words ~= nil)
+	NetStub.listeners.DevFling(pub[2], "out")
+	finish(sincePub)
+
+	-- 13B: private, a presenter and three players: words at the start, a longer assignment, re-draws by the presenter.
+	workspaceAttributes.BW_ServerKind = "private"
+	local ps = newPlayers(4) -- ps[1] presents
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(ps[1], true)
+	local since = now
+	Scripted.expectedSeconds, Scripted.pick, Scripted.finalPick, Scripted.secondPick = 10, nil, nil, nil
+	Scripted.missed, Scripted.judge, Scripted.judged = nil, nil, {}
+	playerList = ps
+	advanceUntil(function() return Match.phase == "Assign" end, 120)
+	local assignAt = now
+	local before = wordOf(ps[2])
+	local seenByPlayer = lastWordsTo(ps[2], since)
+	reroll(ps[3], ps[2].UserId) -- not the presenter
+	local afterStranger = wordOf(ps[2])
+	reroll(ps[1], ps[2].UserId)
+	local afterPresenter = wordOf(ps[2])
+	check("13b private servers: one word each at the start, own word hidden", before ~= nil and wordOf(ps[3]) ~= nil
+		and wordOf(ps[4]) ~= nil and seenByPlayer ~= nil and seenByPlayer[tostring(ps[2].UserId)].words == nil
+		and seenByPlayer[tostring(ps[3].UserId)].words ~= nil)
+	check("13c the presenter (only) re-draws a word during the assignment", afterStranger == before and afterPresenter ~= nil
+		and afterPresenter ~= before)
+	advanceUntil(function() return Match.phase == "Play" end, 60)
+	check("13d with a presenter the assignment lasts ASSIGN_REROLL_SECONDS", math.abs(now - assignAt - Config.ASSIGN_REROLL_SECONDS) < 1)
+	-- Ear judging: the presenter heard ps[3]'s word.
+	at(now + 2)
+	local word3 = wordOf(ps[3])
+	local earAt = now
+	ear(ps[2], ps[3].UserId) -- not the presenter
+	ear(ps[1], ps[3].UserId)
+	ear(ps[1], ps[4].UserId) -- within EAR_COOLDOWN: ignored
+	local levers = #sent("Lever", earAt)
+	at(now + Config.LEVER_SECONDS + 0.2)
+	check("13e the presenter's ear judgment: the lever, then a life and a new word (no rescue); others' presses are ignored",
+		levers == 1 and Match.participants[ps[3]].lives == Config.LIVES - 1 and wordOf(ps[3]) ~= word3
+		and Match.participants[ps[4]].lives == Config.LIVES)
+	-- Everyone falls at once three times -> the three play the final with new words; a word heard in the final is out.
+	Scripted.pick = function(_run, alive)
+		return alive
+	end
+	local wordsBefore = { wordOf(ps[2]), wordOf(ps[4]) }
+	-- The presenter picks every mission menu (two missed picks would hand the round to nobody).
+	local answered = {}
+	advanceUntil(function()
+		for i = #NetStub.sent, 1, -1 do
+			local m = NetStub.sent[i]
+			if m.name == "PresenterMenu" and m.payload.options and m.payload.kind == "pick" and not answered[m] then
+				answered[m] = true
+				NetStub.listeners.PresenterPick(ps[1], m.payload.options[1].id)
+				break
+			end
+		end
+		return Match.phase == "Final"
+	end, 600)
+	check("13f everyone fell at once: the final starts with new words", Match.phase == "Final"
+		and wordOf(ps[2]) ~= wordsBefore[1] and wordOf(ps[4]) ~= wordsBefore[2])
+	at(now + 1)
+	at(now + Config.EAR_COOLDOWN)
+	-- (ps[3] lost a life to the ear judgment above, so it went out a fall earlier: the final is ps[2] and ps[4].)
+	local finalistsOk = Match.isAlive(ps[2]) and Match.isAlive(ps[4]) and not Match.isAlive(ps[3])
+	-- Pressed 0.3 s before the question ends: the lever lands after its end, and still counts for this question.
+	local questionStart = Scripted.finalRuns[#Scripted.finalRuns]
+	at(questionStart + Scripted.expectedSeconds - 0.3)
+	local currentQuestion = #Scripted.finalRuns
+	ear(ps[1], ps[4].UserId)
+	local stillInDuringQuestion = Match.isAlive(ps[4])
+	at(now + Config.LEVER_SECONDS + 1)
+	check("13g a word heard during a final question (even in its last moment) puts that finalist out with that question",
+		finalistsOk and stillInDuringQuestion and not Match.isAlive(ps[4]) and Match.isAlive(ps[2])
+		and #Scripted.finalRuns == currentQuestion)
+	-- The round is decided now (one left): a late ear judgment is dropped; the result shows everyone their own word.
+	at(now + Config.EAR_COOLDOWN)
+	local lateAt = now
+	ear(ps[1], ps[2].UserId)
+	local lateLevers = #sent("Lever", lateAt)
+	advanceUntil(function() return Match.phase == "Result" end, 60)
+	at(now + 0.5)
+	local resultView = lastWordsTo(ps[2], since) -- (the latest one: sent with the Result state)
+	check("13h after the outcome is fixed an ear judgment is dropped; the result shows the winner their own word",
+		lateLevers == 0 and Match.isAlive(ps[2]) and resultView ~= nil and resultView[tostring(ps[2].UserId)].words ~= nil
+		and #resultView[tostring(ps[2].UserId)].words == 1)
+	Scripted.pick = nil
+	finish(since)
+
+	-- 13C: the main game is decided (one left) while the last launch is still in the air: an ear judgment is dropped.
+	local qs = newPlayers(3) -- qs[1] presents
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(qs[1], true)
+	local since3 = now
+	begin(qs, 10, nil, nil)
+	at(now + 2)
+	NetStub.listeners.DevFling(qs[3], "out")
+	at(now + 0.5)
+	local phaseThen = Match.phase
+	local decidedAt = now
+	ear(qs[1], qs[2].UserId)
+	at(now + Config.LEVER_SECONDS + 0.2)
+	check("13i once the main game is decided, a late ear judgment is dropped (no lever, no life)", phaseThen == "Play"
+		and #sent("Lever", decidedAt) == 0 and Match.participants[qs[2]].lives == Config.LIVES)
+	workspaceAttributes.BW_ServerKind = nil
+	finish(since3)
+end
+
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

@@ -2,8 +2,9 @@
 -- The presenter's controls (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23):
 --   - the "volunteer to present" button (row 3 under the status board), for anyone not playing the round;
 --   - while I present: the mission menu (right side, open during the last seconds of free talk; recommended missions
---     marked), the same menu for "who flies" after a one-word mission (bundle 4b: tap a name, then "날려!"), and the
---     sound buttons (bottom centre).
+--     marked), the same menu for "who flies" after a one-word mission (bundle 4b: tap a name, then "날려!"), the
+--     sound buttons (bottom centre), and on private servers the banned-word list (left side, bundle 5a): every alive
+--     player with their word and a button, "다시 뽑기" during the assignment, "🔔 들었다" during the round.
 -- It only shows what it is told and reports presses; the server checks every one of them.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -21,6 +22,10 @@ local menuTitle: TextLabel
 local menuList: Frame
 local flingButton: TextButton
 local soundBar: Frame
+local wordFrame: Frame
+local wordList: ScrollingFrame
+local wordKey = "" -- what the list shows now (rebuilt only when it changes)
+local onWordAction: (string, number) -> () = function(_mode, _userId) end
 local volunteered = false
 local menuEndsAt = 0
 local menuKind = "pick"
@@ -43,9 +48,14 @@ local function button(parent: Instance, text: string, width: number, height: num
 	return b
 end
 
--- onVolunteer(on), onPick(missionId), onSound(index): the player pressed one of the controls.
-function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> (), onSound: (number) -> ())
+export type WordRow = { userId: number, name: string, word: string }
+
+-- onVolunteer(on), onPick(missionId), onSound(index), onWord(mode, userId) ("reroll" / "heard"): the player pressed
+-- one of the controls.
+function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> (), onSound: (number) -> (),
+	onWord: (string, number) -> ())
 	onPickMission = onPick
+	onWordAction = onWord
 	volunteerButton = button(Style.gui(), TEXT.VOLUNTEER, 240, 34)
 	volunteerButton.Name = "Volunteer"
 	volunteerButton.AnchorPoint = Vector2.new(0.5, 0)
@@ -115,6 +125,87 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 		local b = button(soundBar, (TEXT :: any)[entry.text] or entry.text, 90, 44)
 		b.Activated:Connect(function()
 			onSound(index)
+		end)
+	end
+
+	wordFrame = Style.panel(Style.gui(), Style.PANEL, 0.15, 14)
+	wordFrame.Name = "WordList"
+	wordFrame.AnchorPoint = Vector2.new(0, 0.5)
+	wordFrame.Position = UDim2.new(0, 16, 0.55, 0)
+	wordFrame.Size = UDim2.fromOffset(300, 0)
+	wordFrame.AutomaticSize = Enum.AutomaticSize.Y
+	wordFrame.Visible = false
+	local wordPad = Instance.new("UIPadding")
+	wordPad.PaddingTop = UDim.new(0, 8)
+	wordPad.PaddingBottom = UDim.new(0, 8)
+	wordPad.PaddingLeft = UDim.new(0, 8)
+	wordPad.PaddingRight = UDim.new(0, 8)
+	wordPad.Parent = wordFrame
+	local wordLayout = Instance.new("UIListLayout")
+	wordLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	wordLayout.Padding = UDim.new(0, 6)
+	wordLayout.Parent = wordFrame
+	local wordTitle = Style.label(wordFrame, Style.BOLD, 18, Style.AMBER)
+	wordTitle.Size = UDim2.new(1, 0, 0, 22)
+	wordTitle.Text = TEXT.WORDS_TITLE
+	wordTitle.LayoutOrder = 0
+	-- Scrolls when ten names do not fit a short screen (the list's height is set in setWords).
+	wordList = Instance.new("ScrollingFrame")
+	wordList.BackgroundTransparency = 1
+	wordList.BorderSizePixel = 0
+	wordList.ScrollBarThickness = 6
+	wordList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	wordList.CanvasSize = UDim2.new()
+	wordList.Size = UDim2.fromScale(1, 0)
+	wordList.LayoutOrder = 1
+	wordList.Parent = wordFrame
+	local listLayout2 = Instance.new("UIListLayout")
+	listLayout2.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout2.Padding = UDim.new(0, 4)
+	listLayout2.Parent = wordList
+end
+
+-- The banned-word list (private servers, while I present): `mode` "reroll" (assignment) or "heard" (round), nil
+-- hides it.
+function PresenterPanel.setWords(rows: { WordRow }, mode: string?)
+	wordFrame.Visible = mode ~= nil and #rows > 0
+	if not mode then
+		return
+	end
+	local parts = { mode }
+	for _, row in rows do
+		table.insert(parts, row.userId .. ":" .. row.name .. ":" .. row.word)
+	end
+	local key = table.concat(parts, "|")
+	local camera = workspace.CurrentCamera
+	local room = if camera then camera.ViewportSize.Y * 0.5 else 300
+	wordList.Size = UDim2.new(1, 0, 0, math.min(#rows * 40, math.max(room, 120))) -- (each refresh: the window may change)
+	if key == wordKey then
+		return
+	end
+	wordKey = key
+	for _, child in wordList:GetChildren() do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+	for i, row in rows do
+		local line = Instance.new("Frame")
+		line.BackgroundTransparency = 1
+		line.Size = UDim2.new(1, 0, 0, 36)
+		line.LayoutOrder = i
+		line.Parent = wordList
+		local label = Style.label(line, Style.BOLD, 18, Style.WHITE)
+		label.Size = UDim2.new(1, -112, 1, 0)
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.Text = row.name .. " · " .. row.word
+		local action = button(line, if mode == "reroll" then TEXT.WORDS_REROLL else TEXT.WORDS_HEARD, 104, 32)
+		action.AnchorPoint = Vector2.new(1, 0.5)
+		action.Position = UDim2.fromScale(1, 0.5)
+		action.TextSize = 16
+		action.BackgroundColor3 = if mode == "reroll" then Style.PANEL else Style.RED
+		action.Activated:Connect(function()
+			onWordAction(mode, row.userId)
 		end)
 	end
 end

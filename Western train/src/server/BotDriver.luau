@@ -1,7 +1,8 @@
 --!strict
 -- The stand-in driver for a cowboy without a partner (Studio testing, Names.SoloCowboy): it squashes its train a
 -- little before each low bridge and lets go a little after, by setting the train's Squashed attribute as a real
--- driver's input would (CourseService then judges the bridges itself, as for a quiet driver).
+-- driver's input would (CourseService then judges the bridges itself, as for a quiet driver), and jumps at each gold
+-- bag's jump marker (through the jump function Main hands it, as a driver's jump input would).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -12,6 +13,7 @@ local Names = require(shared:WaitForChild("Names"))
 local CourseMath = require(shared:WaitForChild("CourseMath"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
 local TrainState = require(shared:WaitForChild("TrainState"))
+local GoldTrack = require(shared:WaitForChild("GoldTrack"))
 
 local BotDriver = {}
 
@@ -33,23 +35,33 @@ local function wantsFlat(train: Model, distance: number): boolean
 	return false
 end
 
-function BotDriver.start(): Bot
-	local driven: { [Model]: boolean } = {}
+-- jump(train) starts a jump the way a driver's jump input does (JumpService.jump, handed over by Main).
+function BotDriver.start(jump: (Model, number?) -> boolean): Bot
+	local driven: { [Model]: number } = {} -- the gold bag each train has jumped for last
 	local ticking = RunService.Heartbeat:Connect(function()
 		local now = Workspace:GetServerTimeNow()
-		for train in driven do
+		for train, jumpedFor in driven do
 			local run = TrainState.run(train)
 			if run then
-				local flat = run.speed > 0 and wantsFlat(train, CourseMath.distance(run, now))
+				local distance = CourseMath.distance(run, now)
+				local flat = run.speed > 0 and wantsFlat(train, distance)
 				if (train:GetAttribute(Names.Squashed) == true) ~= flat then
 					train:SetAttribute(Names.Squashed, flat)
+				end
+				-- The next gold bag's jump marker, just reached (not after a restart has jumped back past it).
+				local bag = PartUtil.number(train, Names.GoldNext)
+				if bag and bag ~= jumpedFor and run.speed > 0 and not flat and TrainState.hasCowboy(train) then
+					local from = GoldTrack.jumpFrom(train, bag)
+					if distance >= from and distance < from + Config.Bot.JumpLate and jump(train) then
+						driven[train] = bag
+					end
 				end
 			end
 		end
 	end)
 	return {
 		drive = function(train: Model)
-			driven[train] = true
+			driven[train] = 0
 		end,
 		stop = function(train: Model)
 			driven[train] = nil

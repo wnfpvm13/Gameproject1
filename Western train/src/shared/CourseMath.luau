@@ -47,6 +47,21 @@ function CourseMath.mailAt(i: number, firstAt: number, gaps: { number }): (numbe
 	return (here + after) / 2, if i % 2 == 1 then 1 else -1
 end
 
+-- Gold bag k: in gap (k - 1) * every + 1, at `share` of the way from its bridge to the next, its crane on the side away
+-- from that gap's mail crane (left, -1, for odd gaps). Returns the bag's run distance and that side.
+function CourseMath.goldAt(k: number, firstAt: number, gaps: { number }, share: number, every: number): (number, number)
+	local i = (k - 1) * every + 1
+	local here = CourseMath.bridgeAt(i, firstAt, gaps)
+	local after = CourseMath.bridgeAt(i + 1, firstAt, gaps)
+	return here + (after - here) * share, if i % 2 == 1 then -1 else 1
+end
+
+-- The run distance to start a jump so that a bag at run distance `bag` is over train Z `overZ` `leadStuds` of run
+-- after the jump starts.
+function CourseMath.jumpFrom(bag: number, overZ: number, leadStuds: number): number
+	return bag + overZ - leadStuds
+end
+
 -- Barrel i: dropped at `share` of the way from bridge i to the next, after crane i and in the lane on its side (right,
 -- 1, for odd i): a cowboy who has just picked up that bag at the roof's edge must get out of the way. Returns its drop
 -- distance and lane.

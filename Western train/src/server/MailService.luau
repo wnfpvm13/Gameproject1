@@ -1,11 +1,12 @@
 --!strict
--- The mail bags on the trackside cranes, judged on the server. Each train keeps the next bag to pick up and the bags
--- picked up as attributes (Names.MailNext, Names.MailTaken). The cowboy's client reports a pickup; the server takes it
--- when it is the next bag and the bag is near the train: from Config.Mail.PickupSlack before the train's front until
--- the moment the bag would count as missed. A bag still not picked up Config.Run.ReportTimeout after it has gone past
--- the train's back is missed: `onMissed` (wired by Main to CourseService) sends the run back to before the bridge
--- in front of that crane. A train without a cowboy has no bags: its next bag just moves on past the cranes it passes
--- (they are not counted as picked up).
+-- A line of bags on cranes along the track, judged on the server: the mail bags (required) or the gold bags (optional),
+-- one service each (Kind). Each train keeps the next bag to pick up and the bags picked up as attributes (Kind.next,
+-- Kind.taken). The cowboy's client reports a pickup; the server takes it when it is the next bag and the bag is near
+-- the train: from Config.Mail.PickupSlack before the train's front until the moment the bag would count as gone by.
+-- A bag still not picked up Config.Run.ReportTimeout after it has gone past the train's back is gone by: a required
+-- bag is missed (`Kind.onMissed`, wired by Main to CourseService, sends the run back to before the bridge in front of
+-- that crane); an optional one is just passed. A train without a cowboy has no bags: its next bag just moves on past
+-- the cranes it passes (they are not counted as picked up).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -21,24 +22,26 @@ local MailService = {}
 
 export type Service = { track: (train: Model) -> (), untrack: (train: Model) -> (), stop: () -> () }
 
+export type Kind = {
+	at: (index: number) -> number, -- bag `index`'s run distance
+	next: string, -- the train attributes for the next bag and the bags picked up
+	taken: string,
+	onMissed: ((train: Model, index: number) -> ())?, -- a required bag was missed (nil: the bags are optional)
+}
+
 type State = {
 	next: number,
 	taken: number,
 	missedVersion: number?, -- the run version when a bag was missed: no judging until the run changes
 }
 
-local function craneAt(i: number): number
-	local b = Config.Bridge
-	return (CourseMath.mailAt(i, b.FirstAt, b.Gaps))
-end
-
--- onMissed(train, index): bag `index` was missed; the run should go back to before that crane's section.
-function MailService.start(remote: RemoteEvent, onMissed: (Model, number) -> ()): Service
+function MailService.start(remote: RemoteEvent, kind: Kind): Service
 	local states: { [Model]: State } = {}
+	local craneAt = kind.at
 
 	local function publish(train: Model, state: State)
-		train:SetAttribute(Names.MailNext, state.next)
-		train:SetAttribute(Names.MailTaken, state.taken)
+		train:SetAttribute(kind.next, state.next)
+		train:SetAttribute(kind.taken, state.taken)
 	end
 
 	local received = remote.OnServerEvent:Connect(function(player: Player, index: unknown)
@@ -53,7 +56,7 @@ function MailService.start(remote: RemoteEvent, onMissed: (Model, number) -> ())
 					local front = PartUtil.number(train, Names.SpanFront) or 0
 					local back = PartUtil.number(train, Names.SpanBack) or 0
 					-- The bag's place along the train is distance - crane: taken from just before the front until the bag
-					-- would be judged missed (a late report still counts while it can).
+					-- would be judged gone by (a late report still counts while it can).
 					local along = distance - craneAt(index)
 					local lastChance = back + Config.Run.ReportTimeout * run.speed
 					if along >= front - Config.Mail.PickupSlack and along <= lastChance then
@@ -75,14 +78,20 @@ function MailService.start(remote: RemoteEvent, onMissed: (Model, number) -> ())
 				state.missedVersion = nil
 				local back = PartUtil.number(train, Names.SpanBack) or 0
 				local pastAt = CourseMath.timeAt(run, craneAt(state.next) + back) -- the bag reaches the train's back
+				local onMissed = kind.onMissed
 				if not TrainState.hasCowboy(train) then
 					if now >= pastAt then
 						state.next += 1 -- nobody to pick it up: the train just goes by
 						publish(train, state)
 					end
 				elseif now >= pastAt + Config.Run.ReportTimeout then
-					state.missedVersion = version
-					onMissed(train, state.next)
+					if onMissed then
+						state.missedVersion = version
+						onMissed(train, state.next)
+					else
+						state.next += 1 -- an optional bag: passed
+						publish(train, state)
+					end
 				end
 			end
 		end

@@ -3,12 +3,13 @@
 -- the moving world drawn around it (CourseView bridges, TrackScroll scenery) and a RoofRider for its cowboy, who is
 -- laid flat on a squashed roof (CowboyPose). The player is a train's driver (Names.OwnerUserId) or its cowboy
 -- (Names.CowboyUserId):
--- - driving: the squash key folds the train at once (and tells the server), the bridges are judged here and reported,
---   and the face window shows the train;
--- - riding: the character is carried with the roof and follows the cowboy's rules (CowboyRules), and the face window
---   shows the driver's face.
--- Other trains follow their Squashed attribute. A crash on any train (its CrashIndex attribute, or our own judgement
--- first) plays the stamp, stars and a jolt.
+-- - driving: the squash key folds the train at once and the jump key makes it jump (both told to the server; no jump
+--   while flat, and a squash held in the air waits for the landing), the bridges are judged here and reported, and the
+--   face window shows the train;
+-- - riding: the character is carried with the roof and follows the cowboy's rules (CowboyRules), the face window shows
+--   the driver's face, and the train's jumps show the timing ring for a jump together (ApexRing).
+-- Other trains follow their Squashed and JumpAt attributes. A crash on any train (its CrashIndex attribute, or our own
+-- judgement first) plays the stamp, stars and a jolt.
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -32,18 +33,25 @@ local RoofRider = require(script:WaitForChild("RoofRider"))
 local CowboyRules = require(script:WaitForChild("CowboyRules"))
 local CowboyPose = require(script:WaitForChild("CowboyPose"))
 local BarrelView = require(script:WaitForChild("BarrelView"))
+local GoldView = require(script:WaitForChild("GoldView"))
+local JumpInput = require(script:WaitForChild("JumpInput"))
+local ApexRing = require(script:WaitForChild("ApexRing"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
 local squashRemote = remotes:WaitForChild(Names.SquashRemote) :: RemoteEvent
 local bridgeRemote = remotes:WaitForChild(Names.BridgeRemote) :: RemoteEvent
 local mailRemote = remotes:WaitForChild(Names.MailRemote) :: RemoteEvent
+local jumpRemote = remotes:WaitForChild(Names.JumpRemote) :: RemoteEvent
+local goldRemote = remotes:WaitForChild(Names.GoldRemote) :: RemoteEvent
 local faceCam = FaceCam.new(player:WaitForChild("PlayerGui"))
+local apexRing = ApexRing.new(player:WaitForChild("PlayerGui"))
 
 local CRASH_WORD = Color3.fromRGB(255, 120, 70)
 local PASS_WORD = Color3.fromRGB(255, 230, 120)
 local SPLAT_WORD = Color3.fromRGB(255, 160, 200)
 local MAIL_WORD = Color3.fromRGB(150, 230, 140)
+local GOLD_WORD = Color3.fromRGB(255, 214, 80)
 
 type Tracked = {
 	base: BasePart,
@@ -55,6 +63,7 @@ type Tracked = {
 	scenery: TrackScroll.Scroll,
 	rider: RoofRider.Rider,
 	barrels: BarrelView.View,
+	gold: GoldView.View,
 	rules: CowboyRules.Rules?, -- while the player rides this train
 	predicted: { index: number, at: number }?, -- own train: a crash our judgement already played (os.clock)
 	connections: { RBXScriptConnection },
@@ -64,9 +73,11 @@ local mine: Model? = nil -- the train the player drives
 local riding: Model? = nil -- the train the player rides as the cowboy
 local shownInWindow: Model? = nil
 local inputDown = false -- the squash key is still held when a new train arrives (respawn), so it starts flat
+local sentSquash: boolean? = nil -- the squash state last sent to the server
 local ownCrashing = false
 local crashGags = 0 -- counts own crash gags, so an older one's time-out leaves a newer one alone
 local unbindSquash: (() -> ())? = nil
+local jumpControl: JumpInput.Control? = nil
 
 local function refreshFaceSize()
 	faceCam:setBig(inputDown or ownCrashing)
@@ -77,8 +88,10 @@ local function showScore(locomotive: Model)
 		local value = locomotive:GetAttribute(name)
 		return if typeof(value) == "number" then value else 0
 	end
-	local mail = if TrainState.hasCowboy(locomotive) then count(Names.MailTaken) else nil
-	faceCam:setScore(count(Names.Passed), count(Names.Crashes), mail)
+	local cowboy = TrainState.hasCowboy(locomotive)
+	local mail = if cowboy then count(Names.MailTaken) else nil
+	local gold = if cowboy then count(Names.GoldTaken) else nil
+	faceCam:setScore(count(Names.Passed), count(Names.Crashes), mail, gold)
 end
 
 -- The face window shows the train the player drives or rides.
@@ -109,25 +122,60 @@ local function setSquashed(locomotive: Model, squashed: boolean)
 	end
 end
 
-local function onSquashKey(isDown: boolean)
-	inputDown = isDown
+-- Our own train is flat while the squash key is held, except in the air (it folds when it lands). The server hears
+-- every change, even without a train, so its latest state is never a stale one.
+local function refreshOwnSquash(now: number)
 	local own = mine
+	local entry = own and tracked[own]
+	local flat = inputDown and not (entry and entry.animator:airborne(now))
 	if own then
-		setSquashed(own, isDown)
+		setSquashed(own, flat)
 	end
-	refreshFaceSize()
-	squashRemote:FireServer(isDown) -- even without a train, so the server's latest state is never a stale one
+	if flat ~= sentSquash then
+		sentSquash = flat
+		squashRemote:FireServer(flat)
+	end
 end
 
--- The squash key belongs to drivers only (a cowboy walks backward with S). It stays bound while a driver has no
--- train for a moment (respawn), so a key held across it still counts.
+local function onSquashKey(isDown: boolean)
+	inputDown = isDown
+	refreshOwnSquash(Workspace:GetServerTimeNow())
+	refreshFaceSize()
+end
+
+-- Whether our own train may jump now: not flat (or still rising from it) and not in the air already.
+local function canJump(entry: Tracked, now: number): boolean
+	return not entry.squashed and entry.animator:flatness() <= Config.Jump.FlatLimit and not entry.animator:airborne(now)
+end
+
+local function onJumpKey()
+	local own = mine
+	local entry = own and tracked[own]
+	local now = Workspace:GetServerTimeNow()
+	if entry and canJump(entry, now) then
+		entry.animator:jump(now)
+		if entry.puff then
+			entry.puff:burst()
+		end
+		jumpRemote:FireServer(now) -- when we pressed, so everyone draws the jump from the same moment
+	end
+end
+
+-- The squash and jump keys belong to drivers only (a cowboy walks backward with S and jumps with Space). They stay
+-- bound while a driver has no train for a moment (respawn), so a key held across it still counts.
 local function refreshInput()
 	if mine and not unbindSquash then
 		unbindSquash = SquashInput.bind(onSquashKey)
+		jumpControl = JumpInput.bind(onJumpKey)
 	elseif riding and unbindSquash then
 		local unbind = unbindSquash
 		unbindSquash = nil
 		unbind()
+		local control = jumpControl
+		jumpControl = nil
+		if control then
+			control.unbind()
+		end
 	end
 end
 
@@ -179,6 +227,7 @@ local function track(instance: Instance)
 		scenery = TrackScroll.new(locomotive, base),
 		rider = RoofRider.new(locomotive),
 		barrels = BarrelView.new(locomotive, base),
+		gold = GoldView.new(locomotive, base),
 		rules = nil,
 		predicted = nil,
 		connections = {},
@@ -204,7 +253,7 @@ local function track(instance: Instance)
 			faceCam:flash("우편 놓침!", CRASH_WORD)
 		end
 	end))
-	for _, name in { Names.Passed, Names.Crashes, Names.MailTaken, Names.CowboyUserId } do
+	for _, name in { Names.Passed, Names.Crashes, Names.MailTaken, Names.GoldTaken, Names.CowboyUserId } do
 		table.insert(entry.connections, locomotive:GetAttributeChangedSignal(name):Connect(function()
 			if locomotive == shownInWindow then
 				showScore(locomotive)
@@ -223,8 +272,14 @@ local function track(instance: Instance)
 			end
 			riding = locomotive
 			entry.rules = CowboyRules.new(locomotive, base)
+			apexRing:hide() -- the old train's ring, if any
+			local at = locomotive:GetAttribute(Names.JumpAt)
+			if typeof(at) == "number" then
+				apexRing:start(at) -- a jump already under way (an old one just hides)
+			end
 		elseif not isCowboy and riding == locomotive then
 			riding = nil
+			apexRing:hide()
 			local rules = entry.rules
 			entry.rules = nil
 			if rules then
@@ -241,14 +296,26 @@ local function track(instance: Instance)
 		DriverCamera.follow(locomotive)
 		refreshInput()
 		refreshWindow()
-		setSquashed(locomotive, inputDown)
-		squashRemote:FireServer(inputDown) -- also replaces a state the server still holds back from the old train
+		sentSquash = nil -- send it again: also replaces a state the server still holds back from the old train
+		refreshOwnSquash(Workspace:GetServerTimeNow())
 	else
 		local function follow()
 			setSquashed(locomotive, locomotive:GetAttribute(Names.Squashed) == true)
 		end
 		table.insert(entry.connections, locomotive:GetAttributeChangedSignal(Names.Squashed):Connect(follow))
 		follow()
+		-- Its jumps, drawn from when they started on the server; the cowboy riding it gets the timing ring.
+		local function jumped()
+			local at = locomotive:GetAttribute(Names.JumpAt)
+			if typeof(at) == "number" then
+				entry.animator:jump(at)
+				if locomotive == riding then
+					apexRing:start(at)
+				end
+			end
+		end
+		table.insert(entry.connections, locomotive:GetAttributeChangedSignal(Names.JumpAt):Connect(jumped))
+		jumped()
 	end
 	onCowboy()
 	onCrashIndex() -- a train that arrives in the middle of a crash (joining late) shows it too
@@ -274,6 +341,7 @@ CollectionService:GetInstanceRemovedSignal(Names.LocomotiveTag):Connect(function
 		entry.course:destroy()
 		entry.scenery:destroy()
 		entry.barrels:destroy()
+		entry.gold:destroy()
 	end
 	if mine == instance then
 		mine = nil
@@ -281,6 +349,7 @@ CollectionService:GetInstanceRemovedSignal(Names.LocomotiveTag):Connect(function
 	end
 	if riding == instance then
 		riding = nil
+		apexRing:hide()
 		if entry and entry.rules then
 			entry.rules:stop(player.Character)
 		end
@@ -302,11 +371,12 @@ RunService.RenderStepped:Connect(function(dt: number)
 	local now = Workspace:GetServerTimeNow()
 	for locomotive, entry in tracked do
 		entry.animator:setRunSpeed(entry.run:speed(now))
-		entry.animator:update(dt)
+		entry.animator:update(dt, now)
 		local distance = entry.run:distance(now)
 		entry.course:update(distance)
 		entry.scenery:update(distance)
 		entry.barrels:update(distance)
+		entry.gold:update(distance)
 		-- The cowboy rides the roof just drawn, lying flat while it is flat.
 		local character = cowboyCharacter(locomotive)
 		if character then
@@ -326,13 +396,22 @@ RunService.RenderStepped:Connect(function(dt: number)
 				elseif event == "mail" then
 					mailRemote:FireServer(bag)
 					faceCam:flash("우편!", MAIL_WORD)
+				elseif event == "gold" then
+					goldRemote:FireServer(bag)
+					faceCam:flash("금화!", GOLD_WORD)
 				end
 			end
 		end
 	end
-	-- Our own bridges, judged from the shape just drawn; the server confirms.
+	apexRing:update(now)
+	-- Our own train: a squash held through a jump folds it on landing; the jump button greys out while it cannot jump.
+	refreshOwnSquash(now)
 	local own = mine
 	local entry = own and tracked[own]
+	if entry and jumpControl then
+		jumpControl.setEnabled(canJump(entry, now))
+	end
+	-- Our own bridges, judged from the shape just drawn; the server confirms.
 	if own and entry then
 		local event = entry.run:judge(now, entry.animator:height())
 		if event then

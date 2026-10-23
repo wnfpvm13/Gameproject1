@@ -272,11 +272,16 @@ function FaceCam.flash(self: FaceCam, text: string, color: Color3)
 	end)
 end
 
--- mail: the bags taken, or nil for a train without a cowboy (no mail then).
-function FaceCam.setScore(self: FaceCam, passed: number, crashes: number, mail: number?)
-	self.score.Text = if mail
-		then string.format("통과 %d · 쾅 %d · 우편 %d", passed, crashes, mail)
-		else string.format("통과 %d · 쾅 %d", passed, crashes)
+-- mail and gold: the bags picked up, or nil for a train without a cowboy (not shown then).
+function FaceCam.setScore(self: FaceCam, passed: number, crashes: number, mail: number?, gold: number?)
+	local text = string.format("통과 %d · 쾅 %d", passed, crashes)
+	if mail then
+		text ..= string.format(" · 우편 %d", mail)
+	end
+	if gold then
+		text ..= string.format(" · 금화 %d", gold)
+	end
+	self.score.Text = text
 end
 
 function FaceCam.update(self: FaceCam)

@@ -1,8 +1,9 @@
 --!strict
 -- Western train server entry point: wiring, plus each crew's train lifetime. Players pair up as they join (CrewBook):
 -- a driver's avatar is rebuilt as the train on their track (their character hidden inside), and the next player rides
--- that train's roof as the cowboy. Every new train starts its run toward the low bridges (CourseService) and the mail
--- cranes (MailService: a missed bag sends the run back through CourseService). For testing
+-- that train's roof as the cowboy. Every new train starts its run toward the low bridges (CourseService), the mail
+-- cranes (a MailService for the required bags: a missed bag sends the run back through CourseService) and the gold
+-- cranes (a MailService for the optional gold bags); drivers squash (SquashService) and jump (JumpService). For testing
 -- alone in Studio, the Workspace attribute Names.SoloCowboy makes a lone player a cowboy on a train with a stand-in
 -- driver (BotDriver), built from that player's own avatar.
 local Players = game:GetService("Players")
@@ -20,10 +21,13 @@ local CourseService = require(script.Parent:WaitForChild("CourseService"))
 local CrewBook = require(script.Parent:WaitForChild("CrewBook"))
 local BotDriver = require(script.Parent:WaitForChild("BotDriver"))
 local MailService = require(script.Parent:WaitForChild("MailService"))
+local JumpService = require(script.Parent:WaitForChild("JumpService"))
 local shared = ReplicatedStorage:WaitForChild("WesternTrain")
 local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
+local CourseMath = require(shared:WaitForChild("CourseMath"))
+local GoldTrack = require(shared:WaitForChild("GoldTrack"))
 
 local remotes = Net.create()
 local stage = PrototypeStage.build()
@@ -32,13 +36,30 @@ local trains: { [number]: Model } = {} -- by slot
 local builds: { [Player]: number } = {} -- latest build number, so a slow build for an old character is dropped
 local hidden: { [Player]: CharacterHider.Hidden } = {}
 local course = CourseService.start(remotes.Bridge)
-local mail = MailService.start(remotes.Mail, course.missMail)
-local bot = BotDriver.start()
+local mail = MailService.start(remotes.Mail, {
+	at = function(i: number): number
+		return (CourseMath.mailAt(i, Config.Bridge.FirstAt, Config.Bridge.Gaps))
+	end,
+	next = Names.MailNext,
+	taken = Names.MailTaken,
+	onMissed = course.missMail,
+})
+local gold = MailService.start(remotes.Gold, {
+	at = function(k: number): number
+		return (GoldTrack.at(k))
+	end,
+	next = Names.GoldNext,
+	taken = Names.GoldTaken,
+	onMissed = nil,
+})
+local bot = BotDriver.start(JumpService.jump)
 
-SquashService.start(remotes.Squash, function(player: Player): Model?
+local function drivenTrain(player: Player): Model?
 	local slot, role = crews:find(player)
 	return if slot and role == "driver" then trains[slot] else nil
-end)
+end
+SquashService.start(remotes.Squash, drivenTrain)
+JumpService.start(remotes.Jump, drivenTrain)
 
 local function removeTrain(slot: number)
 	local train = trains[slot]
@@ -46,6 +67,7 @@ local function removeTrain(slot: number)
 	if train then
 		course.finish(train)
 		mail.untrack(train)
+		gold.untrack(train)
 		bot.stop(train)
 		train:Destroy()
 	end
@@ -130,6 +152,7 @@ local function onCharacter(player: Player, character: Model)
 		trains[slot] = train
 		course.begin(train, player)
 		mail.track(train)
+		gold.track(train)
 		placeCowboy(slot)
 	else
 		local crew = crews:crew(slot)
@@ -146,6 +169,7 @@ local function onCharacter(player: Player, character: Model)
 			trains[slot] = train
 			course.begin(train, nil)
 			mail.track(train)
+			gold.track(train)
 			bot.drive(train)
 		end
 		placeCowboy(slot) -- with a player driver whose train is not built yet, their build places the cowboy

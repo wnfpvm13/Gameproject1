@@ -1,5 +1,5 @@
 -- Squash and run math tests (run by tools/tests/run_tests.py, which puts Config, SquashSpring, SquashPose,
--- CrankMotion, CourseMath and CrewBook above this).
+-- CrankMotion, CourseMath, JumpArc and CrewBook above this).
 -- Uses the real Config numbers, so a tuning change that breaks the feel (too slow, no bounce, flying parts) fails.
 local passed, failed = 0, 0
 local function check(name: string, ok: boolean, detail: string?)
@@ -349,6 +349,45 @@ do
 	check("the spout passes over a tall standing cowboy's head", K.SpoutHeight - 0.2 > C.RoofTop + C.WalkThickness + 6)
 	-- the biggest rock reaches about 1.9 from its middle (size 2.1, turned)
 	check("the roadside props stand outside the water towers", Config.Stage.RoadsideNear - 2 > K.TowerX + 1.6)
+end
+
+-- 12. The jump and the gold mail.
+do
+	local J, G, B, C, M, R = Config.Jump, Config.GoldMail, Config.Bridge, Config.Cars, Config.Mail, Config.Run
+	check("no lift without a jump, before it or after it", JumpArc.lift(nil, 5, J.Seconds, J.Height) == 0
+		and JumpArc.lift(10, 9.9, J.Seconds, J.Height) == 0 and JumpArc.lift(10, 10 + J.Seconds, J.Seconds, J.Height) == 0)
+	check("the arc tops out at the jump height halfway", near(JumpArc.lift(10, 10 + J.Seconds / 2, J.Seconds, J.Height), J.Height))
+	check("in the air only during the jump", JumpArc.airborne(10, 10, J.Seconds) and JumpArc.airborne(10, 10 + J.Seconds * 0.99, J.Seconds)
+		and not JumpArc.airborne(10, 10 + J.Seconds, J.Seconds) and not JumpArc.airborne(nil, 10, J.Seconds))
+	local gold1, side1 = CourseMath.goldAt(1, B.FirstAt, B.Gaps, G.At, G.Every)
+	local gold2 = CourseMath.goldAt(2, B.FirstAt, B.Gaps, G.At, G.Every)
+	local _, mailSide1 = CourseMath.mailAt(1, B.FirstAt, B.Gaps)
+	local bridge1, bridge2 = CourseMath.bridgeAt(1, B.FirstAt, B.Gaps), CourseMath.bridgeAt(2, B.FirstAt, B.Gaps)
+	check("gold 1 hangs in gap 1 before its mail crane", near(gold1, bridge1 + (bridge2 - bridge1) * G.At) and gold1 < (CourseMath.mailAt(1, B.FirstAt, B.Gaps)))
+	check("the gold crane stands away from that gap's mail crane", side1 == -mailSide1)
+	check("gold 2 hangs in gap 1 + Every", gold2 > CourseMath.bridgeAt(1 + G.Every, B.FirstAt, B.Gaps) and gold2 < CourseMath.bridgeAt(2 + G.Every, B.FirstAt, B.Gaps))
+	check("the jump point brings the bag over the cars after the lead", CourseMath.jumpFrom(100, 8, 12) == 96)
+	-- A train as built in Studio (2026-10-24): front -19.1, back 19.1, the first car's roof from -2.0.
+	local front, back, roofFront = -19.1, 19.1, -2.0
+	local leadStuds = (J.Seconds / 2 + G.RiseSeconds) * R.Speed
+	local springStuds = 6 -- the body is back up this long after the stand-in driver lets go
+	for k = 1, #B.Gaps do
+		local gold = CourseMath.goldAt(k, B.FirstAt, B.Gaps, G.At, G.Every)
+		local i = (k - 1) * G.Every + 1
+		local from = CourseMath.jumpFrom(gold, (roofFront + back) / 2, leadStuds)
+		local upAgain = CourseMath.bridgeAt(i, B.FirstAt, B.Gaps) + B.Depth / 2 + back + Config.Bot.TrailStuds + springStuds
+		local flatAgain = CourseMath.bridgeAt(i + 1, B.FirstAt, B.Gaps) - B.Depth / 2 + front - Config.Bot.LeadStuds
+		check("gold " .. k .. ": the jump starts once the train is up after the bridge", from >= upAgain, string.format("%.1f < %.1f", from, upAgain))
+		check("gold " .. k .. ": and lands before the next bridge needs it flat", from + J.Seconds * R.Speed <= flatAgain)
+	end
+	-- Reaching the bag: a cowboy's upper torso is about 3.55 over the feet (R15) and a jump rises 7.2 (Roblox default).
+	local roofTop = C.RoofTop + C.WalkThickness
+	local topOfJump = roofTop + 7.2 + 3.55
+	check("a jump from a standing roof falls short of the gold", topOfJump + G.Reach < G.BagY)
+	check("a jump from the top of the arc reaches it", math.abs(topOfJump + J.Height - G.BagY) <= G.Reach * 0.6)
+	check("the gold crane's arm is over a cowboy's head at the best jump", G.BagY + G.BagSize.Y / 2 + G.ArmAboveBag - G.ArmThickness / 2 > roofTop + J.Height + 7.2 + 5.3)
+	check("the gold crane's post stands where the mail crane's would", G.PostX >= M.PostX)
+	check("the rise time is a default jump's", math.abs(G.RiseSeconds - math.sqrt(2 * 7.2 / 196.2)) < 0.01)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

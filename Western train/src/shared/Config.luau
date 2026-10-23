@@ -175,11 +175,50 @@ Config.Barrels = {
 	},
 }
 
+-- The locomotive's jump (Space): the whole train, its cars and the cowboy's floors too, rises and falls on a fixed arc.
+-- Not while flat; a squash key held in the air folds the train when it lands.
+Config.Jump = {
+	Height = 5, -- the top of the arc above the train's place on the rails
+	Seconds = 0.9, -- in the air
+	FlatLimit = 0.15, -- no jump while the train is drawn flatter than this (0 standing, 1 flat)
+	LandSlack = 0.15, -- the server takes a new jump this long before the last one lands by its clock (network jitter)
+}
+
+-- Gold mail: an optional bag hung high over the middle of the track in every other gap, from a tall crane on the side
+-- away from that gap's mail crane. A cowboy reaches it only by jumping from a roof the locomotive's jump has lifted
+-- (a jump from the rails' height falls short); a marker across the rails shows the driver where to jump so the top of
+-- the arc comes as the bag passes over the cars.
+Config.GoldMail = {
+	Every = 2, -- in gaps 1, 1 + Every, 1 + 2 * Every, ...
+	At = 0.4, -- as a share of the gap after its bridge (the mail crane stands at 0.5)
+	-- Above the rail tops. A cowboy's middle (about 3.5 over the feet) tops out about 18.6 in a jump from a standing
+	-- roof; from a roof lifted 2.6 or more it comes within Reach.
+	BagY = 23.2,
+	BagSize = Vector3.new(1.3, 1.5, 1.3),
+	Reach = 2, -- from the cowboy's upper torso
+	-- A cowboy's own jump tops out this long after leaving the roof (Roblox's default 7.2-stud jump under its default
+	-- gravity): the jump marker leaves room for it, so a cowboy standing in the middle of the cars who jumps as the timing
+	-- ring closes (the top of the locomotive's arc) is at the top of their own jump as the bag passes over.
+	RiseSeconds = 0.27,
+	PostX = 5.4,
+	PostThickness = 0.7,
+	ArmThickness = 0.4,
+	ArmAboveBag = 2.5, -- over a cowboy's head even at the best jump
+	MarkerDepth = 1.2, -- the jump marker's length along the track
+	Colors = {
+		Post = Color3.fromRGB(92, 62, 40),
+		Bag = Color3.fromRGB(236, 186, 52),
+		Strap = Color3.fromRGB(120, 78, 30),
+		Marker = Color3.fromRGB(240, 200, 60),
+	},
+}
+
 -- A stand-in driver for a cowboy without a partner (Studio testing: set the Workspace attribute Names.SoloCowboy): it
 -- squashes a little before each bridge and lets go a little after.
 Config.Bot = {
 	LeadStuds = 8, -- squash when the front is this far from the bridge
 	TrailStuds = 2, -- let go when the back is this far past it
+	JumpLate = 3, -- jumps for a gold bag up to this far past its jump marker
 }
 
 -- Prototype ground and rails (the server's), and the scenery each client slides past the locomotives.

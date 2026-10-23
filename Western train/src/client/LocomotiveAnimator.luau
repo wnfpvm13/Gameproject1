@@ -3,8 +3,9 @@
 -- every part is resized and moved from its rest pose (the Names.Rest* attributes written by the server's
 -- LocomotiveBuilder); the coupling rods and crank pins (Names.Crank*) also circle with the driving wheels all the
 -- time (as fast as the run moves, see setRunSpeed), and the legs (Names.Kick*) swing about the hip while the spring
--- moves. It also keeps the locomotive's current top height for the bridge judgement. Local only: the server never
--- moves these parts after building them.
+-- moves. A jump lifts every part (the cars and the cowboy's floors too) on JumpArc's arc. It also keeps the
+-- locomotive's current top height for the bridge judgement. Local only: the server never moves these parts after
+-- building them.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("WesternTrain")
@@ -14,6 +15,7 @@ local PartUtil = require(shared:WaitForChild("PartUtil"))
 local SquashSpring = require(shared:WaitForChild("SquashSpring"))
 local SquashPose = require(shared:WaitForChild("SquashPose"))
 local CrankMotion = require(shared:WaitForChild("CrankMotion"))
+local JumpArc = require(shared:WaitForChild("JumpArc"))
 
 local LocomotiveAnimator = {}
 LocomotiveAnimator.__index = LocomotiveAnimator
@@ -47,6 +49,8 @@ type Fields = {
 	angle: number, -- crank angle
 	turnsPerSecond: number, -- crank speed
 	top: number, -- the highest part's top above the rails, as last drawn (locomotive space)
+	jumpAt: number?, -- the server time the last jump started
+	lift: number, -- how high the jump lifted the train, as last drawn
 }
 export type Animator = typeof(setmetatable({} :: Fields, LocomotiveAnimator))
 
@@ -125,6 +129,8 @@ function LocomotiveAnimator.new(locomotive: Model): Animator?
 		angle = 0,
 		turnsPerSecond = Config.Locomotive.CrankTurnsPerSecond,
 		top = 0,
+		jumpAt = nil,
+		lift = 0,
 	}
 	return setmetatable(fields, LocomotiveAnimator)
 end
@@ -143,9 +149,19 @@ function LocomotiveAnimator.jolt(self: Animator, velocity: number)
 	self.settled = false
 end
 
--- The locomotive's current height above the rails (its highest part's top, as last drawn).
+-- The locomotive's current height above the rails (its highest part's top, as last drawn, jump included).
 function LocomotiveAnimator.height(self: Animator): number
 	return self.top
+end
+
+-- A jump that started at server time `at` (the arc is drawn from there, so a late-arriving jump catches up).
+function LocomotiveAnimator.jump(self: Animator, at: number)
+	self.jumpAt = at
+end
+
+-- Whether the train is in the air at server time `now`.
+function LocomotiveAnimator.airborne(self: Animator, now: number): boolean
+	return JumpArc.airborne(self.jumpAt, now, Config.Jump.Seconds)
 end
 
 -- How flat the train is drawn right now: 0 standing, 1 fully flat (the bounce's overshoot is cut off).
@@ -193,27 +209,35 @@ local function place(entry: Entry, baseCFrame: CFrame, body: SquashPose.Vec, ang
 	return top
 end
 
-function LocomotiveAnimator.update(self: Animator, dt: number)
+-- now: the server time (for the jump).
+function LocomotiveAnimator.update(self: Animator, dt: number, now: number)
 	self.angle = CrankMotion.advance(self.angle, dt, self.turnsPerSecond)
-	local baseCFrame = self.base.CFrame
-	if self.settled then
+	local lift = JumpArc.lift(self.jumpAt, now, Config.Jump.Seconds, Config.Jump.Height)
+	local lifted = lift ~= self.lift
+	self.lift = lift
+	local baseCFrame = self.base.CFrame * CFrame.new(0, lift, 0)
+	if self.settled and not lifted then
 		for _, entry in self.cranks do
 			place(entry, baseCFrame, self.body, self.angle, 0, false)
 		end
 		return
 	end
-	local c = Config.Squash
-	local pressing = self.target == 1
-	local frequency = if pressing then c.PressFrequency else c.ReleaseFrequency
-	local damping = if pressing then c.PressDamping else c.ReleaseDamping
-	SquashSpring.step(self.spring, self.target, dt, frequency, damping, c.MinValue, c.MaxValue)
-	self.settled = SquashSpring.settle(self.spring, self.target, c.RestEpsilon)
-	self.body = SquashPose.bodyScale(self.spring.value, c.HeightAtFull, c.WidthAtFull, c.LengthAtFull)
+	local resize = not self.settled
+	if resize then
+		local c = Config.Squash
+		local pressing = self.target == 1
+		local frequency = if pressing then c.PressFrequency else c.ReleaseFrequency
+		local damping = if pressing then c.PressDamping else c.ReleaseDamping
+		SquashSpring.step(self.spring, self.target, dt, frequency, damping, c.MinValue, c.MaxValue)
+		self.settled = SquashSpring.settle(self.spring, self.target, c.RestEpsilon)
+		self.body = SquashPose.bodyScale(self.spring.value, c.HeightAtFull, c.WidthAtFull, c.LengthAtFull)
+	end
+	local velocity = if resize then self.spring.velocity else 0
 	local top = 0
 	for _, entry in self.entries do
-		top = math.max(top, place(entry, baseCFrame, self.body, self.angle, self.spring.velocity, true))
+		top = math.max(top, place(entry, baseCFrame, self.body, self.angle, velocity, resize))
 	end
-	self.top = top
+	self.top = top + lift
 end
 
 return LocomotiveAnimator

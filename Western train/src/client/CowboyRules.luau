@@ -2,8 +2,8 @@
 -- The player's own cowboy on a train's roof: a low bridge passing over a cowboy who is too tall there (in the air, or
 -- not lying flat on a flat roof) knocks them off backward ("splat"); a cowboy who has left the train ("fell") or was
 -- knocked off goes back onto the last car after Config.Cowboy.SplatSeconds; a rolling barrel reaching the cowboy's legs
--- in its lane knocks them off too ("barrel"); a cowboy whose middle comes close to the next mail bag picks it up
--- ("mail", reported to the server). The player's client moves its own character, so this runs there.
+-- in its lane knocks them off too ("barrel"); a cowboy whose middle comes close to the next mail bag or gold bag picks
+-- it up ("mail", "gold", reported to the server). The player's client moves its own character, so this runs there.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -14,23 +14,26 @@ local CourseMath = require(shared:WaitForChild("CourseMath"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
 local TrainState = require(shared:WaitForChild("TrainState"))
 local BarrelTrack = require(shared:WaitForChild("BarrelTrack"))
+local GoldTrack = require(shared:WaitForChild("GoldTrack"))
 
 local CowboyRules = {}
 CowboyRules.__index = CowboyRules
 
-export type Event = "splat" | "fell" | "barrel" | "mail"
+export type Event = "splat" | "fell" | "barrel" | "mail" | "gold"
+type Bag = "mail" | "gold"
+type Report = { index: number, at: number, version: number } -- a bag reported (os.clock, run version)
 
 type Fields = {
 	train: Model,
 	base: BasePart,
 	backUntil: number?, -- os.clock time the cowboy goes back onto the last car (while knocked off or fallen)
-	picked: { index: number, at: number, version: number }?, -- the bag last reported (os.clock, run version)
+	picked: { [Bag]: Report }, -- the bag of each kind last reported
 	roofs: { BasePart }, -- the car roof floors the barrels roll on (BarrelTrack.roofs)
 }
 export type Rules = typeof(setmetatable({} :: Fields, CowboyRules))
 
 function CowboyRules.new(train: Model, base: BasePart): Rules
-	local fields: Fields = { train = train, base = base, backUntil = nil, picked = nil, roofs = BarrelTrack.roofs(train) }
+	local fields: Fields = { train = train, base = base, backUntil = nil, picked = {}, roofs = BarrelTrack.roofs(train) }
 	return setmetatable(fields, CowboyRules)
 end
 
@@ -69,6 +72,40 @@ local function knockOff(self: Rules, humanoid: Humanoid, root: BasePart)
 	humanoid.PlatformStand = true
 	root.AssemblyLinearVelocity = self.base.CFrame:VectorToWorldSpace(Vector3.new(0, c.KnockUp, c.KnockBack))
 	self.backUntil = os.clock() + c.SplatSeconds
+end
+
+-- Where the next bag of a kind hangs (train space, at run distance `distance`), and its index; nil when there is none.
+local function nextBag(self: Rules, kind: Bag, distance: number): (Vector3?, number?)
+	local index = PartUtil.number(self.train, if kind == "mail" then Names.MailNext else Names.GoldNext)
+	if not index then
+		return nil, nil
+	end
+	if kind == "mail" then
+		local b, m = Config.Bridge, Config.Mail
+		local at, side = CourseMath.mailAt(index, b.FirstAt, b.Gaps)
+		return Vector3.new(side * m.BagX, m.BagY, distance - at), index
+	end
+	local at = GoldTrack.at(index)
+	return Vector3.new(0, Config.GoldMail.BagY, distance - at), index
+end
+
+-- The next bag of a kind is picked up when the cowboy's middle (`middle`, train space) comes within `reach` of it.
+-- Reported once; again after Config.Cowboy.ReportAgain (if the server did not take it, e.g. it came in too late) or
+-- once the run has changed. Returns the bag picked up now, if any.
+local function pickUp(self: Rules, kind: Bag, middle: Vector3, distance: number, reach: number, version: number): number?
+	local bag, index = nextBag(self, kind, distance)
+	if not (bag and index) then
+		return nil
+	end
+	local last = self.picked[kind]
+	if last and last.index == index and last.version == version and os.clock() - last.at < Config.Cowboy.ReportAgain then
+		return nil
+	end
+	if (middle - bag).Magnitude <= reach then
+		self.picked[kind] = { index = index, at = os.clock(), version = version }
+		return index
+	end
+	return nil
 end
 
 -- The player stops riding this train (it went, or a new one came): a cowboy still knocked stiff gets up again.
@@ -134,19 +171,17 @@ function CowboyRules.update(self: Rules, character: Model?, floor: BasePart?, li
 				end
 			end
 		end
-		-- The next bag: picked up when the cowboy's middle passes close to it. Reported once; again after a second (if the
-		-- server did not take it, e.g. it came in too late) or once the run has changed.
-		local nextBag = PartUtil.number(self.train, Names.MailNext)
-		local last = self.picked
-		local waiting = last ~= nil and last.index == nextBag and last.version == version and os.clock() - last.at < c.ReportAgain
+		-- The bags: the cowboy's middle (upper torso) close to the next mail bag or the next gold bag.
 		local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or root
-		if nextBag and not waiting and torso and torso:IsA("BasePart") then
-			local m = Config.Mail
-			local at, side = CourseMath.mailAt(nextBag, b.FirstAt, b.Gaps)
-			local bag = Vector3.new(side * m.BagX, m.BagY, distance - at)
-			if (baseCFrame:PointToObjectSpace(torso.Position) - bag).Magnitude <= m.Reach then
-				self.picked = { index = nextBag, at = os.clock(), version = version }
-				return "mail", nextBag
+		if torso and torso:IsA("BasePart") then
+			local chest = baseCFrame:PointToObjectSpace(torso.Position)
+			local mail = pickUp(self, "mail", chest, distance, Config.Mail.Reach, version)
+			if mail then
+				return "mail", mail
+			end
+			local gold = pickUp(self, "gold", chest, distance, Config.GoldMail.Reach, version)
+			if gold then
+				return "gold", gold
 			end
 		end
 	end

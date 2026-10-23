@@ -39,6 +39,9 @@ local task = {
 	delay = function(s, fn, ...)
 		schedule(now + s, coroutine.create(fn), ...)
 	end,
+	defer = function(fn, ...)
+		schedule(now, coroutine.create(fn), ...)
+	end,
 	spawn = function(fn, ...)
 		local co = coroutine.create(fn)
 		local ok, err = coroutine.resume(co, ...)
@@ -165,6 +168,20 @@ TextChatService.CanUsersChatAsync = function(_, from, to)
 	return not chatBlocked[from .. ">" .. to]
 end
 workspace.FindFirstChild = function(_, _name) return nil end
+-- Chat channels (ChatGate): tests add fake TextChannels to fakeChannels and fire its ChildAdded.
+local fakeChannels = { children = {}, ChildAdded = signal() }
+function fakeChannels:GetChildren() return self.children end
+-- The built-in whisper command (ChatGate turns it off during guarded rounds).
+local fakeWhisperCommand = { Enabled = true, IsA = function(_, className) return className == "TextChatCommand" end }
+local fakeCommands = { FindFirstChild = function(_, name) return if name == "RBXWhisperCommand" then fakeWhisperCommand else nil end }
+TextChatService.FindFirstChild = function(_, name)
+	if name == "TextChannels" then
+		return fakeChannels
+	elseif name == "TextChatCommands" then
+		return fakeCommands
+	end
+	return nil
+end
 local Enum = { AccessModifierType = { Allow = "Allow", Deny = "Deny" } }
 
 local loaders = {}

@@ -4,7 +4,8 @@
 --   - while I present: the mission menu (right side, open during the last seconds of free talk; recommended missions
 --     marked), the same menu for "who flies" after a one-word mission (bundle 4b: tap a name, then "날려!"), the
 --     sound buttons (bottom centre), and on private servers the banned-word list (left side, bundle 5a): every alive
---     player with their word and a button, "다시 뽑기" during the assignment, "🔔 들었다" during the round.
+--     player with their word and a button, "다시 뽑기" during the assignment, "🔔 들었다" during the round;
+--   - a banned word caught in chat (bundle 5b): a red banner at the top, "name · 'word' · seconds left" and "🛟 구제".
 -- It only shows what it is told and reports presses; the server checks every one of them.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -25,6 +26,9 @@ local soundBar: Frame
 local wordFrame: Frame
 local wordList: ScrollingFrame
 local wordKey = "" -- what the list shows now (rebuilt only when it changes)
+local rescueFrame: Frame
+local rescueRows: { { label: TextLabel, endsAt: number, text: string } } = {}
+local onRescue: (number) -> () = function(_userId) end
 local onWordAction: (string, number) -> () = function(_mode, _userId) end
 local volunteered = false
 local menuEndsAt = 0
@@ -50,12 +54,13 @@ end
 
 export type WordRow = { userId: number, name: string, word: string }
 
--- onVolunteer(on), onPick(missionId), onSound(index), onWord(mode, userId) ("reroll" / "heard"): the player pressed
--- one of the controls.
+-- onVolunteer(on), onPick(missionId), onSound(index), onWord(mode, userId) ("reroll" / "heard"), onRescueHit(userId):
+-- the player pressed one of the controls.
 function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> (), onSound: (number) -> (),
-	onWord: (string, number) -> ())
+	onWord: (string, number) -> (), onRescueHit: (number) -> ())
 	onPickMission = onPick
 	onWordAction = onWord
+	onRescue = onRescueHit
 	volunteerButton = button(Style.gui(), TEXT.VOLUNTEER, 240, 34)
 	volunteerButton.Name = "Volunteer"
 	volunteerButton.AnchorPoint = Vector2.new(0.5, 0)
@@ -163,6 +168,50 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	listLayout2.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout2.Padding = UDim.new(0, 4)
 	listLayout2.Parent = wordList
+
+	rescueFrame = Instance.new("Frame")
+	rescueFrame.Name = "Rescues"
+	rescueFrame.BackgroundTransparency = 1
+	rescueFrame.AnchorPoint = Vector2.new(0.5, 0)
+	rescueFrame.Position = UDim2.new(0.5, 0, 0, Style.row(4) + 24) -- (under the volunteer / step-down button)
+	rescueFrame.Size = UDim2.fromOffset(360, 0)
+	rescueFrame.AutomaticSize = Enum.AutomaticSize.Y
+	rescueFrame.Parent = Style.gui()
+	local rescueLayout = Instance.new("UIListLayout")
+	rescueLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	rescueLayout.Padding = UDim.new(0, 4)
+	rescueLayout.Parent = rescueFrame
+end
+
+export type RescueRow = { userId: number, name: string, word: string, endsAt: number }
+
+-- Banned words caught in chat waiting for my rescue (while I present); an empty list clears the banner.
+function PresenterPanel.setRescues(rows: { RescueRow })
+	for _, child in rescueFrame:GetChildren() do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+	table.clear(rescueRows)
+	for i, row in rows do
+		local line = Style.panel(rescueFrame, Style.RED, 0.1, 10)
+		line.Size = UDim2.new(1, 0, 0, 40)
+		line.LayoutOrder = i
+		local label = Style.label(line, Style.BOLD, 18, Style.WHITE)
+		label.Size = UDim2.new(1, -124, 1, 0)
+		label.Position = UDim2.fromOffset(10, 0)
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		local text = row.name .. " · '" .. row.word .. "'"
+		label.Text = text
+		local save = button(line, TEXT.RESCUE_BUTTON, 108, 32)
+		save.AnchorPoint = Vector2.new(1, 0.5)
+		save.Position = UDim2.new(1, -6, 0.5, 0)
+		save.TextSize = 16
+		save.Activated:Connect(function()
+			onRescue(row.userId)
+		end)
+		table.insert(rescueRows, { label = label, endsAt = row.endsAt, text = text })
+	end
 end
 
 -- The banned-word list (private servers, while I present): `mode` "reroll" (assignment) or "heard" (round), nil
@@ -223,6 +272,9 @@ function PresenterPanel.setPresenting(on: boolean)
 	soundBar.Visible = on
 	if not on then
 		PresenterPanel.closeMenu()
+		if #rescueRows > 0 then
+			PresenterPanel.setRescues({}) -- (a banner left from when I presented)
+		end
 	end
 end
 
@@ -271,8 +323,11 @@ function PresenterPanel.closeMenu()
 	menuFrame.Visible = false
 end
 
--- Every frame: the countdown in the menu title.
+-- Every frame: the countdown in the menu title and on the rescue banner.
 function PresenterPanel.tick(now: number)
+	for _, row in rescueRows do
+		row.label.Text = string.format("%s · %d", row.text, math.max(0, math.ceil(row.endsAt - now)))
+	end
 	if menuFrame.Visible then
 		local left = math.max(0, math.ceil(menuEndsAt - now))
 		menuTitle.Text = string.format("%s · %d", if menuKind == "judge" then TEXT.JUDGE_PICK else TEXT.PICK_MISSION, left)

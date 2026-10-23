@@ -71,6 +71,8 @@ return {
 	HABIT_WORD_CHANCE = 0.3, -- per player: chance that a word is a speech habit (진짜, 대박 ...) instead of a noun
 	ASSIGN_REROLL_SECONDS = 15, -- the assignment with words and a presenter: time to re-draw words (private servers)
 	EAR_COOLDOWN = 1, -- seconds between two "I heard a banned word" presses of the presenter
+	RESCUE_SECONDS = 3, -- a banned word caught in chat waits this long for the presenter's rescue (bundle 5b)
+	HIT_SOUND = 5, -- the sound everyone hears when chat catches a banned word (index in PRESENTER_SOUNDS: 땡)
 	-- Speech judging (JudgeService, phase 2 public servers): kept for that module and its tests.
 	-- Speech still counts if it began before the moment the round was decided and ended no later than END_TOLERANCE
 	-- after it; judging waits until every alive player's client says that speech has been sent (SETTLE_MAX at most).
@@ -211,6 +213,9 @@ return {
 		NOBODY_FLUNG = "아무도 안 날아가요",
 		FLUNG = "%s 날아가요!",
 		EAR_HIT = "🔔 금칙어! %s",
+		RESCUE_WAIT = "🚨 %s 금칙어! 진행자가 구제할 수 있어요",
+		RESCUED = "🛟 구제! %s 무사해요",
+		RESCUE_BUTTON = "🛟 구제",
 		MY_WORD_WAS = "내 금칙어는 '%s'였어요",
 		WORDS_TITLE = "금칙어 명단",
 		WORDS_REROLL = "다시 뽑기",

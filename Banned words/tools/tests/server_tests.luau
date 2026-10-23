@@ -204,6 +204,24 @@ do
 	Match.phase = "Lobby"
 end
 
+---------------------------------------------------------------- 3b. chat judging (bundle 5b)
+do
+	local J = require(node("Judge"))
+	check("3h chat: spaces, punctuation and invisible characters do not hide a word", J.chatHit("사과", "사 과 먹을래")
+		and J.chatHit("사과", "사.과!") and J.chatHit("사과", "사\u{200B}과") and J.chatHit("사과", "사\u{3000}과")
+		and J.chatHit("사과", "청사과나무"))
+	check("3k chat: Unicode spaces, middle dots, emoji and direction marks do not hide a word either",
+		J.chatHit("사과", "사\u{00A0}과") and J.chatHit("사과", "사\u{00B7}과") and J.chatHit("사과", "사\u{318D}과")
+		and J.chatHit("사과", "사\u{2002}과") and J.chatHit("사과", "사🍎과") and J.chatHit("사과", "사\u{200E}과")
+		and J.chatHit("사과", "사\u{FE0F}과") and J.chatHit("사과", "사…과"))
+	check("3l chat: Hangul fillers (blank-looking letters) do not hide a word", J.chatHit("사과", "사\u{3164}과")
+		and J.chatHit("사과", "사\u{115F}과") and J.chatHit("사과", "사\u{1160}과"))
+	check("3i chat: a word across two words is a hit too (the rescue covers it); jamo spelling is not (owner)",
+		J.chatHit("사과", "의사 과학자") and not J.chatHit("사과", "ㅅㅏㄱㅘ") and not J.chatHit("사과", "애플"))
+	check("3j chat: aliases count, other words do not", J.chatHit("핸드폰", "휴대폰 줘", { "휴대폰" })
+		and not J.chatHit("핸드폰", "전화기 줘", { "휴대폰" }))
+end
+
 ---------------------------------------------------------------- 4. fixed texts never contain a word-bank word
 -- Players may read them aloud, so the same rule as the judge applies (tools/check_content.luau does this in Studio).
 local Judge = require(node("Judge"))

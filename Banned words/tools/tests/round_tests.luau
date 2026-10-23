@@ -1367,4 +1367,221 @@ do
 	finish(since3)
 end
 
+---------------------------------------------------------------- 14. banned words in chat, the rescue, chat rules (bundle 5b)
+do
+	local ChatGate = require(node("ChatGate"))
+	local volunteer = NetStub.listeners.Volunteer
+	local rescue = NetStub.listeners.Rescue
+	local general = { Name = "RBXGeneral" }
+	local whisper = { Name = "RBXWhisper:1_2" }
+	local function wordOf(player)
+		local p = Match.participants[player]
+		return p and p.words[1] and p.words[1].text
+	end
+	local messages = 0
+	local function say(player, text)
+		messages += 1
+		local id = "msg" .. messages
+		ChatGate.received(id, player, text) -- (the delivery callback calls this once per receiver)
+		ChatGate.received(id, player, text)
+		at(now + 0.05)
+	end
+	local function lastRescueTo(player, since)
+		for i = #NetStub.sent, 1, -1 do
+			local m = NetStub.sent[i]
+			if m.at < since then
+				break
+			end
+			if m.name == "Rescue" and m.to == player then
+				return m.payload
+			end
+		end
+		return nil
+	end
+
+	workspaceAttributes.BW_ServerKind = "private"
+	local ps = newPlayers(4) -- ps[1] presents
+	local spectator = newPlayers(1)[1]
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(ps[1], true)
+	local since = now
+	begin(ps, 10, nil, nil)
+	playerList = { ps[1], ps[2], ps[3], ps[4], spectator }
+	at(now + 1)
+
+	-- 14A: a hit, no rescue: "삐", the presenter's banner, then a life and a new word.
+	local word2 = wordOf(ps[2])
+	local hitAt = now
+	say(ps[2], "음 " .. word2 .. " 맞지?")
+	local banner = lastRescueTo(ps[1], hitAt)
+	local beeps = 0
+	for _, m in sent("Sound", hitAt) do
+		if m.payload.index == Config.HIT_SOUND then
+			beeps += 1
+		end
+	end
+	check("14a a banned word in chat: one beep and the presenter's rescue banner (once per message)", beeps == 1
+		and banner ~= nil and #banner.hits == 1 and banner.hits[1].userId == ps[2].UserId and banner.hits[1].word == word2)
+	say(ps[2], word2 .. " 또") -- while the hit waits: merged
+	at(hitAt + Config.RESCUE_SECONDS + 0.3)
+	check("14b no rescue in time: a life and a new word (a second hit while waiting is merged into the first)",
+		Match.participants[ps[2]].lives == Config.LIVES - 1 and wordOf(ps[2]) ~= word2)
+
+	-- 14B: rescued: a new word, no life lost.
+	at(now + Config.FLING_RETURN_SECONDS + 1)
+	local word3 = wordOf(ps[3])
+	local hit3 = now
+	say(ps[3], word3)
+	local function bannersSince(t0)
+		local n = 0
+		for _, m in NetStub.sent do
+			if m.name == "Rescue" and m.to == ps[1] and m.at >= t0 then
+				n += 1
+			end
+		end
+		return n
+	end
+	local beforeStranger = bannersSince(hit3)
+	rescue(ps[4], ps[3].UserId) -- not the presenter: nothing happens
+	local afterStranger = bannersSince(hit3)
+	local stillWaiting = lastRescueTo(ps[1], hit3)
+	rescue(ps[1], ps[3].UserId)
+	local afterPresenter = lastRescueTo(ps[1], hit3)
+	at(hit3 + Config.RESCUE_SECONDS + 0.3)
+	check("14c only the presenter rescues (a player's press changes nothing): no life lost, but a new word",
+		afterStranger == beforeStranger and stillWaiting ~= nil and #stillWaiting.hits == 1 and #afterPresenter.hits == 0
+		and Match.participants[ps[3]].lives == Config.LIVES and wordOf(ps[3]) ~= word3
+		and noticesWith(string.format(Config.TEXT.RESCUED, ps[3].DisplayName), hit3) == 1)
+
+	-- 14C: chat rules while the round is on: non-players' messages do not reach players; whispers are off.
+	check("14d chat rules: spectators, out players and the presenter do not reach alive players; players reach everyone",
+		ChatGate.shouldDeliver(general, spectator, ps[2]) == false and ChatGate.shouldDeliver(general, ps[1], ps[2]) == false
+		and ChatGate.shouldDeliver(general, ps[2], spectator) == true and ChatGate.shouldDeliver(general, spectator, ps[1]) == true
+		and ChatGate.shouldDeliver(general, ps[2], ps[3]) == true)
+	check("14e whispers are blocked during the round (the /w command off too)", ChatGate.shouldDeliver(whisper, ps[2], ps[3]) == false
+		and ChatGate.shouldDeliver(whisper, ps[2], ps[2]) == true and fakeWhisperCommand.Enabled == false)
+	local before4 = Match.participants[ps[4]].lives
+	NetStub.listeners.DevFling(ps[2], "out")
+	at(now + Config.FLING_RETURN_SECONDS + 1)
+	local outAt = now
+	say(ps[2], wordOf(ps[2]) or "?") -- out now: their word no longer counts
+	at(now + 0.5)
+	local outBeeps = 0
+	for _, m in sent("Sound", outAt) do
+		if m.payload.index == Config.HIT_SOUND then
+			outBeeps += 1
+		end
+	end
+	check("14f only alive players' messages are judged (an out player writing their own word: nothing); out players do not reach players",
+		not Match.isAlive(ps[2]) and wordOf(ps[2]) ~= nil and outBeeps == 0
+		and ChatGate.shouldDeliver(general, ps[2], ps[3]) == false and ChatGate.shouldDeliver(general, ps[2], spectator) == true)
+
+	-- 14D: no presenter on a private server: chat judging stops (§3).
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(ps[1], false) -- steps down; nobody takes over
+	at(now + 0.5)
+	local word4 = wordOf(ps[4])
+	say(ps[4], word4)
+	at(now + Config.RESCUE_SECONDS + 0.3)
+	check("14g without a presenter, chat judging stops", Match.presenter == nil and Match.participants[ps[4]].lives == before4
+		and wordOf(ps[4]) == word4)
+	NetStub.listeners.DevFling(ps[3], "out")
+	NetStub.listeners.DevFling(ps[4], "out")
+	finish(since)
+	check("14h after the round the chat rules are off", ChatGate.shouldDeliver(general, spectator, ps[2]) == true
+		and ChatGate.shouldDeliver(whisper, ps[2], ps[3]) == true and fakeWhisperCommand.Enabled == true)
+
+	-- 14E: public servers (stage 1): no words, no chat rules.
+	workspaceAttributes.BW_ServerKind = "public"
+	local qs = newPlayers(2)
+	local sinceQ = now
+	begin(qs, 10, nil, nil)
+	check("14i public servers: no chat rules (nothing to leak)", ChatGate.shouldDeliver(general, spectator, qs[1]) == true)
+	NetStub.listeners.DevFling(qs[2], "out")
+	finish(sinceQ)
+	workspaceAttributes.BW_ServerKind = nil
+end
+
+---------------------------------------------------------------- 15. chat judging at the edges (bundle 5b, after review)
+do
+	local ChatGate = require(node("ChatGate"))
+	local volunteer = NetStub.listeners.Volunteer
+	local function wordOf(player)
+		local p = Match.participants[player]
+		return p and p.words[1] and p.words[1].text
+	end
+	local function beepsSince(since)
+		local n = 0
+		for _, m in sent("Sound", since) do
+			if m.payload.index == Config.HIT_SOUND then
+				n += 1
+			end
+		end
+		return n
+	end
+	workspaceAttributes.BW_ServerKind = "private"
+
+	-- 15A: the real delivery callback on a TextChannel (as TextChatService would call it).
+	local channel = {
+		Name = "RBXGeneral",
+		IsA = function(_, className) return className == "TextChannel" end,
+	}
+	fakeChannels.ChildAdded.fire(channel)
+	local ps = newPlayers(6) -- ps[1] presents; ps[2..6] play (five: the final starts at three or fewer)
+	local spectator = newPlayers(1)[1]
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(ps[1], true)
+	local since = now
+	begin(ps, 10, nil, nil)
+	playerList = { ps[1], ps[2], ps[3], ps[4], ps[5], ps[6], spectator }
+	at(now + 1)
+	local function message(id, from, text)
+		return { MessageId = id, TextSource = { UserId = from.UserId }, Text = text }
+	end
+	local cb = channel.ShouldDeliverCallback
+	local word2 = wordOf(ps[2])
+	local cbAt = now
+	local toPlayer = cb and cb(message("real1", spectator, "hi"), { UserId = ps[3].UserId })
+	local toSpectator = cb and cb(message("real1", spectator, "hi"), { UserId = ps[1].UserId })
+	if cb then
+		cb(message("real2", ps[2], word2), { UserId = ps[3].UserId })
+		cb(message("real2", ps[2], word2), { UserId = ps[4].UserId })
+	end
+	at(now + 0.1)
+	check("15a the channel callback: a spectator's message does not reach a player, does reach the presenter; a player's word is caught once",
+		cb ~= nil and toPlayer == false and toSpectator == true and beepsSince(cbAt) == 1)
+
+	-- 15B: a rescue still waiting when the final becomes due (three left) is judged first, by the main game's rule.
+	-- (Two leave rather than fly: no flight to wait for, so only the waiting rescue can hold the final back.)
+	leave(ps[5], { ps[1], ps[2], ps[3], ps[4], ps[6], spectator })
+	leave(ps[6], { ps[1], ps[2], ps[3], ps[4], spectator })
+	at(now + 0.5)
+	local phaseWhileWaiting = Match.phase
+	at(cbAt + Config.RESCUE_SECONDS + 0.5)
+	check("15b the final waits for a rescue still waiting; the hit costs a main-game life (not a final out)",
+		phaseWhileWaiting == "Play" and Match.participants[ps[2]].lives == Config.LIVES - 1 and wordOf(ps[2]) ~= word2)
+	NetStub.listeners.DevFling(ps[3], "out")
+	NetStub.listeners.DevFling(ps[4], "out")
+	finish(since)
+
+	-- 15C: once the main game is decided, a new message is not judged (even while an older rescue still waits).
+	local qs = newPlayers(4) -- qs[1] presents
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(qs[1], true)
+	local since2 = now
+	begin(qs, 10, nil, nil)
+	at(now + 1)
+	ChatGate.received("edge1", qs[2], wordOf(qs[2])) -- waits for a rescue
+	at(now + 0.1)
+	NetStub.listeners.DevFling(qs[2], "out")
+	NetStub.listeners.DevFling(qs[3], "out") -- qs[4] is the last one: decided
+	at(now + 0.1)
+	local lateAt = now
+	ChatGate.received("edge2", qs[4], wordOf(qs[4]))
+	at(now + 0.1)
+	check("15c after the decision a new message is not judged", beepsSince(lateAt) == 0)
+	finish(since2)
+	workspaceAttributes.BW_ServerKind = nil
+end
+
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

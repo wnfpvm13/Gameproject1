@@ -23,6 +23,8 @@
 --   Splash      that player hit the water: { userId, position }
 --   Words       to each player: the banned words they may see (WordService.payloadFor; bundle 5a)
 --   (client -> server: EarJudge (userId) the presenter heard a banned word, Reroll (userId) a new word; private servers)
+--   Rescue      to the presenter: banned words caught in chat waiting for a rescue { hits = { {userId, word, endsAt} } }
+--               (client -> server: Rescue (userId) the presenter rescues that player)
 -- Kept for the speech judging (JudgeService, phase 2): Settle (server -> client), Transcript, VoicePing, Settled.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -31,7 +33,7 @@ local Net = {}
 local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
 	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer", "Lever",
-	"EarJudge", "Reroll",
+	"EarJudge", "Reroll", "Rescue",
 	"Words", "Settle", "Transcript", "VoicePing", "Settled",
 }
 

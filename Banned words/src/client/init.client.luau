@@ -150,6 +150,8 @@ end, function(mode, userId)
 	else
 		remotes.EarJudge:FireServer(userId)
 	end
+end, function(userId)
+	remotes.Rescue:FireServer(userId)
 end)
 MissionPanel.build(function(questionId, choice)
 	remotes.MissionAnswer:FireServer(questionId, choice)
@@ -240,6 +242,15 @@ remotes.Mission.OnClientEvent:Connect(function(payload)
 	end
 	local canAnswer = State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
 	MissionPanel.show(payload, canAnswer, names, State.myId())
+end)
+
+-- To the presenter: banned words caught in chat waiting for a rescue (bundle 5b).
+remotes.Rescue.OnClientEvent:Connect(function(info)
+	local rows = {}
+	for _, hit in info.hits or {} do
+		table.insert(rows, { userId = hit.userId, name = nameOf(hit.userId), word = hit.word, endsAt = hit.endsAt })
+	end
+	PresenterPanel.setRescues(rows)
 end)
 
 -- The presenter pulled the podium lever (their launch follows).

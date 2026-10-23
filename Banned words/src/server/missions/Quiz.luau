@@ -4,6 +4,13 @@
 -- harder questions and a wrong answer is out (RoundService decides that). Players flying when the question opens
 -- cannot answer and are neither failed nor counted as missing (§4). Questions never repeat until the bank runs out,
 -- and a question whose text or any choice contains a banned word in play is skipped.
+-- The bell quiz (`Quiz.bell`, bundle 6b, owner 2026-10-23: the first to ring answers by voice, the presenter judges)
+-- lives here too, so both draw from the same bank without repeats. BELL_QUIZ_QUESTIONS questions; for each the bells
+-- of everyone on the ground are open BELL_WAIT_SECONDS; the first ring gets the floor and the presenter presses right
+-- or wrong (they see the right answer). Wrong: a subjective launch, and the bells open again for those who have not
+-- answered it, BELL_TRIES answers at most; no verdict in time: no penalty, the next ring. Nobody rings at all: that
+-- question goes to everyone with four choices (like the quiz). Only with a presenter; if they are gone mid-way the
+-- remaining questions go to everyone the same way.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -30,6 +37,10 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
 }
 
 local Quiz = {
@@ -88,17 +99,14 @@ function Quiz.available(final: boolean): boolean
 	return #(if final then QuizBank.final else QuizBank.main) > 0
 end
 
--- Returns false when no clean question is left (nothing was asked).
-function Quiz.run(ctx: Ctx): boolean?
-	local question = pick(if ctx.final then QuizBank.final else QuizBank.main, ctx.rng)
-	if not question then
-		return false
-	end
+-- Everyone on the ground answers `question` with four choices; wrong or none is a fail (event `key`). Returns false if
+-- cancelled.
+local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): boolean
 	ctx.show(if ctx.final then Config.TEXT.FINAL_QUIZ else Config.TEXT.QUIZ_START)
 	local shown = { kind = "quiz", final = ctx.final, question = question.q, choices = question.choices }
 	ctx.screen(shown)
 	if not ctx.wait(Config.QUIZ_INTRO_SECONDS) then
-		return nil
+		return false
 	end
 	local asked = {}
 	for _, player in ctx.players() do
@@ -108,7 +116,7 @@ function Quiz.run(ctx: Ctx): boolean?
 	end
 	local answers = ctx.ask(shown, #question.choices, Config.QUIZ_SECONDS, asked)
 	if ctx.cancelled() then
-		return nil
+		return false
 	end
 	local answered, missed, wrong = {}, {}, {}
 	for _, player in asked do
@@ -128,9 +136,118 @@ function Quiz.run(ctx: Ctx): boolean?
 	if not ctx.final then
 		ctx.answers(answered, missed) -- before the fail: a launched player's miss would not count any more
 	end
-	ctx.fail(wrong, "answer")
+	ctx.fail(wrong, key)
 	ctx.reveal(Config.QUIZ_REVEAL_SECONDS) -- also when this answer decided the round
+	return true
+end
+
+-- Returns false when no clean question is left (nothing was asked).
+function Quiz.run(ctx: Ctx): boolean?
+	local question = pick(if ctx.final then QuizBank.final else QuizBank.main, ctx.rng)
+	if not question then
+		return false
+	end
+	askEveryone(ctx, question, "answer")
 	return nil
 end
+
+local BellQuiz = {
+	id = "bellQuiz",
+	title = Config.TEXT.BELL_QUIZ_TITLE,
+	-- The longest run: every question with every answer chance (each its own bells, an answer by chat, judged at the
+	-- last moment).
+	expectedSeconds = Config.BELL_QUIZ_QUESTIONS * (Config.BELL_TRIES
+		* (Config.BELL_WAIT_SECONDS + Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS) + Config.QUIZ_REVEAL_SECONDS),
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
+	minPlayers = Config.BELL_QUIZ_MIN_PLAYERS :: number?,
+	needsPresenter = true :: boolean?,
+}
+
+function BellQuiz.available(final: boolean): boolean
+	return not final and #QuizBank.main > 0
+end
+
+-- One question by the bells. Returns false if cancelled.
+local function ringFor(ctx: Ctx, question: QuizBank.Question, number: number): boolean
+	local right = question.choices[question.answer]
+	local tried: { [Player]: boolean } = {}
+	for _ = 1, Config.BELL_TRIES do
+		local from = {}
+		for _, player in ctx.players() do
+			if not ctx.flying(player) and not tried[player] then
+				table.insert(from, player)
+			end
+		end
+		if not Match.presenter then
+			return askEveryone(ctx, question, "answer" .. number) -- (the presenter is gone: four choices for everyone)
+		end
+		if #from == 0 then
+			break
+		end
+		ctx.screen({ kind = "bellQuiz", question = question.q, stage = "wait", endsAt = Match.now() + Config.BELL_WAIT_SECONDS })
+		ctx.show(Config.TEXT.BELL_QUIZ_WAIT)
+		local holder = ctx.bell(from, Config.BELL_WAIT_SECONDS, true)[1]
+		if ctx.cancelled() then
+			return false
+		end
+		if not holder then
+			if next(tried) == nil then
+				ctx.show(Config.TEXT.BELL_QUIZ_NOBODY)
+				return askEveryone(ctx, question, "answer" .. number) -- (nobody rang at all: everyone answers with four choices)
+			end
+			break
+		end
+		tried[holder] = true
+		local p = Match.participants[holder]
+		local answerSeconds = if p and p.chat then Config.BELL_ANSWER_CHAT_SECONDS else Config.BELL_ANSWER_SECONDS
+		local seconds = answerSeconds + Config.BELL_VERDICT_SECONDS
+		ctx.screen({ kind = "bellQuiz", question = question.q, stage = "answer", ids = { holder.UserId },
+			endsAt = Match.now() + seconds })
+		ctx.show(string.format(Config.TEXT.BELL_QUIZ_ANSWERING, holder.DisplayName))
+		ctx.floor(holder)
+		local verdict = ctx.presenterVerdict(right, seconds)
+		ctx.floor(nil)
+		if ctx.cancelled() then
+			return false
+		end
+		if verdict == nil and not Match.presenter then
+			return askEveryone(ctx, question, "answer" .. number) -- (the presenter left while judging)
+		end
+		if verdict == "right" then
+			ctx.score(holder, Config.SCORE_BELL_QUIZ)
+			ctx.show(string.format(Config.TEXT.BELL_QUIZ_RIGHT, holder.DisplayName))
+			break
+		elseif verdict == "wrong" then
+			ctx.show(string.format(Config.TEXT.BELL_QUIZ_WRONG, holder.DisplayName))
+			if ctx.canFling(holder) then
+				ctx.fail({ holder }, "bell" .. number .. ":" .. holder.UserId, true)
+			end
+		end
+	end
+	ctx.screen({ kind = "quizResult", final = false, question = question.q, choices = question.choices, answer = question.answer })
+	ctx.show(string.format(Config.TEXT.QUIZ_ANSWER, right))
+	return ctx.wait(Config.QUIZ_REVEAL_SECONDS)
+end
+
+-- Returns false when no clean question was left (nothing was asked).
+function BellQuiz.run(ctx: Ctx): boolean?
+	ctx.show(Config.TEXT.BELL_QUIZ_START)
+	local asked = 0
+	for number = 1, Config.BELL_QUIZ_QUESTIONS do
+		local question = pick(QuizBank.main, ctx.rng)
+		if not question then
+			break
+		end
+		asked += 1
+		-- (no presenter any more: the rest go to everyone with four choices)
+		local going = if Match.presenter then ringFor(ctx, question, number) else askEveryone(ctx, question, "answer" .. number)
+		if not going then
+			return nil
+		end
+	end
+	return if asked > 0 then nil else false
+end
+
+Quiz.bell = BellQuiz
 
 return Quiz

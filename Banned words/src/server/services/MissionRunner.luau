@@ -8,8 +8,9 @@
 -- checks it). It alone listens to the answer remote ("MissionAnswer") and hands answers to the running mission's
 -- question (docs/DESIGN_V3.md §13: Net.listen cannot disconnect, so missions never listen themselves). What a mission
 -- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
--- Bundle 4: the quiz (also the final), the roulette, "a word to everyone" (4b, only with a presenter); bundle 6a: the
--- banned-word talk (only while speech judging is on); and the Studio-only test mission.
+-- Bundle 4: the quiz (also the final), the roulette, "say what you like" (4b, bells since 6b); bundle 6a: the
+-- banned-word talk (only while speech judging is on); bundle 6b: the bell quiz (only with a presenter); and the
+-- Studio-only test mission.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -49,6 +50,14 @@ export type Ctx = {
 	talk: (stage: string, topic: string?) -> (),
 	-- The presenter's re-draw window: waits `seconds` or until they press "start now"; false if cancelled meanwhile.
 	presenterReroll: (seconds: number) -> boolean,
+	-- The seat bells of `from` open for `seconds` (bundle 6b): who rang, first to last (`firstOnly`: closes at the first).
+	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	-- The floor (§5.1): only `player` (and the presenter) heard by everyone, alive players receive only their chat;
+	-- nil ends it. RoundService ends it after every mission too.
+	floor: (player: Player?) -> (),
+	-- The presenter judges an answer (the bell quiz): "right", "wrong", or nil (none in time, no presenter, over).
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (), -- session points (a right bell-quiz answer)
 }
 
 -- What a mission gets: the same, with fail/show that do nothing once cancelled, and wait().
@@ -78,6 +87,10 @@ export type MissionCtx = {
 	lever: () -> (), -- everyone sees the podium lever pulled (the presenter's launch)
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
 }
 
 export type Mission = {
@@ -94,7 +107,7 @@ export type Mission = {
 -- An entry of a presenter's menu.
 export type Option = { id: string, title: string, recommended: boolean }
 
-local MISSIONS: { Mission } = { Quiz, Roulette, OneWord, BannedTalk, TestMission }
+local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
@@ -282,6 +295,24 @@ local function missionCtx(ctx: Ctx): MissionCtx
 				return false
 			end
 			return ctx.presenterReroll(seconds)
+		end,
+		bell = function(from: { Player }, seconds: number, firstOnly: boolean): { Player }
+			if ctx.cancelled() then
+				return {}
+			end
+			return ctx.bell(from, seconds, firstOnly)
+		end,
+		floor = ctx.floor, -- (also after a cancel: the floor must always be given back)
+		presenterVerdict = function(answer: string, seconds: number): string?
+			if ctx.cancelled() then
+				return nil
+			end
+			return ctx.presenterVerdict(answer, seconds)
+		end,
+		score = function(player: Player, amount: number)
+			if not ctx.cancelled() then
+				ctx.score(player, amount)
+			end
 		end,
 		show = function(text: string)
 			if not ctx.cancelled() then

@@ -18,6 +18,7 @@ local GetUp = require(script:WaitForChild("GetUp"))
 local Billboards = require(script:WaitForChild("Billboards"))
 local ChatLook = require(script:WaitForChild("ChatLook"))
 local Fx = require(script:WaitForChild("Fx"))
+local Bell = require(script:WaitForChild("Bell"))
 local UI = script:WaitForChild("UI")
 local Hud = require(UI:WaitForChild("Hud"))
 local Toast = require(UI:WaitForChild("Toast"))
@@ -25,10 +26,15 @@ local MicPanel = require(UI:WaitForChild("MicPanel"))
 local ReactionBar = require(UI:WaitForChild("ReactionBar"))
 local PresenterPanel = require(UI:WaitForChild("PresenterPanel"))
 local MissionPanel = require(UI:WaitForChild("MissionPanel"))
+local BellButton = require(UI:WaitForChild("BellButton"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
 local myFlightEndsAt = 0 -- os.clock(): while my own launch lasts I keep the show camera (I watch myself fly off)
+local bellOpen = false -- the server has my seat bell open (bundle 6b)
+local bellWindow = 0 -- the open window's number (sent back with my ring)
+local bellRung = false -- I rang it this time (one ring each time it opens)
+local menuId = 0 -- the presenter menu now open (sent back with my pick)
 
 -- Seated players cannot jump out or reset during a round.
 local function applySeatLock()
@@ -124,6 +130,9 @@ local function refresh()
 		end
 	end
 	PresenterPanel.setWords(rows, wordMode, round.serverKind == "public")
+	local canRing = bellOpen and not bellRung and State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
+	Bell.set(canRing)
+	BellButton.setVisible(canRing)
 	refreshVoice()
 	applySeatLock()
 end
@@ -140,7 +149,7 @@ end)
 PresenterPanel.build(function(on)
 	remotes.Volunteer:FireServer(on)
 end, function(id)
-	remotes.PresenterPick:FireServer(id)
+	remotes.PresenterPick:FireServer(id, menuId)
 end, function(index)
 	remotes.PresenterSound:FireServer(index)
 end, function(mode, userId)
@@ -159,6 +168,15 @@ end)
 MissionPanel.build(function(questionId, choice)
 	remotes.MissionAnswer:FireServer(questionId, choice)
 end)
+local function ringMyBell()
+	if not bellRung then
+		bellRung = true
+		remotes.Bell:FireServer(bellWindow)
+		refresh()
+	end
+end
+Bell.start(ringMyBell)
+BellButton.build(ringMyBell)
 Fx.init()
 FlatVoice.start()
 GetUp.start()
@@ -227,7 +245,8 @@ end)
 
 remotes.PresenterMenu.OnClientEvent:Connect(function(info)
 	if info.options then
-		PresenterPanel.openMenu(info.options, info.endsAt, info.kind)
+		menuId = info.id or 0
+		PresenterPanel.openMenu(info.options, info.endsAt, info.kind, info.note)
 	else
 		PresenterPanel.closeMenu()
 	end
@@ -257,6 +276,21 @@ remotes.Rescue.OnClientEvent:Connect(function(info)
 		table.insert(rows, { userId = hit.userId, name = nameOf(hit.userId), word = hit.word, endsAt = hit.endsAt })
 	end
 	PresenterPanel.setRescues(rows)
+end)
+
+-- The seat bells (bundle 6b): open to me or not; someone's bell rang (the ding and its light).
+remotes.BellOpen.OnClientEvent:Connect(function(info)
+	local window = info.id or 0
+	if window ~= bellWindow then
+		bellRung = false -- (a new window; the same one sent again on Sync keeps my ring)
+	end
+	bellWindow = window
+	bellOpen = info.open == true and table.find(info.ids or {}, State.myId()) ~= nil
+	refresh()
+end)
+remotes.BellRang.OnClientEvent:Connect(function(info)
+	local who = Players:GetPlayerByUserId(info.userId)
+	Fx.bellRang(if who then Bell.bellOf(who) else nil)
 end)
 
 -- The presenter pulled the podium lever (their launch follows).
@@ -348,6 +382,22 @@ if RunService:IsStudio() then
 		end
 	end)
 end
+
+-- Sitting down or getting up moves my bell prompt (it goes on the chair I sit on).
+local function watchSeating(character: Model)
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	if humanoid and humanoid:IsA("Humanoid") then
+		humanoid.Seated:Connect(function()
+			refresh()
+		end)
+	end
+end
+if player.Character then
+	task.spawn(watchSeating, player.Character)
+end
+player.CharacterAdded:Connect(function(character)
+	task.spawn(watchSeating, character)
+end)
 
 player.CharacterAdded:Connect(function()
 	myFlightEndsAt = 0 -- a launch of my previous character is over

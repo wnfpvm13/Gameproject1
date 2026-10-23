@@ -1,7 +1,7 @@
 --!strict
 -- Effects: the flying chair firing (seat flap snapping back on its hinge, "펑", smoke and confetti), the splash where
--- the player hits the water, the elimination buzzer and red flash, floating emoji reactions and the presenter's sound
--- buttons.
+-- the player hits the water, the elimination buzzer and red flash, floating emoji reactions, the presenter's sound
+-- buttons and a seat bell's ding with its light (bundle 6b).
 -- The server only sends signals; every client animates the flap itself (a server-moved flap would stutter).
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
@@ -22,6 +22,7 @@ local flash: Frame
 local buzzer: Sound
 local bang: Sound
 local splashSound: Sound
+local bellSound: Sound
 local presenterSounds: { Sound } = {} -- the presenter's sound buttons (Config.PRESENTER_SOUNDS order)
 local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
 local playing: { [BasePart]: number } = {} -- hinge -> current animation number
@@ -75,9 +76,32 @@ function Fx.init()
 	buzzer = sound("Buzzer", Config.SOUND_BUZZER, 0.6)
 	bang = sound("Bang", Config.SOUND_BANG, 0.8)
 	splashSound = sound("Splash", Config.SOUND_SPLASH, 0.8)
+	bellSound = sound("Bell", Config.SOUND_BELL, 0.7)
 	for i, entry in Config.PRESENTER_SOUNDS do
 		presenterSounds[i] = sound("PresenterSound" .. i, entry.id, 0.7)
 	end
+end
+
+local BELL_LIGHT_SECONDS = 0.6
+local bellRings: { [Model]: number } = {}
+-- A seat bell rang: the ding, and that bell's light (map contract: Bell.Light holds a PointLight) for a moment.
+function Fx.bellRang(bell: Model?)
+	playCopy(bellSound)
+	local light = bell and bell:FindFirstChild("Light")
+	local glow = light and light:FindFirstChildOfClass("PointLight")
+	if not (bell and light and light:IsA("BasePart") and glow) then
+		return
+	end
+	bellRings[bell] = (bellRings[bell] or 0) + 1
+	local ring = bellRings[bell]
+	glow.Enabled = true
+	light.Material = Enum.Material.Neon
+	task.delay(BELL_LIGHT_SECONDS, function()
+		if bellRings[bell] == ring then
+			glow.Enabled = false
+			light.Material = Enum.Material.SmoothPlastic
+		end
+	end)
 end
 
 -- The presenter pressed a sound button (everyone hears it).

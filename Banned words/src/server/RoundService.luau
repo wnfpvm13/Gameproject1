@@ -26,6 +26,7 @@ local MissionRunner = require(services:WaitForChild("MissionRunner"))
 local WordService = require(services:WaitForChild("WordService"))
 local RescueService = require(services:WaitForChild("RescueService"))
 local ChatGate = require(services:WaitForChild("ChatGate"))
+local BellService = require(services:WaitForChild("BellService"))
 local SeatService = require(services:WaitForChild("SeatService"))
 local SpectatorService = require(services:WaitForChild("SpectatorService"))
 local VoiceService = require(services:WaitForChild("VoiceService"))
@@ -192,6 +193,23 @@ local function settleTalk()
 	Match.broadcast()
 end
 
+-- The floor (docs/DESIGN_V3.md §5.1): `player` and the presenter are heard by everyone, the other alive players by
+-- nobody, and alive players receive only `player`'s chat; nil ends it.
+local floorHolder: Player? = nil -- has the floor now (given again to the new presenter's routing when they change)
+local function setFloor(player: Player?)
+	floorHolder = player
+	if player then
+		local ids = { player.UserId }
+		if Match.presenter then
+			table.insert(ids, Match.presenter.UserId)
+		end
+		VoiceService.setFloor(ids)
+	else
+		VoiceService.setFloor(nil)
+	end
+	ChatGate.setFloor(player)
+end
+
 -- The talk's prep stage: words for everyone alive (not inside the topic), shown, chat rules on; then the talk itself.
 local function setTalkStage(stage: string, topic: string?)
 	if stage == "prep" then
@@ -289,6 +307,28 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 				return Match.roundId ~= myRound or settled()
 			end)
 		end,
+		bell = function(from: { Player }, seconds: number, firstOnly: boolean): { Player }
+			return BellService.collect(from, seconds, firstOnly, function()
+				return Match.roundId ~= myRound or settled()
+			end)
+		end,
+		floor = setFloor,
+		presenterVerdict = function(answer: string, seconds: number): string?
+			local options = {
+				{ id = "right", title = Config.TEXT.VERDICT_RIGHT, recommended = false },
+				{ id = "wrong", title = Config.TEXT.VERDICT_WRONG, recommended = false },
+			}
+			-- (also over when the one answering left or flew: nothing to judge any more, and the floor goes back)
+			local holder = floorHolder
+			local picked = PresenterService.ask("verdict", options, seconds, function()
+				return Match.roundId ~= myRound or settled()
+					or (holder ~= nil and (not Match.isAlive(holder) or SeatService.isFlying(holder)))
+			end, answer)
+			return picked
+		end,
+		score = function(player: Player, amount: number)
+			Scores.add(player, amount)
+		end,
 	}
 end
 
@@ -365,6 +405,8 @@ local function playMain(myRound: number)
 			MissionRunner.run(mission, missionCtx(myRound, false, function(players, key, subjective)
 				failPlayers(players, "m" .. run .. ":" .. key, "fail", if subjective then "subjective" else "objective")
 			end, mainSettled))
+			setFloor(nil) -- (whatever the mission did: the bells close, everyone has their voice back)
+			BellService.close()
 			settleTalk() -- (a banned-word talk ends with its settle stage, also when it was cancelled or broke)
 		end
 	end
@@ -463,6 +505,8 @@ end
 
 local function cleanup()
 	SeatService.releaseAll()
+	setFloor(nil)
+	BellService.close()
 	RescueService.endRound() -- (before the presenter goes: their rescue banner is cleared)
 	PresenterService.endRound()
 	ChatGate.setGuard(false)
@@ -592,6 +636,9 @@ local function onPresenterChange(_reason: PresenterService.Change, old: Player?,
 		SpectatorService.toStands(old)
 	end
 	refreshSpeakers()
+	if floorHolder then
+		setFloor(floorHolder) -- (the new presenter is heard during the floor too)
+	end
 	Match.broadcast()
 	if talkOn() then
 		WordService.sendAll()
@@ -604,6 +651,7 @@ local function onSync(player: Player)
 	ChatService.sendAccess(player)
 	PresenterService.sendMenu(player)
 	MissionRunner.sendScreen(player)
+	BellService.send(player)
 	WordService.send(player)
 	if player == Match.presenter then
 		RescueService.send()
@@ -777,6 +825,7 @@ function RoundService.start()
 	RescueService.start(onRescueResolved)
 	ChatGate.start(onChat)
 	MissionRunner.start()
+	BellService.start(SeatService.isFlying)
 	LifeService.start(SeatService.isFlying)
 	SpectatorService.start(busy)
 	SeatService.init(onFlightOver)

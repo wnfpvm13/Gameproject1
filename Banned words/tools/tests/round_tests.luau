@@ -216,9 +216,13 @@ function Spectator.endRound() end
 function Spectator.toStands(player) table.insert(Spectator.stands, { player = player, at = now }) end
 loaders.SpectatorService = function() return Spectator end
 
-local Voice = { speakers = nil, silenced = nil, silencedCalls = 0 }
+local Voice = { speakers = nil, silenced = nil, silencedCalls = 0, floor = nil, floors = {} }
 function Voice.start() end
 function Voice.setSpeakers(ids) Voice.speakers = ids end
+function Voice.setFloor(ids)
+	Voice.floor = ids
+	table.insert(Voice.floors, ids or false)
+end
 function Voice.setSilenced(ids)
 	Voice.silenced = ids
 	Voice.silencedCalls += 1
@@ -259,6 +263,10 @@ function Scripted.run(ctx)
 		end
 		return
 	end
+	if Scripted.extra and not ctx.final then -- a test drives the ctx itself (bells, the floor, a verdict)
+		Scripted.extra(ctx)
+		return
+	end
 	local pick = if ctx.final then Scripted.finalPick else Scripted.pick
 	ctx.fail(if pick then pick(#list, ctx.players()) else {}, "result")
 	local second = if ctx.final then nil else Scripted.secondPick
@@ -272,7 +280,11 @@ loaders.TestMission = function() return Scripted end
 local function never(id)
 	return { id = id, title = id, expectedSeconds = 1, available = function(_final) return false end, run = function(_ctx) end }
 end
-loaders.Quiz = function() return never("quiz") end
+loaders.Quiz = function()
+	local quiz = never("quiz")
+	quiz.bell = never("bellQuiz")
+	return quiz
+end
 loaders.Roulette = function() return never("roulette") end
 loaders.OneWord = function() return never("oneWord") end
 
@@ -415,6 +427,23 @@ local RoundService = require(node("RoundService"))
 playerList = {}
 RoundService.start()
 at(now + 2)
+-- Presses name the menu / bell window they answer (bundle 6b); the tests press on the latest one unless told otherwise.
+local function latestId(name)
+	for i = #NetStub.sent, 1, -1 do
+		local m = NetStub.sent[i]
+		if m.name == name and m.payload.id then
+			return m.payload.id
+		end
+	end
+	return nil
+end
+local rawPick, rawBell = NetStub.listeners.PresenterPick, NetStub.listeners.Bell
+NetStub.listeners.PresenterPick = function(player, id, menuId)
+	return rawPick(player, id, menuId or latestId("PresenterMenu"))
+end
+NetStub.listeners.Bell = function(player, windowId)
+	return rawBell(player, windowId or latestId("BellOpen"))
+end
 
 -- 7A: three players, nobody fails: games back to back until the next would not fit, then the final at once, then the
 -- cap (the last question begins before the cap and is played to its end).
@@ -889,6 +918,18 @@ do
 		open = open and p.input.AccessType == Deny and #p.input.list == 0
 	end
 	check("9e round over: everyone is heard by everyone", open)
+	-- The floor (bundle 6b): the speaker and the presenter heard by everyone, the other alive players by nobody.
+	local holder, other, host = voicePlayer(4005), voicePlayer(4006), voicePlayer(4007)
+	playerList = { holder, other, host, spectator }
+	RealVoice.setSpeakers({ holder.UserId, other.UserId, host.UserId })
+	RealVoice.setFloor({ holder.UserId, host.UserId })
+	check("9f the floor: the speaker and the presenter are heard by everyone, the other players by nobody; spectators as before",
+		holder.input.AccessType == Deny and #holder.input.list == 0 and host.input.AccessType == Deny
+		and other.input.AccessType == Allow and #other.input.list == 0 and spectator.input.AccessType == Allow
+		and table.find(spectator.input.list, spectator.UserId) ~= nil)
+	RealVoice.setFloor(nil)
+	check("9g the floor given back: every player heard again", other.input.AccessType == Deny and #other.input.list == 0)
+	RealVoice.setSpeakers(nil)
 	playerList = {}
 end
 
@@ -1672,6 +1713,88 @@ do
 	workspaceAttributes.BW_ServerKind = nil
 	workspaceAttributes.BW_VoiceJudging = nil
 	Scripted.off = false
+end
+
+---------------------------------------------------------------- 15. the seat bells, the floor, the presenter's verdict (bundle 6b)
+do
+	local ring = NetStub.listeners.Bell
+	local volunteer = NetStub.listeners.Volunteer
+	local ps = newPlayers(4) -- ps[1] presents
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(ps[1], true)
+	local since = now
+	local seen = {}
+	Scripted.extra = function(ctx)
+		seen.rung = ctx.bell({ ps[2], ps[3] }, 3, false)
+		ctx.floor(ps[2])
+		seen.floor = Voice.floor and table.clone(Voice.floor)
+		seen.chatOther = ChatGate.shouldDeliver(general, ps[3], ps[4])
+		seen.chatHolder = ChatGate.shouldDeliver(general, ps[2], ps[4])
+		seen.chatToPresenter = ChatGate.shouldDeliver(general, ps[3], ps[1])
+		seen.verdict = ctx.presenterVerdict("캔버라", 5)
+		-- (the floor is left on here: RoundService gives it back after the mission)
+	end
+	local play = begin(ps, 10, nil, nil)
+	local pickMission = NetStub.listeners.PresenterPick
+	at(play + 0.3)
+	pickMission(ps[1], "scripted")
+	local missionAt = now
+	at(missionAt + Scripted.expectedSeconds + 0.5) -- the bells of ps[2] and ps[3] are open now
+	local openMsg = lastSent("BellOpen", missionAt)
+	ring(ps[4]) -- not open to them
+	rawBell(ps[2], (openMsg and openMsg.payload.id or 0) - 1) -- an older window's number: does not count
+	Seat.flying[ps[2]] = true
+	ring(ps[2]) -- flying: does not count
+	Seat.flying[ps[2]] = nil
+	ring(ps[3])
+	at(now + 0.3)
+	ring(ps[2])
+	ring(ps[3]) -- a second ring: one each time the bells open
+	local rangs = sent("BellRang", missionAt)
+	at(missionAt + Scripted.expectedSeconds + 3.5) -- the bells closed, the floor is on, the verdict menu open
+	local closeMsg = lastSent("BellOpen", missionAt)
+	local verdictMenu = lastSent("PresenterMenu", missionAt, ps[1], "verdict")
+	check("15a the bells: only those they open to, one ring each, not while flying, in the order they came (everyone hears it)",
+		seen.rung ~= nil and #seen.rung == 2 and seen.rung[1] == ps[3] and seen.rung[2] == ps[2] and #rangs == 2
+		and rangs[1].payload.userId == ps[3].UserId and openMsg ~= nil and openMsg.payload.open == true
+		and #openMsg.payload.ids == 2 and closeMsg ~= nil and closeMsg.payload.open == false)
+	check("15b the floor: the speaker and the presenter are heard by everyone; alive players receive only the speaker's chat",
+		seen.floor ~= nil and #seen.floor == 2 and table.find(seen.floor, ps[2].UserId) ~= nil
+		and table.find(seen.floor, ps[1].UserId) ~= nil and seen.chatOther == false and seen.chatHolder == true
+		and seen.chatToPresenter == true)
+	rawPick(ps[1], "wrong", verdictMenu and verdictMenu.payload.id - 1 or 0) -- an older menu's number: does not count
+	pickMission(ps[1], "right")
+	at(now + 0.5)
+	check("15c the presenter's verdict: a right / wrong menu to the presenter with the right answer, their press comes back",
+		verdictMenu ~= nil and verdictMenu.payload.note == "캔버라" and #verdictMenu.payload.options == 2 and seen.verdict == "right")
+	at(now + 0.5)
+	check("15d after the mission the floor is given back (voice and chat) and the bells are closed", Voice.floor == nil
+		and ChatGate.shouldDeliver(general, ps[3], ps[4]) == true)
+	-- The floor outlives a presenter change (the new routing has no old presenter in it); the one answering leaving
+	-- ends the verdict at once.
+	local floorSeen = {}
+	Scripted.extra = function(ctx)
+		ctx.floor(ps[2])
+		local asked = now
+		floorSeen.verdict = ctx.presenterVerdict("x", 10)
+		floorSeen.waited = now - asked
+	end
+	at(now + Config.FLING_RETURN_SECONDS + 1)
+	local menuSeen = lastSent("PresenterMenu", now - 30, ps[1], "pick")
+	pickMission(ps[1], "scripted")
+	local started = now
+	at(started + Scripted.expectedSeconds + 0.5)
+	leave(ps[2], { ps[1], ps[3], ps[4] })
+	at(now + 1)
+	check("15f the one answering leaves: the verdict ends at once (no judging, the floor goes back)", menuSeen ~= nil
+		and floorSeen.verdict == nil and floorSeen.waited ~= nil and floorSeen.waited < 1.5 and Voice.floor == nil)
+	Scripted.extra = nil
+	local outside = now
+	ring(ps[2]) -- no bells open: nothing
+	check("15e a ring with no bells open does nothing", #sent("BellRang", outside) == 0)
+	NetStub.listeners.DevFling(ps[3], "out")
+	NetStub.listeners.DevFling(ps[4], "out")
+	finish(since)
 end
 
 ---------------------------------------------------------------- 16. a client flipping "ready" fast

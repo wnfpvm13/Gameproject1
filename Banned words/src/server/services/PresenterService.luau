@@ -27,7 +27,7 @@ local PresenterService = {}
 
 export type Option = { id: string, title: string, recommended: boolean }
 export type Change = "left" | "misses" | "stepped down"
-export type MenuKind = "pick" | "judge" -- the next mission / who the one-word mission launches
+export type MenuKind = "pick" | "judge" | "verdict" -- the next mission / who flies / the bell quiz's right or wrong
 
 local DEFAULT_WALK_SPEED = 16
 local DEFAULT_JUMP_HEIGHT = 7.2
@@ -48,7 +48,9 @@ local onReroll: (Player?) -> () = function(_target) end
 local onTalkStart: () -> () = function() end
 local lastEar: { [Player]: number } = {}
 -- The open menu (one at a time).
-local menu: { kind: MenuKind, options: { Option }, endsAt: number, picked: string? }? = nil
+-- (`id`: each menu's own number; a press must name it, so a late press from an older menu never counts for a newer one)
+local menu: { id: number, kind: MenuKind, options: { Option }, endsAt: number, picked: string?, note: string? }? = nil
+local menus = 0
 
 -- Runs one yielding check. Returns (ok, answer); a call that errors is reported and returns ok = false.
 local function try<T>(what: string, call: () -> T): (boolean, T?)
@@ -322,8 +324,9 @@ function PresenterService.start(hooks: Hooks)
 			setVolunteer(player, on)
 		end
 	end)
-	Net.listen("PresenterPick", function(player, id)
-		if menu and player == Match.presenter and typeof(id) == "string" and not menu.picked and Match.now() <= menu.endsAt then
+	Net.listen("PresenterPick", function(player, id, menuId)
+		if menu and player == Match.presenter and typeof(id) == "string" and menuId == menu.id and not menu.picked
+			and Match.now() <= menu.endsAt then
 			for _, option in menu.options do
 				if option.id == id then
 					menu.picked = id
@@ -385,14 +388,16 @@ end
 -- Opens a menu of `kind` to the presenter for `seconds` and waits. Returns the id they picked (or nil), and whether
 -- they let the time run out (false when the presenter changed or `stop()` became true). A missed choice counts;
 -- PRESENTER_MISSES in a row replace them.
-function PresenterService.ask(kind: MenuKind, options: { Option }, seconds: number, stop: () -> boolean): (string?, boolean)
+-- `note`: a line for the menu's title (the bell quiz: the right answer).
+function PresenterService.ask(kind: MenuKind, options: { Option }, seconds: number, stop: () -> boolean, note: string?): (string?, boolean)
 	local presenter = Match.presenter
 	if not presenter or #options == 0 then
 		return nil, false
 	end
 	local endsAt = os.clock() + seconds
-	menu = { kind = kind, options = options, endsAt = Match.now() + seconds, picked = nil }
-	Net.to(presenter, "PresenterMenu", { kind = kind, options = options, endsAt = Match.now() + seconds })
+	menus += 1
+	menu = { id = menus, kind = kind, options = options, endsAt = Match.now() + seconds, picked = nil, note = note }
+	Net.to(presenter, "PresenterMenu", { id = menus, kind = kind, options = options, endsAt = Match.now() + seconds, note = note })
 	while os.clock() < endsAt and menu and not menu.picked and Match.presenter == presenter and not stop() do
 		task.wait(0.1)
 	end
@@ -401,12 +406,12 @@ function PresenterService.ask(kind: MenuKind, options: { Option }, seconds: numb
 		return nil, false -- replaced meanwhile (the menu went with them)
 	end
 	closeMenu()
+	if stop() then
+		return nil, false -- (over meanwhile: a press in the same moment no longer counts)
+	end
 	if picked then
 		misses = 0
 		return picked, false
-	end
-	if stop() then
-		return nil, false
 	end
 	misses += 1
 	if misses >= Config.PRESENTER_MISSES then
@@ -420,7 +425,8 @@ end
 -- The presenter asked for the whole state again: the open menu too.
 function PresenterService.sendMenu(player: Player)
 	if menu and player == Match.presenter then
-		Net.to(player, "PresenterMenu", { kind = menu.kind, options = menu.options, endsAt = menu.endsAt })
+		Net.to(player, "PresenterMenu", { id = menu.id, kind = menu.kind, options = menu.options, endsAt = menu.endsAt,
+			note = menu.note })
 	end
 end
 

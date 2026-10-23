@@ -2,7 +2,8 @@
 -- The chat gate (docs/DESIGN_V3.md §7; bundle 5b): the server side of every TextChannel. While a guarded round is on
 -- (RoundService decides: from the assignment to the result, when banned words play), messages from anyone who is not
 -- an alive participant (the presenter, out players, spectators, late joiners) are not delivered to alive participants,
--- and whispers are off (the /w command and the whisper channels), so nobody can tell a player their word. Every
+-- and whispers are off (the /w command and the whisper channels), so nobody can tell a player their word. While
+-- someone has the floor (bundle 6b, any game), alive participants receive only that player's messages. Every
 -- message an alive participant sends is handed on once (by MessageId) for judging. The delivery callback runs for each
 -- receiver and must never yield: it decides, and judges each message once without yielding.
 local Players = game:GetService("Players")
@@ -15,6 +16,7 @@ local ChatGate = {}
 local CHANNEL_WARN_AFTER = 30 -- seconds without TextChannels before a warning
 
 local guarded = false
+local floorHolder: Player? = nil -- has the floor now: alive participants receive only their messages
 local seen: { [string]: boolean } = {} -- MessageIds already handed on (cleared each round)
 local onMessage: (Player, string) -> () = function(_player, _text) end
 
@@ -35,7 +37,13 @@ end
 
 -- The delivery rule for one message to one receiver (pure, so it can be tested without TextChatService).
 function ChatGate.shouldDeliver(channel: Instance, sender: Player?, receiver: Player?): boolean
-	if not guarded or sender == nil or receiver == nil or sender == receiver then
+	if sender == nil or receiver == nil or sender == receiver then
+		return true
+	end
+	if floorHolder and sender ~= floorHolder and Match.isAlive(receiver) then
+		return false -- (no one talks over the floor, e.g. telling the answer in the bell quiz)
+	end
+	if not guarded then
 		return true
 	end
 	if isWhisper(channel) then
@@ -101,6 +109,11 @@ function ChatGate.start(handle: (Player, string) -> ())
 		channels.ChildAdded:Connect(watch) -- whisper channels appear when someone whispers
 		setWhisperCommand(not guarded) -- (the commands may have appeared after a round began)
 	end)
+end
+
+-- The floor: `player` speaks, alive participants receive only their messages; nil ends it.
+function ChatGate.setFloor(player: Player?)
+	floorHolder = player
 end
 
 -- Round start / end: the rules on (true) or off.

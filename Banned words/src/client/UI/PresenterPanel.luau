@@ -36,6 +36,7 @@ local onWordAction: (string, number) -> () = function(_mode, _userId) end
 local volunteered = false
 local menuEndsAt = 0
 local menuKind = "pick"
+local menuNote = "" -- the "verdict" menu's right answer
 local selected: string? = nil -- the name tapped in a "judge" menu
 local onPickMission: (string) -> () = function(_id) end
 
@@ -313,15 +314,16 @@ function PresenterPanel.setPresenting(on: boolean)
 	end
 end
 
--- A menu (server time `endsAt`). "pick" (the next mission): a press picks and closes it. "judge" (who flies): a press
--- selects a name, "날려!" sends it.
-function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: string?)
+-- A menu (server time `endsAt`). "pick" (the next mission) and "verdict" (the bell quiz: right or wrong, `note` = the
+-- right answer, in the title): a press picks and closes it. "judge" (who flies): a press selects a name, "날려!" sends it.
+function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: string?, note: string?)
 	for _, child in menuList:GetChildren() do
 		if child:IsA("TextButton") then
 			child:Destroy()
 		end
 	end
 	menuKind = kind or "pick"
+	menuNote = note or ""
 	selected = nil
 	local judging = menuKind == "judge"
 	local nameButtons: { [string]: TextButton } = {}
@@ -365,7 +367,10 @@ function PresenterPanel.tick(now: number)
 	end
 	if menuFrame.Visible then
 		local left = math.max(0, math.ceil(menuEndsAt - now))
-		menuTitle.Text = string.format("%s · %d", if menuKind == "judge" then TEXT.JUDGE_PICK else TEXT.PICK_MISSION, left)
+		local heading = if menuKind == "judge" then TEXT.JUDGE_PICK
+			elseif menuKind == "verdict" then string.format(TEXT.VERDICT_PICK, menuNote)
+			else TEXT.PICK_MISSION
+		menuTitle.Text = string.format("%s · %d", heading, left)
 	end
 end
 

@@ -13,9 +13,11 @@
 --   camera's left), windows along -X and the far end, a white roof (y 56) with skylights and white trusses over the
 --   water (y 44) that stay above the flight arc.
 -- Code reads (map contract, DESIGN_V3 §9): PoolHall (attribute CeilingY), PoolHall.Chairs (Chair01..10, each a Model
--- with Base, an invisible Seat carrying SeatIndex 1..10 from the show camera's left (+X) to its right, and Flap: the
+-- with Base, an invisible Seat carrying SeatIndex 1..10 from the show camera's left (+X) to its right, Flap: the
 -- visible cushion and backrest, welded to the anchored invisible Hinge on the box's back top edge; clients turn the
--- Hinge about its own X axis for a launch, the server never moves any of it), Landing, Podium, ShowCamera,
+-- Hinge about its own X axis for a launch, the server never moves any of it; and Bell (bundle 6b): a desk bell on a
+-- post at the seated player's right, PrimaryPart Button (clients put their prompt on it), Light (the dome, a PointLight
+-- clients switch on when it rings)), Landing, Podium, ShowCamera,
 -- PresenterCamera, Stands, Lobby.
 
 local CHAIR_COUNT = 10
@@ -297,6 +299,10 @@ local chairs = Instance.new("Folder")
 chairs.Name = "Chairs"
 chairs.Parent = hall
 local BASE = Vector3.new(3.4, 1.5, 3.2)
+local BELL_SIDE = BASE.X / 2 + 0.45 -- the bell stands in the gap to the chair's right, close to its own chair
+local BELL_FORWARD = -0.8 -- a little in front of the seat's middle, under the seated player's hand
+local BELL_HEIGHT = 2.2 -- top of the post (the cushion top is about 2.05)
+local BELL_GOLD = Color3.fromRGB(232, 184, 64)
 local CUSHION_HEIGHT = 0.55
 for i = 1, CHAIR_COUNT do
 	local x = (CHAIR_COUNT - 1) * CHAIR_SPACING / 2 - (i - 1) * CHAIR_SPACING -- seat 1 on the camera's left
@@ -341,6 +347,22 @@ for i = 1, CHAIR_COUNT do
 	flap.PrimaryPart = hinge
 	weldTo(flap, hinge)
 	flap.Parent = model
+	-- The seat bell: in the gap at the seated player's right (local +X), on a post at hand height. It never moves.
+	local bell = Instance.new("Model")
+	bell.Name = "Bell"
+	local bellAt = f * CFrame.new(BELL_SIDE, 0, BELL_FORWARD)
+	tube(bell, "Post", (bellAt * CFrame.new(0, CARPET_TOP, 0)).Position, (bellAt * CFrame.new(0, BELL_HEIGHT - 0.1, 0)).Position, 0.18, CHROME, Enum.Material.Metal, TRIM)
+	puck(bell, "Stand", bellAt * CFrame.new(0, BELL_HEIGHT - 0.05, 0), 0.9, 0.1, CHAIR_BLUE_DARK, Enum.Material.SmoothPlastic, TRIM)
+	local dome = ball(bell, "Light", (bellAt * CFrame.new(0, BELL_HEIGHT + 0.1, 0)).Position, 0.75, BELL_GOLD, Enum.Material.SmoothPlastic, TRIM)
+	local glow = Instance.new("PointLight")
+	glow.Color = Color3.fromRGB(255, 214, 120)
+	glow.Range = 10
+	glow.Brightness = 3
+	glow.Enabled = false
+	glow.Parent = dome
+	local button = puck(bell, "Button", bellAt * CFrame.new(0, BELL_HEIGHT + 0.5, 0), 0.22, 0.12, CARPET_RED, Enum.Material.SmoothPlastic, TRIM)
+	bell.PrimaryPart = button
+	bell.Parent = model
 	model.PrimaryPart = base
 	model.Parent = chairs
 end

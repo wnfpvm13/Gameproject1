@@ -57,11 +57,13 @@ return {
 	ROULETTE_REVEAL_SECONDS = 2,
 	ROULETTE_MIN_PLAYERS = 2,
 	ROULETTE_PER_ROUND = 1,
-	-- "A word to everyone" (bundle 4b): up to ONE_WORD_MAX_PERFORMERS take turns on a topic (ONE_WORD_PREP_SECONDS to
-	-- read it and maybe swap it once, then ONE_WORD_SECONDS by voice or ONE_WORD_CHAT_SECONDS by chat); then the
-	-- presenter picks the one to launch within PRESENTER_JUDGE_SECONDS, else everyone votes for VOTE_SECONDS. Only
-	-- with a presenter, at most GAME_PER_ROUND times a round.
+	-- "Say what you like" (bundle 4b's "a word to everyone", bells since 6b): the bells are open BELL_ORDER_SECONDS
+	-- (who rang first speaks first among those who spoke least), then up to ONE_WORD_MAX_PERFORMERS take turns on a
+	-- topic (ONE_WORD_PREP_SECONDS to read it and maybe swap it once, then ONE_WORD_SECONDS alone on the floor by voice
+	-- or ONE_WORD_CHAT_SECONDS by chat); then the presenter picks the one to launch within PRESENTER_JUDGE_SECONDS,
+	-- else everyone votes for VOTE_SECONDS (without a presenter only with VOTE_MIN_VOTERS). GAME_PER_ROUND a round.
 	ONE_WORD_MAX_PERFORMERS = 5,
+	BELL_ORDER_SECONDS = 5,
 	ONE_WORD_PREP_SECONDS = 3,
 	ONE_WORD_SECONDS = 8,
 	ONE_WORD_CHAT_SECONDS = 15,
@@ -69,6 +71,20 @@ return {
 	ONE_WORD_MIN_PLAYERS = 2, -- performers it needs (alive, on the ground)
 	ONE_WORD_RESULT_SECONDS = 2, -- who flies (or nobody) stays on the status line this long
 	PRESENTER_JUDGE_SECONDS = 10,
+	-- The seat bells (bundle 6b): one ring per player each time they are open, at least BELL_COOLDOWN apart.
+	BELL_COOLDOWN = 0.2,
+	-- The bell quiz (bundle 6b, owner 2026-10-23: the first to ring answers by voice and the presenter judges, so only
+	-- with a presenter): BELL_QUIZ_QUESTIONS questions; for each the bells are open BELL_WAIT_SECONDS, the first ring
+	-- gets the floor for BELL_ANSWER_SECONDS (chat participants type for BELL_ANSWER_CHAT_SECONDS) and the presenter
+	-- then has BELL_VERDICT_SECONDS more to press right or wrong; a wrong answer flies (subjective) and the bells open
+	-- again for the others, BELL_TRIES answers a question at most. Nobody rings: everyone answers with four choices.
+	BELL_QUIZ_QUESTIONS = 3,
+	BELL_QUIZ_MIN_PLAYERS = 2,
+	BELL_WAIT_SECONDS = 8,
+	BELL_TRIES = 3,
+	BELL_ANSWER_SECONDS = 5,
+	BELL_ANSWER_CHAT_SECONDS = 10,
+	BELL_VERDICT_SECONDS = 5,
 	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
 	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
 	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
@@ -87,6 +103,7 @@ return {
 	-- Banned words (docs/DESIGN_V3.md §6; bundle 5a, the banned-word talk of bundle 6a): one each, only during the talk.
 	HABIT_WORD_CHANCE = 0.3, -- per player: chance that a word is a speech habit (진짜, 대박 ...) instead of a noun
 	TALK_SECONDS = 60, -- the talk itself (judged)
+	TALK_MIN_PLAYERS = 2,
 	TALK_PREP_SECONDS = 5, -- without a presenter: words and topic show this long before the talk
 	TALK_REROLL_SECONDS = 15, -- with a presenter: time to re-draw words (or press "start now")
 	REROLLS_PUBLIC = 1, -- public servers: the presenter re-draws everyone's words this often a round
@@ -219,8 +236,9 @@ return {
 		ROULETTE_TITLE = "룰렛",
 		ROULETTE_START = "룰렛이 돌아가요 · 걸린 한 명이 날아가요",
 		ROULETTE_HIT = "%s 당첨!",
-		ONE_WORD_TITLE = "모두에게 한마디",
-		ONE_WORD_START = "모두에게 한마디 · 주제에 맞게 한마디씩!",
+		ONE_WORD_TITLE = "좋아하는 거 말하기",
+		ONE_WORD_START = "좋아하는 거 말하기 · 벨을 누르면 먼저 말해요",
+		ONE_WORD_BELL = "🔔 벨을 누르면 먼저 말해요",
 		ONE_WORD_TURN = "%s 차례 · %s",
 		ONE_WORD_PREP = "곧 시작",
 		ONE_WORD_SWAP = "주제 바꾸기",
@@ -239,6 +257,17 @@ return {
 		RESCUED = "🛟 구제! %s 무사해요",
 		RESCUE_BUTTON = "🛟 구제",
 		MY_WORD_WAS = "내 금칙어: '%s'", -- (no particle: it would depend on the word's last syllable)
+		BELL_BUTTON = "🔔 벨",
+		BELL_QUIZ_TITLE = "벨 퀴즈",
+		BELL_QUIZ_START = "벨 퀴즈 · 먼저 벨을 누른 사람이 말로 답해요",
+		BELL_QUIZ_WAIT = "🔔 벨을 눌러 답하세요",
+		BELL_QUIZ_ANSWERING = "%s 님이 답하는 중",
+		BELL_QUIZ_RIGHT = "⭕ 정답! %s",
+		BELL_QUIZ_WRONG = "❌ 땡! %s",
+		BELL_QUIZ_NOBODY = "아무도 안 눌러서 모두 답해요",
+		VERDICT_PICK = "맞았나요? 정답: %s",
+		VERDICT_RIGHT = "⭕ 맞음",
+		VERDICT_WRONG = "❌ 틀림",
 		WORDS_TITLE = "금칙어 명단",
 		WORDS_REROLL = "다시 뽑기",
 		WORDS_REROLL_ALL = "전원 다시 뽑기",
@@ -260,6 +289,7 @@ return {
 	-- Scoring (session leaderstats, casual only).
 	SCORE_WIN = 3,
 	SCORE_PRESENTER = 2, -- the presenter at the end of a round (owner 2026-10-23); launches earn nothing
+	SCORE_BELL_QUIZ = 1, -- a right answer in the bell quiz
 	ASSIST_WINDOW = 10, -- (speech assist credit, used again with speech judging in phase 2)
 	SCORE_ASSIST = 1,
 
@@ -278,6 +308,8 @@ return {
 	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)
 	SOUND_BANG = "rbxassetid://9114086657", -- Dirt Explosion 1: sharp bang (SFX), the flying chair firing
 	SOUND_SPLASH = "rbxassetid://9120585252", -- Water Splash, Big Water Splash, Dive In 1 (SFX), the landing
+	SOUND_BELL = "rbxassetid://1839997929", -- the seat bell's ding (APM game show toolkit, Correct Answer 2; replace
+	-- with a shorter desk-bell sound after the owner hears it)
 }
 ]====]; s.Parent = n1 end
 do local s = Instance.new("ModuleScript"); s.Name = "Hearts"; s.Source = [====[--!strict
@@ -644,11 +676,12 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 --               }, final = they all fell at   ChatJoin    (on) join rounds by text chat instead of voice
 --               once and play the final }
 --   ChatAccess  to one player only: may I join by chat? { state = checking / yes / no / voice / error }
---   PresenterMenu to the presenter: { kind = "pick" (next mission) | "judge" (who to launch), options = { {id, title,
---               recommended} } | nil (closed), endsAt }
+--   PresenterMenu to the presenter: { id (the menu's number, sent back with the pick), kind = "pick" (next mission)
+--               | "judge" (who to launch) | "verdict" (the bell quiz: right / wrong, `note` = the right answer),
+--               options = { {id, title, recommended} } | nil (closed), endsAt, note? }
 --   Lever       the presenter pulled the podium lever (a launch by their choice follows)
 --   Sound       a presenter sound button: { index } (Config.PRESENTER_SOUNDS)
---   (client -> server: Volunteer (on), PresenterPick (mission id), PresenterSound (index))
+--   (client -> server: Volunteer (on), PresenterPick (option id, menu id), PresenterSound (index))
 --   Mission     the running mission's screen (MissionRunner): { kind = "quiz", final, question, choices, endsAt?, id? }
 --               | { kind = "quizResult", ..., answer } | { kind = "roulette", ids, pick, spinSeconds }
 --               | { kind = "talk", stage = "prep" | "talk", topic, endsAt } | { kind = "none" }
@@ -661,6 +694,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 --               (sent during the banned-word talk only, bundle 6a; outside it everyone has no word)
 --   (client -> server, the presenter during the banned-word talk: EarJudge (userId) heard a banned word; Reroll (userId:
 --   private servers, or "all": public servers) new words in the prep stage; TalkStart start the talk now)
+--   BellOpen    the seat bells open to some players: { open = true, id, ids, endsAt } | { open = false } (bundle 6b)
+--   BellRang    a seat bell rang: { userId } (client -> server: Bell (window id), ring my bell)
 --   Rescue      to the presenter: banned words caught in chat waiting for a rescue { hits = { {userId, word, endsAt} } }
 --               (client -> server: Rescue (userId) the presenter rescues that player)
 -- The speech judging of phase 2 (JudgeService, not running in stage 1) will need Settle (server -> client), Transcript,
@@ -672,7 +707,7 @@ local Net = {}
 local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
 	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer", "Lever",
-	"EarJudge", "Reroll", "TalkStart", "Rescue",
+	"EarJudge", "Reroll", "TalkStart", "Rescue", "Bell", "BellOpen", "BellRang",
 	"Words",
 }
 
@@ -750,6 +785,7 @@ local MissionRunner = require(services:WaitForChild("MissionRunner"))
 local WordService = require(services:WaitForChild("WordService"))
 local RescueService = require(services:WaitForChild("RescueService"))
 local ChatGate = require(services:WaitForChild("ChatGate"))
+local BellService = require(services:WaitForChild("BellService"))
 local SeatService = require(services:WaitForChild("SeatService"))
 local SpectatorService = require(services:WaitForChild("SpectatorService"))
 local VoiceService = require(services:WaitForChild("VoiceService"))
@@ -916,6 +952,23 @@ local function settleTalk()
 	Match.broadcast()
 end
 
+-- The floor (docs/DESIGN_V3.md §5.1): `player` and the presenter are heard by everyone, the other alive players by
+-- nobody, and alive players receive only `player`'s chat; nil ends it.
+local floorHolder: Player? = nil -- has the floor now (given again to the new presenter's routing when they change)
+local function setFloor(player: Player?)
+	floorHolder = player
+	if player then
+		local ids = { player.UserId }
+		if Match.presenter then
+			table.insert(ids, Match.presenter.UserId)
+		end
+		VoiceService.setFloor(ids)
+	else
+		VoiceService.setFloor(nil)
+	end
+	ChatGate.setFloor(player)
+end
+
 -- The talk's prep stage: words for everyone alive (not inside the topic), shown, chat rules on; then the talk itself.
 local function setTalkStage(stage: string, topic: string?)
 	if stage == "prep" then
@@ -1013,6 +1066,28 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 				return Match.roundId ~= myRound or settled()
 			end)
 		end,
+		bell = function(from: { Player }, seconds: number, firstOnly: boolean): { Player }
+			return BellService.collect(from, seconds, firstOnly, function()
+				return Match.roundId ~= myRound or settled()
+			end)
+		end,
+		floor = setFloor,
+		presenterVerdict = function(answer: string, seconds: number): string?
+			local options = {
+				{ id = "right", title = Config.TEXT.VERDICT_RIGHT, recommended = false },
+				{ id = "wrong", title = Config.TEXT.VERDICT_WRONG, recommended = false },
+			}
+			-- (also over when the one answering left or flew: nothing to judge any more, and the floor goes back)
+			local holder = floorHolder
+			local picked = PresenterService.ask("verdict", options, seconds, function()
+				return Match.roundId ~= myRound or settled()
+					or (holder ~= nil and (not Match.isAlive(holder) or SeatService.isFlying(holder)))
+			end, answer)
+			return picked
+		end,
+		score = function(player: Player, amount: number)
+			Scores.add(player, amount)
+		end,
 	}
 end
 
@@ -1089,6 +1164,8 @@ local function playMain(myRound: number)
 			MissionRunner.run(mission, missionCtx(myRound, false, function(players, key, subjective)
 				failPlayers(players, "m" .. run .. ":" .. key, "fail", if subjective then "subjective" else "objective")
 			end, mainSettled))
+			setFloor(nil) -- (whatever the mission did: the bells close, everyone has their voice back)
+			BellService.close()
 			settleTalk() -- (a banned-word talk ends with its settle stage, also when it was cancelled or broke)
 		end
 	end
@@ -1187,6 +1264,8 @@ end
 
 local function cleanup()
 	SeatService.releaseAll()
+	setFloor(nil)
+	BellService.close()
 	RescueService.endRound() -- (before the presenter goes: their rescue banner is cleared)
 	PresenterService.endRound()
 	ChatGate.setGuard(false)
@@ -1316,6 +1395,9 @@ local function onPresenterChange(_reason: PresenterService.Change, old: Player?,
 		SpectatorService.toStands(old)
 	end
 	refreshSpeakers()
+	if floorHolder then
+		setFloor(floorHolder) -- (the new presenter is heard during the floor too)
+	end
 	Match.broadcast()
 	if talkOn() then
 		WordService.sendAll()
@@ -1328,6 +1410,7 @@ local function onSync(player: Player)
 	ChatService.sendAccess(player)
 	PresenterService.sendMenu(player)
 	MissionRunner.sendScreen(player)
+	BellService.send(player)
 	WordService.send(player)
 	if player == Match.presenter then
 		RescueService.send()
@@ -1501,6 +1584,7 @@ function RoundService.start()
 	RescueService.start(onRescueResolved)
 	ChatGate.start(onChat)
 	MissionRunner.start()
+	BellService.start(SeatService.isFlying)
 	LifeService.start(SeatService.isFlying)
 	SpectatorService.start(busy)
 	SeatService.init(onFlightOver)
@@ -2026,6 +2110,10 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
 }
 
 local BannedTalk = {
@@ -2035,7 +2123,7 @@ local BannedTalk = {
 	-- rescue still waiting).
 	expectedSeconds = Config.TALK_REROLL_SECONDS + Config.TALK_SECONDS + Config.SETTLE_MAX + Config.RESCUE_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
-	minPlayers = 2 :: number?,
+	minPlayers = Config.TALK_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -2064,15 +2152,17 @@ end
 return BannedTalk
 ]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "OneWord"; s.Source = [====[--!strict
--- "A word to everyone" (docs/DESIGN_V3.md §5; bundle 4b, owner 2026-10-23: topics mostly about yourself, the presenter
--- picks on screen and the podium lever is pulled). Up to ONE_WORD_MAX_PERFORMERS alive players on the ground take
--- turns, those who performed least first: each gets a topic (ONE_WORD_PREP_SECONDS to read it and swap it once),
--- then speaks for ONE_WORD_SECONDS (chat participants type for ONE_WORD_CHAT_SECONDS). Nothing is judged while they
--- speak. Then the presenter picks the one to launch (the saddest word) within PRESENTER_JUDGE_SECONDS; with no pick
--- everyone votes (VoteRules). The launch is subjective: in public servers it never takes a last life and hits a
--- player at most SUBJECTIVE_FLINGS times a round, so those players are not offered. Only while someone presents
--- (the system never picks this mission by itself). Who flew during the performances (a banned word, bundle 5) or
--- skipped their turn is not offered (§4 "한마디에서 금칙어로 이미 날아간 사람은 … 빠진다").
+-- "Say what you like" (docs/DESIGN_V3.md §5: bundle 4b's "a word to everyone", owner 2026-10-23: topics mostly about
+-- yourself, the presenter picks on screen and the podium lever is pulled; bells and the floor since bundle 6b). First
+-- the bells of everyone on the ground are open for BELL_ORDER_SECONDS. Then up to ONE_WORD_MAX_PERFORMERS take turns:
+-- those who performed least first, among equals who rang first (in the order they rang), then the rest at random.
+-- Each gets a topic (ONE_WORD_PREP_SECONDS to read it and swap it once), then has the floor (only they and the presenter
+-- are heard, alive players see only their chat) for ONE_WORD_SECONDS (chat participants type for
+-- ONE_WORD_CHAT_SECONDS). Then the presenter picks the one to launch (the saddest word) within PRESENTER_JUDGE_SECONDS;
+-- with no pick everyone votes (VoteRules). Without a presenter it is played only with VOTE_MIN_VOTERS alive (else the
+-- vote could not happen). The launch is subjective: in public servers it never takes a last life and hits a player at
+-- most SUBJECTIVE_FLINGS times a round, so those players are not offered. Who flew during the performances or skipped
+-- their turn is not offered (§4).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
@@ -2102,21 +2192,29 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
 }
 
 local OneWord = {
 	id = "oneWord",
 	title = Config.TEXT.ONE_WORD_TITLE,
-	-- The time budget counts the longest run: everyone swaps the topic and types by chat, then a vote and the result.
-	expectedSeconds = Config.ONE_WORD_MAX_PERFORMERS * (2 * Config.ONE_WORD_PREP_SECONDS + Config.ONE_WORD_CHAT_SECONDS)
+	-- The time budget counts the longest run: the bells, everyone swaps the topic and types by chat, then a vote and the
+	-- result.
+	expectedSeconds = Config.BELL_ORDER_SECONDS
+		+ Config.ONE_WORD_MAX_PERFORMERS * (2 * Config.ONE_WORD_PREP_SECONDS + Config.ONE_WORD_CHAT_SECONDS)
 		+ Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS + Config.ONE_WORD_RESULT_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.ONE_WORD_MIN_PLAYERS :: number?,
-	needsPresenter = true :: boolean?,
+	needsPresenter = nil :: boolean?,
 }
 
--- Turns performed on this server (the least go first); weak keys, so players who left drop out.
+-- Turns performed this round (the least go first; DESIGN §5 "이번 판에 안 해 본 사람 우선"); weak keys, so players
+-- who left drop out.
 local performed: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
+local performedRound = -1 -- the round `performed` counts
 
 local function ids(list: { Player }): { number }
 	local out = {}
@@ -2126,14 +2224,16 @@ local function ids(list: { Player }): { number }
 	return out
 end
 
--- Up to ONE_WORD_MAX_PERFORMERS alive players on the ground, those who performed least first (random among equals).
-local function choosePerformers(ctx: Ctx): { Player }
+-- Up to ONE_WORD_MAX_PERFORMERS alive players on the ground: those who performed least first; among equals who rang
+-- the bell first (`rung`, first to last), then the others at random.
+local function choosePerformers(ctx: Ctx, rung: { Player }): { Player }
 	local pool = {}
 	local order: { [Player]: number } = {}
 	for _, player in ctx.players() do
 		if not ctx.flying(player) then
 			table.insert(pool, player)
-			order[player] = ctx.rng:NextNumber()
+			local rank = table.find(rung, player)
+			order[player] = if rank then rank else #rung + 1 + ctx.rng:NextNumber()
 		end
 	end
 	table.sort(pool, function(a, b)
@@ -2239,7 +2339,10 @@ local function turn(ctx: Ctx, performers: { Player }, index: number, given: { [s
 	end
 	local seconds = if chat then Config.ONE_WORD_CHAT_SECONDS else Config.ONE_WORD_SECONDS
 	screen("talk", true, Match.now() + seconds)
-	return watchWait(ctx, seconds, performers, performer, seen)
+	ctx.floor(performer)
+	local going = watchWait(ctx, seconds, performers, performer, seen)
+	ctx.floor(nil)
+	return going
 end
 
 -- Who flies: the presenter's pick, else a vote; nil for nobody. `eligible()` gives the targets still allowed now
@@ -2299,20 +2402,43 @@ local function judge(ctx: Ctx, eligible: () -> { Player }): (Player?, boolean)
 	return winner, false
 end
 
-function OneWord.available(final: boolean): boolean
-	return not final and #OneWordTopics > 0
+-- Without a presenter only when a vote can decide (VOTE_MIN_VOTERS alive).
+local function playable(alive: number): boolean
+	return Match.presenter ~= nil or VoteRules.canVote(alive)
 end
 
--- Returns false when it could not start (nobody presents any more, or too few on the ground).
+function OneWord.available(final: boolean): boolean
+	return not final and #OneWordTopics > 0 and playable(#Match.aliveList())
+end
+
+-- Returns false when it could not start (no presenter and too few for a vote, or too few on the ground).
 function OneWord.run(ctx: Ctx): boolean?
-	if not Match.presenter then
+	if not playable(#ctx.players()) then
 		return false
 	end
-	local performers = choosePerformers(ctx)
-	if #performers < Config.ONE_WORD_MIN_PLAYERS then
+	local ground = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(ground, player)
+		end
+	end
+	if #ground < Config.ONE_WORD_MIN_PLAYERS then
 		return false
+	end
+	if performedRound ~= Match.roundId then
+		performedRound = Match.roundId
+		table.clear(performed)
 	end
 	ctx.show(Config.TEXT.ONE_WORD_START)
+	ctx.screen({ kind = "oneWordBell", endsAt = Match.now() + Config.BELL_ORDER_SECONDS })
+	local rung = ctx.bell(ground, Config.BELL_ORDER_SECONDS, false)
+	if ctx.cancelled() then
+		return nil
+	end
+	local performers = choosePerformers(ctx, rung)
+	if #performers < Config.ONE_WORD_MIN_PLAYERS then
+		return nil -- (people flew or left during the bells: it was started, so it counts)
+	end
 	local given: { [string]: boolean } = {}
 	local seen: Seen = { done = {}, flew = {} }
 	-- Flights are noted all through the mission (also while the presenter chooses and during the vote).
@@ -2373,6 +2499,13 @@ do local s = Instance.new("ModuleScript"); s.Name = "Quiz"; s.Source = [====[--!
 -- harder questions and a wrong answer is out (RoundService decides that). Players flying when the question opens
 -- cannot answer and are neither failed nor counted as missing (§4). Questions never repeat until the bank runs out,
 -- and a question whose text or any choice contains a banned word in play is skipped.
+-- The bell quiz (`Quiz.bell`, bundle 6b, owner 2026-10-23: the first to ring answers by voice, the presenter judges)
+-- lives here too, so both draw from the same bank without repeats. BELL_QUIZ_QUESTIONS questions; for each the bells
+-- of everyone on the ground are open BELL_WAIT_SECONDS; the first ring gets the floor and the presenter presses right
+-- or wrong (they see the right answer). Wrong: a subjective launch, and the bells open again for those who have not
+-- answered it, BELL_TRIES answers at most; no verdict in time: no penalty, the next ring. Nobody rings at all: that
+-- question goes to everyone with four choices (like the quiz). Only with a presenter; if they are gone mid-way the
+-- remaining questions go to everyone the same way.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -2399,6 +2532,10 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
 }
 
 local Quiz = {
@@ -2457,17 +2594,14 @@ function Quiz.available(final: boolean): boolean
 	return #(if final then QuizBank.final else QuizBank.main) > 0
 end
 
--- Returns false when no clean question is left (nothing was asked).
-function Quiz.run(ctx: Ctx): boolean?
-	local question = pick(if ctx.final then QuizBank.final else QuizBank.main, ctx.rng)
-	if not question then
-		return false
-	end
+-- Everyone on the ground answers `question` with four choices; wrong or none is a fail (event `key`). Returns false if
+-- cancelled.
+local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): boolean
 	ctx.show(if ctx.final then Config.TEXT.FINAL_QUIZ else Config.TEXT.QUIZ_START)
 	local shown = { kind = "quiz", final = ctx.final, question = question.q, choices = question.choices }
 	ctx.screen(shown)
 	if not ctx.wait(Config.QUIZ_INTRO_SECONDS) then
-		return nil
+		return false
 	end
 	local asked = {}
 	for _, player in ctx.players() do
@@ -2477,7 +2611,7 @@ function Quiz.run(ctx: Ctx): boolean?
 	end
 	local answers = ctx.ask(shown, #question.choices, Config.QUIZ_SECONDS, asked)
 	if ctx.cancelled() then
-		return nil
+		return false
 	end
 	local answered, missed, wrong = {}, {}, {}
 	for _, player in asked do
@@ -2497,10 +2631,119 @@ function Quiz.run(ctx: Ctx): boolean?
 	if not ctx.final then
 		ctx.answers(answered, missed) -- before the fail: a launched player's miss would not count any more
 	end
-	ctx.fail(wrong, "answer")
+	ctx.fail(wrong, key)
 	ctx.reveal(Config.QUIZ_REVEAL_SECONDS) -- also when this answer decided the round
+	return true
+end
+
+-- Returns false when no clean question is left (nothing was asked).
+function Quiz.run(ctx: Ctx): boolean?
+	local question = pick(if ctx.final then QuizBank.final else QuizBank.main, ctx.rng)
+	if not question then
+		return false
+	end
+	askEveryone(ctx, question, "answer")
 	return nil
 end
+
+local BellQuiz = {
+	id = "bellQuiz",
+	title = Config.TEXT.BELL_QUIZ_TITLE,
+	-- The longest run: every question with every answer chance (each its own bells, an answer by chat, judged at the
+	-- last moment).
+	expectedSeconds = Config.BELL_QUIZ_QUESTIONS * (Config.BELL_TRIES
+		* (Config.BELL_WAIT_SECONDS + Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS) + Config.QUIZ_REVEAL_SECONDS),
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
+	minPlayers = Config.BELL_QUIZ_MIN_PLAYERS :: number?,
+	needsPresenter = true :: boolean?,
+}
+
+function BellQuiz.available(final: boolean): boolean
+	return not final and #QuizBank.main > 0
+end
+
+-- One question by the bells. Returns false if cancelled.
+local function ringFor(ctx: Ctx, question: QuizBank.Question, number: number): boolean
+	local right = question.choices[question.answer]
+	local tried: { [Player]: boolean } = {}
+	for _ = 1, Config.BELL_TRIES do
+		local from = {}
+		for _, player in ctx.players() do
+			if not ctx.flying(player) and not tried[player] then
+				table.insert(from, player)
+			end
+		end
+		if not Match.presenter then
+			return askEveryone(ctx, question, "answer" .. number) -- (the presenter is gone: four choices for everyone)
+		end
+		if #from == 0 then
+			break
+		end
+		ctx.screen({ kind = "bellQuiz", question = question.q, stage = "wait", endsAt = Match.now() + Config.BELL_WAIT_SECONDS })
+		ctx.show(Config.TEXT.BELL_QUIZ_WAIT)
+		local holder = ctx.bell(from, Config.BELL_WAIT_SECONDS, true)[1]
+		if ctx.cancelled() then
+			return false
+		end
+		if not holder then
+			if next(tried) == nil then
+				ctx.show(Config.TEXT.BELL_QUIZ_NOBODY)
+				return askEveryone(ctx, question, "answer" .. number) -- (nobody rang at all: everyone answers with four choices)
+			end
+			break
+		end
+		tried[holder] = true
+		local p = Match.participants[holder]
+		local answerSeconds = if p and p.chat then Config.BELL_ANSWER_CHAT_SECONDS else Config.BELL_ANSWER_SECONDS
+		local seconds = answerSeconds + Config.BELL_VERDICT_SECONDS
+		ctx.screen({ kind = "bellQuiz", question = question.q, stage = "answer", ids = { holder.UserId },
+			endsAt = Match.now() + seconds })
+		ctx.show(string.format(Config.TEXT.BELL_QUIZ_ANSWERING, holder.DisplayName))
+		ctx.floor(holder)
+		local verdict = ctx.presenterVerdict(right, seconds)
+		ctx.floor(nil)
+		if ctx.cancelled() then
+			return false
+		end
+		if verdict == nil and not Match.presenter then
+			return askEveryone(ctx, question, "answer" .. number) -- (the presenter left while judging)
+		end
+		if verdict == "right" then
+			ctx.score(holder, Config.SCORE_BELL_QUIZ)
+			ctx.show(string.format(Config.TEXT.BELL_QUIZ_RIGHT, holder.DisplayName))
+			break
+		elseif verdict == "wrong" then
+			ctx.show(string.format(Config.TEXT.BELL_QUIZ_WRONG, holder.DisplayName))
+			if ctx.canFling(holder) then
+				ctx.fail({ holder }, "bell" .. number .. ":" .. holder.UserId, true)
+			end
+		end
+	end
+	ctx.screen({ kind = "quizResult", final = false, question = question.q, choices = question.choices, answer = question.answer })
+	ctx.show(string.format(Config.TEXT.QUIZ_ANSWER, right))
+	return ctx.wait(Config.QUIZ_REVEAL_SECONDS)
+end
+
+-- Returns false when no clean question was left (nothing was asked).
+function BellQuiz.run(ctx: Ctx): boolean?
+	ctx.show(Config.TEXT.BELL_QUIZ_START)
+	local asked = 0
+	for number = 1, Config.BELL_QUIZ_QUESTIONS do
+		local question = pick(QuizBank.main, ctx.rng)
+		if not question then
+			break
+		end
+		asked += 1
+		-- (no presenter any more: the rest go to everyone with four choices)
+		local going = if Match.presenter then ringFor(ctx, question, number) else askEveryone(ctx, question, "answer" .. number)
+		if not going then
+			return nil
+		end
+	end
+	return if asked > 0 then nil else false
+end
+
+Quiz.bell = BellQuiz
 
 return Quiz
 ]====]; s.Parent = n4 end
@@ -2533,6 +2776,10 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
 }
 
 local Roulette = {
@@ -2606,6 +2853,10 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
 }
 
 local TestMission = {
@@ -2640,11 +2891,123 @@ return TestMission
 ]====]; s.Parent = n4 end
 n4.Parent = n2
 local n5 = Instance.new("Folder"); n5.Name = "services"
+do local s = Instance.new("ModuleScript"); s.Name = "BellService"; s.Source = [====[--!strict
+-- The seat bells (docs/DESIGN_V3.md §5.1; bundle 6b, owner 2026-10-23): every chair has a bell next to it. A mission
+-- opens the bells of some players for a while (`collect`); each of them may ring once, and the rings are kept in the
+-- order they reached the server (that order decides who was first: ping plays a small part, known and accepted). A
+-- ring needs the player alive, on the ground, in the main game, and BELL_COOLDOWN after their last ring. Everyone hears
+-- the ding and sees that bell light up ("BellRang"); clients show their bell button while it is open to them
+-- ("BellOpen"). Every window has its own number and a ring must name it (a late ring never counts for a later window);
+-- a window that wants only the first ring closes the moment it comes. Outside an open window rings do nothing.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local Net = require(script.Parent.Parent:WaitForChild("Net"))
+
+local BellService = {}
+
+local POLL = 0.05 -- seconds between "done yet?" checks while the bells are open
+
+type Window = { id: number, from: { [Player]: boolean }, rung: { Player }, endsAt: number, firstOnly: boolean }
+
+local window: Window? = nil
+local windows = 0
+local lastRing: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any -- (players who left drop out)
+local unavailable: (Player) -> boolean = function(_player)
+	return false
+end
+
+local function ids(set: { [Player]: boolean }): { number }
+	local out = {}
+	for player in set do
+		table.insert(out, player.UserId)
+	end
+	return out
+end
+
+local function tell(player: Player?)
+	local open = window
+	local payload = if open then { open = true, id = open.id, ids = ids(open.from), endsAt = open.endsAt } else { open = false }
+	if player then
+		Net.to(player, "BellOpen", payload)
+	else
+		Net.toAll("BellOpen", payload)
+	end
+end
+
+-- isBusy(player): another service owns the player now (flying), so their bell does not count.
+function BellService.start(isBusy: (Player) -> boolean)
+	unavailable = isBusy
+	Net.listen("Bell", function(player, windowId)
+		local open = window
+		if not open or windowId ~= open.id or not open.from[player] or table.find(open.rung, player) then
+			return
+		end
+		if Match.now() > open.endsAt then
+			return -- (past its end: the window is only waiting to be closed)
+		end
+		if Match.phase ~= "Play" or not Match.isAlive(player) or unavailable(player) then
+			return
+		end
+		local now = os.clock()
+		if now - (lastRing[player] or -math.huge) < Config.BELL_COOLDOWN then
+			return
+		end
+		lastRing[player] = now
+		table.insert(open.rung, player)
+		Net.toAll("BellRang", { userId = player.UserId })
+		if open.firstOnly then
+			window = nil -- (closed at once: nobody else rings in the moment before collect looks again)
+			tell(nil)
+		end
+	end)
+end
+
+-- Opens the bells of `from` for `seconds` and waits. Returns who rang, first to last. `firstOnly`: closes at the first
+-- ring. Ends early when `stop()` (the mission was cancelled).
+function BellService.collect(from: { Player }, seconds: number, firstOnly: boolean, stop: () -> boolean): { Player }
+	windows += 1
+	local open: Window = { id = windows, from = {}, rung = {}, endsAt = Match.now() + seconds, firstOnly = firstOnly }
+	for _, player in from do
+		open.from[player] = true
+	end
+	window = open
+	tell(nil)
+	local untilAt = os.clock() + seconds
+	while os.clock() < untilAt and not stop() and window == open do
+		task.wait(math.min(POLL, math.max(0, untilAt - os.clock())))
+	end
+	if window == open then
+		window = nil
+		tell(nil)
+	end
+	return open.rung
+end
+
+-- A mission ended (or the round): the bells close.
+function BellService.close()
+	if window then
+		window = nil
+		tell(nil)
+	end
+end
+
+-- A player asked for the whole state again.
+function BellService.send(player: Player)
+	if window then
+		tell(player)
+	end
+end
+
+return BellService
+]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "ChatGate"; s.Source = [====[--!strict
 -- The chat gate (docs/DESIGN_V3.md §7; bundle 5b): the server side of every TextChannel. While a guarded round is on
 -- (RoundService decides: from the assignment to the result, when banned words play), messages from anyone who is not
 -- an alive participant (the presenter, out players, spectators, late joiners) are not delivered to alive participants,
--- and whispers are off (the /w command and the whisper channels), so nobody can tell a player their word. Every
+-- and whispers are off (the /w command and the whisper channels), so nobody can tell a player their word. While
+-- someone has the floor (bundle 6b, any game), alive participants receive only that player's messages. Every
 -- message an alive participant sends is handed on once (by MessageId) for judging. The delivery callback runs for each
 -- receiver and must never yield: it decides, and judges each message once without yielding.
 local Players = game:GetService("Players")
@@ -2657,6 +3020,7 @@ local ChatGate = {}
 local CHANNEL_WARN_AFTER = 30 -- seconds without TextChannels before a warning
 
 local guarded = false
+local floorHolder: Player? = nil -- has the floor now: alive participants receive only their messages
 local seen: { [string]: boolean } = {} -- MessageIds already handed on (cleared each round)
 local onMessage: (Player, string) -> () = function(_player, _text) end
 
@@ -2677,7 +3041,13 @@ end
 
 -- The delivery rule for one message to one receiver (pure, so it can be tested without TextChatService).
 function ChatGate.shouldDeliver(channel: Instance, sender: Player?, receiver: Player?): boolean
-	if not guarded or sender == nil or receiver == nil or sender == receiver then
+	if sender == nil or receiver == nil or sender == receiver then
+		return true
+	end
+	if floorHolder and sender ~= floorHolder and Match.isAlive(receiver) then
+		return false -- (no one talks over the floor, e.g. telling the answer in the bell quiz)
+	end
+	if not guarded then
 		return true
 	end
 	if isWhisper(channel) then
@@ -2743,6 +3113,11 @@ function ChatGate.start(handle: (Player, string) -> ())
 		channels.ChildAdded:Connect(watch) -- whisper channels appear when someone whispers
 		setWhisperCommand(not guarded) -- (the commands may have appeared after a round began)
 	end)
+end
+
+-- The floor: `player` speaks, alive participants receive only their messages; nil ends it.
+function ChatGate.setFloor(player: Player?)
+	floorHolder = player
 end
 
 -- Round start / end: the rules on (true) or off.
@@ -3233,8 +3608,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionRunner"; s.Source = 
 -- checks it). It alone listens to the answer remote ("MissionAnswer") and hands answers to the running mission's
 -- question (docs/DESIGN_V3.md §13: Net.listen cannot disconnect, so missions never listen themselves). What a mission
 -- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
--- Bundle 4: the quiz (also the final), the roulette, "a word to everyone" (4b, only with a presenter); bundle 6a: the
--- banned-word talk (only while speech judging is on); and the Studio-only test mission.
+-- Bundle 4: the quiz (also the final), the roulette, "say what you like" (4b, bells since 6b); bundle 6a: the
+-- banned-word talk (only while speech judging is on); bundle 6b: the bell quiz (only with a presenter); and the
+-- Studio-only test mission.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -3274,6 +3650,14 @@ export type Ctx = {
 	talk: (stage: string, topic: string?) -> (),
 	-- The presenter's re-draw window: waits `seconds` or until they press "start now"; false if cancelled meanwhile.
 	presenterReroll: (seconds: number) -> boolean,
+	-- The seat bells of `from` open for `seconds` (bundle 6b): who rang, first to last (`firstOnly`: closes at the first).
+	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	-- The floor (§5.1): only `player` (and the presenter) heard by everyone, alive players receive only their chat;
+	-- nil ends it. RoundService ends it after every mission too.
+	floor: (player: Player?) -> (),
+	-- The presenter judges an answer (the bell quiz): "right", "wrong", or nil (none in time, no presenter, over).
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (), -- session points (a right bell-quiz answer)
 }
 
 -- What a mission gets: the same, with fail/show that do nothing once cancelled, and wait().
@@ -3303,6 +3687,10 @@ export type MissionCtx = {
 	lever: () -> (), -- everyone sees the podium lever pulled (the presenter's launch)
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
 }
 
 export type Mission = {
@@ -3319,7 +3707,7 @@ export type Mission = {
 -- An entry of a presenter's menu.
 export type Option = { id: string, title: string, recommended: boolean }
 
-local MISSIONS: { Mission } = { Quiz, Roulette, OneWord, BannedTalk, TestMission }
+local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
@@ -3508,6 +3896,24 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			end
 			return ctx.presenterReroll(seconds)
 		end,
+		bell = function(from: { Player }, seconds: number, firstOnly: boolean): { Player }
+			if ctx.cancelled() then
+				return {}
+			end
+			return ctx.bell(from, seconds, firstOnly)
+		end,
+		floor = ctx.floor, -- (also after a cancel: the floor must always be given back)
+		presenterVerdict = function(answer: string, seconds: number): string?
+			if ctx.cancelled() then
+				return nil
+			end
+			return ctx.presenterVerdict(answer, seconds)
+		end,
+		score = function(player: Player, amount: number)
+			if not ctx.cancelled() then
+				ctx.score(player, amount)
+			end
+		end,
 		show = function(text: string)
 			if not ctx.cancelled() then
 				ctx.show(text)
@@ -3627,7 +4033,7 @@ local PresenterService = {}
 
 export type Option = { id: string, title: string, recommended: boolean }
 export type Change = "left" | "misses" | "stepped down"
-export type MenuKind = "pick" | "judge" -- the next mission / who the one-word mission launches
+export type MenuKind = "pick" | "judge" | "verdict" -- the next mission / who flies / the bell quiz's right or wrong
 
 local DEFAULT_WALK_SPEED = 16
 local DEFAULT_JUMP_HEIGHT = 7.2
@@ -3648,7 +4054,9 @@ local onReroll: (Player?) -> () = function(_target) end
 local onTalkStart: () -> () = function() end
 local lastEar: { [Player]: number } = {}
 -- The open menu (one at a time).
-local menu: { kind: MenuKind, options: { Option }, endsAt: number, picked: string? }? = nil
+-- (`id`: each menu's own number; a press must name it, so a late press from an older menu never counts for a newer one)
+local menu: { id: number, kind: MenuKind, options: { Option }, endsAt: number, picked: string?, note: string? }? = nil
+local menus = 0
 
 -- Runs one yielding check. Returns (ok, answer); a call that errors is reported and returns ok = false.
 local function try<T>(what: string, call: () -> T): (boolean, T?)
@@ -3922,8 +4330,9 @@ function PresenterService.start(hooks: Hooks)
 			setVolunteer(player, on)
 		end
 	end)
-	Net.listen("PresenterPick", function(player, id)
-		if menu and player == Match.presenter and typeof(id) == "string" and not menu.picked and Match.now() <= menu.endsAt then
+	Net.listen("PresenterPick", function(player, id, menuId)
+		if menu and player == Match.presenter and typeof(id) == "string" and menuId == menu.id and not menu.picked
+			and Match.now() <= menu.endsAt then
 			for _, option in menu.options do
 				if option.id == id then
 					menu.picked = id
@@ -3985,14 +4394,16 @@ end
 -- Opens a menu of `kind` to the presenter for `seconds` and waits. Returns the id they picked (or nil), and whether
 -- they let the time run out (false when the presenter changed or `stop()` became true). A missed choice counts;
 -- PRESENTER_MISSES in a row replace them.
-function PresenterService.ask(kind: MenuKind, options: { Option }, seconds: number, stop: () -> boolean): (string?, boolean)
+-- `note`: a line for the menu's title (the bell quiz: the right answer).
+function PresenterService.ask(kind: MenuKind, options: { Option }, seconds: number, stop: () -> boolean, note: string?): (string?, boolean)
 	local presenter = Match.presenter
 	if not presenter or #options == 0 then
 		return nil, false
 	end
 	local endsAt = os.clock() + seconds
-	menu = { kind = kind, options = options, endsAt = Match.now() + seconds, picked = nil }
-	Net.to(presenter, "PresenterMenu", { kind = kind, options = options, endsAt = Match.now() + seconds })
+	menus += 1
+	menu = { id = menus, kind = kind, options = options, endsAt = Match.now() + seconds, picked = nil, note = note }
+	Net.to(presenter, "PresenterMenu", { id = menus, kind = kind, options = options, endsAt = Match.now() + seconds, note = note })
 	while os.clock() < endsAt and menu and not menu.picked and Match.presenter == presenter and not stop() do
 		task.wait(0.1)
 	end
@@ -4001,12 +4412,12 @@ function PresenterService.ask(kind: MenuKind, options: { Option }, seconds: numb
 		return nil, false -- replaced meanwhile (the menu went with them)
 	end
 	closeMenu()
+	if stop() then
+		return nil, false -- (over meanwhile: a press in the same moment no longer counts)
+	end
 	if picked then
 		misses = 0
 		return picked, false
-	end
-	if stop() then
-		return nil, false
 	end
 	misses += 1
 	if misses >= Config.PRESENTER_MISSES then
@@ -4020,7 +4431,8 @@ end
 -- The presenter asked for the whole state again: the open menu too.
 function PresenterService.sendMenu(player: Player)
 	if menu and player == Match.presenter then
-		Net.to(player, "PresenterMenu", { kind = menu.kind, options = menu.options, endsAt = menu.endsAt })
+		Net.to(player, "PresenterMenu", { id = menu.id, kind = menu.kind, options = menu.options, endsAt = menu.endsAt,
+			note = menu.note })
 	end
 end
 
@@ -4899,6 +5311,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "VoiceService"; s.Source = [
 --    audible to each other (docs/DESIGN_V3.md §13; with banned words they know every word).
 -- 3. Chat participants are heard by nobody during their round, even if their voice connects meanwhile (§7: speaking
 --    would get around the chat judging).
+-- 4. The floor (bundle 6b, §5.1): while someone has it, only they and the presenter are heard by everyone; the other
+--    alive participants are heard by nobody. Out players and spectators keep their own group.
 local Players = game:GetService("Players")
 
 local VoiceService = {}
@@ -4907,6 +5321,7 @@ local FLAT_CURVE = { [0] = 1, [2000] = 1 }
 
 local speakers: { [number]: boolean }? = nil -- userIds allowed to talk to the table; nil = no round, everyone open
 local silenced: { [number]: boolean } = {} -- userIds nobody hears (chat participants of the round)
+local floor: { [number]: boolean }? = nil -- while someone has the floor: the userIds still heard by everyone
 
 local function flatten(child: Instance)
 	if child:IsA("AudioEmitter") then
@@ -4935,9 +5350,10 @@ local function apply()
 	for _, player in Players:GetPlayers() do
 		local input = inputOf(player)
 		if input then
-			if silenced[player.UserId] then
+			local otherHasFloor = speakers ~= nil and speakers[player.UserId] and floor ~= nil and not floor[player.UserId]
+			if silenced[player.UserId] or otherHasFloor then
 				input.AccessType = Enum.AccessModifierType.Allow
-				input:SetUserIdAccessList({}) -- nobody allowed: nobody hears
+				input:SetUserIdAccessList({}) -- nobody allowed: nobody hears (a chat participant, or someone else's floor)
 			elseif speakers == nil or speakers[player.UserId] then
 				input.AccessType = Enum.AccessModifierType.Deny
 				input:SetUserIdAccessList({}) -- nobody denied: the whole server hears
@@ -4959,6 +5375,21 @@ function VoiceService.setSpeakers(userIds: { number }?)
 		speakers = set
 	else
 		speakers = nil
+	end
+	apply()
+end
+
+-- The floor: `userIds` (the one speaking and the presenter) are heard by everyone, the other alive participants by
+-- nobody; nil gives everyone their voice back.
+function VoiceService.setFloor(userIds: { number }?)
+	if userIds then
+		local set = {}
+		for _, id in userIds do
+			set[id] = true
+		end
+		floor = set
+	else
+		floor = nil
 	end
 	apply()
 end
@@ -5162,6 +5593,7 @@ local GetUp = require(script:WaitForChild("GetUp"))
 local Billboards = require(script:WaitForChild("Billboards"))
 local ChatLook = require(script:WaitForChild("ChatLook"))
 local Fx = require(script:WaitForChild("Fx"))
+local Bell = require(script:WaitForChild("Bell"))
 local UI = script:WaitForChild("UI")
 local Hud = require(UI:WaitForChild("Hud"))
 local Toast = require(UI:WaitForChild("Toast"))
@@ -5169,10 +5601,15 @@ local MicPanel = require(UI:WaitForChild("MicPanel"))
 local ReactionBar = require(UI:WaitForChild("ReactionBar"))
 local PresenterPanel = require(UI:WaitForChild("PresenterPanel"))
 local MissionPanel = require(UI:WaitForChild("MissionPanel"))
+local BellButton = require(UI:WaitForChild("BellButton"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
 local myFlightEndsAt = 0 -- os.clock(): while my own launch lasts I keep the show camera (I watch myself fly off)
+local bellOpen = false -- the server has my seat bell open (bundle 6b)
+local bellWindow = 0 -- the open window's number (sent back with my ring)
+local bellRung = false -- I rang it this time (one ring each time it opens)
+local menuId = 0 -- the presenter menu now open (sent back with my pick)
 
 -- Seated players cannot jump out or reset during a round.
 local function applySeatLock()
@@ -5268,6 +5705,9 @@ local function refresh()
 		end
 	end
 	PresenterPanel.setWords(rows, wordMode, round.serverKind == "public")
+	local canRing = bellOpen and not bellRung and State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
+	Bell.set(canRing)
+	BellButton.setVisible(canRing)
 	refreshVoice()
 	applySeatLock()
 end
@@ -5284,7 +5724,7 @@ end)
 PresenterPanel.build(function(on)
 	remotes.Volunteer:FireServer(on)
 end, function(id)
-	remotes.PresenterPick:FireServer(id)
+	remotes.PresenterPick:FireServer(id, menuId)
 end, function(index)
 	remotes.PresenterSound:FireServer(index)
 end, function(mode, userId)
@@ -5303,6 +5743,15 @@ end)
 MissionPanel.build(function(questionId, choice)
 	remotes.MissionAnswer:FireServer(questionId, choice)
 end)
+local function ringMyBell()
+	if not bellRung then
+		bellRung = true
+		remotes.Bell:FireServer(bellWindow)
+		refresh()
+	end
+end
+Bell.start(ringMyBell)
+BellButton.build(ringMyBell)
 Fx.init()
 FlatVoice.start()
 GetUp.start()
@@ -5371,7 +5820,8 @@ end)
 
 remotes.PresenterMenu.OnClientEvent:Connect(function(info)
 	if info.options then
-		PresenterPanel.openMenu(info.options, info.endsAt, info.kind)
+		menuId = info.id or 0
+		PresenterPanel.openMenu(info.options, info.endsAt, info.kind, info.note)
 	else
 		PresenterPanel.closeMenu()
 	end
@@ -5401,6 +5851,21 @@ remotes.Rescue.OnClientEvent:Connect(function(info)
 		table.insert(rows, { userId = hit.userId, name = nameOf(hit.userId), word = hit.word, endsAt = hit.endsAt })
 	end
 	PresenterPanel.setRescues(rows)
+end)
+
+-- The seat bells (bundle 6b): open to me or not; someone's bell rang (the ding and its light).
+remotes.BellOpen.OnClientEvent:Connect(function(info)
+	local window = info.id or 0
+	if window ~= bellWindow then
+		bellRung = false -- (a new window; the same one sent again on Sync keeps my ring)
+	end
+	bellWindow = window
+	bellOpen = info.open == true and table.find(info.ids or {}, State.myId()) ~= nil
+	refresh()
+end)
+remotes.BellRang.OnClientEvent:Connect(function(info)
+	local who = Players:GetPlayerByUserId(info.userId)
+	Fx.bellRang(if who then Bell.bellOf(who) else nil)
 end)
 
 -- The presenter pulled the podium lever (their launch follows).
@@ -5493,6 +5958,22 @@ if RunService:IsStudio() then
 	end)
 end
 
+-- Sitting down or getting up moves my bell prompt (it goes on the chair I sit on).
+local function watchSeating(character: Model)
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	if humanoid and humanoid:IsA("Humanoid") then
+		humanoid.Seated:Connect(function()
+			refresh()
+		end)
+	end
+end
+if player.Character then
+	task.spawn(watchSeating, player.Character)
+end
+player.CharacterAdded:Connect(function(character)
+	task.spawn(watchSeating, character)
+end)
+
 player.CharacterAdded:Connect(function()
 	myFlightEndsAt = 0 -- a launch of my previous character is over
 	task.wait(0.5)
@@ -5523,6 +6004,79 @@ end)
 -- Ask for the current state now that every handler is connected (late joiners miss earlier broadcasts).
 remotes.Sync:FireServer()
 ]====]
+do local s = Instance.new("ModuleScript"); s.Name = "Bell"; s.Source = [====[--!strict
+-- My seat bell (docs/DESIGN_V3.md §5.1, §9; bundle 6b): a ProximityPrompt on my own chair's bell only (E, gamepad X,
+-- touch; the chairs stand 5 studs apart, so a prompt on every bell would reach the neighbours' too). It is enabled
+-- while the server has my bell open; a press asks the server to ring it (the server checks everything). Also finds any
+-- player's bell, by the chair their character sits on, for the ding and the light.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+
+local Bell = {}
+
+local PROMPT_DISTANCE = 10 -- studs (a seated player is about 2.5 studs from their bell)
+
+local prompt: ProximityPrompt? = nil
+local promptOn: BasePart? = nil
+local onRing: () -> () = function() end
+
+-- The bell model next to the chair `player` sits on (map contract: PoolHall.Chairs.ChairNN.Bell), or nil.
+function Bell.bellOf(player: Player): Model?
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local hall = workspace:FindFirstChild("PoolHall")
+	local chairs = hall and hall:FindFirstChild("Chairs")
+	if not (humanoid and chairs) then
+		return nil
+	end
+	for _, chair in chairs:GetChildren() do
+		local seat = chair:FindFirstChild("Seat")
+		if seat and seat:IsA("Seat") and seat.Occupant == humanoid then
+			local bell = chair:FindFirstChild("Bell")
+			return if bell and bell:IsA("Model") then bell else nil
+		end
+	end
+	return nil
+end
+
+-- ring(): I pressed my bell (prompt or the screen button).
+function Bell.start(ring: () -> ())
+	onRing = ring
+end
+
+-- Whether I may ring now (my bell is open and I sit on my chair): the prompt goes to my chair's bell and is enabled.
+function Bell.set(canRing: boolean)
+	local bell = if canRing then Bell.bellOf(Players.LocalPlayer) else nil
+	local button = bell and bell.PrimaryPart
+	if button ~= promptOn then
+		if prompt then
+			prompt:Destroy()
+			prompt = nil
+		end
+		promptOn = button
+		if button then
+			local p = Instance.new("ProximityPrompt")
+			p.ActionText = Config.TEXT.BELL_BUTTON
+			p.KeyboardKeyCode = Enum.KeyCode.E
+			p.HoldDuration = 0
+			p.MaxActivationDistance = PROMPT_DISTANCE
+			p.RequiresLineOfSight = false
+			p.Triggered:Connect(function()
+				onRing()
+			end)
+			p.Parent = button
+			prompt = p
+		end
+	end
+	if prompt then
+		prompt.Enabled = canRing
+	end
+end
+
+return Bell
+]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "Billboards"; s.Source = [====[--!strict
 -- Head bubbles: name and lives (hearts) for every participant on the chairs, me included (the presenter's bubble says
 -- "진행자" instead of hearts), and from bundle 5 the banned words above them: each other participant's visible words
@@ -5879,8 +6433,8 @@ return FlatVoice
 ]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "Fx"; s.Source = [====[--!strict
 -- Effects: the flying chair firing (seat flap snapping back on its hinge, "펑", smoke and confetti), the splash where
--- the player hits the water, the elimination buzzer and red flash, floating emoji reactions and the presenter's sound
--- buttons.
+-- the player hits the water, the elimination buzzer and red flash, floating emoji reactions, the presenter's sound
+-- buttons and a seat bell's ding with its light (bundle 6b).
 -- The server only sends signals; every client animates the flap itself (a server-moved flap would stutter).
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
@@ -5901,6 +6455,7 @@ local flash: Frame
 local buzzer: Sound
 local bang: Sound
 local splashSound: Sound
+local bellSound: Sound
 local presenterSounds: { Sound } = {} -- the presenter's sound buttons (Config.PRESENTER_SOUNDS order)
 local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
 local playing: { [BasePart]: number } = {} -- hinge -> current animation number
@@ -5954,9 +6509,32 @@ function Fx.init()
 	buzzer = sound("Buzzer", Config.SOUND_BUZZER, 0.6)
 	bang = sound("Bang", Config.SOUND_BANG, 0.8)
 	splashSound = sound("Splash", Config.SOUND_SPLASH, 0.8)
+	bellSound = sound("Bell", Config.SOUND_BELL, 0.7)
 	for i, entry in Config.PRESENTER_SOUNDS do
 		presenterSounds[i] = sound("PresenterSound" .. i, entry.id, 0.7)
 	end
+end
+
+local BELL_LIGHT_SECONDS = 0.6
+local bellRings: { [Model]: number } = {}
+-- A seat bell rang: the ding, and that bell's light (map contract: Bell.Light holds a PointLight) for a moment.
+function Fx.bellRang(bell: Model?)
+	playCopy(bellSound)
+	local light = bell and bell:FindFirstChild("Light")
+	local glow = light and light:FindFirstChildOfClass("PointLight")
+	if not (bell and light and light:IsA("BasePart") and glow) then
+		return
+	end
+	bellRings[bell] = (bellRings[bell] or 0) + 1
+	local ring = bellRings[bell]
+	glow.Enabled = true
+	light.Material = Enum.Material.Neon
+	task.delay(BELL_LIGHT_SECONDS, function()
+		if bellRings[bell] == ring then
+			glow.Enabled = false
+			light.Material = Enum.Material.SmoothPlastic
+		end
+	end)
 end
 
 -- The presenter pressed a sound button (everyone hears it).
@@ -6823,6 +7401,42 @@ end
 return State
 ]====]; s.Parent = n6 end
 local n7 = Instance.new("Folder"); n7.Name = "UI"
+do local s = Instance.new("ModuleScript"); s.Name = "BellButton"; s.Source = [====[--!strict
+-- The big bell button on screen (docs/DESIGN_V3.md §5.1; bundle 6b): shown while my seat bell is open, for every input
+-- (on a phone the E prompt is small; a fast game wants a big target). A press asks the server to ring my bell.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Style = require(script.Parent:WaitForChild("Style"))
+
+local BellButton = {}
+
+local button: TextButton
+
+function BellButton.build(onRing: () -> ())
+	button = Instance.new("TextButton")
+	button.Name = "BellButton"
+	button.LayoutOrder = 1 -- above the presenter's sounds and the reactions
+	button.Size = UDim2.fromOffset(150, 64)
+	button.BackgroundColor3 = Style.AMBER
+	button.FontFace = Style.BOLD
+	button.TextSize = 28
+	button.TextColor3 = Style.PANEL
+	button.Text = Config.TEXT.BELL_BUTTON
+	button.Visible = false
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 18)
+	corner.Parent = button
+	button.Activated:Connect(onRing)
+	button.Parent = Style.bottomStack()
+end
+
+function BellButton.setVisible(visible: boolean)
+	button.Visible = visible
+end
+
+return BellButton
+]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "Hud"; s.Source = [====[--!strict
 -- Status board at the top centre: phase + message, timer, my lives (hearts) and survivors. Kept short (64 px) so the
 -- chair row under it stays visible.
@@ -7019,7 +7633,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [
 --     button while they read it; then "the presenter is choosing", or a vote: the performers, "nobody" and "I could
 --     not hear" (my own name cannot be picked);
 --   - the banned-word talk (bundle 6a): one slim line under the status board, "topic · seconds left" (the middle of the
---     screen stays free: the players read each other's words over their heads there).
+--     screen stays free: the players read each other's words over their heads there);
+--   - the bells (bundle 6b): "ring to speak first" before "say what you like", and the bell quiz: the question, then
+--     who is answering (the right answer comes as a quiz result).
 -- It only shows what it is told and reports the button pressed; the server checks every answer.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -7292,12 +7908,13 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	state.endsAt = payload.endsAt or 0
 	state.canAnswer = canAnswer
 	state.myId = myId
+	local bells = kind == "oneWordBell" or kind == "bellQuiz"
 	card.Visible = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
-		or kind == "talk"
+		or kind == "talk" or bells
 	answerGrid.Visible = quizLike or kind == "vote"
-	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk"
-	timer.Visible = quizLike or kind == "oneWord" or kind == "vote"
-	note.Visible = kind == "oneWord"
+	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
+	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells
+	note.Visible = kind == "oneWord" or kind == "bellQuiz"
 	local slim = kind == "talk"
 	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 0.5)
 	card.Position = if slim then TALK_POSITION else CARD_POSITION
@@ -7342,6 +7959,12 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		swapButton.Visible = payload.phase == "prep" and not payload.swapped and payload.id ~= nil and ids[current] == myId
 	elseif kind == "oneWordJudge" then
 		title.Text = TEXT.JUDGE_WAIT
+	elseif kind == "oneWordBell" then
+		title.Text = TEXT.ONE_WORD_BELL
+	elseif kind == "bellQuiz" then
+		title.Text = payload.question or ""
+		note.Text = if payload.stage == "answer" then string.format(TEXT.BELL_QUIZ_ANSWERING, names[1] or "?")
+			else TEXT.BELL_QUIZ_WAIT
 	elseif kind == "talk" then
 		state.topicLine = (if payload.stage == "prep" then TEXT.TALK_SOON .. " · " else "")
 			.. string.format(TEXT.TALK_TOPIC, payload.topic or "")
@@ -7375,7 +7998,8 @@ function MissionPanel.tick(now: number)
 	if state.kind == "talk" then
 		timer.Text = ""
 		title.Text = string.format("%s · %d", state.topicLine, math.max(0, math.ceil(state.endsAt - now)))
-	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" then
+	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" or state.kind == "oneWordBell"
+		or state.kind == "bellQuiz" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""
@@ -7448,6 +8072,7 @@ local onWordAction: (string, number) -> () = function(_mode, _userId) end
 local volunteered = false
 local menuEndsAt = 0
 local menuKind = "pick"
+local menuNote = "" -- the "verdict" menu's right answer
 local selected: string? = nil -- the name tapped in a "judge" menu
 local onPickMission: (string) -> () = function(_id) end
 
@@ -7725,15 +8350,16 @@ function PresenterPanel.setPresenting(on: boolean)
 	end
 end
 
--- A menu (server time `endsAt`). "pick" (the next mission): a press picks and closes it. "judge" (who flies): a press
--- selects a name, "날려!" sends it.
-function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: string?)
+-- A menu (server time `endsAt`). "pick" (the next mission) and "verdict" (the bell quiz: right or wrong, `note` = the
+-- right answer, in the title): a press picks and closes it. "judge" (who flies): a press selects a name, "날려!" sends it.
+function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: string?, note: string?)
 	for _, child in menuList:GetChildren() do
 		if child:IsA("TextButton") then
 			child:Destroy()
 		end
 	end
 	menuKind = kind or "pick"
+	menuNote = note or ""
 	selected = nil
 	local judging = menuKind == "judge"
 	local nameButtons: { [string]: TextButton } = {}
@@ -7777,7 +8403,10 @@ function PresenterPanel.tick(now: number)
 	end
 	if menuFrame.Visible then
 		local left = math.max(0, math.ceil(menuEndsAt - now))
-		menuTitle.Text = string.format("%s · %d", if menuKind == "judge" then TEXT.JUDGE_PICK else TEXT.PICK_MISSION, left)
+		local heading = if menuKind == "judge" then TEXT.JUDGE_PICK
+			elseif menuKind == "verdict" then string.format(TEXT.VERDICT_PICK, menuNote)
+			else TEXT.PICK_MISSION
+		menuTitle.Text = string.format("%s · %d", heading, left)
 	end
 end
 

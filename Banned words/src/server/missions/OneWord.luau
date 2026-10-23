@@ -1,13 +1,15 @@
 --!strict
--- "A word to everyone" (docs/DESIGN_V3.md §5; bundle 4b, owner 2026-10-23: topics mostly about yourself, the presenter
--- picks on screen and the podium lever is pulled). Up to ONE_WORD_MAX_PERFORMERS alive players on the ground take
--- turns, those who performed least first: each gets a topic (ONE_WORD_PREP_SECONDS to read it and swap it once),
--- then speaks for ONE_WORD_SECONDS (chat participants type for ONE_WORD_CHAT_SECONDS). Nothing is judged while they
--- speak. Then the presenter picks the one to launch (the saddest word) within PRESENTER_JUDGE_SECONDS; with no pick
--- everyone votes (VoteRules). The launch is subjective: in public servers it never takes a last life and hits a
--- player at most SUBJECTIVE_FLINGS times a round, so those players are not offered. Only while someone presents
--- (the system never picks this mission by itself). Who flew during the performances (a banned word, bundle 5) or
--- skipped their turn is not offered (§4 "한마디에서 금칙어로 이미 날아간 사람은 … 빠진다").
+-- "Say what you like" (docs/DESIGN_V3.md §5: bundle 4b's "a word to everyone", owner 2026-10-23: topics mostly about
+-- yourself, the presenter picks on screen and the podium lever is pulled; bells and the floor since bundle 6b). First
+-- the bells of everyone on the ground are open for BELL_ORDER_SECONDS. Then up to ONE_WORD_MAX_PERFORMERS take turns:
+-- those who performed least first, among equals who rang first (in the order they rang), then the rest at random.
+-- Each gets a topic (ONE_WORD_PREP_SECONDS to read it and swap it once), then has the floor (only they and the presenter
+-- are heard, alive players see only their chat) for ONE_WORD_SECONDS (chat participants type for
+-- ONE_WORD_CHAT_SECONDS). Then the presenter picks the one to launch (the saddest word) within PRESENTER_JUDGE_SECONDS;
+-- with no pick everyone votes (VoteRules). Without a presenter it is played only with VOTE_MIN_VOTERS alive (else the
+-- vote could not happen). The launch is subjective: in public servers it never takes a last life and hits a player at
+-- most SUBJECTIVE_FLINGS times a round, so those players are not offered. Who flew during the performances or skipped
+-- their turn is not offered (§4).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
@@ -37,21 +39,29 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
 }
 
 local OneWord = {
 	id = "oneWord",
 	title = Config.TEXT.ONE_WORD_TITLE,
-	-- The time budget counts the longest run: everyone swaps the topic and types by chat, then a vote and the result.
-	expectedSeconds = Config.ONE_WORD_MAX_PERFORMERS * (2 * Config.ONE_WORD_PREP_SECONDS + Config.ONE_WORD_CHAT_SECONDS)
+	-- The time budget counts the longest run: the bells, everyone swaps the topic and types by chat, then a vote and the
+	-- result.
+	expectedSeconds = Config.BELL_ORDER_SECONDS
+		+ Config.ONE_WORD_MAX_PERFORMERS * (2 * Config.ONE_WORD_PREP_SECONDS + Config.ONE_WORD_CHAT_SECONDS)
 		+ Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS + Config.ONE_WORD_RESULT_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.ONE_WORD_MIN_PLAYERS :: number?,
-	needsPresenter = true :: boolean?,
+	needsPresenter = nil :: boolean?,
 }
 
--- Turns performed on this server (the least go first); weak keys, so players who left drop out.
+-- Turns performed this round (the least go first; DESIGN §5 "이번 판에 안 해 본 사람 우선"); weak keys, so players
+-- who left drop out.
 local performed: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
+local performedRound = -1 -- the round `performed` counts
 
 local function ids(list: { Player }): { number }
 	local out = {}
@@ -61,14 +71,16 @@ local function ids(list: { Player }): { number }
 	return out
 end
 
--- Up to ONE_WORD_MAX_PERFORMERS alive players on the ground, those who performed least first (random among equals).
-local function choosePerformers(ctx: Ctx): { Player }
+-- Up to ONE_WORD_MAX_PERFORMERS alive players on the ground: those who performed least first; among equals who rang
+-- the bell first (`rung`, first to last), then the others at random.
+local function choosePerformers(ctx: Ctx, rung: { Player }): { Player }
 	local pool = {}
 	local order: { [Player]: number } = {}
 	for _, player in ctx.players() do
 		if not ctx.flying(player) then
 			table.insert(pool, player)
-			order[player] = ctx.rng:NextNumber()
+			local rank = table.find(rung, player)
+			order[player] = if rank then rank else #rung + 1 + ctx.rng:NextNumber()
 		end
 	end
 	table.sort(pool, function(a, b)
@@ -174,7 +186,10 @@ local function turn(ctx: Ctx, performers: { Player }, index: number, given: { [s
 	end
 	local seconds = if chat then Config.ONE_WORD_CHAT_SECONDS else Config.ONE_WORD_SECONDS
 	screen("talk", true, Match.now() + seconds)
-	return watchWait(ctx, seconds, performers, performer, seen)
+	ctx.floor(performer)
+	local going = watchWait(ctx, seconds, performers, performer, seen)
+	ctx.floor(nil)
+	return going
 end
 
 -- Who flies: the presenter's pick, else a vote; nil for nobody. `eligible()` gives the targets still allowed now
@@ -234,20 +249,43 @@ local function judge(ctx: Ctx, eligible: () -> { Player }): (Player?, boolean)
 	return winner, false
 end
 
-function OneWord.available(final: boolean): boolean
-	return not final and #OneWordTopics > 0
+-- Without a presenter only when a vote can decide (VOTE_MIN_VOTERS alive).
+local function playable(alive: number): boolean
+	return Match.presenter ~= nil or VoteRules.canVote(alive)
 end
 
--- Returns false when it could not start (nobody presents any more, or too few on the ground).
+function OneWord.available(final: boolean): boolean
+	return not final and #OneWordTopics > 0 and playable(#Match.aliveList())
+end
+
+-- Returns false when it could not start (no presenter and too few for a vote, or too few on the ground).
 function OneWord.run(ctx: Ctx): boolean?
-	if not Match.presenter then
+	if not playable(#ctx.players()) then
 		return false
 	end
-	local performers = choosePerformers(ctx)
-	if #performers < Config.ONE_WORD_MIN_PLAYERS then
+	local ground = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(ground, player)
+		end
+	end
+	if #ground < Config.ONE_WORD_MIN_PLAYERS then
 		return false
+	end
+	if performedRound ~= Match.roundId then
+		performedRound = Match.roundId
+		table.clear(performed)
 	end
 	ctx.show(Config.TEXT.ONE_WORD_START)
+	ctx.screen({ kind = "oneWordBell", endsAt = Match.now() + Config.BELL_ORDER_SECONDS })
+	local rung = ctx.bell(ground, Config.BELL_ORDER_SECONDS, false)
+	if ctx.cancelled() then
+		return nil
+	end
+	local performers = choosePerformers(ctx, rung)
+	if #performers < Config.ONE_WORD_MIN_PLAYERS then
+		return nil -- (people flew or left during the bells: it was started, so it counts)
+	end
 	local given: { [string]: boolean } = {}
 	local seen: Seen = { done = {}, flew = {} }
 	-- Flights are noted all through the mission (also while the presenter chooses and during the vote).

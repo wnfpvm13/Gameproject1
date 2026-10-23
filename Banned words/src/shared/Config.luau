@@ -44,11 +44,13 @@ return {
 	ROULETTE_REVEAL_SECONDS = 2,
 	ROULETTE_MIN_PLAYERS = 2,
 	ROULETTE_PER_ROUND = 1,
-	-- "A word to everyone" (bundle 4b): up to ONE_WORD_MAX_PERFORMERS take turns on a topic (ONE_WORD_PREP_SECONDS to
-	-- read it and maybe swap it once, then ONE_WORD_SECONDS by voice or ONE_WORD_CHAT_SECONDS by chat); then the
-	-- presenter picks the one to launch within PRESENTER_JUDGE_SECONDS, else everyone votes for VOTE_SECONDS. Only
-	-- with a presenter, at most GAME_PER_ROUND times a round.
+	-- "Say what you like" (bundle 4b's "a word to everyone", bells since 6b): the bells are open BELL_ORDER_SECONDS
+	-- (who rang first speaks first among those who spoke least), then up to ONE_WORD_MAX_PERFORMERS take turns on a
+	-- topic (ONE_WORD_PREP_SECONDS to read it and maybe swap it once, then ONE_WORD_SECONDS alone on the floor by voice
+	-- or ONE_WORD_CHAT_SECONDS by chat); then the presenter picks the one to launch within PRESENTER_JUDGE_SECONDS,
+	-- else everyone votes for VOTE_SECONDS (without a presenter only with VOTE_MIN_VOTERS). GAME_PER_ROUND a round.
 	ONE_WORD_MAX_PERFORMERS = 5,
+	BELL_ORDER_SECONDS = 5,
 	ONE_WORD_PREP_SECONDS = 3,
 	ONE_WORD_SECONDS = 8,
 	ONE_WORD_CHAT_SECONDS = 15,
@@ -56,6 +58,20 @@ return {
 	ONE_WORD_MIN_PLAYERS = 2, -- performers it needs (alive, on the ground)
 	ONE_WORD_RESULT_SECONDS = 2, -- who flies (or nobody) stays on the status line this long
 	PRESENTER_JUDGE_SECONDS = 10,
+	-- The seat bells (bundle 6b): one ring per player each time they are open, at least BELL_COOLDOWN apart.
+	BELL_COOLDOWN = 0.2,
+	-- The bell quiz (bundle 6b, owner 2026-10-23: the first to ring answers by voice and the presenter judges, so only
+	-- with a presenter): BELL_QUIZ_QUESTIONS questions; for each the bells are open BELL_WAIT_SECONDS, the first ring
+	-- gets the floor for BELL_ANSWER_SECONDS (chat participants type for BELL_ANSWER_CHAT_SECONDS) and the presenter
+	-- then has BELL_VERDICT_SECONDS more to press right or wrong; a wrong answer flies (subjective) and the bells open
+	-- again for the others, BELL_TRIES answers a question at most. Nobody rings: everyone answers with four choices.
+	BELL_QUIZ_QUESTIONS = 3,
+	BELL_QUIZ_MIN_PLAYERS = 2,
+	BELL_WAIT_SECONDS = 8,
+	BELL_TRIES = 3,
+	BELL_ANSWER_SECONDS = 5,
+	BELL_ANSWER_CHAT_SECONDS = 10,
+	BELL_VERDICT_SECONDS = 5,
 	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
 	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
 	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
@@ -74,6 +90,7 @@ return {
 	-- Banned words (docs/DESIGN_V3.md §6; bundle 5a, the banned-word talk of bundle 6a): one each, only during the talk.
 	HABIT_WORD_CHANCE = 0.3, -- per player: chance that a word is a speech habit (진짜, 대박 ...) instead of a noun
 	TALK_SECONDS = 60, -- the talk itself (judged)
+	TALK_MIN_PLAYERS = 2,
 	TALK_PREP_SECONDS = 5, -- without a presenter: words and topic show this long before the talk
 	TALK_REROLL_SECONDS = 15, -- with a presenter: time to re-draw words (or press "start now")
 	REROLLS_PUBLIC = 1, -- public servers: the presenter re-draws everyone's words this often a round
@@ -206,8 +223,9 @@ return {
 		ROULETTE_TITLE = "룰렛",
 		ROULETTE_START = "룰렛이 돌아가요 · 걸린 한 명이 날아가요",
 		ROULETTE_HIT = "%s 당첨!",
-		ONE_WORD_TITLE = "모두에게 한마디",
-		ONE_WORD_START = "모두에게 한마디 · 주제에 맞게 한마디씩!",
+		ONE_WORD_TITLE = "좋아하는 거 말하기",
+		ONE_WORD_START = "좋아하는 거 말하기 · 벨을 누르면 먼저 말해요",
+		ONE_WORD_BELL = "🔔 벨을 누르면 먼저 말해요",
 		ONE_WORD_TURN = "%s 차례 · %s",
 		ONE_WORD_PREP = "곧 시작",
 		ONE_WORD_SWAP = "주제 바꾸기",
@@ -226,6 +244,17 @@ return {
 		RESCUED = "🛟 구제! %s 무사해요",
 		RESCUE_BUTTON = "🛟 구제",
 		MY_WORD_WAS = "내 금칙어: '%s'", -- (no particle: it would depend on the word's last syllable)
+		BELL_BUTTON = "🔔 벨",
+		BELL_QUIZ_TITLE = "벨 퀴즈",
+		BELL_QUIZ_START = "벨 퀴즈 · 먼저 벨을 누른 사람이 말로 답해요",
+		BELL_QUIZ_WAIT = "🔔 벨을 눌러 답하세요",
+		BELL_QUIZ_ANSWERING = "%s 님이 답하는 중",
+		BELL_QUIZ_RIGHT = "⭕ 정답! %s",
+		BELL_QUIZ_WRONG = "❌ 땡! %s",
+		BELL_QUIZ_NOBODY = "아무도 안 눌러서 모두 답해요",
+		VERDICT_PICK = "맞았나요? 정답: %s",
+		VERDICT_RIGHT = "⭕ 맞음",
+		VERDICT_WRONG = "❌ 틀림",
 		WORDS_TITLE = "금칙어 명단",
 		WORDS_REROLL = "다시 뽑기",
 		WORDS_REROLL_ALL = "전원 다시 뽑기",
@@ -247,6 +276,7 @@ return {
 	-- Scoring (session leaderstats, casual only).
 	SCORE_WIN = 3,
 	SCORE_PRESENTER = 2, -- the presenter at the end of a round (owner 2026-10-23); launches earn nothing
+	SCORE_BELL_QUIZ = 1, -- a right answer in the bell quiz
 	ASSIST_WINDOW = 10, -- (speech assist credit, used again with speech judging in phase 2)
 	SCORE_ASSIST = 1,
 
@@ -265,4 +295,6 @@ return {
 	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)
 	SOUND_BANG = "rbxassetid://9114086657", -- Dirt Explosion 1: sharp bang (SFX), the flying chair firing
 	SOUND_SPLASH = "rbxassetid://9120585252", -- Water Splash, Big Water Splash, Dive In 1 (SFX), the landing
+	SOUND_BELL = "rbxassetid://1839997929", -- the seat bell's ding (APM game show toolkit, Correct Answer 2; replace
+	-- with a shorter desk-bell sound after the owner hears it)
 }

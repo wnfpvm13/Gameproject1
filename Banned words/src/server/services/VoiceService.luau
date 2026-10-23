@@ -6,6 +6,8 @@
 --    audible to each other (docs/DESIGN_V3.md §13; with banned words they know every word).
 -- 3. Chat participants are heard by nobody during their round, even if their voice connects meanwhile (§7: speaking
 --    would get around the chat judging).
+-- 4. The floor (bundle 6b, §5.1): while someone has it, only they and the presenter are heard by everyone; the other
+--    alive participants are heard by nobody. Out players and spectators keep their own group.
 local Players = game:GetService("Players")
 
 local VoiceService = {}
@@ -14,6 +16,7 @@ local FLAT_CURVE = { [0] = 1, [2000] = 1 }
 
 local speakers: { [number]: boolean }? = nil -- userIds allowed to talk to the table; nil = no round, everyone open
 local silenced: { [number]: boolean } = {} -- userIds nobody hears (chat participants of the round)
+local floor: { [number]: boolean }? = nil -- while someone has the floor: the userIds still heard by everyone
 
 local function flatten(child: Instance)
 	if child:IsA("AudioEmitter") then
@@ -42,9 +45,10 @@ local function apply()
 	for _, player in Players:GetPlayers() do
 		local input = inputOf(player)
 		if input then
-			if silenced[player.UserId] then
+			local otherHasFloor = speakers ~= nil and speakers[player.UserId] and floor ~= nil and not floor[player.UserId]
+			if silenced[player.UserId] or otherHasFloor then
 				input.AccessType = Enum.AccessModifierType.Allow
-				input:SetUserIdAccessList({}) -- nobody allowed: nobody hears
+				input:SetUserIdAccessList({}) -- nobody allowed: nobody hears (a chat participant, or someone else's floor)
 			elseif speakers == nil or speakers[player.UserId] then
 				input.AccessType = Enum.AccessModifierType.Deny
 				input:SetUserIdAccessList({}) -- nobody denied: the whole server hears
@@ -66,6 +70,21 @@ function VoiceService.setSpeakers(userIds: { number }?)
 		speakers = set
 	else
 		speakers = nil
+	end
+	apply()
+end
+
+-- The floor: `userIds` (the one speaking and the presenter) are heard by everyone, the other alive participants by
+-- nobody; nil gives everyone their voice back.
+function VoiceService.setFloor(userIds: { number }?)
+	if userIds then
+		local set = {}
+		for _, id in userIds do
+			set[id] = true
+		end
+		floor = set
+	else
+		floor = nil
 	end
 	apply()
 end

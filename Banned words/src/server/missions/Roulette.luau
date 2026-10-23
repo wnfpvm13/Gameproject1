@@ -27,6 +27,10 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
 }
 
 local Roulette = {

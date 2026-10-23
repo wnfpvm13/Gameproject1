@@ -9,11 +9,12 @@
 --               }, final = they all fell at   ChatJoin    (on) join rounds by text chat instead of voice
 --               once and play the final }
 --   ChatAccess  to one player only: may I join by chat? { state = checking / yes / no / voice / error }
---   PresenterMenu to the presenter: { kind = "pick" (next mission) | "judge" (who to launch), options = { {id, title,
---               recommended} } | nil (closed), endsAt }
+--   PresenterMenu to the presenter: { id (the menu's number, sent back with the pick), kind = "pick" (next mission)
+--               | "judge" (who to launch) | "verdict" (the bell quiz: right / wrong, `note` = the right answer),
+--               options = { {id, title, recommended} } | nil (closed), endsAt, note? }
 --   Lever       the presenter pulled the podium lever (a launch by their choice follows)
 --   Sound       a presenter sound button: { index } (Config.PRESENTER_SOUNDS)
---   (client -> server: Volunteer (on), PresenterPick (mission id), PresenterSound (index))
+--   (client -> server: Volunteer (on), PresenterPick (option id, menu id), PresenterSound (index))
 --   Mission     the running mission's screen (MissionRunner): { kind = "quiz", final, question, choices, endsAt?, id? }
 --               | { kind = "quizResult", ..., answer } | { kind = "roulette", ids, pick, spinSeconds }
 --               | { kind = "talk", stage = "prep" | "talk", topic, endsAt } | { kind = "none" }
@@ -26,6 +27,8 @@
 --               (sent during the banned-word talk only, bundle 6a; outside it everyone has no word)
 --   (client -> server, the presenter during the banned-word talk: EarJudge (userId) heard a banned word; Reroll (userId:
 --   private servers, or "all": public servers) new words in the prep stage; TalkStart start the talk now)
+--   BellOpen    the seat bells open to some players: { open = true, id, ids, endsAt } | { open = false } (bundle 6b)
+--   BellRang    a seat bell rang: { userId } (client -> server: Bell (window id), ring my bell)
 --   Rescue      to the presenter: banned words caught in chat waiting for a rescue { hits = { {userId, word, endsAt} } }
 --               (client -> server: Rescue (userId) the presenter rescues that player)
 -- The speech judging of phase 2 (JudgeService, not running in stage 1) will need Settle (server -> client), Transcript,
@@ -37,7 +40,7 @@ local Net = {}
 local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
 	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer", "Lever",
-	"EarJudge", "Reroll", "TalkStart", "Rescue",
+	"EarJudge", "Reroll", "TalkStart", "Rescue", "Bell", "BellOpen", "BellRang",
 	"Words",
 }
 

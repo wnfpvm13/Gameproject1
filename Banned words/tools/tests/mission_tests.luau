@@ -46,7 +46,8 @@ end
 
 -- A ctx like RoundService's: `alive` are the players, `flyingSet` cannot answer; fails, answers and shows are recorded.
 local function fakeCtx(alive, final, flyingSet)
-	local record = { fails = {}, answered = nil, missed = nil, shows = {}, cancel = false }
+	local record = { fails = {}, answered = nil, missed = nil, shows = {}, cancel = false, bellCalls = {}, floors = {},
+		verdicts = {}, scores = {} }
 	record.ctx = {
 		final = final,
 		players = function() return alive end,
@@ -68,6 +69,22 @@ local function fakeCtx(alive, final, flyingSet)
 			record.pickSeconds = seconds
 			return if record.pick then record.pick(options) else nil
 		end,
+		-- Bundle 6b: the bells answer at once with the next list of record.rings; floors, verdicts and points recorded.
+		bell = function(from, seconds, firstOnly)
+			table.insert(record.bellCalls, { from = from, seconds = seconds, firstOnly = firstOnly })
+			local rung = if record.rings then table.remove(record.rings, 1) else nil
+			return rung or {}
+		end,
+		floor = function(player)
+			table.insert(record.floors, player or false)
+		end,
+		presenterVerdict = function(answer, seconds)
+			table.insert(record.verdicts, { answer = answer, seconds = seconds })
+			return if record.verdict then record.verdict(answer) else nil
+		end,
+		score = function(player, amount)
+			table.insert(record.scores, { player = player, amount = amount })
+		end,
 	}
 	return record
 end
@@ -80,6 +97,15 @@ local function screens(since)
 		end
 	end
 	return list
+end
+local function lastScreenOf(since, kind)
+	local found = nil
+	for _, m in screens(since) do
+		if m.payload.kind == kind then
+			found = m.payload
+		end
+	end
+	return found
 end
 local function levers(since)
 	local n = 0
@@ -438,13 +464,13 @@ do
 		return found
 	end
 
-	-- 6A: no presenter -> it does not start.
+	-- 6A: no presenter and fewer than VOTE_MIN_VOTERS -> it does not start (nobody could decide who flies).
 	Match.presenter = nil
-	local nobody = fakeCtx(newPlayers(4), false, nil)
+	local nobody = fakeCtx(newPlayers(Config.VOTE_MIN_VOTERS - 1), false, nil)
 	local idle = oneWordRun(nobody)
 	at(now + 1)
-	check("6a without a presenter it does not start (and says it played nothing)", idle.done and idle.played == false
-		and OneWord.needsPresenter == true)
+	check("6a without a presenter and too few for a vote it does not start (and says it played nothing)", idle.done
+		and idle.played == false and OneWord.needsPresenter == nil)
 
 	-- 6B: seven alive (one flying): five performers on the ground, a swap, the presenter picks, the lever, a launch.
 	Match.presenter = presenter
@@ -630,7 +656,111 @@ do
 		and vote5.endsAt > now - Config.VOTE_SECONDS and #record5.fails == 0)
 	at(now + 5)
 	check("6q (and it ends)", run5.done)
+
+	-- 6F (bundle 6b): the bells first; who rang first speaks first (among those who spoke least); the floor per turn;
+	-- without a presenter it is played with VOTE_MIN_VOTERS.
 	Match.presenter = nil
+	local bs = newPlayers(Config.VOTE_MIN_VOTERS + 1)
+	local record6 = fakeCtx(bs, false, { [bs[1]] = true })
+	record6.rings = { { bs[4], bs[2] } }
+	local since6 = now
+	local run6 = oneWordRun(record6)
+	local call = record6.bellCalls[1]
+	local ids6 = lastScreen(since6, "oneWord").ids
+	local bellScreen = lastScreen(since6, "oneWordBell")
+	check("6r the bells of everyone on the ground open first (BELL_ORDER_SECONDS); who rang first speaks first",
+		call ~= nil and #call.from == #bs - 1 and not table.find(call.from, bs[1]) and call.seconds == Config.BELL_ORDER_SECONDS
+		and call.firstOnly == false and bellScreen ~= nil and ids6[1] == bs[4].UserId and ids6[2] == bs[2].UserId)
+	at(now + Config.ONE_WORD_PREP_SECONDS + 0.5)
+	local floorDuring = record6.floors[#record6.floors]
+	at(now + Config.ONE_WORD_SECONDS)
+	check("6s each performer has the floor while they speak, given back after the turn", floorDuring == bs[4]
+		and record6.floors[2] == false)
+	at(now + 4 * (Config.ONE_WORD_PREP_SECONDS + Config.ONE_WORD_SECONDS) + 1)
+	check("6t without a presenter (enough players) it is played: the vote follows", lastScreen(since6, "vote") ~= nil)
+	at(now + Config.VOTE_SECONDS + 5)
+	check("6u (and it ends)", run6.done)
+	Match.presenter = nil
+end
+
+---------------------------------------------------------------- 7. the bell quiz (bundle 6b)
+do
+	local BellQuiz = Quiz.bell
+	local presenter = newPlayers(1)[1]
+	QuizBank.main = { q("하나", "정답", "나", "다", "라"), q("둘", "정답", "바", "사", "아"), q("셋", "정답", "차", "카", "타") } -- (drawn in any order)
+	Match.presenter = presenter
+	local ps = newPlayers(3)
+	local record = fakeCtx(ps, false, nil)
+	-- Question 1: ps[1] rings, right. Question 2: ps[2] wrong, then ps[3] with no verdict, then nobody. Question 3: no
+	-- ring at all -> everyone answers with four choices.
+	record.rings = { { ps[1] }, { ps[2] }, { ps[3] }, {}, {} }
+	local verdicts = { "right", "wrong", nil }
+	local calls = 0
+	record.verdict = function(_answer)
+		calls += 1
+		return verdicts[calls]
+	end
+	local since = now
+	local run = start(BellQuiz, record)
+	at(now + 0.5)
+	local first = record.verdicts[1]
+	check("7a the first ring answers; the presenter judges with the right answer shown; right -> a point, no launch",
+		record.bellCalls[1] ~= nil and record.bellCalls[1].firstOnly == true and #record.bellCalls[1].from == 3
+		and first ~= nil and first.answer == "정답" and first.seconds == Config.BELL_ANSWER_SECONDS + Config.BELL_VERDICT_SECONDS
+		and #record.scores == 1 and record.scores[1].player == ps[1] and record.scores[1].amount == Config.SCORE_BELL_QUIZ
+		and #record.fails == 0 and record.floors[1] == ps[1] and record.floors[2] == false)
+	at(now + Config.QUIZ_REVEAL_SECONDS + 0.5)
+	local f = record.fails[1]
+	local second, third = record.bellCalls[3], record.bellCalls[4]
+	check("7b wrong -> a subjective launch and the bells open again without them; no verdict in time -> no launch",
+		f ~= nil and f.subjective == true and #f.players == 1 and f.players[1] == ps[2] and #record.fails == 1
+		and second ~= nil and #second.from == 2 and not table.find(second.from, ps[2])
+		and third ~= nil and #third.from == 1 and third.from[1] == ps[1])
+	at(now + Config.QUIZ_REVEAL_SECONDS + 0.5)
+	local quiz = lastScreenOf(since, "quiz")
+	check("7c nobody rings at all -> that question goes to everyone with four choices", quiz ~= nil and quiz.question ~= nil
+		and #quiz.choices == 4 and #record.bellCalls == 5)
+	at(now + Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.QUIZ_REVEAL_SECONDS + 1)
+	check("7d (it ends after BELL_QUIZ_QUESTIONS questions)", run.done and run.ok == true)
+	-- Without a presenter the questions go to everyone; a protected player's wrong answer does not launch them.
+	Match.presenter = nil
+	local record2 = fakeCtx(ps, false, nil)
+	local since2 = now
+	local run2 = start(BellQuiz, record2)
+	at(now + 0.5)
+	check("7e no presenter (any more) -> the questions go to everyone with four choices", #record2.bellCalls == 0
+		and lastScreenOf(since2, "quiz") ~= nil)
+	record2.cancel = true
+	at(now + Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + 1)
+	Match.presenter = presenter
+	local record3 = fakeCtx(ps, false, nil)
+	record3.protected = { [ps[2]] = true }
+	record3.rings = { { ps[2] }, {} }
+	record3.verdict = function() return "wrong" end
+	local run3 = start(BellQuiz, record3)
+	at(now + 0.5)
+	check("7f a player a subjective launch may not hit (public limits) is not launched for a wrong answer", #record3.fails == 0)
+	record3.cancel = true
+	at(now + 2)
+	check("7g (cancelled runs end)", run2.done and run3.done)
+	-- The presenter leaves before anyone answered a question: that question goes to everyone with four choices.
+	local record4 = fakeCtx(ps, false, nil)
+	record4.rings = { { ps[1] } }
+	record4.verdict = function()
+		Match.presenter = nil -- gone while ps[1] answers: no verdict
+		return nil
+	end
+	local since4 = now
+	local run4 = start(BellQuiz, record4)
+	at(now + Config.QUIZ_INTRO_SECONDS + 0.5)
+	check("7h the presenter gone mid-question: that question goes to everyone with four choices", lastScreenOf(since4, "quiz") ~= nil)
+	record4.cancel = true
+	at(now + Config.QUIZ_SECONDS + 2)
+	check("7i the time budget covers the longest run (every answer chance with its own bells, by chat, judged last)",
+		BellQuiz.expectedSeconds >= Config.BELL_QUIZ_QUESTIONS * (Config.BELL_TRIES * (Config.BELL_WAIT_SECONDS
+			+ Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS) + Config.QUIZ_REVEAL_SECONDS) and run4.done)
+	Match.presenter = nil
+	QuizBank.main = realMain
 end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

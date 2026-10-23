@@ -8,7 +8,9 @@
 --     button while they read it; then "the presenter is choosing", or a vote: the performers, "nobody" and "I could
 --     not hear" (my own name cannot be picked);
 --   - the banned-word talk (bundle 6a): one slim line under the status board, "topic · seconds left" (the middle of the
---     screen stays free: the players read each other's words over their heads there).
+--     screen stays free: the players read each other's words over their heads there);
+--   - the bells (bundle 6b): "ring to speak first" before "say what you like", and the bell quiz: the question, then
+--     who is answering (the right answer comes as a quiz result).
 -- It only shows what it is told and reports the button pressed; the server checks every answer.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -281,12 +283,13 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	state.endsAt = payload.endsAt or 0
 	state.canAnswer = canAnswer
 	state.myId = myId
+	local bells = kind == "oneWordBell" or kind == "bellQuiz"
 	card.Visible = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
-		or kind == "talk"
+		or kind == "talk" or bells
 	answerGrid.Visible = quizLike or kind == "vote"
-	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk"
-	timer.Visible = quizLike or kind == "oneWord" or kind == "vote"
-	note.Visible = kind == "oneWord"
+	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
+	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells
+	note.Visible = kind == "oneWord" or kind == "bellQuiz"
 	local slim = kind == "talk"
 	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 0.5)
 	card.Position = if slim then TALK_POSITION else CARD_POSITION
@@ -331,6 +334,12 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		swapButton.Visible = payload.phase == "prep" and not payload.swapped and payload.id ~= nil and ids[current] == myId
 	elseif kind == "oneWordJudge" then
 		title.Text = TEXT.JUDGE_WAIT
+	elseif kind == "oneWordBell" then
+		title.Text = TEXT.ONE_WORD_BELL
+	elseif kind == "bellQuiz" then
+		title.Text = payload.question or ""
+		note.Text = if payload.stage == "answer" then string.format(TEXT.BELL_QUIZ_ANSWERING, names[1] or "?")
+			else TEXT.BELL_QUIZ_WAIT
 	elseif kind == "talk" then
 		state.topicLine = (if payload.stage == "prep" then TEXT.TALK_SOON .. " · " else "")
 			.. string.format(TEXT.TALK_TOPIC, payload.topic or "")
@@ -364,7 +373,8 @@ function MissionPanel.tick(now: number)
 	if state.kind == "talk" then
 		timer.Text = ""
 		title.Text = string.format("%s · %d", state.topicLine, math.max(0, math.ceil(state.endsAt - now)))
-	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" then
+	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" or state.kind == "oneWordBell"
+		or state.kind == "bellQuiz" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""

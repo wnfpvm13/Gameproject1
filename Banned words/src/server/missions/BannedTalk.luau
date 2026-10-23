@@ -32,6 +32,10 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
 }
 
 local BannedTalk = {
@@ -41,7 +45,7 @@ local BannedTalk = {
 	-- rescue still waiting).
 	expectedSeconds = Config.TALK_REROLL_SECONDS + Config.TALK_SECONDS + Config.SETTLE_MAX + Config.RESCUE_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
-	minPlayers = 2 :: number?,
+	minPlayers = Config.TALK_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
 }
 

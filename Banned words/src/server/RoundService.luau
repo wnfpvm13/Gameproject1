@@ -202,10 +202,17 @@ local function settleTalk()
 		-- Late hits are held meanwhile and fall together once no more can come (the order transcripts arrive in must
 		-- not decide who falls first, e.g. who plays the final when everyone left falls).
 		holdingLate = true
+		local waitFrom = os.clock()
 		JudgeService.settle(Match.cutoffAt)
 		JudgeService.setOpen(false)
+		local waited = os.clock() - waitFrom
 		holdingLate = false
 		releaseHeld()
+		-- (for the live test: numbers only, never what was said; see docs/STT_LIVE_TEST_2026-10-24.md §3)
+		local s = JudgeService.stats()
+		print(string.format("[BannedWords] talk %d speech: %d transcripts received (with repeats) from %d speakers, %d"
+			.. " judged in the talk, %d word matches, busiest minute window %d, settle waited %.1f s", talks,
+			s.transcripts, s.players, s.judged, s.hits, s.peakMinute, waited))
 	end
 	local deadline = os.clock() + Config.RESCUE_SECONDS + Config.LEVER_SECONDS + Config.SETTLE_SLACK
 	while (RescueService.pending() > 0 or earsPending > 0) and os.clock() < deadline do

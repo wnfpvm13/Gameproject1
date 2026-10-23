@@ -4,9 +4,14 @@ For places edited in Studio without Rojo (the test place is a cloud place). It f
 default.project.json, walking the folders, so a new module can never be left out of the installer:
   folder -> Folder, init.client.luau -> the folder becomes a LocalScript, X.server.luau -> Script,
   X.client.luau -> LocalScript, X.luau -> ModuleScript.
-The map is separate (tools/build_lounge_map.luau, then tools/build_lounge_lighting.luau). The old STT live test is removed because its UI overlaps the HUD.
+The map is separate (tools/build_pool_hall.luau, then tools/build_pool_lighting.luau). The old STT live test is removed
+because its UI overlaps the HUD.
+
+--voice-judging builds the speech judging live test instead (docs/STT_LIVE_TEST_2026-10-24.md): the same code with
+Config.VOICE_JUDGING = true, written to .qa/install_game_stt.luau (not committed; the repository keeps it off until
+the owner turns it on).
 """
-import io, os
+import io, os, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(os.path.dirname(HERE), "src")
@@ -19,9 +24,24 @@ ROOTS = [
 ]
 
 
+ARGS = sys.argv[1:]
+if any(arg != "--voice-judging" for arg in ARGS):
+    sys.exit("unknown argument(s): " + " ".join(ARGS) + " (only --voice-judging)")
+VOICE_JUDGING_BUILD = "--voice-judging" in ARGS
+CONFIG = os.path.join(SRC, "shared", "Config.luau")
+VOICE_OFF = "\tVOICE_JUDGING = false,\n"
+VOICE_ON = "\tVOICE_JUDGING = true, -- (speech judging live test build: tools/install_game.py --voice-judging)\n"
+
+
 def long_string(path):
     text = io.open(path, encoding="utf-8").read()
-    assert "]====]" not in text, path
+    if VOICE_JUDGING_BUILD and os.path.samefile(path, CONFIG):
+        if text.count(VOICE_OFF) != 1:
+            raise SystemExit("Config.VOICE_JUDGING = false not found exactly once: nothing written")
+        text = text.replace(VOICE_OFF, VOICE_ON)
+        switched[0] = True
+    if "]====]" in text:
+        raise SystemExit("]====] inside " + path + ": nothing written")
     return "[====[" + text + "]====]"
 
 
@@ -33,6 +53,7 @@ def classify(filename):
 
 
 counter = [0]
+switched = [False]  # the live test build changed Config (checked before anything is written)
 
 
 def emit_folder(folder, parent_var, name, out):
@@ -78,5 +99,13 @@ end
 return "game installed"
 """)
 code = "".join(out)
-io.open(os.path.join(HERE, "install_game.luau"), "w", encoding="utf-8", newline="\n").write(code)
-print(len(code))
+if VOICE_JUDGING_BUILD:
+    if not switched[0]:
+        raise SystemExit("Config.luau was not part of the build: nothing written")
+    target = os.path.join(os.path.dirname(HERE), ".qa", "install_game_stt.luau")
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    code = code.replace('return "game installed', 'return "[speech judging ON - live test build] game installed')
+else:
+    target = os.path.join(HERE, "install_game.luau")
+io.open(target, "w", encoding="utf-8", newline="\n").write(code)
+print(len(code), target)

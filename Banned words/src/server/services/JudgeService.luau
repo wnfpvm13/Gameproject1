@@ -30,6 +30,13 @@ local seenTexts: { [Player]: { [number]: boolean } } = {}
 local minuteCount, minuteStart, warnedThisMinute = 0, os.clock(), false
 local settleKey = 0
 local settled: { [Player]: boolean } = {}
+-- Numbers of the talk now open, for the server console (the live test measures accuracy and the request limit; what
+-- was said is never logged): transcripts received (repeats included), from how many players, judged inside the talk,
+-- word matches (before RoundService drops some: a judgment already open, flying, ...), and the most transcripts this
+-- server took in one fixed 60 s window (a window may span the talk before; a lower bound of the STT requests).
+export type Stats = { transcripts: number, players: number, judged: number, hits: number, peakMinute: number }
+local stats: Stats = { transcripts = 0, players = 0, judged = 0, hits = 0, peakMinute = 0 }
+local speakers: { [Player]: boolean } = {}
 
 -- Cuts at a character boundary (never mid-syllable); nil if the text is not valid UTF-8.
 local function cleanText(text: string): string?
@@ -70,6 +77,7 @@ local function countRequest()
 		minuteCount, minuteStart, warnedThisMinute = 0, os.clock(), false
 	end
 	minuteCount += 1
+	stats.peakMinute = math.max(stats.peakMinute, minuteCount)
 	local limit = 1 + 5 * #Players:GetPlayers()
 	if not warnedThisMinute and minuteCount > limit * 0.8 then
 		warnedThisMinute = true
@@ -90,6 +98,11 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 		return
 	end
 	countRequest()
+	stats.transcripts += 1
+	if not speakers[player] then
+		speakers[player] = true
+		stats.players += 1
+	end
 	-- A table key must be a real number: NaN would throw, and infinities or fractions are never real ids.
 	if typeof(textId) == "number" and textId == textId and math.abs(textId) < math.huge and textId % 1 == 0 then
 		local seen = seenTexts[player] or {}
@@ -113,9 +126,11 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 	if from < Match.talkStartedAt or to > Match.cutoffAt or endedBy > Match.cutoffAt + Config.END_TOLERANCE then
 		return -- may have been spoken before the talk, after it ended, or well past that moment
 	end
+	stats.judged += 1
 	local p = Match.participants[player]
 	for _, word in p.words do
 		if word.effectiveAt <= from and Judge.isConfirmed(word.text, cleaned, word.aliases) then
+			stats.hits += 1
 			onHit(player, word.text)
 			return
 		end
@@ -172,7 +187,14 @@ function JudgeService.setOpen(isOpen: boolean)
 	if isOpen then
 		table.clear(recent)
 		table.clear(seenTexts) -- (text ids only matter within one talk)
+		table.clear(speakers)
+		stats = { transcripts = 0, players = 0, judged = 0, hits = 0, peakMinute = 0 }
 	end
+end
+
+-- The numbers of the talk opened last (see Stats).
+function JudgeService.stats(): Stats
+	return table.clone(stats)
 end
 
 return JudgeService

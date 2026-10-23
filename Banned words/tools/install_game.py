@@ -9,7 +9,8 @@ because its UI overlaps the HUD.
 
 --voice-judging builds the speech judging live test instead (docs/STT_LIVE_TEST_2026-10-24.md): the same code with
 Config.VOICE_JUDGING = true, written to .qa/install_game_stt.luau (not committed; the repository keeps it off until
-the owner turns it on).
+the owner turns it on). --voice-judging --solo: also one player may play a round and the talk and sees their own word
+(SHOW_OWN_WORD, MIN_PLAYERS 1, TALK_MIN_PLAYERS 1), written to .qa/install_game_stt_solo.luau.
 """
 import io, os, sys
 
@@ -25,20 +26,32 @@ ROOTS = [
 
 
 ARGS = sys.argv[1:]
-if any(arg != "--voice-judging" for arg in ARGS):
-    sys.exit("unknown argument(s): " + " ".join(ARGS) + " (only --voice-judging)")
+if any(arg not in ("--voice-judging", "--solo") for arg in ARGS):
+    sys.exit("unknown argument(s): " + " ".join(ARGS) + " (only --voice-judging, --voice-judging --solo)")
 VOICE_JUDGING_BUILD = "--voice-judging" in ARGS
+SOLO_BUILD = "--solo" in ARGS
+if SOLO_BUILD and not VOICE_JUDGING_BUILD:
+    sys.exit("--solo is a speech judging live test build: use --voice-judging --solo")
 CONFIG = os.path.join(SRC, "shared", "Config.luau")
-VOICE_OFF = "\tVOICE_JUDGING = false,\n"
-VOICE_ON = "\tVOICE_JUDGING = true, -- (speech judging live test build: tools/install_game.py --voice-judging)\n"
+# (Config line in the repository, the live test build's line); each must be found exactly once.
+SWITCHES = [("\tVOICE_JUDGING = false,\n",
+             "\tVOICE_JUDGING = true, -- (speech judging live test build: tools/install_game.py --voice-judging)\n")]
+if SOLO_BUILD:
+    # One tester: a round and the banned-word talk with one player, who also sees their own word.
+    SWITCHES += [
+        ("\tSHOW_OWN_WORD = false,\n", "\tSHOW_OWN_WORD = true, -- (solo speech test build)\n"),
+        ("\tMIN_PLAYERS = if isStudio then 1 else 2,\n", "\tMIN_PLAYERS = 1, -- (solo speech test build)\n"),
+        ("\tTALK_MIN_PLAYERS = 2,\n", "\tTALK_MIN_PLAYERS = 1, -- (solo speech test build)\n"),
+    ]
 
 
 def long_string(path):
     text = io.open(path, encoding="utf-8").read()
     if VOICE_JUDGING_BUILD and os.path.samefile(path, CONFIG):
-        if text.count(VOICE_OFF) != 1:
-            raise SystemExit("Config.VOICE_JUDGING = false not found exactly once: nothing written")
-        text = text.replace(VOICE_OFF, VOICE_ON)
+        for old, new in SWITCHES:
+            if text.count(old) != 1:
+                raise SystemExit("Config line not found exactly once: " + old.strip() + " (nothing written)")
+            text = text.replace(old, new)
         switched[0] = True
     if "]====]" in text:
         raise SystemExit("]====] inside " + path + ": nothing written")
@@ -102,9 +115,11 @@ code = "".join(out)
 if VOICE_JUDGING_BUILD:
     if not switched[0]:
         raise SystemExit("Config.luau was not part of the build: nothing written")
-    target = os.path.join(os.path.dirname(HERE), ".qa", "install_game_stt.luau")
+    name = "install_game_stt_solo.luau" if SOLO_BUILD else "install_game_stt.luau"
+    target = os.path.join(os.path.dirname(HERE), ".qa", name)
     os.makedirs(os.path.dirname(target), exist_ok=True)
-    code = code.replace('return "game installed', 'return "[speech judging ON - live test build] game installed')
+    tag = "[speech judging ON - SOLO live test build, own word shown] " if SOLO_BUILD else "[speech judging ON - live test build] "
+    code = code.replace('return "game installed', 'return "' + tag + 'game installed')
 else:
     target = os.path.join(HERE, "install_game.luau")
 io.open(target, "w", encoding="utf-8", newline="\n").write(code)

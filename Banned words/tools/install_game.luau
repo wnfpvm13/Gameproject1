@@ -46,6 +46,9 @@ return {
 	-- Speech judging of banned words (bundle 6e, after a live test). The banned-word talk is played only while it is on
 	-- (owner 2026-10-23); Studio can pretend it is with the workspace attribute BW_VoiceJudging = true.
 	VOICE_JUDGING = false,
+	-- The solo speech test build only (tools/install_game.py --voice-judging --solo, docs/STT_LIVE_TEST_2026-10-24.md):
+	-- a player also sees their own banned word, so one tester knows what to say. Never on in a real game.
+	SHOW_OWN_WORD = false,
 
 	-- Missions (docs/DESIGN_V3.md §5; bundle 4a, owner 2026-10-23). The quiz: everyone alive answers at once (four
 	-- choices); a wrong answer or none is a fail. The final asks harder questions the same way. The roulette picks one
@@ -1756,6 +1759,9 @@ local function busy(player: Player): boolean
 end
 
 function RoundService.start()
+	if Config.SHOW_OWN_WORD then
+		warn("[BannedWords] SOLO speech test build: players see their own banned word - never publish this as the game")
+	end
 	VoiceService.start()
 	Scores.start()
 	ChatService.start()
@@ -7036,7 +7042,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "WordService"; s.Source = [=
 -- HABIT_WORD_CHANCE drawn for each player on their own (a kind shared by everyone could be read off the others'
 -- heads), never overlapping another word in play. A word is replaced after it was said, or by the presenter's re-draw;
 -- a new word also avoids `avoid` (the running mission's screen texts, the talk's topic). What each viewer may see:
--- everyone's words, except an alive participant's own (shown as hidden). Words exist only during the banned-word talk
+-- everyone's words, except an alive participant's own (shown as hidden; shown in the solo speech test build,
+-- Config.SHOW_OWN_WORD). Words exist only during the banned-word talk
 -- (bundle 6a: RoundService assigns them in its prep stage and clears them after it); this module only keeps them in
 -- Match.participants.
 local Players = game:GetService("Players")
@@ -7159,6 +7166,7 @@ function WordService.payloadFor(viewer: Player)
 			table.insert(visible, word.text)
 		end
 		local hidden = player == viewer and p.alive and Match.phase ~= "Result" and #visible > 0 -- (no word: nothing to hide)
+			and not Config.SHOW_OWN_WORD
 		result[tostring(player.UserId)] = { words = if hidden then nil else visible, count = #visible }
 	end
 	return result

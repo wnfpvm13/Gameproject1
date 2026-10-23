@@ -884,6 +884,9 @@ local function busy(player: Player): boolean
 end
 
 function RoundService.start()
+	if Config.SHOW_OWN_WORD then
+		warn("[BannedWords] SOLO speech test build: players see their own banned word - never publish this as the game")
+	end
 	VoiceService.start()
 	Scores.start()
 	ChatService.start()

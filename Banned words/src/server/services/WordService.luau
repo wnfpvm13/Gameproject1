@@ -3,7 +3,8 @@
 -- HABIT_WORD_CHANCE drawn for each player on their own (a kind shared by everyone could be read off the others'
 -- heads), never overlapping another word in play. A word is replaced after it was said, or by the presenter's re-draw;
 -- a new word also avoids `avoid` (the running mission's screen texts, the talk's topic). What each viewer may see:
--- everyone's words, except an alive participant's own (shown as hidden). Words exist only during the banned-word talk
+-- everyone's words, except an alive participant's own (shown as hidden; shown in the solo speech test build,
+-- Config.SHOW_OWN_WORD). Words exist only during the banned-word talk
 -- (bundle 6a: RoundService assigns them in its prep stage and clears them after it); this module only keeps them in
 -- Match.participants.
 local Players = game:GetService("Players")
@@ -126,6 +127,7 @@ function WordService.payloadFor(viewer: Player)
 			table.insert(visible, word.text)
 		end
 		local hidden = player == viewer and p.alive and Match.phase ~= "Result" and #visible > 0 -- (no word: nothing to hide)
+			and not Config.SHOW_OWN_WORD
 		result[tostring(player.UserId)] = { words = if hidden then nil else visible, count = #visible }
 	end
 	return result

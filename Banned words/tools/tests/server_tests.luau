@@ -196,6 +196,12 @@ do
 	check("3f out players and spectators (and the presenter) see every word; the result shows your own",
 		outView[tostring(someone.UserId)].words ~= nil and specView[tostring(someone.UserId)].words ~= nil
 		and resultView[tostring(someone.UserId)].words ~= nil)
+	Match.phase = "Play"
+	Config.SHOW_OWN_WORD = true -- (the solo speech test build)
+	local soloView = WordService.payloadFor(someone)
+	Config.SHOW_OWN_WORD = false
+	check("3f2 the solo speech test build shows a player their own word", soloView[tostring(someone.UserId)].words ~= nil
+		and soloView[tostring(someone.UserId)].words[1] == Match.participants[someone].words[1].text)
 	WordService.clear()
 	check("3g clear drops every word", #Match.participants[someone].words == 0)
 	Match.phase = "Lobby"

@@ -33,6 +33,9 @@ return {
 	-- Speech judging of banned words (bundle 6e, after a live test). The banned-word talk is played only while it is on
 	-- (owner 2026-10-23); Studio can pretend it is with the workspace attribute BW_VoiceJudging = true.
 	VOICE_JUDGING = false,
+	-- The solo speech test build only (tools/install_game.py --voice-judging --solo, docs/STT_LIVE_TEST_2026-10-24.md):
+	-- a player also sees their own banned word, so one tester knows what to say. Never on in a real game.
+	SHOW_OWN_WORD = false,
 
 	-- Missions (docs/DESIGN_V3.md §5; bundle 4a, owner 2026-10-23). The quiz: everyone alive answers at once (four
 	-- choices); a wrong answer or none is a fail. The final asks harder questions the same way. The roulette picks one

@@ -125,10 +125,27 @@ Config.Cowboy = {
 	BridgeMargin = 0.5, -- a bridge counts as over the cowboy this much beyond its girder (along and across)
 	ReportAgain = 1, -- seconds before a mail pickup the server has not counted yet is reported again
 	SplatSeconds = 1.2, -- after a bridge hits the cowboy or the cowboy falls off: back on the last car after this
-	KnockBack = 28, -- studs per second backward when a bridge hits the cowboy
+	KnockBack = 28, -- studs per second backward when a barrel knocks the cowboy off (a bridge makes paper of them: Paper)
 	KnockUp = 14,
 	FellBelow = 1.0, -- feet lower than this above the rail tops, on no roof: the cowboy is off the train
 	SpawnLift = 3.5, -- the root above a roof when the cowboy is put on the last car
+}
+
+-- The paper gag (PaperPath): a bridge that hits the cowboy flattens them front to back like a sheet of paper, carries
+-- them back stuck on its face for a moment, then lets them flutter down, until they are put back on the last car
+-- (Config.Cowboy.SplatSeconds) and puff back to their own shape.
+Config.Paper = {
+	Thickness = 0.12, -- front to back, as a share of the cowboy's own
+	InSeconds = 0.06, -- flattened this fast
+	StuckSeconds = 0.35, -- carried back on the girder's face
+	FallSpeed = 5, -- then fluttering down this many studs per second,
+	SwayStuds = 1.2, -- swaying this far to each side,
+	SwaysPerSecond = 1.6,
+	Tilt = 0.35, -- tilting this much (radians) with the sway,
+	TurnsPerSecond = 1.1, -- turning about the vertical so the thin edge shows,
+	Drift = 0.35, -- and drifting back at this share of the run speed
+	PopSeconds = 0.2, -- back on the train: puffing up past their own thickness and settling
+	PopThickness = 1.3,
 }
 
 -- Mail bags on trackside mail cranes, one between every two bridges (left and right in turn): the cowboy picks a bag up

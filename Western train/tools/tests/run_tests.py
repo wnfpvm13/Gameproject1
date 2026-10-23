@@ -3,14 +3,15 @@
   python -I tools/tests/run_tests.py
 
   squash  src/shared/Config.luau (real numbers), SquashSpring.luau, SquashPose.luau, CrankMotion.luau, CourseMath.luau,
-          JumpArc.luau, src/server/CrewBook.luau:
+          JumpArc.luau, PaperPath.luau, src/server/CrewBook.luau:
           press speed and overshoot, the release bounce and wobble, frame-rate independence, hitches, part poses (a lying part,
           wheels on the rails, the chimney folding harder from its foot, the cap staying on top, exact return to
           rest), the rods' circle (direction, quarter-turn sides, squashing with the wheels), the legs' swing
           (opposite sides, limits, kick on press, flap on release, the shoes never below the rails), the run toward the
           bridges (clock, bridge places, when a bridge is over the locomotive, the server's pass check, the clearance),
           who drives and who rides (pairing in join order, the stand-in driver, leaving), mail, barrels, the jump and
-          the gold mail (the arc, where the gold hangs, the jump clear of the bridges, only a jump together reaching it)
+          the gold mail (the arc, where the gold hangs, the jump clear of the bridges, only a jump together reaching it),
+          the paper gag (how thin and when, the flight stuck on the girder and fluttering down)
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
 
 The modules run unchanged; the only fakes are Color3.fromRGB and Vector3.new (Config's colours and face-window
@@ -28,6 +29,7 @@ MODULES = [
     ("CrankMotion", "src/shared/CrankMotion.luau"),
     ("CourseMath", "src/shared/CourseMath.luau"),
     ("JumpArc", "src/shared/JumpArc.luau"),
+    ("PaperPath", "src/shared/PaperPath.luau"),
     ("CrewBook", "src/server/CrewBook.luau"),
 ]
 PRELUDE = (

@@ -7,7 +7,8 @@
 --   while flat, and a squash held in the air waits for the landing), the bridges are judged here and reported, and the
 --   face window shows the train;
 -- - riding: the character is carried with the roof and follows the cowboy's rules (CowboyRules), the face window shows
---   the driver's face, and the train's jumps show the timing ring for a jump together (ApexRing).
+--   the driver's face, and the train's jumps show the timing ring for a jump together (ApexRing); a bridge splat is
+--   told to the server, so everyone sees the cowboy go paper-thin (PaperPose) and the driver hears of it.
 -- Other trains follow their Squashed and JumpAt attributes. A crash on any train (its CrashIndex attribute, or our own
 -- judgement first) plays the stamp, stars and a jolt.
 local CollectionService = game:GetService("CollectionService")
@@ -36,6 +37,8 @@ local BarrelView = require(script:WaitForChild("BarrelView"))
 local GoldView = require(script:WaitForChild("GoldView"))
 local JumpInput = require(script:WaitForChild("JumpInput"))
 local ApexRing = require(script:WaitForChild("ApexRing"))
+local PaperPose = require(script:WaitForChild("PaperPose"))
+local PaperPath = require(shared:WaitForChild("PaperPath"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
@@ -44,6 +47,7 @@ local bridgeRemote = remotes:WaitForChild(Names.BridgeRemote) :: RemoteEvent
 local mailRemote = remotes:WaitForChild(Names.MailRemote) :: RemoteEvent
 local jumpRemote = remotes:WaitForChild(Names.JumpRemote) :: RemoteEvent
 local goldRemote = remotes:WaitForChild(Names.GoldRemote) :: RemoteEvent
+local splatRemote = remotes:WaitForChild(Names.SplatRemote) :: RemoteEvent
 local faceCam = FaceCam.new(player:WaitForChild("PlayerGui"))
 local apexRing = ApexRing.new(player:WaitForChild("PlayerGui"))
 
@@ -66,6 +70,9 @@ type Tracked = {
 	gold: GoldView.View,
 	rules: CowboyRules.Rules?, -- while the player rides this train
 	predicted: { index: number, at: number }?, -- own train: a crash our judgement already played (os.clock)
+	splat: number?, -- the server time a bridge last made paper of this train's cowboy
+	cowboy: Model?, -- this train's cowboy's character, and since when (server time, as first seen here): a splat from
+	cowboySince: number, -- before then was someone else's, or the character before a respawn, and is not drawn
 	connections: { RBXScriptConnection },
 }
 local tracked: { [Model]: Tracked } = {}
@@ -204,6 +211,12 @@ local function playCrash(locomotive: Model, entry: Tracked, index: number)
 	end
 end
 
+local function cowboyCharacter(locomotive: Model): Model?
+	local id = locomotive:GetAttribute(Names.CowboyUserId)
+	local cowboy = if typeof(id) == "number" and id ~= 0 then Players:GetPlayerByUserId(id) else nil
+	return cowboy and cowboy.Character
+end
+
 local function track(instance: Instance)
 	if not instance:IsA("Model") or tracked[instance] then
 		return
@@ -230,6 +243,9 @@ local function track(instance: Instance)
 		gold = GoldView.new(locomotive, base),
 		rules = nil,
 		predicted = nil,
+		splat = nil,
+		cowboy = nil,
+		cowboySince = 0,
 		connections = {},
 	}
 	tracked[locomotive] = entry
@@ -247,6 +263,20 @@ local function track(instance: Instance)
 		end
 	end
 	table.insert(entry.connections, locomotive:GetAttributeChangedSignal(Names.CrashIndex):Connect(onCrashIndex))
+	-- The cowboy's bridge splats (our own cowboy's we draw at once, from CowboyRules); the driver hears of them.
+	local function onSplat(fresh: boolean)
+		local at = locomotive:GetAttribute(Names.SplatAt)
+		if typeof(at) == "number" and locomotive ~= riding then
+			entry.splat = at
+			if fresh and locomotive == mine then
+				faceCam:flash("철퍽!", SPLAT_WORD)
+			end
+		end
+	end
+	table.insert(entry.connections, locomotive:GetAttributeChangedSignal(Names.SplatAt):Connect(function()
+		onSplat(true)
+	end))
+	onSplat(false)
 	table.insert(entry.connections, locomotive:GetAttributeChangedSignal(Names.MissedMail):Connect(function()
 		local missed = locomotive:GetAttribute(Names.MissedMail)
 		if typeof(missed) == "number" and missed > 0 and (locomotive == mine or locomotive == riding) then
@@ -361,12 +391,6 @@ for _, instance in CollectionService:GetTagged(Names.LocomotiveTag) do
 	task.spawn(track, instance)
 end
 
-local function cowboyCharacter(locomotive: Model): Model?
-	local id = locomotive:GetAttribute(Names.CowboyUserId)
-	local cowboy = if typeof(id) == "number" and id ~= 0 then Players:GetPlayerByUserId(id) else nil
-	return cowboy and cowboy.Character
-end
-
 RunService.RenderStepped:Connect(function(dt: number)
 	local now = Workspace:GetServerTimeNow()
 	for locomotive, entry in tracked do
@@ -379,15 +403,26 @@ RunService.RenderStepped:Connect(function(dt: number)
 		entry.gold:update(distance)
 		-- The cowboy rides the roof just drawn, lying flat while it is flat.
 		local character = cowboyCharacter(locomotive)
+		if character ~= entry.cowboy then
+			entry.cowboy = character
+			entry.cowboySince = now
+		end
 		if character then
 			local isMe = locomotive == riding
 			local floor = entry.rider:update(character, isMe)
-			local lie = if floor then entry.animator:flatness() else 0
+			local splat = entry.splat
+			local paper = splat ~= nil and splat >= entry.cowboySince -- this very character was made paper
+			local thickness = if paper then PaperPath.thickness(now - (splat :: number), Config.Cowboy.SplatSeconds, Config.Paper) else 1
+			PaperPose.set(character, thickness)
+			local flying = paper and now - (splat :: number) < Config.Cowboy.SplatSeconds
+			local lie = if floor and not flying then entry.animator:flatness() else 0 -- paper flies flat out
 			CowboyPose.set(character, lie)
 			local rules = entry.rules
 			if isMe and rules then
 				local event, bag = rules:update(character, floor, lie, distance)
 				if event == "splat" then
+					entry.splat = now
+					splatRemote:FireServer(now)
 					faceCam:flash("철퍽!", SPLAT_WORD)
 				elseif event == "fell" then
 					faceCam:flash("앗!", SPLAT_WORD)
@@ -403,6 +438,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 			end
 		end
 	end
+	PaperPose.flush() -- a cowboy drawn thin last frame but not this one goes back to their own shape
 	apexRing:update(now)
 	-- Our own train: a squash held through a jump folds it on landing; the jump button greys out while it cannot jump.
 	refreshOwnSquash(now)

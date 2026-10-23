@@ -1,7 +1,8 @@
 --!strict
 -- The player's own cowboy on a train's roof: a low bridge passing over a cowboy who is too tall there (in the air, or
--- not lying flat on a flat roof) knocks them off backward ("splat"); a cowboy who has left the train ("fell") or was
--- knocked off goes back onto the last car after Config.Cowboy.SplatSeconds; a rolling barrel reaching the cowboy's legs
+-- not lying flat on a flat roof) makes paper of them ("splat": stuck on the girder, then fluttering down, PaperPath);
+-- a cowboy who has left the train ("fell") or was knocked off goes back onto the last car after
+-- Config.Cowboy.SplatSeconds; a rolling barrel reaching the cowboy's legs
 -- in its lane knocks them off too ("barrel"); a cowboy whose middle comes close to the next mail bag or gold bag picks
 -- it up ("mail", "gold", reported to the server). The player's client moves its own character, so this runs there.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,6 +16,7 @@ local PartUtil = require(shared:WaitForChild("PartUtil"))
 local TrainState = require(shared:WaitForChild("TrainState"))
 local BarrelTrack = require(shared:WaitForChild("BarrelTrack"))
 local GoldTrack = require(shared:WaitForChild("GoldTrack"))
+local PaperPath = require(shared:WaitForChild("PaperPath"))
 
 local CowboyRules = {}
 CowboyRules.__index = CowboyRules
@@ -29,11 +31,13 @@ type Fields = {
 	backUntil: number?, -- os.clock time the cowboy goes back onto the last car (while knocked off or fallen)
 	picked: { [Bag]: Report }, -- the bag of each kind last reported
 	roofs: { BasePart }, -- the car roof floors the barrels roll on (BarrelTrack.roofs)
+	paper: { at: number, from: Vector3, speed: number, character: Model }?, -- a splat's flight: since (os.clock), from
+	-- (train space), the run speed, and whose (a character after a respawn does not fly it)
 }
 export type Rules = typeof(setmetatable({} :: Fields, CowboyRules))
 
 function CowboyRules.new(train: Model, base: BasePart): Rules
-	local fields: Fields = { train = train, base = base, backUntil = nil, picked = {}, roofs = BarrelTrack.roofs(train) }
+	local fields: Fields = { train = train, base = base, backUntil = nil, picked = {}, roofs = BarrelTrack.roofs(train), paper = nil }
 	return setmetatable(fields, CowboyRules)
 end
 
@@ -57,10 +61,12 @@ local function putBack(self: Rules, character: Model)
 	local root = character:FindFirstChild("HumanoidRootPart")
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local floor = PartUtil.lastRoofFloor(self.train, Names.Walkable, Names.RestCFrame)
+	if humanoid then
+		humanoid.PlatformStand = false -- even with nowhere to go back to: never left stiff
+	end
 	if not (root and root:IsA("BasePart") and humanoid and floor) then
 		return
 	end
-	humanoid.PlatformStand = false
 	root.AssemblyLinearVelocity = Vector3.zero
 	root.AssemblyAngularVelocity = Vector3.zero
 	character:PivotTo(PartUtil.aboveFloor(floor.CFrame, floor.Size, Config.Cowboy.SpawnLift))
@@ -72,6 +78,38 @@ local function knockOff(self: Rules, humanoid: Humanoid, root: BasePart)
 	humanoid.PlatformStand = true
 	root.AssemblyLinearVelocity = self.base.CFrame:VectorToWorldSpace(Vector3.new(0, c.KnockUp, c.KnockBack))
 	self.backUntil = os.clock() + c.SplatSeconds
+end
+
+-- Made paper of by a bridge at train-space `from` while the bridges go by at `speed`: stiff (PlatformStand), flown on
+-- PaperPath until Config.Cowboy.SplatSeconds, then back on the last car.
+local function splat(self: Rules, character: Model, humanoid: Humanoid, from: Vector3, speed: number)
+	humanoid.PlatformStand = true
+	self.paper = { at = os.clock(), from = from, speed = speed, character = character }
+	self.backUntil = os.clock() + Config.Cowboy.SplatSeconds
+end
+
+-- The paper flight, every frame while it lasts: placed outright (facing the front, where the girder came from, then
+-- turned about the vertical and swayed in its own plane), so neither physics nor the roof carries it anywhere else.
+-- Over a roof it comes down no lower than resting on it (a roof springing back up must not swallow it).
+local function flyPaper(self: Rules, character: Model, root: BasePart)
+	local paper = self.paper
+	if not paper then
+		return
+	end
+	if paper.character ~= character then
+		self.paper = nil -- respawned meanwhile: the new character does not fly the old one's flight
+		return
+	end
+	local x, y, z, yaw, tilt = PaperPath.at(os.clock() - paper.at, paper.speed, Config.Paper)
+	local baseCFrame = self.base.CFrame
+	local at = paper.from + Vector3.new(x, y, z)
+	local roof = BarrelTrack.roofTopAt(self.roofs, baseCFrame, at.Z)
+	if roof then
+		at = Vector3.new(at.X, math.max(at.Y, roof + Config.Cowboy.SpawnLift), at.Z)
+	end
+	root.CFrame = baseCFrame * CFrame.new(at) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(0, 0, tilt)
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.AssemblyAngularVelocity = Vector3.zero
 end
 
 -- Where the next bag of a kind hangs (train space, at run distance `distance`), and its index; nil when there is none.
@@ -115,6 +153,7 @@ function CowboyRules.stop(self: Rules, character: Model?)
 		humanoid.PlatformStand = false
 	end
 	self.backUntil = nil
+	self.paper = nil
 end
 
 -- Every frame, after RoofRider. distance: the train's run distance (nil before the run); floor: the roof floor under
@@ -129,7 +168,10 @@ function CowboyRules.update(self: Rules, character: Model?, floor: BasePart?, li
 	if backUntil then
 		if os.clock() >= backUntil then
 			self.backUntil = nil
+			self.paper = nil
 			putBack(self, character)
+		else
+			flyPaper(self, character, root)
 		end
 		return nil
 	end
@@ -153,7 +195,8 @@ function CowboyRules.update(self: Rules, character: Model?, floor: BasePart?, li
 		local over = math.abs(here.Z - middle) <= b.Depth / 2 + margin and math.abs(here.X) <= b.Span / 2 + b.PierWidth + margin
 		local top = topOf(character, floor, lie, baseCFrame.Position.Y)
 		if top and over and top > b.Clearance then
-			knockOff(self, humanoid, root) -- stiff as a board, carried off by the girder
+			local run = TrainState.run(self.train)
+			splat(self, character, humanoid, here, if run then run.speed else 0)
 			return "splat"
 		end
 		-- A rolling barrel in the cowboy's lane, at the legs: jumped clear only with the feet above its top as drawn (on the

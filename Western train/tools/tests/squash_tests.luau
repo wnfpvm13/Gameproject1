@@ -1,5 +1,5 @@
 -- Squash and run math tests (run by tools/tests/run_tests.py, which puts Config, SquashSpring, SquashPose,
--- CrankMotion, CourseMath, JumpArc and CrewBook above this).
+-- CrankMotion, CourseMath, JumpArc, PaperPath and CrewBook above this).
 -- Uses the real Config numbers, so a tuning change that breaks the feel (too slow, no bounce, flying parts) fails.
 local passed, failed = 0, 0
 local function check(name: string, ok: boolean, detail: string?)
@@ -388,6 +388,38 @@ do
 	check("the gold crane's arm is over a cowboy's head at the best jump", G.BagY + G.BagSize.Y / 2 + G.ArmAboveBag - G.ArmThickness / 2 > roofTop + J.Height + 7.2 + 5.3)
 	check("the gold crane's post stands where the mail crane's would", G.PostX >= M.PostX)
 	check("the rise time is a default jump's", math.abs(G.RiseSeconds - math.sqrt(2 * 7.2 / 196.2)) < 0.01)
+end
+
+-- 13. The paper gag after a bridge splat.
+do
+	local P, S = Config.Paper, Config.Cowboy.SplatSeconds
+	local function thick(t: number): number
+		return PaperPath.thickness(t, S, P)
+	end
+	check("as thick as ever before the splat and after the pop", thick(-0.1) == 1 and near(thick(S + P.PopSeconds), 1, 1e-6) and thick(S + 5) == 1)
+	check("paper-thin right after the splat until back on the train", near(thick(P.InSeconds), P.Thickness) and near(thick(S - 0.01), P.Thickness))
+	check("flattening and the pop start where the last part ended", near(thick(P.InSeconds - 1e-6), P.Thickness, 1e-4) and near(thick(S), P.Thickness))
+	check("puffs past their own thickness in the pop", near(thick(S + P.PopSeconds / 2), P.PopThickness, 1e-6))
+	local speed = Config.Run.Speed
+	local x, y, z, yaw, tilt = PaperPath.at(P.StuckSeconds / 2, speed, P)
+	check("stuck on the girder: carried back with it, not falling or turning", x == 0 and y == 0 and near(z, speed * P.StuckSeconds / 2) and yaw == 0 and tilt == 0)
+	local x1, y1, z1, yaw1 = PaperPath.at(P.StuckSeconds + 1e-6, speed, P)
+	check("peeling off where the girder left it", near(x1, 0, 1e-4) and near(y1, 0, 1e-4) and near(z1, speed * P.StuckSeconds, 1e-4) and near(yaw1, 0, 1e-4))
+	local lowest, widest, lastZ, backward, turned = 0, 0, z1, true, 0
+	for i = 1, 40 do
+		local t = P.StuckSeconds + (S - P.StuckSeconds) * i / 40
+		local px, py, pz, pyaw = PaperPath.at(t, speed, P)
+		lowest = math.min(lowest, py)
+		widest = math.max(widest, math.abs(px))
+		backward = backward and pz >= lastZ and pz - lastZ < speed * (S - P.StuckSeconds) / 40
+		lastZ = pz
+		turned = pyaw
+	end
+	check("flutters down slowly, swaying within its sway", lowest < 0 and widest <= P.SwayStuds + 1e-9)
+	check("drifts back slower than the bridges go", backward)
+	check("turns enough to show its thin edge", turned >= math.pi / 2)
+	local standingRoot = Config.Cars.RoofTop + Config.Cars.WalkThickness + 3
+	check("does not fall into the sand before it goes back", standingRoot - P.FallSpeed * (S - P.StuckSeconds) > 1)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

@@ -8,6 +8,7 @@ return {
 	MailRemote = "Mail",
 	JumpRemote = "Jump",
 	GoldRemote = "Gold",
+	SplatRemote = "Splat",
 	-- Local folders each client makes in Workspace for what it draws, and the stage's haze in Lighting
 	CourseFolder = "WesternTrainCourse",
 	SceneryFolder = "WesternTrainScenery",
@@ -41,6 +42,7 @@ return {
 	JumpAt = "JumpAt", -- the server time the locomotive's last jump started
 	GoldNext = "GoldNext", -- the next gold bag, and the gold bags picked up
 	GoldTaken = "GoldTaken",
+	SplatAt = "SplatAt", -- the server time a bridge last made paper of the train's cowboy
 	-- On every part that squashes: its rest pose relative to the Base part
 	RestCFrame = "RestCFrame",
 	RestSize = "RestSize",

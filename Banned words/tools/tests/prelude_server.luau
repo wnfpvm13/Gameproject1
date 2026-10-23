@@ -136,6 +136,27 @@ local VoiceChatService = {
 		return voiceEnabled[userId] == true
 	end,
 }
+-- Presenter checks: GetChatGroupsAsync gives each player voiceGroups[userId] (default {"g"}), CanUsersChatAsync is
+-- false for chatBlocked[from .. ">" .. to]; groupsBroken / reachBroken make those calls fail.
+local voiceGroups, chatBlocked = {}, {}
+local groupsBroken, reachBroken = false, false
+VoiceChatService.GetChatGroupsAsync = function(_, list)
+	if groupsBroken then
+		error("chat groups API unavailable")
+	end
+	local out = {}
+	for i, p in list do
+		out[i] = voiceGroups[p.UserId] or { "g" }
+	end
+	return out
+end
+TextChatService.CanUsersChatAsync = function(_, from, to)
+	if reachBroken then
+		error("chat reach check unavailable")
+	end
+	return not chatBlocked[from .. ">" .. to]
+end
+workspace.FindFirstChild = function(_, _name) return nil end
 local Enum = { AccessModifierType = { Allow = "Allow", Deny = "Deny" } }
 
 local loaders = {}

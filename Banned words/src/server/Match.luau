@@ -1,6 +1,7 @@
 --!strict
 -- Shared match state plus small read helpers and the RoundState broadcast. No game rules: services read it,
--- and only RoundService changes phase and participants (LifeService the lives, ChatService the chat choice).
+-- and only RoundService changes phase and participants (LifeService the lives, ChatService the chat choice,
+-- PresenterService the presenter).
 -- Times: `Match.now()` (server clock shared with clients) for anything sent over the network,
 -- os.clock() for local intervals.
 local Players = game:GetService("Players")
@@ -30,6 +31,8 @@ local Match = {
 	message = "",
 	roundId = 0,
 	serverKind = "public", -- "public" | "private" (docs/DESIGN_V3.md §3), set at each round start
+	presenter = nil :: Player?, -- runs this round from the podium (PresenterService decides who; nil = the system)
+	presenterPending = false, -- a replacement is being looked for (clients wait before naming who presents)
 	participants = {} :: { [Player]: Participant },
 	startedWith = 0,
 	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
@@ -130,6 +133,8 @@ function Match.payload()
 		readyCount = #Match.eligiblePlayers(),
 		requireReady = Config.REQUIRE_VOICE_READY,
 		serverKind = Match.serverKind,
+		presenter = if Match.presenter then Match.presenter.UserId else nil,
+		presenterPending = Match.presenterPending,
 	}
 end
 
@@ -155,6 +160,8 @@ function Match.resetRound()
 	table.clear(Match.participants)
 	table.clear(Match.launches)
 	Match.startedWith = 0
+	Match.presenter = nil
+	Match.presenterPending = false
 	Match.talkStartedAt = math.huge
 	Match.cutoffAt = math.huge
 	Match.hostHeldUntil = 0

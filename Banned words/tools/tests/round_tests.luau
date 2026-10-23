@@ -17,7 +17,10 @@ end
 
 local function fakeCharacter()
 	local humanoid = { Health = 100 }
-	local character = { Parent = workspace }
+	local character = { Parent = workspace, ChildAdded = signal() }
+	function character:GetChildren()
+		return {}
+	end
 	function character:FindFirstChildOfClass(className)
 		return if className == "Humanoid" then humanoid else nil
 	end
@@ -29,15 +32,29 @@ local function fakeCharacter()
 	end
 	return character
 end
+local friendPairs = {} -- ["a-b"] = true: those two users are Roblox friends
+local friendsBroken = false
+local friendsDelay = 0 -- each friend check yields this long
 local function fakePlayer(i)
 	local attributes = {}
 	return {
+		IsFriendsWithAsync = function(self, otherId)
+			if friendsBroken then
+				error("friends API unavailable")
+			end
+			if friendsDelay > 0 then
+				task.wait(friendsDelay)
+			end
+			return friendPairs[self.UserId .. "-" .. otherId] == true or friendPairs[otherId .. "-" .. self.UserId] == true
+		end,
 		Name = "P" .. i,
 		UserId = i,
 		DisplayName = "P" .. i,
 		Parent = Players,
 		Character = fakeCharacter(),
 		CharacterAdded = signal(),
+		ChildAdded = signal(), -- (the real VoiceService of section 9 watches every player)
+		FindFirstChildOfClass = function(_, _className) return nil end,
 		SetAttribute = function(_, name, value) attributes[name] = value end,
 		GetAttribute = function(_, name) return attributes[name] end,
 	}
@@ -214,7 +231,7 @@ loaders.Scores = function() return Score end
 
 -- The mission: waits expectedSeconds (ctx.wait, so a cancel stops it), then fails whoever pick(run number, alive
 -- players) names; secondPick, if set, is a second event of the same main-game run right after the first.
-local Scripted = { id = "scripted", expectedSeconds = 10, runs = {}, finalRuns = {}, pick = nil, finalPick = nil, secondPick = nil }
+local Scripted = { id = "scripted", title = "scripted", expectedSeconds = 10, runs = {}, finalRuns = {}, pick = nil, finalPick = nil, secondPick = nil }
 function Scripted.available(_final) return true end
 function Scripted.run(ctx)
 	local list = if ctx.final then Scripted.finalRuns else Scripted.runs
@@ -841,6 +858,270 @@ do
 	end
 	check("9e round over: everyone is heard by everyone", open)
 	playerList = {}
+end
+
+---------------------------------------------------------------- 10. the presenter (PresenterService through RoundService)
+do
+	local Presenter = require(node("PresenterService"))
+	local volunteer = NetStub.listeners.Volunteer
+	local pickMission = NetStub.listeners.PresenterPick
+	local pressSound = NetStub.listeners.PresenterSound
+	local function offer(player, on) -- one request, after the per-player cooldown has passed
+		at(now + Config.VOLUNTEER_COOLDOWN)
+		volunteer(player, on)
+	end
+	local function lastState()
+		for i = #NetStub.sent, 1, -1 do
+			if NetStub.sent[i].name == "RoundState" then
+				return NetStub.sent[i].payload
+			end
+		end
+		return nil
+	end
+	local function menus(since) -- menus that opened since `since`: { to, payload }
+		local list = {}
+		for _, m in NetStub.sent do
+			if m.name == "PresenterMenu" and m.at >= since and m.payload.options then
+				table.insert(list, m)
+			end
+		end
+		return list
+	end
+
+	-- 10A: three players, one volunteers: they present, the menu, a pick, sounds, then missed picks.
+	local ps = newPlayers(3)
+	offer(ps[1], true)
+	local since = now
+	local play = begin(ps, 10, nil, nil)
+	local state = lastState()
+	check("10a a volunteer presents the round and takes no chair", Match.presenter == ps[1] and Match.participants[ps[1]] == nil
+		and Match.participants[ps[2]] ~= nil and state ~= nil and state.presenter == ps[1].UserId)
+	check("10b the presenter is heard by everyone", Voice.speakers ~= nil and table.find(Voice.speakers, ps[1].UserId) ~= nil)
+	local menuAt = play + Config.FREE_TALK_SECONDS - Config.PRESENTER_PICK_SECONDS
+	at(menuAt + 0.5)
+	local opened = menus(since)
+	check("10c the menu opens to the presenter alone for the last PRESENTER_PICK_SECONDS of free talk", #opened == 1
+		and opened[1].to == ps[1] and opened[1].at >= menuAt - 0.3 and opened[1].payload.options[1].id == "scripted"
+		and opened[1].payload.options[1].recommended == true)
+	local function closes()
+		local n = 0
+		for _, m in NetStub.sent do
+			if m.name == "PresenterMenu" and m.at >= since and not m.payload.options then
+				n += 1
+			end
+		end
+		return n
+	end
+	pickMission(ps[2], "scripted") -- not the presenter
+	pickMission(ps[1], "nope") -- not on the menu
+	at(now + 0.5)
+	local stillOpen = menus(since)
+	local closedEarly = closes()
+	pickMission(ps[1], "scripted")
+	at(play + Config.FREE_TALK_SECONDS + 1)
+	check("10d a pick by anyone else or of something not offered is ignored; the presenter's pick runs after free talk",
+		#stillOpen == 1 and closedEarly == 0 and #Scripted.runs == 1 and Scripted.runs[1] >= play + Config.FREE_TALK_SECONDS - 0.3
+		and noticesWith(Config.TEXT.PICK_AUTO, since) == 0)
+	local before = #sent("Sound", since)
+	pressSound(ps[1], 1)
+	pressSound(ps[1], 1) -- the same button again at once
+	pressSound(ps[1], 2)
+	pressSound(ps[2], 3) -- not the presenter
+	pressSound(ps[1], 99) -- no such button
+	local sounds = sent("Sound", since)
+	check("10e sound buttons: the presenter only, each button once per PRESENTER_SOUND_COOLDOWN", #sounds == before + 2
+		and sounds[#sounds - 1].payload.index == 1 and sounds[#sounds].payload.index == 2)
+	-- No more picks: the system picks; PRESENTER_MISSES misses in a row and nobody else volunteers -> the system.
+	local cycle = Config.FREE_TALK_SECONDS + Scripted.expectedSeconds
+	advanceUntil(function() return Match.presenter == nil end, cycle * (Config.PRESENTER_MISSES + 1))
+	check("10f a missed pick is made by the system (notice); PRESENTER_MISSES in a row end the presenting",
+		noticesWith(Config.TEXT.PICK_AUTO, since) == Config.PRESENTER_MISSES and Match.presenter == nil
+		and #Scripted.runs >= Config.PRESENTER_MISSES and lastState().presenter == nil)
+	check("10g ...and the presenter is no longer heard by the table", table.find(Voice.speakers, ps[1].UserId) == nil)
+	at(now + 1)
+	leave(ps[3], { ps[1], ps[2] })
+	finish(since)
+
+	-- 10B: the presenter leaves mid-round -> a volunteer who is not playing takes over; then steps down -> the system.
+	local qs = newPlayers(3)
+	offer(qs[1], true)
+	local since2 = now
+	local play2 = begin(qs, 10, nil, nil)
+	local late = fakePlayer(nextId + 50)
+	playerList = { qs[1], qs[2], qs[3], late }
+	task.spawn(Players.PlayerAdded.fire, late)
+	offer(late, true)
+	leave(qs[1], { qs[2], qs[3], late })
+	at(now + 0.5)
+	check("10h a presenter who leaves is replaced by a volunteer who is not playing", Match.presenter == late
+		and lastState().presenter == late.UserId and Match.participants[late] == nil)
+	offer(late, false)
+	at(now + 0.5)
+	check("10i a presenter who stops volunteering steps down (the system runs the round, they watch from the stands)",
+		Match.presenter == nil and find(Spectator.stands, late) ~= nil)
+	at(play2 + 3)
+	NetStub.listeners.DevFling(qs[3], "out")
+	finish(since2)
+
+	-- 10C: presenting to the end scores and is credited; the presenter may move again afterwards.
+	local rs = newPlayers(2)
+	offer(rs[1], true)
+	local since3 = now
+	local play3 = begin(rs, 10, nil, nil)
+	local humanoid = rs[1].Character:FindFirstChildOfClass("Humanoid")
+	local lockedWalk = humanoid.WalkSpeed
+	at(play3 + 2)
+	NetStub.listeners.DevFling(rs[2], "out")
+	local list3 = finish(since3)
+	local result3 = phaseAt(list3, "Result")
+	check("10j the presenter at the end scores SCORE_PRESENTER and is named in the result", Score.added[rs[1]] == Config.SCORE_PRESENTER
+		and result3 ~= nil and string.find(result3.message, string.format(Config.TEXT.PRESENTER_CREDIT, rs[1].DisplayName), 1, true) ~= nil)
+	check("10k the presenter stays at the podium in the round and may move again after it", lockedWalk == Config.PRESENTER_WALK_SPEED
+		and humanoid.WalkSpeed == 16)
+
+	-- 10E: an out player who volunteers may take over the round (docs/DESIGN_V3.md §8).
+	local ts = newPlayers(4)
+	offer(ts[1], true)
+	local since5 = now
+	local play5 = begin(ts, 10, nil, nil)
+	at(play5 + 2)
+	NetStub.listeners.DevFling(ts[4], "out")
+	at(now + Config.FLING_RETURN_SECONDS + 1)
+	offer(ts[4], true)
+	offer(ts[1], false)
+	at(now + 0.5)
+	check("10t an out player who volunteers may take over the round", Match.presenter == ts[4]
+		and lastState().presenter == ts[4].UserId and not Match.isAlive(ts[4]))
+	NetStub.listeners.DevFling(ts[3], "out")
+	finish(since5)
+
+	-- 10F: a flying out player cannot take over; a replaced presenter is not chosen again in that round.
+	local fs = newPlayers(4)
+	offer(fs[1], true)
+	local since6 = now
+	local play6 = begin(fs, 10, nil, nil)
+	at(play6 + 2)
+	NetStub.listeners.DevFling(fs[4], "out")
+	at(now + 0.2)
+	volunteer(fs[4], true) -- (first request of this player: no cooldown to wait for)
+	volunteer(fs[1], false)
+	at(now + 0.5)
+	check("10w a flying player cannot take over (the system runs the round)", Match.presenter == nil)
+	finish(since6)
+
+	local us = newPlayers(5)
+	offer(us[1], true)
+	local since7 = now
+	local play7 = begin(us, 10, nil, nil)
+	at(play7 + 2)
+	NetStub.listeners.DevFling(us[5], "out")
+	at(now + Config.FLING_RETURN_SECONDS + 1)
+	offer(us[5], true)
+	offer(us[1], false)
+	at(now + 0.5)
+	local tookOver = Match.presenter == us[5]
+	offer(us[1], true) -- the stepped-down presenter volunteers again
+	offer(us[5], false)
+	at(now + 0.5)
+	check("10v a replaced presenter is not chosen again in that round", tookOver and Match.presenter == nil)
+	NetStub.listeners.DevFling(us[3], "out")
+	NetStub.listeners.DevFling(us[4], "out")
+	finish(since7)
+
+	-- 10G: the round ends while the checks for a replacement still run -> nobody presents, nothing is locked.
+	workspaceAttributes.BW_ServerKind = "public" -- friend checks run
+	local vs = newPlayers(3)
+	offer(vs[1], true)
+	local since8 = now
+	local play8 = begin(vs, 10, nil, nil)
+	local spare = fakePlayer(nextId + 60)
+	playerList = { vs[1], vs[2], vs[3], spare }
+	task.spawn(Players.PlayerAdded.fire, spare)
+	offer(spare, true)
+	at(play8 + 3)
+	friendsDelay = 4
+	offer(vs[1], false) -- steps down: the two friend checks for `spare` take 8 s
+	local steppedDown = now
+	at(now + 0.5)
+	local pendingWhileChecking = Match.presenterPending -- (sent with the next broadcast; none comes before the checks end here)
+	NetStub.listeners.DevFling(vs[3], "out") -- the round is over once the flight ends (about 5 s)
+	at(steppedDown + 10) -- the checks are done; the result shows for RESULT_TIME
+	friendsDelay = 0
+	local spareHumanoid = spare.Character:FindFirstChildOfClass("Humanoid")
+	check("10u a round that ends during the checks gets no new presenter", Match.phase == "Result"
+		and Match.presenter == nil and (spareHumanoid == nil or spareHumanoid.WalkSpeed ~= Config.PRESENTER_WALK_SPEED))
+	check("10y clients are told a replacement is being looked for, and when it is over", pendingWhileChecking
+		and Match.presenterPending == false)
+	workspaceAttributes.BW_ServerKind = nil
+	finish(since8)
+
+	-- 10D: who may present (PresenterService.choose directly, between rounds).
+	local function pool(n)
+		local list = newPlayers(n)
+		for _, p in list do
+			offer(p, true)
+		end
+		return list
+	end
+	local function choose(candidates)
+		local chosen = Presenter.choose(candidates)
+		Match.presenter = nil
+		return chosen
+	end
+	Match.serverKind = "public"
+	local a = pool(1)
+	check("10l a presenter needs MIN_PLAYERS others to play", choose({ a[1] }) == nil)
+	local b = newPlayers(2)
+	offer(b[1], true)
+	Match.chatJoin[b[1]] = true
+	check("10m a chat participant cannot present", choose(b) == nil)
+	Match.chatJoin[b[1]] = nil
+	Config.REQUIRE_VOICE_READY = true
+	local notReady = choose(b)
+	Match.ready[b[1]] = true
+	local readyNow = choose(b)
+	Config.REQUIRE_VOICE_READY = false
+	Match.ready[b[1]] = nil
+	check("10n on live servers a presenter needs their voice ready", notReady == nil and readyNow == b[1])
+	friendPairs[b[1].UserId .. "-" .. b[2].UserId] = true
+	local publicFriend = choose(b)
+	Match.serverKind = "private"
+	local privateFriend = choose(b)
+	Match.serverKind = "public"
+	friendPairs[b[1].UserId .. "-" .. b[2].UserId] = nil
+	check("10o public servers: nobody's friend may present; private servers: friends may", publicFriend == nil and privateFriend == b[1])
+	voiceGroups[b[1].UserId] = { "x" }
+	local apart = choose(b)
+	voiceGroups[b[1].UserId] = nil
+	check("10p the presenter must share a voice chat group with every voice participant", apart == nil)
+	Match.chatJoin[b[2]] = true
+	chatBlocked[b[2].UserId .. ">" .. b[1].UserId] = true
+	local blocked = choose(b)
+	chatBlocked[b[2].UserId .. ">" .. b[1].UserId] = nil
+	Match.chatJoin[b[2]] = nil
+	check("10q the presenter must receive every chat participant's messages", blocked == nil)
+	friendsDelay = 2
+	local switched = "pending"
+	task.spawn(function()
+		switched = choose(b)
+	end)
+	Match.chatJoin[b[1]] = true -- while the friend check runs
+	at(now + 5)
+	Match.chatJoin[b[1]] = nil
+	friendsDelay = 0
+	check("10x a volunteer who switches to chat during the checks is not chosen", switched == nil)
+	groupsBroken = true
+	local studio = choose(b)
+	RunService.IsStudio = function() return false end
+	local live = choose(b)
+	RunService.IsStudio = function() return true end
+	groupsBroken = false
+	check("10r a check that cannot run: Studio allows, live servers do not", studio == b[1] and live == nil)
+	local c = pool(2)
+	local others = newPlayers(1)
+	local first = choose({ c[1], c[2], others[1] })
+	local second = choose({ c[1], c[2], others[1] })
+	check("10s volunteers take turns (who presented least goes first)", first ~= nil and second ~= nil and first ~= second)
 end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

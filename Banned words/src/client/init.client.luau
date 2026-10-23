@@ -1,5 +1,6 @@
 -- 금칙어 게임 Korean client entry point: only wiring. Server events update State, then refresh() redraws
--- every part from State (HUD, head bubbles, camera, reaction bar, getting ready, recognizer on/off, seat lock).
+-- every part from State (HUD, head bubbles, camera, reaction bar, getting ready, presenter controls, recognizer on/off,
+-- seat lock).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -22,6 +23,7 @@ local Hud = require(UI:WaitForChild("Hud"))
 local Toast = require(UI:WaitForChild("Toast"))
 local MicPanel = require(UI:WaitForChild("MicPanel"))
 local ReactionBar = require(UI:WaitForChild("ReactionBar"))
+local PresenterPanel = require(UI:WaitForChild("PresenterPanel"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
@@ -54,17 +56,22 @@ local function refreshVoice()
 	MicPanel.set({
 		status = status,
 		micTested = State.micTested,
-		inMyRound = State.inRound() and State.isParticipant(State.myId()),
+		inMyRound = State.inRound() and (State.isParticipant(State.myId()) or State.mePresenting()),
 		readyCount = State.round.readyCount,
 		chatAccess = State.chatAccess,
 		chatMode = player:GetAttribute("BW_ChatMode") == true,
 	})
 end
 
--- Everyone on the chairs gets a head bubble (name + hearts) during a round, every participant in the result.
+-- Everyone on the chairs (and the presenter) gets a head bubble during a round, every participant in the result.
+-- The presenter does not see their own (it would sit right in front of their camera).
 local function bubbleTargets(): { number }
 	if State.inRound() then
-		return State.round.alive
+		local list = table.clone(State.round.alive)
+		if State.round.presenter and not State.mePresenting() then
+			table.insert(list, State.round.presenter)
+		end
+		return list
 	elseif State.round.phase == "Result" then
 		return State.round.participants
 	end
@@ -74,12 +81,27 @@ end
 local function refresh()
 	local round = State.round
 	local me = State.myId()
+	local presenting = State.mePresenting()
 	Hud.setStatus(round.phase, round.message)
 	Hud.setAlive(#round.alive, round.total)
-	Hud.setMyLives(if State.inRound() and State.isParticipant(me) then State.livesOf(me) else nil, round.maxLives)
-	Billboards.render({ show = bubbleTargets(), words = State.words, lives = round.lives, maxLives = round.maxLives })
-	ShowCamera.set((State.inRound() and State.meAlive()) or os.clock() < myFlightEndsAt)
-	ReactionBar.setVisible(not (State.inRound() and State.meAlive()))
+	Hud.setMyLives(if State.inRound() and State.isParticipant(me) then State.livesOf(me) else nil, round.maxLives,
+		if presenting then Config.TEXT.ME_PRESENTER else nil)
+	Billboards.render({
+		show = bubbleTargets(),
+		words = State.words,
+		lives = round.lives,
+		maxLives = round.maxLives,
+		presenter = if State.inRound() then round.presenter else nil,
+	})
+	local seated = (State.inRound() and State.meAlive()) or os.clock() < myFlightEndsAt
+	ShowCamera.set(if presenting then "presenter" elseif seated then "show" else nil)
+	ReactionBar.setVisible(not (State.inRound() and State.meAlive()) and not presenting)
+	-- Anyone not playing the round may volunteer (an out player or a spectator can take over a round,
+	-- docs/DESIGN_V3.md §8); the presenter steps down with the same button. Chat participants cannot present.
+	local playing = State.inRound() and State.meAlive()
+	local chatMode = player:GetAttribute("BW_ChatMode") == true
+	PresenterPanel.setVolunteer(not playing and not chatMode, player:GetAttribute("BW_Volunteer") == true, presenting)
+	PresenterPanel.setPresenting(presenting)
 	refreshVoice()
 	applySeatLock()
 end
@@ -92,6 +114,13 @@ MicPanel.build(function(on)
 end)
 ReactionBar.build(function(index)
 	remotes.Reaction:FireServer(index)
+end)
+PresenterPanel.build(function(on)
+	remotes.Volunteer:FireServer(on)
+end, function(id)
+	remotes.PresenterPick:FireServer(id)
+end, function(index)
+	remotes.PresenterSound:FireServer(index)
 end)
 Fx.init()
 FlatVoice.start()
@@ -107,7 +136,13 @@ Speech.onText(function()
 		refreshVoice()
 	end
 end)
-player:GetAttributeChangedSignal("BW_ChatMode"):Connect(refreshVoice)
+player:GetAttributeChangedSignal("BW_ChatMode"):Connect(refresh)
+player:GetAttributeChangedSignal("BW_Volunteer"):Connect(function()
+	if player:GetAttribute("BW_Volunteer") == true then
+		Toast.show(Config.TEXT.VOLUNTEERED, "info")
+	end
+	refresh()
+end)
 Speech.onUnstable(function()
 	if not State.micTested then
 		Toast.show(Config.TEXT.RECOGNITION_UNSTABLE, "near")
@@ -117,23 +152,56 @@ Speech.start(script) -- this LocalScript lives in PlayerScripts and survives res
 
 -- Server events.
 local stateSeen = false -- the first state after joining only sets things up (no "it started" toast for late joiners)
+local function nameOf(userId: number?): string
+	local other = userId and Players:GetPlayerByUserId(userId)
+	return if other then other.DisplayName else "?"
+end
+
+-- The presenter the last toast named (or the round started with). While the server looks for a replacement
+-- (`presenterPending`) nobody is named yet, so a change gets one toast with where it ended up.
+local announcedPresenter: number? = nil
+
 remotes.RoundState.OnClientEvent:Connect(function(round)
 	local previous = State.round.phase
+	local wasInRound = State.inRound()
 	State.round = round
 	if round.phase == "Lobby" or round.phase == "Countdown" then
 		State.words = {}
 	end
+	if round.phase ~= previous and round.phase == "Assign" then
+		announcedPresenter = round.presenter
+	end
 	if stateSeen and round.phase ~= previous then
-		if round.phase == "Play" then
+		if round.phase == "Assign" and round.presenter then
+			Toast.show(string.format(Config.TEXT.PRESENTER_NAMED, nameOf(round.presenter)), "info")
+		elseif round.phase == "Play" then
 			Toast.show(Config.TEXT.PLAY_START, "info")
 		elseif round.phase == "Final" then
 			Toast.show(Config.TEXT.FINAL, "near")
 		elseif round.phase == "Result" then
 			Toast.show(round.message, "info")
 		end
+	elseif stateSeen and wasInRound and State.inRound() and not round.presenterPending
+		and round.presenter ~= announcedPresenter then
+		-- The presenter changed during the round (left, missed picks, stepped down).
+		announcedPresenter = round.presenter
+		Toast.show(if round.presenter then string.format(Config.TEXT.PRESENTER_CHANGED, nameOf(round.presenter))
+			else Config.TEXT.PRESENTER_NONE, "near")
 	end
 	stateSeen = true
 	refresh()
+end)
+
+remotes.PresenterMenu.OnClientEvent:Connect(function(info)
+	if info.options then
+		PresenterPanel.openMenu(info.options, info.endsAt)
+	else
+		PresenterPanel.closeMenu()
+	end
+end)
+
+remotes.Sound.OnClientEvent:Connect(function(info)
+	Fx.presenterSound(info.index)
 end)
 
 remotes.Words.OnClientEvent:Connect(function(words)
@@ -235,6 +303,7 @@ Players.PlayerAdded:Connect(watchCharacters)
 RunService.Heartbeat:Connect(function()
 	local remaining = State.round.endsAt - workspace:GetServerTimeNow()
 	Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
+	PresenterPanel.tick(workspace:GetServerTimeNow())
 end)
 
 -- Ask for the current state now that every handler is connected (late joiners miss earlier broadcasts).

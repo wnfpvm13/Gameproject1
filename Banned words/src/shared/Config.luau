@@ -79,6 +79,22 @@ return {
 	-- studs over the head). The banned words of bundle 5 add 1 stud per word row to that tag: raise this then.
 	CHAT_BUBBLE_VERTICAL_OFFSET = 2.5,
 
+	-- Presenter (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23): a volunteer runs the round from the podium.
+	PRESENTER_PICK_SECONDS = 15, -- the presenter picks the next mission in the last this-many seconds of free talk
+	PRESENTER_MISSES = 2, -- picks missed in a row -> another presenter (or the system runs the round)
+	PRESENTER_RECOMMENDED = 3, -- the mission menu marks this many at the top as recommended
+	VOLUNTEER_COOLDOWN = 1, -- seconds between two "volunteer / stop" requests from one player
+	PRESENTER_SOUND_COOLDOWN = 3, -- seconds before the same sound button works again
+	PRESENTER_WALK_SPEED = 0, -- the presenter stays at the podium during a round (back to the defaults after)
+	-- Sound buttons (owner 2026-10-23: five, Roblox-licensed APM Music / Pro Sound Effects). `text` = Config.TEXT key.
+	PRESENTER_SOUNDS = {
+		{ text = "SOUND_DRUMROLL", id = "rbxassetid://1840444182" }, -- Drum Rolls (A) (APM)
+		{ text = "SOUND_APPLAUSE", id = "rbxassetid://9113137529" }, -- Applause Nightclub 1 (SFX)
+		{ text = "SOUND_LAUGH", id = "rbxassetid://9114009960" }, -- Crowd Big Burst Of Laughter Cackling 1 (SFX)
+		{ text = "SOUND_CORRECT", id = "rbxassetid://1839997929" }, -- Correct Answer 2 (APM game show toolkit)
+		{ text = "SOUND_WRONG", id = "rbxassetid://1839997989" }, -- Wrong Answer 3 (APM game show toolkit)
+	},
+
 	-- Transcript intake guards (client-side STT). 10 s of Korean speech is roughly 70 syllables = 210 bytes.
 	TRANSCRIPT_MAX_BYTES = 600,
 	TRANSCRIPT_BURST = 6, -- at most this many transcripts per window per player (spam guard)
@@ -128,10 +144,31 @@ return {
 		CHAT_CANCEL = "채팅 참가 취소",
 		CHAT_JOINED = "채팅으로 참가해요 · 판 중에는 음성이 꺼져요",
 		CHAT_TAG = "[채팅]", -- before a chat participant's name in the chat window
+		-- Presenter (docs/DESIGN_V3.md §8).
+		VOLUNTEER = "🎤 진행자 지원",
+		VOLUNTEER_CANCEL = "진행자 지원 취소",
+		STEP_DOWN = "진행 넘기기",
+		VOLUNTEERED = "진행자로 지원했어요 · 조건이 맞으면 진행을 맡아요",
+		PRESENTER_NAMED = "오늘의 진행자: %s",
+		PRESENTER_CHANGED = "진행자가 바뀌었어요: %s",
+		PRESENTER_NONE = "진행자 없이 자동으로 진행해요",
+		PRESENTER_TAG = "🎤 진행자",
+		ME_PRESENTER = "🎤 내가 진행자",
+		PRESENTER_CREDIT = "진행 %s",
+		PICK_MISSION = "다음 미션을 골라 주세요",
+		PICK_RECOMMENDED = "추천",
+		PICK_AUTO = "시간이 지나서 추천 미션으로 진행해요",
+		TEST_MISSION_TITLE = "연습 미션",
+		SOUND_DRUMROLL = "두구두구",
+		SOUND_APPLAUSE = "박수",
+		SOUND_LAUGH = "웃음",
+		SOUND_CORRECT = "딩동",
+		SOUND_WRONG = "땡",
 	},
 
 	-- Scoring (session leaderstats, casual only).
 	SCORE_WIN = 3,
+	SCORE_PRESENTER = 2, -- the presenter at the end of a round (owner 2026-10-23); launches earn nothing
 	ASSIST_WINDOW = 10, -- (speech assist credit, used again with speech judging in phase 2)
 	SCORE_ASSIST = 1,
 

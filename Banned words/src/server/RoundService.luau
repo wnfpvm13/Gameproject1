@@ -4,9 +4,9 @@
 --   -> Final (sudden death) -> Result -> Countdown (quick rematch) ...
 -- Rules live in the services: lives in LifeService, the time budget and the final trigger in Timeline, missions in
 -- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
--- join by chat in ChatService, score in Scores. Bundles 2b-2c: no banned words and no presenter yet, and the only
--- mission is the Studio test mission (live servers just talk until the main game is over, then the survivors win
--- without a final).
+-- join by chat in ChatService, the presenter in PresenterService, score in Scores. Up to bundle 3: no banned words
+-- yet, and the only mission is the Studio test mission (live servers just talk until the main game is over, then the
+-- survivors win without a final).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -22,6 +22,7 @@ local SeatService = require(services:WaitForChild("SeatService"))
 local SpectatorService = require(services:WaitForChild("SpectatorService"))
 local VoiceService = require(services:WaitForChild("VoiceService"))
 local ChatService = require(services:WaitForChild("ChatService"))
+local PresenterService = require(services:WaitForChild("PresenterService"))
 local Scores = require(services:WaitForChild("Scores"))
 
 local RoundService = {}
@@ -35,11 +36,14 @@ local freeTalk = false -- free talk in the main game (the Studio fail key works 
 -- a mission runs or the round waits for flights)
 local lastEndedAt = -math.huge -- os.clock() when the last result finished (quick rematch countdown)
 
--- Alive participants are heard by everyone; players who are out and spectators only by each other.
+-- Alive participants and the presenter are heard by everyone; players who are out and spectators only by each other.
 local function refreshSpeakers()
 	local ids = {}
 	for _, player in Match.aliveList() do
 		table.insert(ids, player.UserId)
+	end
+	if Match.presenter then
+		table.insert(ids, Match.presenter.UserId)
 	end
 	VoiceService.setSpeakers(ids)
 end
@@ -166,12 +170,28 @@ local function playMain(myRound: number)
 		freeTalk = false
 	end
 	while true do
-		talk(os.clock() + Config.FREE_TALK_SECONDS)
+		-- Free talk; in its last PRESENTER_PICK_SECONDS the presenter picks the next mission (docs/DESIGN_V3.md §2).
+		local talkUntil = os.clock() + Config.FREE_TALK_SECONDS
+		talk(talkUntil - Config.PRESENTER_PICK_SECONDS)
+		local picked: string? = nil
+		if Match.presenter and not over() then
+			local options = MissionRunner.options(Timeline.left() - Config.PRESENTER_PICK_SECONDS, #Match.aliveList())
+			if #options > 0 then
+				freeTalk = true
+				local missed
+				picked, missed = PresenterService.askPick(options, Config.PRESENTER_PICK_SECONDS, over)
+				freeTalk = false
+				if missed then
+					Net.notice(Config.TEXT.PICK_AUTO)
+				end
+			end
+		end
+		talk(talkUntil)
 		local landed = waitFlights()
 		if over() then
 			return
 		end
-		local mission = if landed then MissionRunner.choose(Timeline.left()) else nil
+		local mission = if landed then MissionRunner.choose(Timeline.left(), #Match.aliveList(), picked) else nil
 		if landed and not mission then
 			talk(math.huge) -- nothing fits any more: free talk to the end
 			return
@@ -233,19 +253,27 @@ local function playFinal(myRound: number)
 	end
 end
 
--- Who won (everyone still in), with the session score.
+-- Who won (everyone still in) and who presented to the end, with the session score.
 local function resultText(): string
 	local names = {}
 	for _, player in Match.aliveList() do
 		Scores.add(player, Config.SCORE_WIN)
 		table.insert(names, player.DisplayName)
 	end
+	local text
 	if #names == 0 then
-		return Config.TEXT.NO_WINNER
+		text = Config.TEXT.NO_WINNER
 	elseif #names == 1 then
-		return string.format(Config.TEXT.WINNER, names[1])
+		text = string.format(Config.TEXT.WINNER, names[1])
+	else
+		text = string.format(Config.TEXT.JOINT_WINNERS, table.concat(names, ", "))
 	end
-	return string.format(Config.TEXT.JOINT_WINNERS, table.concat(names, ", "))
+	local presenter = Match.presenter
+	if presenter and presenter.Parent then
+		Scores.add(presenter, Config.SCORE_PRESENTER)
+		text ..= " · " .. string.format(Config.TEXT.PRESENTER_CREDIT, presenter.DisplayName)
+	end
+	return text
 end
 
 local function shuffled(list: { Player }): { Player }
@@ -265,6 +293,7 @@ end
 
 local function cleanup()
 	SeatService.releaseAll()
+	PresenterService.endRound()
 	openVoices()
 	SpectatorService.endRound()
 	Match.resetRound()
@@ -289,17 +318,23 @@ local function runRound()
 	if #candidates < Config.MIN_PLAYERS then
 		return
 	end
-	while #candidates > Config.MAX_PLAYERS do
-		table.remove(candidates)
-	end
 
-	-- Assign: chairs, lives, and who plays by chat (their voice is off until the result, docs/DESIGN_V3.md §7).
+	-- Assign: the presenter (not seated, docs/DESIGN_V3.md §8), chairs, lives, and who plays by chat (their voice is
+	-- off until the result, §7).
 	Match.roundId += 1
 	local myRound = Match.roundId
 	Match.resetRound()
 	Match.serverKind = detectServerKind()
 	toFinal = false
 	Scores.resetRound()
+	MissionRunner.beginRound()
+	local presenter = PresenterService.choose(candidates) -- before the chairs are counted: every volunteer is looked at
+	if presenter then
+		table.remove(candidates, table.find(candidates, presenter))
+	end
+	while #candidates > Config.MAX_PLAYERS do
+		table.remove(candidates)
+	end
 	local seated = SeatService.seatPlayers(candidates)
 	local chatIds = {}
 	for _, player in candidates do
@@ -314,6 +349,9 @@ local function runRound()
 	end
 	Match.startedWith = #Match.aliveList()
 	LifeService.beginRound()
+	if Match.presenter then
+		PresenterService.place(Match.presenter)
+	end
 	SpectatorService.beginRound()
 	VoiceService.setSilenced(chatIds)
 	refreshSpeakers()
@@ -328,6 +366,7 @@ local function runRound()
 	-- Result: winners and scores.
 	local text = resultText()
 	SeatService.releaseAll()
+	PresenterService.endRound()
 	openVoices()
 	Match.setPhase("Result", Config.RESULT_TIME, text)
 	waitPhase()
@@ -353,27 +392,51 @@ end
 local function onCharacterAdded(player: Player, character: Model)
 	character:WaitForChild("HumanoidRootPart", 10)
 	task.wait(0.5) -- let the engine finish placing it at the spawn
-	if player.Character == character and Match.inRound() and Match.isAlive(player) then
-		SeatService.reseat(player)
+	if player.Character ~= character or not Match.inRound() then
+		return
 	end
+	if Match.isAlive(player) then
+		SeatService.reseat(player)
+	elseif Match.presenter == player then
+		PresenterService.place(player) -- back to the podium
+	end
+end
+
+-- The presenter changed during a round (left, missed picks, stepped down): voices, the old presenter to the stands.
+local function onPresenterChange(_reason: PresenterService.Change, old: Player?, _new: Player?)
+	if not Match.inRound() then
+		return
+	end
+	if old and old.Parent then
+		SpectatorService.toStands(old)
+	end
+	refreshSpeakers()
+	Match.broadcast()
 end
 
 local function onSync(player: Player)
 	Net.to(player, "RoundState", Match.payload())
 	ChatService.sendAccess(player)
+	PresenterService.sendMenu(player)
 end
 
--- The player plays in the round being played: their way of joining (voice or chat) holds until it is over.
+-- The player plays in or presents the round being played: their way of joining (voice or chat) holds until it is over.
 local function lockedIn(player: Player): boolean
-	return Match.inRound() and Match.participants[player] ~= nil
+	return Match.inRound() and (Match.participants[player] ~= nil or Match.presenter == player)
+end
+
+-- Players another service owns right now: flying (SeatService) or presenting at the podium (PresenterService).
+local function busy(player: Player): boolean
+	return SeatService.isFlying(player) or Match.presenter == player
 end
 
 function RoundService.start()
 	VoiceService.start()
 	Scores.start()
 	ChatService.start()
+	PresenterService.start(onPresenterChange, SeatService.isFlying)
 	LifeService.start(SeatService.isFlying)
-	SpectatorService.start(SeatService.isFlying)
+	SpectatorService.start(busy)
 	SeatService.init(onFlightOver)
 	Net.listen("Ready", function(player, isReady)
 		local value = isReady == true

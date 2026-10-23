@@ -92,6 +92,22 @@ return {
 	-- studs over the head). The banned words of bundle 5 add 1 stud per word row to that tag: raise this then.
 	CHAT_BUBBLE_VERTICAL_OFFSET = 2.5,
 
+	-- Presenter (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23): a volunteer runs the round from the podium.
+	PRESENTER_PICK_SECONDS = 15, -- the presenter picks the next mission in the last this-many seconds of free talk
+	PRESENTER_MISSES = 2, -- picks missed in a row -> another presenter (or the system runs the round)
+	PRESENTER_RECOMMENDED = 3, -- the mission menu marks this many at the top as recommended
+	VOLUNTEER_COOLDOWN = 1, -- seconds between two "volunteer / stop" requests from one player
+	PRESENTER_SOUND_COOLDOWN = 3, -- seconds before the same sound button works again
+	PRESENTER_WALK_SPEED = 0, -- the presenter stays at the podium during a round (back to the defaults after)
+	-- Sound buttons (owner 2026-10-23: five, Roblox-licensed APM Music / Pro Sound Effects). `text` = Config.TEXT key.
+	PRESENTER_SOUNDS = {
+		{ text = "SOUND_DRUMROLL", id = "rbxassetid://1840444182" }, -- Drum Rolls (A) (APM)
+		{ text = "SOUND_APPLAUSE", id = "rbxassetid://9113137529" }, -- Applause Nightclub 1 (SFX)
+		{ text = "SOUND_LAUGH", id = "rbxassetid://9114009960" }, -- Crowd Big Burst Of Laughter Cackling 1 (SFX)
+		{ text = "SOUND_CORRECT", id = "rbxassetid://1839997929" }, -- Correct Answer 2 (APM game show toolkit)
+		{ text = "SOUND_WRONG", id = "rbxassetid://1839997989" }, -- Wrong Answer 3 (APM game show toolkit)
+	},
+
 	-- Transcript intake guards (client-side STT). 10 s of Korean speech is roughly 70 syllables = 210 bytes.
 	TRANSCRIPT_MAX_BYTES = 600,
 	TRANSCRIPT_BURST = 6, -- at most this many transcripts per window per player (spam guard)
@@ -141,10 +157,31 @@ return {
 		CHAT_CANCEL = "채팅 참가 취소",
 		CHAT_JOINED = "채팅으로 참가해요 · 판 중에는 음성이 꺼져요",
 		CHAT_TAG = "[채팅]", -- before a chat participant's name in the chat window
+		-- Presenter (docs/DESIGN_V3.md §8).
+		VOLUNTEER = "🎤 진행자 지원",
+		VOLUNTEER_CANCEL = "진행자 지원 취소",
+		STEP_DOWN = "진행 넘기기",
+		VOLUNTEERED = "진행자로 지원했어요 · 조건이 맞으면 진행을 맡아요",
+		PRESENTER_NAMED = "오늘의 진행자: %s",
+		PRESENTER_CHANGED = "진행자가 바뀌었어요: %s",
+		PRESENTER_NONE = "진행자 없이 자동으로 진행해요",
+		PRESENTER_TAG = "🎤 진행자",
+		ME_PRESENTER = "🎤 내가 진행자",
+		PRESENTER_CREDIT = "진행 %s",
+		PICK_MISSION = "다음 미션을 골라 주세요",
+		PICK_RECOMMENDED = "추천",
+		PICK_AUTO = "시간이 지나서 추천 미션으로 진행해요",
+		TEST_MISSION_TITLE = "연습 미션",
+		SOUND_DRUMROLL = "두구두구",
+		SOUND_APPLAUSE = "박수",
+		SOUND_LAUGH = "웃음",
+		SOUND_CORRECT = "딩동",
+		SOUND_WRONG = "땡",
 	},
 
 	-- Scoring (session leaderstats, casual only).
 	SCORE_WIN = 3,
+	SCORE_PRESENTER = 2, -- the presenter at the end of a round (owner 2026-10-23); launches earn nothing
 	ASSIST_WINDOW = 10, -- (speech assist credit, used again with speech judging in phase 2)
 	SCORE_ASSIST = 1,
 
@@ -254,7 +291,8 @@ require(script.Parent:WaitForChild("RoundService")).start()
 ]====]; s.Parent = n2 end
 do local s = Instance.new("ModuleScript"); s.Name = "Match"; s.Source = [====[--!strict
 -- Shared match state plus small read helpers and the RoundState broadcast. No game rules: services read it,
--- and only RoundService changes phase and participants (LifeService the lives, ChatService the chat choice).
+-- and only RoundService changes phase and participants (LifeService the lives, ChatService the chat choice,
+-- PresenterService the presenter).
 -- Times: `Match.now()` (server clock shared with clients) for anything sent over the network,
 -- os.clock() for local intervals.
 local Players = game:GetService("Players")
@@ -284,6 +322,8 @@ local Match = {
 	message = "",
 	roundId = 0,
 	serverKind = "public", -- "public" | "private" (docs/DESIGN_V3.md §3), set at each round start
+	presenter = nil :: Player?, -- runs this round from the podium (PresenterService decides who; nil = the system)
+	presenterPending = false, -- a replacement is being looked for (clients wait before naming who presents)
 	participants = {} :: { [Player]: Participant },
 	startedWith = 0,
 	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
@@ -384,6 +424,8 @@ function Match.payload()
 		readyCount = #Match.eligiblePlayers(),
 		requireReady = Config.REQUIRE_VOICE_READY,
 		serverKind = Match.serverKind,
+		presenter = if Match.presenter then Match.presenter.UserId else nil,
+		presenterPending = Match.presenterPending,
 	}
 end
 
@@ -409,6 +451,8 @@ function Match.resetRound()
 	table.clear(Match.participants)
 	table.clear(Match.launches)
 	Match.startedWith = 0
+	Match.presenter = nil
+	Match.presenterPending = false
 	Match.talkStartedAt = math.huge
 	Match.cutoffAt = math.huge
 	Match.hostHeldUntil = 0
@@ -428,6 +472,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 --               }, final = they all fell at   ChatJoin    (on) join rounds by text chat instead of voice
 --               once and play the final }
 --   ChatAccess  to one player only: may I join by chat? { state = checking / yes / no / voice / error }
+--   PresenterMenu to the presenter: { options = { {id, title, recommended} } | nil (closed), endsAt }
+--   Sound       a presenter sound button: { index } (Config.PRESENTER_SOUNDS)
+--   (client -> server: Volunteer (on), PresenterPick (mission id), PresenterSound (index))
 --   Notice      short toast text
 --   Reaction    emoji shown above a player
 --   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
@@ -440,6 +487,7 @@ local Net = {}
 
 local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
+	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound",
 	"Words", "WordWarn", "Settle", "Transcript", "VoicePing", "Settled",
 }
 
@@ -495,9 +543,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "RoundService"; s.Source = [
 --   -> Final (sudden death) -> Result -> Countdown (quick rematch) ...
 -- Rules live in the services: lives in LifeService, the time budget and the final trigger in Timeline, missions in
 -- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
--- join by chat in ChatService, score in Scores. Bundles 2b-2c: no banned words and no presenter yet, and the only
--- mission is the Studio test mission (live servers just talk until the main game is over, then the survivors win
--- without a final).
+-- join by chat in ChatService, the presenter in PresenterService, score in Scores. Up to bundle 3: no banned words
+-- yet, and the only mission is the Studio test mission (live servers just talk until the main game is over, then the
+-- survivors win without a final).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -513,6 +561,7 @@ local SeatService = require(services:WaitForChild("SeatService"))
 local SpectatorService = require(services:WaitForChild("SpectatorService"))
 local VoiceService = require(services:WaitForChild("VoiceService"))
 local ChatService = require(services:WaitForChild("ChatService"))
+local PresenterService = require(services:WaitForChild("PresenterService"))
 local Scores = require(services:WaitForChild("Scores"))
 
 local RoundService = {}
@@ -526,11 +575,14 @@ local freeTalk = false -- free talk in the main game (the Studio fail key works 
 -- a mission runs or the round waits for flights)
 local lastEndedAt = -math.huge -- os.clock() when the last result finished (quick rematch countdown)
 
--- Alive participants are heard by everyone; players who are out and spectators only by each other.
+-- Alive participants and the presenter are heard by everyone; players who are out and spectators only by each other.
 local function refreshSpeakers()
 	local ids = {}
 	for _, player in Match.aliveList() do
 		table.insert(ids, player.UserId)
+	end
+	if Match.presenter then
+		table.insert(ids, Match.presenter.UserId)
 	end
 	VoiceService.setSpeakers(ids)
 end
@@ -657,12 +709,28 @@ local function playMain(myRound: number)
 		freeTalk = false
 	end
 	while true do
-		talk(os.clock() + Config.FREE_TALK_SECONDS)
+		-- Free talk; in its last PRESENTER_PICK_SECONDS the presenter picks the next mission (docs/DESIGN_V3.md §2).
+		local talkUntil = os.clock() + Config.FREE_TALK_SECONDS
+		talk(talkUntil - Config.PRESENTER_PICK_SECONDS)
+		local picked: string? = nil
+		if Match.presenter and not over() then
+			local options = MissionRunner.options(Timeline.left() - Config.PRESENTER_PICK_SECONDS, #Match.aliveList())
+			if #options > 0 then
+				freeTalk = true
+				local missed
+				picked, missed = PresenterService.askPick(options, Config.PRESENTER_PICK_SECONDS, over)
+				freeTalk = false
+				if missed then
+					Net.notice(Config.TEXT.PICK_AUTO)
+				end
+			end
+		end
+		talk(talkUntil)
 		local landed = waitFlights()
 		if over() then
 			return
 		end
-		local mission = if landed then MissionRunner.choose(Timeline.left()) else nil
+		local mission = if landed then MissionRunner.choose(Timeline.left(), #Match.aliveList(), picked) else nil
 		if landed and not mission then
 			talk(math.huge) -- nothing fits any more: free talk to the end
 			return
@@ -724,19 +792,27 @@ local function playFinal(myRound: number)
 	end
 end
 
--- Who won (everyone still in), with the session score.
+-- Who won (everyone still in) and who presented to the end, with the session score.
 local function resultText(): string
 	local names = {}
 	for _, player in Match.aliveList() do
 		Scores.add(player, Config.SCORE_WIN)
 		table.insert(names, player.DisplayName)
 	end
+	local text
 	if #names == 0 then
-		return Config.TEXT.NO_WINNER
+		text = Config.TEXT.NO_WINNER
 	elseif #names == 1 then
-		return string.format(Config.TEXT.WINNER, names[1])
+		text = string.format(Config.TEXT.WINNER, names[1])
+	else
+		text = string.format(Config.TEXT.JOINT_WINNERS, table.concat(names, ", "))
 	end
-	return string.format(Config.TEXT.JOINT_WINNERS, table.concat(names, ", "))
+	local presenter = Match.presenter
+	if presenter and presenter.Parent then
+		Scores.add(presenter, Config.SCORE_PRESENTER)
+		text ..= " · " .. string.format(Config.TEXT.PRESENTER_CREDIT, presenter.DisplayName)
+	end
+	return text
 end
 
 local function shuffled(list: { Player }): { Player }
@@ -756,6 +832,7 @@ end
 
 local function cleanup()
 	SeatService.releaseAll()
+	PresenterService.endRound()
 	openVoices()
 	SpectatorService.endRound()
 	Match.resetRound()
@@ -780,17 +857,23 @@ local function runRound()
 	if #candidates < Config.MIN_PLAYERS then
 		return
 	end
-	while #candidates > Config.MAX_PLAYERS do
-		table.remove(candidates)
-	end
 
-	-- Assign: chairs, lives, and who plays by chat (their voice is off until the result, docs/DESIGN_V3.md §7).
+	-- Assign: the presenter (not seated, docs/DESIGN_V3.md §8), chairs, lives, and who plays by chat (their voice is
+	-- off until the result, §7).
 	Match.roundId += 1
 	local myRound = Match.roundId
 	Match.resetRound()
 	Match.serverKind = detectServerKind()
 	toFinal = false
 	Scores.resetRound()
+	MissionRunner.beginRound()
+	local presenter = PresenterService.choose(candidates) -- before the chairs are counted: every volunteer is looked at
+	if presenter then
+		table.remove(candidates, table.find(candidates, presenter))
+	end
+	while #candidates > Config.MAX_PLAYERS do
+		table.remove(candidates)
+	end
 	local seated = SeatService.seatPlayers(candidates)
 	local chatIds = {}
 	for _, player in candidates do
@@ -805,6 +888,9 @@ local function runRound()
 	end
 	Match.startedWith = #Match.aliveList()
 	LifeService.beginRound()
+	if Match.presenter then
+		PresenterService.place(Match.presenter)
+	end
 	SpectatorService.beginRound()
 	VoiceService.setSilenced(chatIds)
 	refreshSpeakers()
@@ -819,6 +905,7 @@ local function runRound()
 	-- Result: winners and scores.
 	local text = resultText()
 	SeatService.releaseAll()
+	PresenterService.endRound()
 	openVoices()
 	Match.setPhase("Result", Config.RESULT_TIME, text)
 	waitPhase()
@@ -844,27 +931,51 @@ end
 local function onCharacterAdded(player: Player, character: Model)
 	character:WaitForChild("HumanoidRootPart", 10)
 	task.wait(0.5) -- let the engine finish placing it at the spawn
-	if player.Character == character and Match.inRound() and Match.isAlive(player) then
-		SeatService.reseat(player)
+	if player.Character ~= character or not Match.inRound() then
+		return
 	end
+	if Match.isAlive(player) then
+		SeatService.reseat(player)
+	elseif Match.presenter == player then
+		PresenterService.place(player) -- back to the podium
+	end
+end
+
+-- The presenter changed during a round (left, missed picks, stepped down): voices, the old presenter to the stands.
+local function onPresenterChange(_reason: PresenterService.Change, old: Player?, _new: Player?)
+	if not Match.inRound() then
+		return
+	end
+	if old and old.Parent then
+		SpectatorService.toStands(old)
+	end
+	refreshSpeakers()
+	Match.broadcast()
 end
 
 local function onSync(player: Player)
 	Net.to(player, "RoundState", Match.payload())
 	ChatService.sendAccess(player)
+	PresenterService.sendMenu(player)
 end
 
--- The player plays in the round being played: their way of joining (voice or chat) holds until it is over.
+-- The player plays in or presents the round being played: their way of joining (voice or chat) holds until it is over.
 local function lockedIn(player: Player): boolean
-	return Match.inRound() and Match.participants[player] ~= nil
+	return Match.inRound() and (Match.participants[player] ~= nil or Match.presenter == player)
+end
+
+-- Players another service owns right now: flying (SeatService) or presenting at the podium (PresenterService).
+local function busy(player: Player): boolean
+	return SeatService.isFlying(player) or Match.presenter == player
 end
 
 function RoundService.start()
 	VoiceService.start()
 	Scores.start()
 	ChatService.start()
+	PresenterService.start(onPresenterChange, SeatService.isFlying)
 	LifeService.start(SeatService.isFlying)
-	SpectatorService.start(SeatService.isFlying)
+	SpectatorService.start(busy)
 	SeatService.init(onFlightOver)
 	Net.listen("Ready", function(player, isReady)
 		local value = isReady == true
@@ -1064,7 +1175,10 @@ type Ctx = {
 
 local TestMission = {
 	id = "test",
+	title = Config.TEXT.TEST_MISSION_TITLE,
 	expectedSeconds = Config.TEST_MISSION_SECONDS,
+	maxPerRound = nil :: number?, -- like the quiz: no limit
+	minPlayers = nil :: number?,
 }
 
 function TestMission.available(_final: boolean): boolean
@@ -1560,7 +1674,8 @@ end
 return LifeService
 ]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "MissionRunner"; s.Source = [====[--!strict
--- Missions (docs/DESIGN_V3.md §5, §13): picks the next mission that fits the time left and runs one at a time with a
+-- Missions (docs/DESIGN_V3.md §5, §13): lists the missions that may run next (recommended order, also the presenter's
+-- menu), picks the next mission that fits the time left and runs one at a time with a
 -- ctx (missions cannot require services, so everything they may do comes through the ctx RoundService builds). A
 -- mission stops as soon as it is cancelled (the round was decided or is over): its waits wake up and its fails and
 -- notices are dropped. Only this service requires the modules under server/missions (tools/tests/check_deps.py
@@ -1602,21 +1717,73 @@ export type MissionCtx = {
 
 export type Mission = {
 	id: string,
+	title: string, -- shown in the presenter's menu
 	expectedSeconds: number, -- for the time budget, without the launches afterwards
+	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
+	minPlayers: number?, -- alive participants it needs (nil = any)
 	available: (final: boolean) -> boolean,
 	run: (ctx: MissionCtx) -> (),
 }
 
+-- An entry of the presenter's menu.
+export type Option = { id: string, title: string, recommended: boolean }
+
 local MISSIONS: { Mission } = { TestMission }
 
--- The next main-game mission that still fits, launches included, in `secondsLeft`; nil if none does.
-function MissionRunner.choose(secondsLeft: number): Mission?
+local played: { [string]: number } = {} -- main-game runs this round, per mission id
+
+local function fits(mission: Mission, secondsLeft: number): boolean
+	return mission.expectedSeconds + Config.FLING_RETURN_SECONDS <= secondsLeft
+end
+
+-- A new round: nothing played yet.
+function MissionRunner.beginRound()
+	table.clear(played)
+end
+
+-- The main-game missions that may run now, in recommended order (not played yet this round first): available, under
+-- their per-round limit, enough players for them, and fitting `secondsLeft` with the launches.
+function MissionRunner.candidates(secondsLeft: number, alive: number): { Mission }
+	local list = {}
 	for _, mission in MISSIONS do
-		if mission.available(false) and mission.expectedSeconds + Config.FLING_RETURN_SECONDS <= secondsLeft then
+		local count = played[mission.id] or 0
+		if mission.available(false) and fits(mission, secondsLeft) and (mission.maxPerRound == nil or count < mission.maxPerRound)
+			and alive >= (mission.minPlayers or 0) then
+			table.insert(list, mission)
+		end
+	end
+	local position: { [Mission]: number } = {}
+	for i, mission in list do
+		position[mission] = i
+	end
+	table.sort(list, function(a, b)
+		local pa, pb = played[a.id] or 0, played[b.id] or 0
+		if pa ~= pb then
+			return pa < pb
+		end
+		return position[a] < position[b]
+	end)
+	return list
+end
+
+-- The presenter's menu for the same choice.
+function MissionRunner.options(secondsLeft: number, alive: number): { Option }
+	local options = {}
+	for i, mission in MissionRunner.candidates(secondsLeft, alive) do
+		table.insert(options, { id = mission.id, title = mission.title, recommended = i <= Config.PRESENTER_RECOMMENDED })
+	end
+	return options
+end
+
+-- The next main-game mission: `pickedId` if it may still run, else the top recommendation; nil if none fits.
+function MissionRunner.choose(secondsLeft: number, alive: number, pickedId: string?): Mission?
+	local list = MissionRunner.candidates(secondsLeft, alive)
+	for _, mission in list do
+		if mission.id == pickedId then
 			return mission
 		end
 	end
-	return nil
+	return list[1]
 end
 
 -- A mission that can ask final questions, or nil (then the survivors share the win).
@@ -1660,6 +1827,9 @@ end
 
 -- Runs one mission to its end. Returns false if it raised an error (reported; that run is over).
 function MissionRunner.run(mission: Mission, ctx: Ctx): boolean
+	if not ctx.final then
+		played[mission.id] = (played[mission.id] or 0) + 1
+	end
 	local runCtx = missionCtx(ctx)
 	local ok, err = pcall(function(): any
 		mission.run(runCtx)
@@ -1672,6 +1842,387 @@ function MissionRunner.run(mission: Mission, ctx: Ctx): boolean
 end
 
 return MissionRunner
+]====]; s.Parent = n5 end
+do local s = Instance.new("ModuleScript"); s.Name = "PresenterService"; s.Source = [====[--!strict
+-- The presenter (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23): one volunteer runs a round from the podium. Who
+-- presents: volunteers whose voice is ready (chat participants cannot present), the one who presented least so far
+-- first, only when enough participants remain, and only after the checks: the presenter shares a voice chat group
+-- with every voice participant (VoiceChatService:GetChatGroupsAsync), receives every chat participant's messages
+-- (TextChatService:CanUsersChatAsync) and, on public servers, is nobody's Roblox friend. A check that fails to run
+-- disqualifies on live servers; Studio allows it (GetChatGroupsAsync works only in Team Test there).
+-- During a round the presenter picks the next mission in the last PRESENTER_PICK_SECONDS of free talk (missed picks:
+-- the system picks; PRESENTER_MISSES in a row hand the round to another presenter), plays sound buttons, and may step
+-- down. A presenter who leaves or steps down is replaced by a volunteer who is not playing (not flying either, and
+-- not someone who presented this round before), else the system runs the round. Who presents is Match.presenter;
+-- RoundService is told of every change during a round (voices, stands).
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TextChatService = game:GetService("TextChatService")
+local VoiceChatService = game:GetService("VoiceChatService")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local Net = require(script.Parent.Parent:WaitForChild("Net"))
+
+local PresenterService = {}
+
+export type Option = { id: string, title: string, recommended: boolean }
+export type Change = "left" | "misses" | "stepped down"
+
+local DEFAULT_WALK_SPEED = 16
+local DEFAULT_JUMP_HEIGHT = 7.2
+
+local rng = Random.new()
+local volunteers: { [Player]: boolean } = {}
+local presented: { [Player]: number } = {} -- rounds presented this session (the least goes first)
+local lastVolunteer: { [Player]: number } = {}
+local lastSound: { [number]: number } = {}
+local misses = 0
+local formers: { [Player]: boolean } = {} -- replaced this round: they watch until it is over (docs/DESIGN_V3.md §8)
+local onChange: (Change, Player?, Player?) -> () = function(_reason, _old, _new) end
+local unavailable: (Player) -> boolean = function(_player)
+	return false
+end
+-- The open mission menu (one at a time).
+local menu: { options: { Option }, endsAt: number, picked: string? }? = nil
+
+-- Runs one yielding check. Returns (ok, answer); a call that errors is reported and returns ok = false.
+local function try<T>(what: string, call: () -> T): (boolean, T?)
+	local ok, result = pcall(call)
+	if not ok then
+		warn("[BannedWords] presenter " .. what .. " check failed:", result)
+		return false, nil
+	end
+	return true, result
+end
+
+-- A check that could not run: allowed in Studio only (docs/DESIGN_V3.md §8).
+local function failedCheck(): boolean
+	return RunService:IsStudio()
+end
+
+local function shareGroup(a: { string }, b: { string }): boolean
+	for _, id in a do
+		if table.find(b, id) then
+			return true
+		end
+	end
+	return false
+end
+
+-- One player's voice chat groups, or nil when the check fails. Asked one player at a time: the documentation calls
+-- the answer "a sorted array of arrays" without saying it follows the order of the players given.
+local function groupsOf(player: Player): { string }?
+	local ok, answer = try("voice group", function()
+		return VoiceChatService:GetChatGroupsAsync({ player })
+	end)
+	if not ok or typeof(answer) ~= "table" then
+		return nil
+	end
+	local first = (answer :: any)[1]
+	if typeof(first) == "table" then
+		return first
+	end
+	return answer :: any -- (a flat list of ids)
+end
+
+-- Whether `candidate` shares a voice chat group with every one of `voice`; nil when a check failed.
+local function sharesVoiceGroup(candidate: Player, voice: { Player }): boolean?
+	local mine = groupsOf(candidate)
+	if not mine then
+		return nil
+	end
+	for _, player in voice do
+		local theirs = groupsOf(player)
+		if not theirs then
+			return nil
+		end
+		if not shareGroup(mine, theirs) then
+			return false
+		end
+	end
+	return true
+end
+
+-- Whether `candidate` may present a round played by `participants`. Yields.
+local function qualifies(candidate: Player, participants: { Player }): boolean
+	local voice: { Player } = {}
+	local chat: { Player } = {}
+	for _, player in participants do
+		table.insert(if Match.chatJoin[player] then chat else voice, player)
+	end
+	if #voice > 0 then
+		local shares = sharesVoiceGroup(candidate, voice)
+		if shares == false or (shares == nil and not failedCheck()) then
+			return false
+		end
+	end
+	for _, player in chat do
+		local ok, reaches = try("chat", function()
+			return TextChatService:CanUsersChatAsync(player.UserId, candidate.UserId)
+		end)
+		if (ok and reaches ~= true) or (not ok and not failedCheck()) then
+			return false
+		end
+	end
+	if Match.serverKind == "public" then
+		for _, player in participants do
+			local ok, friends = try("friend", function()
+				return candidate:IsFriendsWithAsync(player.UserId)
+			end)
+			if (ok and friends == true) or (not ok and not failedCheck()) then
+				return false
+			end
+		end
+	end
+	return true
+end
+
+-- A volunteer who could present now: still here, voice ready, not joining by chat. Looked at again after the checks,
+-- which yield.
+local function canPresent(player: Player): boolean
+	local voiceReady = Match.ready[player] or not Config.REQUIRE_VOICE_READY
+	return volunteers[player] == true and voiceReady and not Match.chatJoin[player] and player.Parent ~= nil
+end
+
+-- Volunteers who could present now, the least experienced first.
+local function ready(from: { Player }): { Player }
+	local list = {}
+	for _, player in from do
+		if canPresent(player) then
+			table.insert(list, player)
+		end
+	end
+	local order: { [Player]: number } = {}
+	for _, player in list do
+		order[player] = rng:NextNumber()
+	end
+	table.sort(list, function(a, b)
+		local na, nb = presented[a] or 0, presented[b] or 0
+		if na ~= nb then
+			return na < nb
+		end
+		return order[a] < order[b]
+	end)
+	return list
+end
+
+local function lockMovement(player: Player, locked: boolean)
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.UseJumpPower = false
+		humanoid.WalkSpeed = if locked then Config.PRESENTER_WALK_SPEED else DEFAULT_WALK_SPEED
+		humanoid.JumpHeight = if locked then 0 else DEFAULT_JUMP_HEIGHT
+	end
+end
+
+local function closeMenu()
+	if menu and Match.presenter then
+		Net.to(Match.presenter, "PresenterMenu", { options = nil })
+	end
+	menu = nil
+end
+
+-- Puts the presenter behind the podium desk, facing the chairs, and keeps them there.
+function PresenterService.place(player: Player)
+	local hall = workspace:FindFirstChild("PoolHall")
+	local podium = hall and hall:FindFirstChild("Podium") :: BasePart?
+	local character = player.Character
+	if podium and character and character:FindFirstChild("HumanoidRootPart") then
+		character:PivotTo(podium.CFrame * CFrame.new(0, 3, 0))
+	end
+	lockMovement(player, true)
+end
+
+-- Hands the round to another volunteer who is not playing (out players and spectators; or to the system). Yields for
+-- the checks; a round that ended meanwhile gets nobody and no change call.
+local function replace(reason: Change)
+	local old = Match.presenter
+	local round = Match.roundId
+	closeMenu()
+	if old then
+		lockMovement(old, false)
+		formers[old] = true
+	end
+	Match.presenter = nil
+	Match.presenterPending = true
+	misses = 0
+	local others: { Player } = {}
+	for _, player in Players:GetPlayers() do
+		if not formers[player] and not Match.isAlive(player) and not unavailable(player) then
+			table.insert(others, player)
+		end
+	end
+	local function stillOn(): boolean
+		return Match.roundId == round and Match.inRound() and Match.presenter == nil
+	end
+	for _, candidate in ready(others) do
+		if not stillOn() then
+			break
+		end
+		-- The checks yield: the round, the volunteering and the flying are looked at again after them.
+		if qualifies(candidate, Match.aliveList()) and stillOn() and canPresent(candidate) and not unavailable(candidate) then
+			Match.presenter = candidate
+			presented[candidate] = (presented[candidate] or 0) + 1
+			PresenterService.place(candidate)
+			break
+		end
+	end
+	if Match.roundId == round then
+		Match.presenterPending = false
+		if Match.inRound() then
+			onChange(reason, old, Match.presenter)
+		end
+	end
+end
+
+local function setVolunteer(player: Player, on: boolean)
+	if on then
+		volunteers[player] = true
+	else
+		volunteers[player] = nil
+	end
+	player:SetAttribute("BW_Volunteer", on)
+	if not on and Match.presenter == player and Match.inRound() then
+		task.spawn(function()
+			replace("stepped down")
+		end)
+	end
+end
+
+-- changed(reason, old, new): the presenter changed during a round. isBusy(player): another service owns the player
+-- now (flying), so they cannot take over.
+function PresenterService.start(changed: (Change, Player?, Player?) -> (), isBusy: (Player) -> boolean)
+	onChange = changed
+	unavailable = isBusy
+	Net.listen("Volunteer", function(player, on)
+		if typeof(on) ~= "boolean" then
+			return
+		end
+		local now = os.clock()
+		if now - (lastVolunteer[player] or -math.huge) < Config.VOLUNTEER_COOLDOWN then
+			return
+		end
+		lastVolunteer[player] = now
+		if (volunteers[player] == true) ~= on then
+			setVolunteer(player, on)
+		end
+	end)
+	Net.listen("PresenterPick", function(player, id)
+		if menu and player == Match.presenter and typeof(id) == "string" and not menu.picked and Match.now() <= menu.endsAt then
+			for _, option in menu.options do
+				if option.id == id then
+					menu.picked = id
+				end
+			end
+		end
+	end)
+	Net.listen("PresenterSound", function(player, index)
+		if player ~= Match.presenter or not Match.inRound() or typeof(index) ~= "number" then
+			return
+		end
+		if not Config.PRESENTER_SOUNDS[index] then
+			return
+		end
+		local now = os.clock()
+		if now - (lastSound[index] or -math.huge) >= Config.PRESENTER_SOUND_COOLDOWN then
+			lastSound[index] = now
+			Net.toAll("Sound", { index = index })
+		end
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		volunteers[player] = nil
+		presented[player] = nil
+		lastVolunteer[player] = nil
+		formers[player] = nil
+		if Match.presenter == player and Match.inRound() then
+			task.spawn(function()
+				replace("left")
+			end)
+		end
+	end)
+end
+
+-- Round start: picks the presenter among `candidates` (the players about to be seated) and returns them, or nil
+-- (the system runs the round). The presenter is not seated, so enough candidates must remain. Yields for the checks.
+function PresenterService.choose(candidates: { Player }): Player?
+	Match.presenter = nil
+	misses = 0
+	if #candidates - 1 < Config.MIN_PLAYERS then
+		return nil
+	end
+	for _, candidate in ready(candidates) do
+		local participants = {}
+		for _, player in candidates do
+			if player ~= candidate and #participants < Config.MAX_PLAYERS then
+				table.insert(participants, player)
+			end
+		end
+		if qualifies(candidate, participants) and canPresent(candidate) then
+			Match.presenter = candidate
+			presented[candidate] = (presented[candidate] or 0) + 1
+			return candidate
+		end
+	end
+	return nil
+end
+
+-- Opens the mission menu to the presenter for `seconds` and waits. Returns the id they picked (or nil), and whether
+-- they let the time run out (false when the presenter changed or `stop()` became true). A missed pick counts;
+-- PRESENTER_MISSES in a row replace them.
+function PresenterService.askPick(options: { Option }, seconds: number, stop: () -> boolean): (string?, boolean)
+	local presenter = Match.presenter
+	if not presenter or #options == 0 then
+		return nil, false
+	end
+	local endsAt = os.clock() + seconds
+	menu = { options = options, endsAt = Match.now() + seconds, picked = nil }
+	Net.to(presenter, "PresenterMenu", { options = options, endsAt = Match.now() + seconds })
+	while os.clock() < endsAt and menu and not menu.picked and Match.presenter == presenter and not stop() do
+		task.wait(0.1)
+	end
+	local picked = if menu then menu.picked else nil
+	if Match.presenter ~= presenter then
+		return nil, false -- replaced meanwhile (the menu went with them)
+	end
+	closeMenu()
+	if picked then
+		misses = 0
+		return picked, false
+	end
+	if stop() then
+		return nil, false
+	end
+	misses += 1
+	if misses >= Config.PRESENTER_MISSES then
+		task.spawn(function()
+			replace("misses")
+		end)
+	end
+	return nil, true
+end
+
+-- The presenter asked for the whole state again: the open menu too.
+function PresenterService.sendMenu(player: Player)
+	if menu and player == Match.presenter then
+		Net.to(player, "PresenterMenu", { options = menu.options, endsAt = menu.endsAt })
+	end
+end
+
+-- Round over: the presenter may move again and nobody presents until the next round's choice.
+function PresenterService.endRound()
+	closeMenu()
+	if Match.presenter then
+		lockMovement(Match.presenter, false)
+	end
+	Match.presenter = nil
+	Match.presenterPending = false
+	misses = 0
+	table.clear(formers)
+end
+
+return PresenterService
 ]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "Scores"; s.Source = [====[--!strict
 -- Casual session score (leaderstats "점수") and the assist ("유도") credit. Nothing is saved between sessions.
@@ -2197,10 +2748,9 @@ return SeatService
 do local s = Instance.new("ModuleScript"); s.Name = "SpectatorService"; s.Source = [====[--!strict
 -- Spectators (docs/DESIGN_V3.md §8-10, was GhostService in V2): during a round everyone who is not an alive
 -- participant (players who are out, late joiners, anyone who respawns) watches from the stands. Anyone found on the
--- stage (the chair row and the floor up to the show camera) is moved back to the stands, except players SeatService
--- still owns (flying). When the round is over the stands empty into the lobby. Spectators can send emoji reactions;
--- their voice is VoiceService's job. (The presenter, bundle 3, will stand at the podium on the stage and must be
--- exempted then.)
+-- stage (the chair row and the floor up to the show camera) is moved back to the stands, except players another
+-- service owns (flying, or presenting at the podium: the isBusy callback). When the round is over the stands empty
+-- into the lobby. Spectators can send emoji reactions; their voice is VoiceService's job.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -2324,7 +2874,7 @@ local function standsWhenReady(player: Player, character: Model)
 	end)
 end
 
--- isBusy(player): true while another service owns the player's body (a flight); the stage guard skips them.
+-- isBusy(player): true while another service owns the player's body (a flight, the podium); they are left alone.
 function SpectatorService.start(isBusy: (Player) -> boolean)
 	busy = isBusy
 	Players.RespawnTime = Config.RESPAWN_TIME
@@ -2363,7 +2913,7 @@ function SpectatorService.beginRound()
 	table.clear(inStands)
 	for _, player in Players:GetPlayers() do
 		local character = player.Character
-		if not Match.isAlive(player) and character then
+		if not Match.isAlive(player) and not busy(player) and character then
 			if character:FindFirstChild("HumanoidRootPart") then
 				SpectatorService.toStands(player)
 			else
@@ -2647,7 +3197,8 @@ return WordService
 n5.Parent = n2
 n2.Parent = parents[2]
 local n6 = Instance.new("LocalScript"); n6.Name = "BannedWordsClient"; n6.Source = [====[-- 금칙어 게임 Korean client entry point: only wiring. Server events update State, then refresh() redraws
--- every part from State (HUD, head bubbles, camera, reaction bar, getting ready, recognizer on/off, seat lock).
+-- every part from State (HUD, head bubbles, camera, reaction bar, getting ready, presenter controls, recognizer on/off,
+-- seat lock).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -2670,6 +3221,7 @@ local Hud = require(UI:WaitForChild("Hud"))
 local Toast = require(UI:WaitForChild("Toast"))
 local MicPanel = require(UI:WaitForChild("MicPanel"))
 local ReactionBar = require(UI:WaitForChild("ReactionBar"))
+local PresenterPanel = require(UI:WaitForChild("PresenterPanel"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
@@ -2702,17 +3254,22 @@ local function refreshVoice()
 	MicPanel.set({
 		status = status,
 		micTested = State.micTested,
-		inMyRound = State.inRound() and State.isParticipant(State.myId()),
+		inMyRound = State.inRound() and (State.isParticipant(State.myId()) or State.mePresenting()),
 		readyCount = State.round.readyCount,
 		chatAccess = State.chatAccess,
 		chatMode = player:GetAttribute("BW_ChatMode") == true,
 	})
 end
 
--- Everyone on the chairs gets a head bubble (name + hearts) during a round, every participant in the result.
+-- Everyone on the chairs (and the presenter) gets a head bubble during a round, every participant in the result.
+-- The presenter does not see their own (it would sit right in front of their camera).
 local function bubbleTargets(): { number }
 	if State.inRound() then
-		return State.round.alive
+		local list = table.clone(State.round.alive)
+		if State.round.presenter and not State.mePresenting() then
+			table.insert(list, State.round.presenter)
+		end
+		return list
 	elseif State.round.phase == "Result" then
 		return State.round.participants
 	end
@@ -2722,12 +3279,27 @@ end
 local function refresh()
 	local round = State.round
 	local me = State.myId()
+	local presenting = State.mePresenting()
 	Hud.setStatus(round.phase, round.message)
 	Hud.setAlive(#round.alive, round.total)
-	Hud.setMyLives(if State.inRound() and State.isParticipant(me) then State.livesOf(me) else nil, round.maxLives)
-	Billboards.render({ show = bubbleTargets(), words = State.words, lives = round.lives, maxLives = round.maxLives })
-	ShowCamera.set((State.inRound() and State.meAlive()) or os.clock() < myFlightEndsAt)
-	ReactionBar.setVisible(not (State.inRound() and State.meAlive()))
+	Hud.setMyLives(if State.inRound() and State.isParticipant(me) then State.livesOf(me) else nil, round.maxLives,
+		if presenting then Config.TEXT.ME_PRESENTER else nil)
+	Billboards.render({
+		show = bubbleTargets(),
+		words = State.words,
+		lives = round.lives,
+		maxLives = round.maxLives,
+		presenter = if State.inRound() then round.presenter else nil,
+	})
+	local seated = (State.inRound() and State.meAlive()) or os.clock() < myFlightEndsAt
+	ShowCamera.set(if presenting then "presenter" elseif seated then "show" else nil)
+	ReactionBar.setVisible(not (State.inRound() and State.meAlive()) and not presenting)
+	-- Anyone not playing the round may volunteer (an out player or a spectator can take over a round,
+	-- docs/DESIGN_V3.md §8); the presenter steps down with the same button. Chat participants cannot present.
+	local playing = State.inRound() and State.meAlive()
+	local chatMode = player:GetAttribute("BW_ChatMode") == true
+	PresenterPanel.setVolunteer(not playing and not chatMode, player:GetAttribute("BW_Volunteer") == true, presenting)
+	PresenterPanel.setPresenting(presenting)
 	refreshVoice()
 	applySeatLock()
 end
@@ -2740,6 +3312,13 @@ MicPanel.build(function(on)
 end)
 ReactionBar.build(function(index)
 	remotes.Reaction:FireServer(index)
+end)
+PresenterPanel.build(function(on)
+	remotes.Volunteer:FireServer(on)
+end, function(id)
+	remotes.PresenterPick:FireServer(id)
+end, function(index)
+	remotes.PresenterSound:FireServer(index)
 end)
 Fx.init()
 FlatVoice.start()
@@ -2755,7 +3334,13 @@ Speech.onText(function()
 		refreshVoice()
 	end
 end)
-player:GetAttributeChangedSignal("BW_ChatMode"):Connect(refreshVoice)
+player:GetAttributeChangedSignal("BW_ChatMode"):Connect(refresh)
+player:GetAttributeChangedSignal("BW_Volunteer"):Connect(function()
+	if player:GetAttribute("BW_Volunteer") == true then
+		Toast.show(Config.TEXT.VOLUNTEERED, "info")
+	end
+	refresh()
+end)
 Speech.onUnstable(function()
 	if not State.micTested then
 		Toast.show(Config.TEXT.RECOGNITION_UNSTABLE, "near")
@@ -2765,23 +3350,56 @@ Speech.start(script) -- this LocalScript lives in PlayerScripts and survives res
 
 -- Server events.
 local stateSeen = false -- the first state after joining only sets things up (no "it started" toast for late joiners)
+local function nameOf(userId: number?): string
+	local other = userId and Players:GetPlayerByUserId(userId)
+	return if other then other.DisplayName else "?"
+end
+
+-- The presenter the last toast named (or the round started with). While the server looks for a replacement
+-- (`presenterPending`) nobody is named yet, so a change gets one toast with where it ended up.
+local announcedPresenter: number? = nil
+
 remotes.RoundState.OnClientEvent:Connect(function(round)
 	local previous = State.round.phase
+	local wasInRound = State.inRound()
 	State.round = round
 	if round.phase == "Lobby" or round.phase == "Countdown" then
 		State.words = {}
 	end
+	if round.phase ~= previous and round.phase == "Assign" then
+		announcedPresenter = round.presenter
+	end
 	if stateSeen and round.phase ~= previous then
-		if round.phase == "Play" then
+		if round.phase == "Assign" and round.presenter then
+			Toast.show(string.format(Config.TEXT.PRESENTER_NAMED, nameOf(round.presenter)), "info")
+		elseif round.phase == "Play" then
 			Toast.show(Config.TEXT.PLAY_START, "info")
 		elseif round.phase == "Final" then
 			Toast.show(Config.TEXT.FINAL, "near")
 		elseif round.phase == "Result" then
 			Toast.show(round.message, "info")
 		end
+	elseif stateSeen and wasInRound and State.inRound() and not round.presenterPending
+		and round.presenter ~= announcedPresenter then
+		-- The presenter changed during the round (left, missed picks, stepped down).
+		announcedPresenter = round.presenter
+		Toast.show(if round.presenter then string.format(Config.TEXT.PRESENTER_CHANGED, nameOf(round.presenter))
+			else Config.TEXT.PRESENTER_NONE, "near")
 	end
 	stateSeen = true
 	refresh()
+end)
+
+remotes.PresenterMenu.OnClientEvent:Connect(function(info)
+	if info.options then
+		PresenterPanel.openMenu(info.options, info.endsAt)
+	else
+		PresenterPanel.closeMenu()
+	end
+end)
+
+remotes.Sound.OnClientEvent:Connect(function(info)
+	Fx.presenterSound(info.index)
 end)
 
 remotes.Words.OnClientEvent:Connect(function(words)
@@ -2883,20 +3501,24 @@ Players.PlayerAdded:Connect(watchCharacters)
 RunService.Heartbeat:Connect(function()
 	local remaining = State.round.endsAt - workspace:GetServerTimeNow()
 	Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
+	PresenterPanel.tick(workspace:GetServerTimeNow())
 end)
 
 -- Ask for the current state now that every handler is connected (late joiners miss earlier broadcasts).
 remotes.Sync:FireServer()
 ]====]
 do local s = Instance.new("ModuleScript"); s.Name = "Billboards"; s.Source = [====[--!strict
--- Head bubbles: name and lives (hearts) for every participant on the chairs, me included, and from bundle 5 the
--- banned words above them: each other participant's visible words (a new one flashes) and "???" for my own.
+-- Head bubbles: name and lives (hearts) for every participant on the chairs, me included (the presenter's bubble says
+-- "진행자" instead of hearts), and from bundle 5 the banned words above them: each other participant's visible words
+-- (a new one flashes) and "???" for my own.
 -- The V3 pool hall is white, so word cards carry a thick navy outline and the name sits on a navy pill.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
-local Hearts = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hearts"))
+local shared = ReplicatedStorage:WaitForChild("BannedWords")
+local Config = require(shared:WaitForChild("Config"))
+local Hearts = require(shared:WaitForChild("Hearts"))
 
 local Billboards = {}
 
@@ -2920,6 +3542,7 @@ export type View = {
 	words: { [string]: { words: { string }?, count: number } }, -- nil words = hidden (my own)
 	lives: { [string]: number },
 	maxLives: number,
+	presenter: number?, -- the presenter's userId (their bubble shows the presenter tag)
 }
 
 type Bubble = { gui: BillboardGui, size: UDim2, hearts: TextLabel, words: { string }, layout: string }
@@ -3086,7 +3709,9 @@ function Billboards.render(view: View)
 				end
 			end
 			if bubble then
-				bubble.hearts.Text = Hearts.text(view.lives[key] or 0, view.maxLives)
+				bubble.hearts.Text = if userId == view.presenter
+					then Config.TEXT.PRESENTER_TAG
+					else Hearts.text(view.lives[key] or 0, view.maxLives)
 			end
 		end
 	end
@@ -3238,7 +3863,8 @@ return FlatVoice
 ]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "Fx"; s.Source = [====[--!strict
 -- Effects: the flying chair firing (seat flap snapping back on its hinge, "펑", smoke and confetti), the splash where
--- the player hits the water, the elimination buzzer and red flash, and floating emoji reactions.
+-- the player hits the water, the elimination buzzer and red flash, floating emoji reactions and the presenter's sound
+-- buttons.
 -- The server only sends signals; every client animates the flap itself (a server-moved flap would stutter).
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
@@ -3259,6 +3885,7 @@ local flash: Frame
 local buzzer: Sound
 local bang: Sound
 local splashSound: Sound
+local presenterSounds: { Sound } = {} -- the presenter's sound buttons (Config.PRESENTER_SOUNDS order)
 local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
 local playing: { [BasePart]: number } = {} -- hinge -> current animation number
 
@@ -3271,14 +3898,27 @@ local function sound(name: string, id: string, volume: number): Sound
 	return s
 end
 
--- Plays a copy, so two launches close together do not cut each other's bang or splash (both sounds are under 4 s;
--- the copy goes away after SOUND_COPY_SECONDS even if it never loaded).
+-- Plays a copy, so two launches (or sound buttons) close together do not cut each other. The copy goes when it ends;
+-- in case it never does, twice its length after it loaded (at least SOUND_COPY_SECONDS; the drum roll runs 8.3 s),
+-- or SOUND_LOAD_GIVE_UP seconds if it never loads.
 local SOUND_COPY_SECONDS = 8
+local SOUND_LOAD_GIVE_UP = 30
 local function playCopy(template: Sound)
 	local copy = template:Clone()
 	copy.Parent = SoundService
 	copy:Play()
-	Debris:AddItem(copy, SOUND_COPY_SECONDS)
+	copy.Ended:Once(function()
+		copy:Destroy()
+	end)
+	local function expire()
+		Debris:AddItem(copy, math.max(SOUND_COPY_SECONDS, copy.TimeLength) * 2)
+	end
+	if copy.IsLoaded then
+		expire()
+	else
+		copy.Loaded:Once(expire)
+		Debris:AddItem(copy, SOUND_LOAD_GIVE_UP)
+	end
 end
 
 function Fx.init()
@@ -3298,6 +3938,17 @@ function Fx.init()
 	buzzer = sound("Buzzer", Config.SOUND_BUZZER, 0.6)
 	bang = sound("Bang", Config.SOUND_BANG, 0.8)
 	splashSound = sound("Splash", Config.SOUND_SPLASH, 0.8)
+	for i, entry in Config.PRESENTER_SOUNDS do
+		presenterSounds[i] = sound("PresenterSound" .. i, entry.id, 0.7)
+	end
+end
+
+-- The presenter pressed a sound button (everyone hears it).
+function Fx.presenterSound(index: number)
+	local template = presenterSounds[index]
+	if template then
+		playCopy(template)
+	end
 end
 
 local function anchorAt(position: Vector3, lifetime: number): Part
@@ -3566,24 +4217,29 @@ end
 return GetUp
 ]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "ShowCamera"; s.Source = [====[--!strict
--- The show camera (docs/DESIGN_V3.md §10, owner 2026-10-22): seated participants watch the chair row from the front,
--- so every other participant (faces and word bubbles) is on screen with the pool behind, including anyone flying off.
--- The FOV makes the row's HalfWidth fit the screen width at the current aspect ratio (the game is landscape only).
--- Rig numbers live on PoolHall.ShowCamera (attributes HalfWidth, MinFov, MaxFov). Everyone else keeps the normal camera.
+-- The fixed round cameras (docs/DESIGN_V3.md §10, owner 2026-10-22):
+--   "show"      seated participants watch the chair row from the front, so every other participant (faces and word
+--               bubbles) is on screen with the pool behind, including anyone flying off. The FOV makes the row's
+--               HalfWidth fit the screen width at the current aspect ratio (the game is landscape only). Rig numbers
+--               live on PoolHall.ShowCamera (attributes HalfWidth, MinFov, MaxFov).
+--   "presenter" the presenter looks at the row from behind the podium (PoolHall.PresenterCamera, attribute Fov). Their
+--               own character stands between that camera and the row, so it is hidden on their screen only (like
+--               first person; everyone else still sees them).
+-- Everyone else keeps the normal camera.
+local Players = game:GetService("Players")
+
 local ShowCamera = {}
+
+export type Mode = "show" | "presenter"
 
 local DEFAULT_FOV = 70
 
-local active = false
+local mode: Mode? = nil
 local bound: Camera? = nil -- the camera the change listeners below watch
 local connections: { RBXScriptConnection } = {}
 
-local function rig(): (BasePart?, Instance?)
-	local hall = workspace:FindFirstChild("PoolHall")
-	if not hall then
-		return nil, nil
-	end
-	return hall:FindFirstChild("ShowCamera") :: BasePart?, hall:FindFirstChild("Chairs")
+local function hall(): Instance?
+	return workspace:FindFirstChild("PoolHall")
 end
 
 -- Distance from the camera to the chair row along the view direction (the row's centre = the seats' average).
@@ -3603,7 +4259,7 @@ local function rowDepth(marker: BasePart, chairs: Instance): number
 end
 
 -- Vertical FOV that shows HalfWidth studs to each side of the row centre at the current aspect ratio.
-local function fovFor(marker: BasePart, chairs: Instance, camera: Camera): number
+local function fitRow(marker: BasePart, chairs: Instance, camera: Camera): number
 	local halfWidth = (marker:GetAttribute("HalfWidth") or 29) :: number
 	local minFov = (marker:GetAttribute("MinFov") or 40) :: number
 	local maxFov = (marker:GetAttribute("MaxFov") or 70) :: number
@@ -3614,12 +4270,59 @@ local function fovFor(marker: BasePart, chairs: Instance, camera: Camera): numbe
 	return math.clamp(vertical, minFov, maxFov)
 end
 
+-- The marker and FOV of the current mode, or nil while the map is missing.
+local function rig(camera: Camera): (BasePart?, number)
+	local map = hall()
+	if not map or not mode then
+		return nil, DEFAULT_FOV
+	end
+	if mode == "presenter" then
+		local marker = map:FindFirstChild("PresenterCamera") :: BasePart?
+		return marker, if marker then (marker:GetAttribute("Fov") or 55) :: number else DEFAULT_FOV
+	end
+	local marker = map:FindFirstChild("ShowCamera") :: BasePart?
+	local chairs = map:FindFirstChild("Chairs")
+	if not (marker and chairs) then
+		return nil, DEFAULT_FOV
+	end
+	return marker, fitRow(marker, chairs, camera)
+end
+
+local function setHidden(d: Instance, hidden: boolean)
+	if d:IsA("BasePart") or d:IsA("Decal") then
+		local untyped: any = d
+		untyped.LocalTransparencyModifier = if hidden then 1 else 0
+	end
+end
+
+-- My own character, invisible on my screen (true) or shown again (false). While hidden, parts added later
+-- (accessories that load late, tools) are hidden too.
+local hiddenAdded: RBXScriptConnection? = nil
+local function hideMe(hidden: boolean)
+	if hiddenAdded then
+		hiddenAdded:Disconnect()
+		hiddenAdded = nil
+	end
+	local character = Players.LocalPlayer.Character
+	if not character then
+		return
+	end
+	for _, d in character:GetDescendants() do
+		setHidden(d, hidden)
+	end
+	if hidden then
+		hiddenAdded = character.DescendantAdded:Connect(function(d)
+			setHidden(d, true)
+		end)
+	end
+end
+
 local place: () -> boolean -- defined below (the listeners need it)
 
 -- Watches the current camera: a new aspect ratio refits the FOV, and anything else putting CameraType back (a
 -- respawn; in the Studio test 2026-10-22 the MCP execute_luau tool, which restores a camera type it saw change during
--- a call) is undone while the show camera is on. The check runs again when the deferred call fires, so turning the
--- show camera off in between wins.
+-- a call) is undone while a round camera is on. The check runs again when the deferred call fires, so turning the
+-- camera off in between wins.
 local function bind(camera: Camera)
 	if bound == camera then
 		return
@@ -3630,15 +4333,17 @@ local function bind(camera: Camera)
 	table.clear(connections)
 	bound = camera
 	table.insert(connections, camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-		local marker, chairs = rig()
-		if active and marker and chairs then
-			camera.FieldOfView = fovFor(marker, chairs, camera)
+		if mode then
+			local marker, fov = rig(camera)
+			if marker then
+				camera.FieldOfView = fov
+			end
 		end
 	end))
 	table.insert(connections, camera:GetPropertyChangedSignal("CameraType"):Connect(function()
-		if active and camera.CameraType ~= Enum.CameraType.Scriptable then
+		if mode and camera.CameraType ~= Enum.CameraType.Scriptable then
 			task.defer(function()
-				if active then
+				if mode then
 					place()
 				end
 			end)
@@ -3648,48 +4353,58 @@ end
 
 place = function(): boolean
 	local camera = workspace.CurrentCamera
-	local marker, chairs = rig()
-	if not (camera and marker and chairs) then
+	if not camera then
+		return false
+	end
+	local marker, fov = rig(camera)
+	if not marker then
 		return false
 	end
 	bind(camera)
 	camera.CameraType = Enum.CameraType.Scriptable
 	camera.CFrame = marker.CFrame
-	camera.FieldOfView = fovFor(marker, chairs, camera)
+	camera.FieldOfView = fov
+	if mode == "presenter" then
+		hideMe(true)
+	end
 	return true
 end
 
--- A replaced CurrentCamera gets the show camera again if it should be on.
+-- A replaced CurrentCamera gets the round camera again if it should be on.
 workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-	if active then
+	if mode then
 		place()
 	end
 end)
 
--- on = I'm an alive participant in a round (seated, or flying and coming back). Retries once if the map is late.
-function ShowCamera.set(on: boolean)
-	if on then
-		if not active then
-			active = true
-			if not place() then
-				task.delay(0.5, function()
-					if active then
-						place()
-					end
-				end)
-			end
+-- `to` = "show" while I'm an alive participant in a round (seated, or flying and coming back), "presenter" while I
+-- present one, nil otherwise. Retries once if the map is late.
+function ShowCamera.set(to: Mode?)
+	if to == mode then
+		return
+	end
+	if mode == "presenter" then
+		hideMe(false)
+	end
+	mode = to
+	if to then
+		if not place() then
+			task.delay(0.5, function()
+				if mode == to then
+					place()
+				end
+			end)
 		end
-	elseif active then
-		active = false
+	else
 		local camera = workspace.CurrentCamera
 		camera.CameraType = Enum.CameraType.Custom
 		camera.FieldOfView = DEFAULT_FOV
 	end
 end
 
--- A new character resets the camera type; put the show camera back if it should be on.
+-- A new character resets the camera type; put the round camera back if it should be on.
 function ShowCamera.reapply()
-	if active then
+	if mode then
 		place()
 	end
 end
@@ -4035,6 +4750,11 @@ function State.livesOf(userId: number): number
 	return State.round.lives[tostring(userId)] or 0
 end
 
+-- I present the round being played.
+function State.mePresenting(): boolean
+	return State.inRound() and State.round.presenter == State.myId()
+end
+
 return State
 ]====]; s.Parent = n6 end
 local n7 = Instance.new("Folder"); n7.Name = "UI"
@@ -4104,9 +4824,9 @@ function Hud.setAlive(alive: number, total: number)
 	aliveL.Text = if total > 0 then string.format("생존 %d / %d", alive, total) else ""
 end
 
--- nil hides it (not playing this round).
-function Hud.setMyLives(lives: number?, max: number)
-	livesL.Text = if lives then "내 목숨 " .. Hearts.text(lives, max) else ""
+-- nil hides it (not playing this round); `role` shows instead of the hearts (the presenter).
+function Hud.setMyLives(lives: number?, max: number, role: string?)
+	livesL.Text = if role then role elseif lives then "내 목숨 " .. Hearts.text(lives, max) else ""
 end
 
 return Hud
@@ -4223,6 +4943,163 @@ function MicPanel.set(r: Ready)
 end
 
 return MicPanel
+]====]; s.Parent = n7 end
+do local s = Instance.new("ModuleScript"); s.Name = "PresenterPanel"; s.Source = [====[--!strict
+-- The presenter's controls (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23):
+--   - the "volunteer to present" button (row 3 under the status board), for anyone not playing the round;
+--   - while I present: the mission menu (right side, open during the last seconds of free talk; recommended missions
+--     marked) and the sound buttons (bottom centre).
+-- It only shows what it is told and reports presses; the server checks every one of them.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Style = require(script.Parent:WaitForChild("Style"))
+
+local PresenterPanel = {}
+
+export type Option = { id: string, title: string, recommended: boolean }
+
+local TEXT = Config.TEXT
+local volunteerButton: TextButton
+local menuFrame: Frame
+local menuTitle: TextLabel
+local menuList: Frame
+local soundBar: Frame
+local volunteered = false
+local menuEndsAt = 0
+local onPickMission: (string) -> () = function(_id) end
+
+local function button(parent: Instance, text: string, width: number, height: number): TextButton
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.fromOffset(width, height)
+	b.BackgroundColor3 = Style.PANEL
+	b.BackgroundTransparency = 0.15
+	b.FontFace = Style.BOLD
+	b.TextSize = 18
+	b.TextColor3 = Style.WHITE
+	b.Text = text
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = b
+	b.Parent = parent
+	return b
+end
+
+-- onVolunteer(on), onPick(missionId), onSound(index): the player pressed one of the controls.
+function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> (), onSound: (number) -> ())
+	onPickMission = onPick
+	volunteerButton = button(Style.gui(), TEXT.VOLUNTEER, 240, 34)
+	volunteerButton.Name = "Volunteer"
+	volunteerButton.AnchorPoint = Vector2.new(0.5, 0)
+	volunteerButton.Position = UDim2.new(0.5, 0, 0, Style.row(3) + 12) -- under the chat button (row 2, 34 px)
+	volunteerButton.TextColor3 = Style.AMBER
+	volunteerButton.Visible = false
+	volunteerButton.Activated:Connect(function()
+		onVolunteer(not volunteered)
+	end)
+
+	menuFrame = Style.panel(Style.gui(), Style.PANEL, 0.15, 14)
+	menuFrame.Name = "MissionMenu"
+	menuFrame.AnchorPoint = Vector2.new(1, 0.5)
+	menuFrame.Position = UDim2.new(1, -16, 0.5, 0)
+	menuFrame.Size = UDim2.fromOffset(260, 0)
+	menuFrame.AutomaticSize = Enum.AutomaticSize.Y
+	menuFrame.Visible = false
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0, 10)
+	pad.PaddingBottom = UDim.new(0, 10)
+	pad.PaddingLeft = UDim.new(0, 10)
+	pad.PaddingRight = UDim.new(0, 10)
+	pad.Parent = menuFrame
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 8)
+	layout.Parent = menuFrame
+	menuTitle = Style.label(menuFrame, Style.BOLD, 20, Style.AMBER)
+	menuTitle.Size = UDim2.new(1, 0, 0, 26)
+	menuTitle.LayoutOrder = 0
+	menuList = Instance.new("Frame")
+	menuList.BackgroundTransparency = 1
+	menuList.Size = UDim2.fromScale(1, 0)
+	menuList.AutomaticSize = Enum.AutomaticSize.Y
+	menuList.LayoutOrder = 1
+	menuList.Parent = menuFrame
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Padding = UDim.new(0, 6)
+	listLayout.Parent = menuList
+
+	soundBar = Instance.new("Frame")
+	soundBar.Name = "SoundBar"
+	soundBar.LayoutOrder = 2 -- above the (hidden while presenting) reaction bar
+	soundBar.Size = UDim2.fromOffset(96 * #Config.PRESENTER_SOUNDS, 44)
+	soundBar.BackgroundTransparency = 1
+	soundBar.Visible = false
+	soundBar.Parent = Style.bottomStack()
+	local soundLayout = Instance.new("UIListLayout")
+	soundLayout.FillDirection = Enum.FillDirection.Horizontal
+	soundLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	soundLayout.Padding = UDim.new(0, 6)
+	soundLayout.Parent = soundBar
+	for index, entry in Config.PRESENTER_SOUNDS do
+		local b = button(soundBar, (TEXT :: any)[entry.text] or entry.text, 90, 44)
+		b.Activated:Connect(function()
+			onSound(index)
+		end)
+	end
+end
+
+-- The volunteer button: shown when I may volunteer (not playing the round), labelled by my current choice; while I
+-- present it is how I step down.
+function PresenterPanel.setVolunteer(visible: boolean, on: boolean, presenting: boolean)
+	volunteered = on
+	volunteerButton.Visible = visible
+	volunteerButton.Text = if presenting then TEXT.STEP_DOWN elseif on then TEXT.VOLUNTEER_CANCEL else TEXT.VOLUNTEER
+end
+
+-- While I present: the sound buttons.
+function PresenterPanel.setPresenting(on: boolean)
+	soundBar.Visible = on
+	if not on then
+		PresenterPanel.closeMenu()
+	end
+end
+
+-- The mission menu (server time `endsAt`); a press picks and closes it.
+function PresenterPanel.openMenu(options: { Option }, endsAt: number)
+	for _, child in menuList:GetChildren() do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+	for i, option in options do
+		local label = if option.recommended then "★ " .. option.title .. " · " .. TEXT.PICK_RECOMMENDED else option.title
+		local b = button(menuList, label, 240, 40)
+		b.LayoutOrder = i
+		b.TextColor3 = if option.recommended then Style.AMBER else Style.WHITE
+		b.Activated:Connect(function()
+			onPickMission(option.id)
+			PresenterPanel.closeMenu()
+		end)
+	end
+	menuEndsAt = endsAt
+	menuFrame.Visible = true
+	PresenterPanel.tick(workspace:GetServerTimeNow())
+end
+
+function PresenterPanel.closeMenu()
+	menuFrame.Visible = false
+end
+
+-- Every frame: the countdown in the menu title.
+function PresenterPanel.tick(now: number)
+	if menuFrame.Visible then
+		local left = math.max(0, math.ceil(menuEndsAt - now))
+		menuTitle.Text = string.format("%s · %d", TEXT.PICK_MISSION, left)
+	end
+end
+
+return PresenterPanel
 ]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "ReactionBar"; s.Source = [====[--!strict
 -- Emoji reaction buttons for players who are out and spectators (bottom of the bottom stack). The server rate-limits and broadcasts them.

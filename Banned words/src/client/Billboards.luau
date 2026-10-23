@@ -1,12 +1,15 @@
 --!strict
--- Head bubbles: name and lives (hearts) for every participant on the chairs, me included, and from bundle 5 the
--- banned words above them: each other participant's visible words (a new one flashes) and "???" for my own.
+-- Head bubbles: name and lives (hearts) for every participant on the chairs, me included (the presenter's bubble says
+-- "진행자" instead of hearts), and from bundle 5 the banned words above them: each other participant's visible words
+-- (a new one flashes) and "???" for my own.
 -- The V3 pool hall is white, so word cards carry a thick navy outline and the name sits on a navy pill.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
-local Hearts = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hearts"))
+local shared = ReplicatedStorage:WaitForChild("BannedWords")
+local Config = require(shared:WaitForChild("Config"))
+local Hearts = require(shared:WaitForChild("Hearts"))
 
 local Billboards = {}
 
@@ -30,6 +33,7 @@ export type View = {
 	words: { [string]: { words: { string }?, count: number } }, -- nil words = hidden (my own)
 	lives: { [string]: number },
 	maxLives: number,
+	presenter: number?, -- the presenter's userId (their bubble shows the presenter tag)
 }
 
 type Bubble = { gui: BillboardGui, size: UDim2, hearts: TextLabel, words: { string }, layout: string }
@@ -196,7 +200,9 @@ function Billboards.render(view: View)
 				end
 			end
 			if bubble then
-				bubble.hearts.Text = Hearts.text(view.lives[key] or 0, view.maxLives)
+				bubble.hearts.Text = if userId == view.presenter
+					then Config.TEXT.PRESENTER_TAG
+					else Hearts.text(view.lives[key] or 0, view.maxLives)
 			end
 		end
 	end

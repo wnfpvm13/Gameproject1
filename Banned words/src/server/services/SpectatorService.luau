@@ -1,10 +1,9 @@
 --!strict
 -- Spectators (docs/DESIGN_V3.md §8-10, was GhostService in V2): during a round everyone who is not an alive
 -- participant (players who are out, late joiners, anyone who respawns) watches from the stands. Anyone found on the
--- stage (the chair row and the floor up to the show camera) is moved back to the stands, except players SeatService
--- still owns (flying). When the round is over the stands empty into the lobby. Spectators can send emoji reactions;
--- their voice is VoiceService's job. (The presenter, bundle 3, will stand at the podium on the stage and must be
--- exempted then.)
+-- stage (the chair row and the floor up to the show camera) is moved back to the stands, except players another
+-- service owns (flying, or presenting at the podium: the isBusy callback). When the round is over the stands empty
+-- into the lobby. Spectators can send emoji reactions; their voice is VoiceService's job.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -128,7 +127,7 @@ local function standsWhenReady(player: Player, character: Model)
 	end)
 end
 
--- isBusy(player): true while another service owns the player's body (a flight); the stage guard skips them.
+-- isBusy(player): true while another service owns the player's body (a flight, the podium); they are left alone.
 function SpectatorService.start(isBusy: (Player) -> boolean)
 	busy = isBusy
 	Players.RespawnTime = Config.RESPAWN_TIME
@@ -167,7 +166,7 @@ function SpectatorService.beginRound()
 	table.clear(inStands)
 	for _, player in Players:GetPlayers() do
 		local character = player.Character
-		if not Match.isAlive(player) and character then
+		if not Match.isAlive(player) and not busy(player) and character then
 			if character:FindFirstChild("HumanoidRootPart") then
 				SpectatorService.toStands(player)
 			else

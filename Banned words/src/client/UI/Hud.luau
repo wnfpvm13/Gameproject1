@@ -64,9 +64,9 @@ function Hud.setAlive(alive: number, total: number)
 	aliveL.Text = if total > 0 then string.format("생존 %d / %d", alive, total) else ""
 end
 
--- nil hides it (not playing this round).
-function Hud.setMyLives(lives: number?, max: number)
-	livesL.Text = if lives then "내 목숨 " .. Hearts.text(lives, max) else ""
+-- nil hides it (not playing this round); `role` shows instead of the hearts (the presenter).
+function Hud.setMyLives(lives: number?, max: number, role: string?)
+	livesL.Text = if role then role elseif lives then "내 목숨 " .. Hearts.text(lives, max) else ""
 end
 
 return Hud

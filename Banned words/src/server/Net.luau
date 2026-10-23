@@ -9,6 +9,9 @@
 --               }, final = they all fell at   ChatJoin    (on) join rounds by text chat instead of voice
 --               once and play the final }
 --   ChatAccess  to one player only: may I join by chat? { state = checking / yes / no / voice / error }
+--   PresenterMenu to the presenter: { options = { {id, title, recommended} } | nil (closed), endsAt }
+--   Sound       a presenter sound button: { index } (Config.PRESENTER_SOUNDS)
+--   (client -> server: Volunteer (on), PresenterPick (mission id), PresenterSound (index))
 --   Notice      short toast text
 --   Reaction    emoji shown above a player
 --   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
@@ -21,6 +24,7 @@ local Net = {}
 
 local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
+	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound",
 	"Words", "WordWarn", "Settle", "Transcript", "VoicePing", "Settled",
 }
 

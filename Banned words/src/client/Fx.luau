@@ -1,6 +1,7 @@
 --!strict
 -- Effects: the flying chair firing (seat flap snapping back on its hinge, "펑", smoke and confetti), the splash where
--- the player hits the water, the elimination buzzer and red flash, and floating emoji reactions.
+-- the player hits the water, the elimination buzzer and red flash, floating emoji reactions and the presenter's sound
+-- buttons.
 -- The server only sends signals; every client animates the flap itself (a server-moved flap would stutter).
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
@@ -21,6 +22,7 @@ local flash: Frame
 local buzzer: Sound
 local bang: Sound
 local splashSound: Sound
+local presenterSounds: { Sound } = {} -- the presenter's sound buttons (Config.PRESENTER_SOUNDS order)
 local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
 local playing: { [BasePart]: number } = {} -- hinge -> current animation number
 
@@ -33,14 +35,27 @@ local function sound(name: string, id: string, volume: number): Sound
 	return s
 end
 
--- Plays a copy, so two launches close together do not cut each other's bang or splash (both sounds are under 4 s;
--- the copy goes away after SOUND_COPY_SECONDS even if it never loaded).
+-- Plays a copy, so two launches (or sound buttons) close together do not cut each other. The copy goes when it ends;
+-- in case it never does, twice its length after it loaded (at least SOUND_COPY_SECONDS; the drum roll runs 8.3 s),
+-- or SOUND_LOAD_GIVE_UP seconds if it never loads.
 local SOUND_COPY_SECONDS = 8
+local SOUND_LOAD_GIVE_UP = 30
 local function playCopy(template: Sound)
 	local copy = template:Clone()
 	copy.Parent = SoundService
 	copy:Play()
-	Debris:AddItem(copy, SOUND_COPY_SECONDS)
+	copy.Ended:Once(function()
+		copy:Destroy()
+	end)
+	local function expire()
+		Debris:AddItem(copy, math.max(SOUND_COPY_SECONDS, copy.TimeLength) * 2)
+	end
+	if copy.IsLoaded then
+		expire()
+	else
+		copy.Loaded:Once(expire)
+		Debris:AddItem(copy, SOUND_LOAD_GIVE_UP)
+	end
 end
 
 function Fx.init()
@@ -60,6 +75,17 @@ function Fx.init()
 	buzzer = sound("Buzzer", Config.SOUND_BUZZER, 0.6)
 	bang = sound("Bang", Config.SOUND_BANG, 0.8)
 	splashSound = sound("Splash", Config.SOUND_SPLASH, 0.8)
+	for i, entry in Config.PRESENTER_SOUNDS do
+		presenterSounds[i] = sound("PresenterSound" .. i, entry.id, 0.7)
+	end
+end
+
+-- The presenter pressed a sound button (everyone hears it).
+function Fx.presenterSound(index: number)
+	local template = presenterSounds[index]
+	if template then
+		playCopy(template)
+	end
 end
 
 local function anchorAt(position: Vector3, lifetime: number): Part

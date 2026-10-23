@@ -20,7 +20,10 @@ type Ctx = {
 
 local TestMission = {
 	id = "test",
+	title = Config.TEXT.TEST_MISSION_TITLE,
 	expectedSeconds = Config.TEST_MISSION_SECONDS,
+	maxPerRound = nil :: number?, -- like the quiz: no limit
+	minPlayers = nil :: number?,
 }
 
 function TestMission.available(_final: boolean): boolean

@@ -1,5 +1,6 @@
 --!strict
--- Missions (docs/DESIGN_V3.md §5, §13): picks the next mission that fits the time left and runs one at a time with a
+-- Missions (docs/DESIGN_V3.md §5, §13): lists the missions that may run next (recommended order, also the presenter's
+-- menu), picks the next mission that fits the time left and runs one at a time with a
 -- ctx (missions cannot require services, so everything they may do comes through the ctx RoundService builds). A
 -- mission stops as soon as it is cancelled (the round was decided or is over): its waits wake up and its fails and
 -- notices are dropped. Only this service requires the modules under server/missions (tools/tests/check_deps.py
@@ -41,21 +42,73 @@ export type MissionCtx = {
 
 export type Mission = {
 	id: string,
+	title: string, -- shown in the presenter's menu
 	expectedSeconds: number, -- for the time budget, without the launches afterwards
+	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
+	minPlayers: number?, -- alive participants it needs (nil = any)
 	available: (final: boolean) -> boolean,
 	run: (ctx: MissionCtx) -> (),
 }
 
+-- An entry of the presenter's menu.
+export type Option = { id: string, title: string, recommended: boolean }
+
 local MISSIONS: { Mission } = { TestMission }
 
--- The next main-game mission that still fits, launches included, in `secondsLeft`; nil if none does.
-function MissionRunner.choose(secondsLeft: number): Mission?
+local played: { [string]: number } = {} -- main-game runs this round, per mission id
+
+local function fits(mission: Mission, secondsLeft: number): boolean
+	return mission.expectedSeconds + Config.FLING_RETURN_SECONDS <= secondsLeft
+end
+
+-- A new round: nothing played yet.
+function MissionRunner.beginRound()
+	table.clear(played)
+end
+
+-- The main-game missions that may run now, in recommended order (not played yet this round first): available, under
+-- their per-round limit, enough players for them, and fitting `secondsLeft` with the launches.
+function MissionRunner.candidates(secondsLeft: number, alive: number): { Mission }
+	local list = {}
 	for _, mission in MISSIONS do
-		if mission.available(false) and mission.expectedSeconds + Config.FLING_RETURN_SECONDS <= secondsLeft then
+		local count = played[mission.id] or 0
+		if mission.available(false) and fits(mission, secondsLeft) and (mission.maxPerRound == nil or count < mission.maxPerRound)
+			and alive >= (mission.minPlayers or 0) then
+			table.insert(list, mission)
+		end
+	end
+	local position: { [Mission]: number } = {}
+	for i, mission in list do
+		position[mission] = i
+	end
+	table.sort(list, function(a, b)
+		local pa, pb = played[a.id] or 0, played[b.id] or 0
+		if pa ~= pb then
+			return pa < pb
+		end
+		return position[a] < position[b]
+	end)
+	return list
+end
+
+-- The presenter's menu for the same choice.
+function MissionRunner.options(secondsLeft: number, alive: number): { Option }
+	local options = {}
+	for i, mission in MissionRunner.candidates(secondsLeft, alive) do
+		table.insert(options, { id = mission.id, title = mission.title, recommended = i <= Config.PRESENTER_RECOMMENDED })
+	end
+	return options
+end
+
+-- The next main-game mission: `pickedId` if it may still run, else the top recommendation; nil if none fits.
+function MissionRunner.choose(secondsLeft: number, alive: number, pickedId: string?): Mission?
+	local list = MissionRunner.candidates(secondsLeft, alive)
+	for _, mission in list do
+		if mission.id == pickedId then
 			return mission
 		end
 	end
-	return nil
+	return list[1]
 end
 
 -- A mission that can ask final questions, or nil (then the survivors share the win).
@@ -99,6 +152,9 @@ end
 
 -- Runs one mission to its end. Returns false if it raised an error (reported; that run is over).
 function MissionRunner.run(mission: Mission, ctx: Ctx): boolean
+	if not ctx.final then
+		played[mission.id] = (played[mission.id] or 0) + 1
+	end
 	local runCtx = missionCtx(ctx)
 	local ok, err = pcall(function(): any
 		mission.run(runCtx)

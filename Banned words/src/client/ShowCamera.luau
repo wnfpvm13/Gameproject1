@@ -1,22 +1,27 @@
 --!strict
--- The show camera (docs/DESIGN_V3.md §10, owner 2026-10-22): seated participants watch the chair row from the front,
--- so every other participant (faces and word bubbles) is on screen with the pool behind, including anyone flying off.
--- The FOV makes the row's HalfWidth fit the screen width at the current aspect ratio (the game is landscape only).
--- Rig numbers live on PoolHall.ShowCamera (attributes HalfWidth, MinFov, MaxFov). Everyone else keeps the normal camera.
+-- The fixed round cameras (docs/DESIGN_V3.md §10, owner 2026-10-22):
+--   "show"      seated participants watch the chair row from the front, so every other participant (faces and word
+--               bubbles) is on screen with the pool behind, including anyone flying off. The FOV makes the row's
+--               HalfWidth fit the screen width at the current aspect ratio (the game is landscape only). Rig numbers
+--               live on PoolHall.ShowCamera (attributes HalfWidth, MinFov, MaxFov).
+--   "presenter" the presenter looks at the row from behind the podium (PoolHall.PresenterCamera, attribute Fov). Their
+--               own character stands between that camera and the row, so it is hidden on their screen only (like
+--               first person; everyone else still sees them).
+-- Everyone else keeps the normal camera.
+local Players = game:GetService("Players")
+
 local ShowCamera = {}
+
+export type Mode = "show" | "presenter"
 
 local DEFAULT_FOV = 70
 
-local active = false
+local mode: Mode? = nil
 local bound: Camera? = nil -- the camera the change listeners below watch
 local connections: { RBXScriptConnection } = {}
 
-local function rig(): (BasePart?, Instance?)
-	local hall = workspace:FindFirstChild("PoolHall")
-	if not hall then
-		return nil, nil
-	end
-	return hall:FindFirstChild("ShowCamera") :: BasePart?, hall:FindFirstChild("Chairs")
+local function hall(): Instance?
+	return workspace:FindFirstChild("PoolHall")
 end
 
 -- Distance from the camera to the chair row along the view direction (the row's centre = the seats' average).
@@ -36,7 +41,7 @@ local function rowDepth(marker: BasePart, chairs: Instance): number
 end
 
 -- Vertical FOV that shows HalfWidth studs to each side of the row centre at the current aspect ratio.
-local function fovFor(marker: BasePart, chairs: Instance, camera: Camera): number
+local function fitRow(marker: BasePart, chairs: Instance, camera: Camera): number
 	local halfWidth = (marker:GetAttribute("HalfWidth") or 29) :: number
 	local minFov = (marker:GetAttribute("MinFov") or 40) :: number
 	local maxFov = (marker:GetAttribute("MaxFov") or 70) :: number
@@ -47,12 +52,59 @@ local function fovFor(marker: BasePart, chairs: Instance, camera: Camera): numbe
 	return math.clamp(vertical, minFov, maxFov)
 end
 
+-- The marker and FOV of the current mode, or nil while the map is missing.
+local function rig(camera: Camera): (BasePart?, number)
+	local map = hall()
+	if not map or not mode then
+		return nil, DEFAULT_FOV
+	end
+	if mode == "presenter" then
+		local marker = map:FindFirstChild("PresenterCamera") :: BasePart?
+		return marker, if marker then (marker:GetAttribute("Fov") or 55) :: number else DEFAULT_FOV
+	end
+	local marker = map:FindFirstChild("ShowCamera") :: BasePart?
+	local chairs = map:FindFirstChild("Chairs")
+	if not (marker and chairs) then
+		return nil, DEFAULT_FOV
+	end
+	return marker, fitRow(marker, chairs, camera)
+end
+
+local function setHidden(d: Instance, hidden: boolean)
+	if d:IsA("BasePart") or d:IsA("Decal") then
+		local untyped: any = d
+		untyped.LocalTransparencyModifier = if hidden then 1 else 0
+	end
+end
+
+-- My own character, invisible on my screen (true) or shown again (false). While hidden, parts added later
+-- (accessories that load late, tools) are hidden too.
+local hiddenAdded: RBXScriptConnection? = nil
+local function hideMe(hidden: boolean)
+	if hiddenAdded then
+		hiddenAdded:Disconnect()
+		hiddenAdded = nil
+	end
+	local character = Players.LocalPlayer.Character
+	if not character then
+		return
+	end
+	for _, d in character:GetDescendants() do
+		setHidden(d, hidden)
+	end
+	if hidden then
+		hiddenAdded = character.DescendantAdded:Connect(function(d)
+			setHidden(d, true)
+		end)
+	end
+end
+
 local place: () -> boolean -- defined below (the listeners need it)
 
 -- Watches the current camera: a new aspect ratio refits the FOV, and anything else putting CameraType back (a
 -- respawn; in the Studio test 2026-10-22 the MCP execute_luau tool, which restores a camera type it saw change during
--- a call) is undone while the show camera is on. The check runs again when the deferred call fires, so turning the
--- show camera off in between wins.
+-- a call) is undone while a round camera is on. The check runs again when the deferred call fires, so turning the
+-- camera off in between wins.
 local function bind(camera: Camera)
 	if bound == camera then
 		return
@@ -63,15 +115,17 @@ local function bind(camera: Camera)
 	table.clear(connections)
 	bound = camera
 	table.insert(connections, camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-		local marker, chairs = rig()
-		if active and marker and chairs then
-			camera.FieldOfView = fovFor(marker, chairs, camera)
+		if mode then
+			local marker, fov = rig(camera)
+			if marker then
+				camera.FieldOfView = fov
+			end
 		end
 	end))
 	table.insert(connections, camera:GetPropertyChangedSignal("CameraType"):Connect(function()
-		if active and camera.CameraType ~= Enum.CameraType.Scriptable then
+		if mode and camera.CameraType ~= Enum.CameraType.Scriptable then
 			task.defer(function()
-				if active then
+				if mode then
 					place()
 				end
 			end)
@@ -81,48 +135,58 @@ end
 
 place = function(): boolean
 	local camera = workspace.CurrentCamera
-	local marker, chairs = rig()
-	if not (camera and marker and chairs) then
+	if not camera then
+		return false
+	end
+	local marker, fov = rig(camera)
+	if not marker then
 		return false
 	end
 	bind(camera)
 	camera.CameraType = Enum.CameraType.Scriptable
 	camera.CFrame = marker.CFrame
-	camera.FieldOfView = fovFor(marker, chairs, camera)
+	camera.FieldOfView = fov
+	if mode == "presenter" then
+		hideMe(true)
+	end
 	return true
 end
 
--- A replaced CurrentCamera gets the show camera again if it should be on.
+-- A replaced CurrentCamera gets the round camera again if it should be on.
 workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-	if active then
+	if mode then
 		place()
 	end
 end)
 
--- on = I'm an alive participant in a round (seated, or flying and coming back). Retries once if the map is late.
-function ShowCamera.set(on: boolean)
-	if on then
-		if not active then
-			active = true
-			if not place() then
-				task.delay(0.5, function()
-					if active then
-						place()
-					end
-				end)
-			end
+-- `to` = "show" while I'm an alive participant in a round (seated, or flying and coming back), "presenter" while I
+-- present one, nil otherwise. Retries once if the map is late.
+function ShowCamera.set(to: Mode?)
+	if to == mode then
+		return
+	end
+	if mode == "presenter" then
+		hideMe(false)
+	end
+	mode = to
+	if to then
+		if not place() then
+			task.delay(0.5, function()
+				if mode == to then
+					place()
+				end
+			end)
 		end
-	elseif active then
-		active = false
+	else
 		local camera = workspace.CurrentCamera
 		camera.CameraType = Enum.CameraType.Custom
 		camera.FieldOfView = DEFAULT_FOV
 	end
 end
 
--- A new character resets the camera type; put the show camera back if it should be on.
+-- A new character resets the camera type; put the round camera back if it should be on.
 function ShowCamera.reapply()
-	if active then
+	if mode then
 		place()
 	end
 end

@@ -34,6 +34,7 @@ ROUND_MODULES = [
     ("Timeline", "src/server/services/Timeline.luau"),
     ("MissionRunner", "src/server/services/MissionRunner.luau"),
     ("ChatService", "src/server/services/ChatService.luau"),
+    ("PresenterService", "src/server/services/PresenterService.luau"),
     ("VoiceServiceReal", "src/server/services/VoiceService.luau"),  # section 9 (RoundService gets a stub)
     ("RoundService", "src/server/RoundService.luau"),
 ]

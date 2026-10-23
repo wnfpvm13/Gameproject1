@@ -48,4 +48,9 @@ function State.livesOf(userId: number): number
 	return State.round.lives[tostring(userId)] or 0
 end
 
+-- I present the round being played.
+function State.mePresenting(): boolean
+	return State.inRound() and State.round.presenter == State.myId()
+end
+
 return State

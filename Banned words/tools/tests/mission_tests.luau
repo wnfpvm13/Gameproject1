@@ -274,7 +274,7 @@ do
 	check("3c fewer than ROULETTE_MIN_PLAYERS on the ground: nobody is picked (and no error)", #alone.fails == 0
 		and aloneRun.done and aloneRun.ok == true)
 
-	-- Menu order from a fresh round: the quiz, the roulette (once), then quizzes; the roulette needs two players.
+	-- The menu order (the presenter's recommendations) from a fresh round: the quiz, the roulette (once), then quizzes.
 	QuizBank.main = realMain
 	QuizBank.final = realFinal
 	MissionRunner.beginRound()
@@ -293,7 +293,7 @@ do
 			at(now + 30)
 		end
 	end
-	check("3d automatic order: quiz, roulette, then quizzes (the roulette once a round)", order[1] == "quiz"
+	check("3d the menu order (recommended first): quiz, roulette, then quizzes (the roulette once a round)", order[1] == "quiz"
 		and order[2] == "roulette" and order[3] == "quiz" and order[4] == "quiz", table.concat(order, ","))
 	MissionRunner.beginRound()
 	local small = MissionRunner.candidates(300, 1, false)
@@ -302,6 +302,51 @@ do
 		rouletteListed = rouletteListed or m.id == "roulette"
 	end
 	check("3e the roulette is not offered with fewer than ROULETTE_MIN_PLAYERS alive", not rouletteListed)
+
+	-- Choosing the next game (bundle 6a): the presenter's pick, else at random (fewer runs likelier, not the last one).
+	MissionRunner.beginRound()
+	local rng = Random.new(7)
+	local picked = MissionRunner.choose(300, 4, false, "roulette", rng, "roulette")
+	local avoided = true
+	for _ = 1, 60 do
+		local m = MissionRunner.choose(300, 4, false, nil, rng, "quiz")
+		avoided = avoided and m ~= nil and m.id ~= "quiz"
+	end
+	check("3f the presenter's pick wins (even the last game); a random choice skips the game just played",
+		picked ~= nil and picked.id == "roulette" and avoided)
+	start(MissionRunner.choose(300, 4, false, "quiz", rng, nil) :: any, fakeCtx(newPlayers(4), false, nil))
+	at(now + 30)
+	start(MissionRunner.choose(300, 4, false, "quiz", rng, nil) :: any, fakeCtx(newPlayers(4), false, nil))
+	at(now + 30)
+	local quizzes, draws = 0, 400
+	for _ = 1, draws do
+		local m = MissionRunner.choose(300, 4, false, nil, rng, nil)
+		if m and m.id == "quiz" then
+			quizzes += 1
+		end
+	end
+	-- quiz played twice: weight 1/3 against 1 each for the roulette and the test mission -> about 1/7 of the draws
+	check("3g games played more this round are picked less often", quizzes > draws * 0.07 and quizzes < draws * 0.25,
+		string.format("%d of %d", quizzes, draws))
+	check("3h nothing fits the time left -> no game", MissionRunner.choose(5, 4, false, nil, rng, nil) == nil)
+	local function listed(id)
+		for _, m in MissionRunner.candidates(300, 4, false) do
+			if m.id == id then
+				return true
+			end
+		end
+		return false
+	end
+	local offWithout = listed("bannedTalk")
+	Match.voiceJudging = true
+	local onWith = listed("bannedTalk")
+	local inFinal = false
+	for _, m in { MissionRunner.finalMission() } do
+		inFinal = inFinal or m.id == "bannedTalk"
+	end
+	Match.voiceJudging = false
+	check("3i the banned-word talk is offered only while speech judging is on (never in the final)", not offWithout and onWith
+		and not inFinal)
 end
 
 ---------------------------------------------------------------- 4. the real bank

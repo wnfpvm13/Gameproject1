@@ -18,7 +18,7 @@ export type Word = {
 
 export type Participant = {
 	player: Player,
-	words: { Word }, -- banned words (none until bundle 5)
+	words: { Word }, -- banned words (only during the banned-word talk, docs/DESIGN_V3.md §6)
 	alive: boolean, -- still in the game (lives left, or a finalist after everyone fell at once)
 	lives: number,
 	afkMisses: number, -- answer missions missed in a row
@@ -31,6 +31,9 @@ local Match = {
 	message = "",
 	roundId = 0,
 	serverKind = "public", -- "public" | "private" (docs/DESIGN_V3.md §3), set at each round start
+	voiceJudging = false, -- speech judging of banned words is on (Config.VOICE_JUDGING; Studio: BW_VoiceJudging), set at
+	-- each round start; the banned-word talk is played only then (owner 2026-10-23)
+	talk = nil :: string?, -- the banned-word talk's stage: "prep" | "talk" | "settle" (nil: no talk, no words)
 	presenter = nil :: Player?, -- runs this round from the podium (PresenterService decides who; nil = the system)
 	presenterPending = false, -- a replacement is being looked for (clients wait before naming who presents)
 	participants = {} :: { [Player]: Participant },
@@ -113,6 +116,7 @@ function Match.payload()
 		readyCount = #Match.eligiblePlayers(),
 		requireReady = Config.REQUIRE_VOICE_READY,
 		serverKind = Match.serverKind,
+		talk = Match.talk,
 		presenter = if Match.presenter then Match.presenter.UserId else nil,
 		presenterPending = Match.presenterPending,
 	}
@@ -129,7 +133,7 @@ function Match.setPhase(name: string, duration: number, text: string)
 	Match.broadcast()
 end
 
--- A new status line within the same phase (a mission starting, free talk again).
+-- A new status line within the same phase (a mission starting, the next game).
 function Match.setMessage(text: string)
 	Match.message = text
 	Match.broadcast()
@@ -141,6 +145,7 @@ function Match.resetRound()
 	Match.startedWith = 0
 	Match.presenter = nil
 	Match.presenterPending = false
+	Match.talk = nil
 	Match.talkStartedAt = math.huge
 	Match.cutoffAt = math.huge
 end

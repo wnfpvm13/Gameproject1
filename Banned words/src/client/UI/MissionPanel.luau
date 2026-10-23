@@ -6,7 +6,9 @@
 --     name the server picked; with two players a coin flips between the two names instead;
 --   - a word to everyone (bundle 4b): whose turn, the topic, the seconds left, and for the performer a "swap topic"
 --     button while they read it; then "the presenter is choosing", or a vote: the performers, "nobody" and "I could
---     not hear" (my own name cannot be picked).
+--     not hear" (my own name cannot be picked);
+--   - the banned-word talk (bundle 6a): one slim line under the status board, "topic · seconds left" (the middle of the
+--     screen stays free: the players read each other's words over their heads there).
 -- It only shows what it is told and reports the button pressed; the server checks every answer.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -56,7 +58,11 @@ local state = {
 	pick = 1,
 	startsAt = 0,
 	spinSeconds = 1,
+	topicLine = "", -- the banned-word talk's topic line (the seconds are added every frame)
 }
+local CARD_POSITION = UDim2.fromScale(0.5, 0.56) -- a little low: the status board sits above
+local TALK_POSITION = UDim2.new(0.5, 0, 0, Style.row(4)) -- the talk's slim line: under the status board and the
+-- getting-ready lines (rows 1-3), above the chair row
 
 local function answerButton(index: number): TextButton
 	local b = Instance.new("TextButton")
@@ -102,7 +108,7 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	card = Style.panel(Style.gui(), Style.PANEL, 0.2, 16)
 	card.Name = "MissionCard"
 	card.AnchorPoint = Vector2.new(0.5, 0.5)
-	card.Position = UDim2.fromScale(0.5, 0.56) -- a little low: the status board sits above
+	card.Position = CARD_POSITION
 	card.Size = UDim2.fromScale(0.5, 0)
 	card.AutomaticSize = Enum.AutomaticSize.Y
 	card.Visible = false
@@ -276,10 +282,16 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	state.canAnswer = canAnswer
 	state.myId = myId
 	card.Visible = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
+		or kind == "talk"
 	answerGrid.Visible = quizLike or kind == "vote"
-	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
+	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk"
 	timer.Visible = quizLike or kind == "oneWord" or kind == "vote"
 	note.Visible = kind == "oneWord"
+	local slim = kind == "talk"
+	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 0.5)
+	card.Position = if slim then TALK_POSITION else CARD_POSITION
+	title.TextSize = if slim then 22 else 26
+	title.Size = UDim2.new(1, 0, 0, if slim then 30 else 64)
 	swapButton.Visible = false
 	wheel.Visible = kind == "roulette" and #names > 2
 	coin.Visible = kind == "roulette" and #names <= 2
@@ -319,6 +331,10 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		swapButton.Visible = payload.phase == "prep" and not payload.swapped and payload.id ~= nil and ids[current] == myId
 	elseif kind == "oneWordJudge" then
 		title.Text = TEXT.JUDGE_WAIT
+	elseif kind == "talk" then
+		state.topicLine = (if payload.stage == "prep" then TEXT.TALK_SOON .. " · " else "")
+			.. string.format(TEXT.TALK_TOPIC, payload.topic or "")
+		title.Text = state.topicLine
 	elseif kind == "roulette" then
 		title.Text = ""
 		state.names = names
@@ -345,7 +361,10 @@ function MissionPanel.tick(now: number)
 			cardScale.Scale = math.min(1, view.Y * 0.8 / height, view.X * 0.9 / width)
 		end
 	end
-	if state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" then
+	if state.kind == "talk" then
+		timer.Text = ""
+		title.Text = string.format("%s · %d", state.topicLine, math.max(0, math.ceil(state.endsAt - now)))
+	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""

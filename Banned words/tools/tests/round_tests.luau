@@ -1,9 +1,11 @@
 -- V3 round rules on the real modules (docs/DESIGN_V3.md §2, §4, §15): LifeService (one penalty per event, none while
 -- flying, simultaneous fails, everyone at once -> final, subjective limits, AFK), Timeline (time up, early final),
 -- and whole rounds of the real RoundService with stub chairs/stands/voice/scores and a scripted mission in place
--- of the Studio test mission: 8 min -> final, time budget, final cap -> joint winners, 3 left of 4+ -> final at once,
--- everyone at once -> final among them, one left -> winner, leaving is out, the Studio fail key; joining by chat
--- (ChatService: privacy of the check, retries, voice accounts, the round lock) and the real VoiceService routing.
+-- of the Studio test mission: games back to back (no free talk, bundle 6a), the time budget -> the final once nothing
+-- fits, final cap -> joint winners, 3 left of 4+ -> final at once, everyone at once -> final among them, one left ->
+-- winner, leaving is out, the Studio fail key; joining by chat (ChatService: privacy of the check, retries, voice
+-- accounts, the round lock), the real VoiceService routing, the presenter, and the real banned-word talk (words in
+-- its prep stage only, chat judging, rescues, the presenter's ear and re-draws, public limits, the settle stage).
 local Config = require(node("Config"))
 local Match = require(node("Match"))
 local LifeService = require(node("LifeService"))
@@ -231,8 +233,9 @@ loaders.Scores = function() return Score end
 
 -- The mission: waits expectedSeconds (ctx.wait, so a cancel stops it), then fails whoever pick(run number, alive
 -- players) names; secondPick, if set, is a second event of the same main-game run right after the first.
-local Scripted = { id = "scripted", title = "scripted", expectedSeconds = 10, runs = {}, finalRuns = {}, pick = nil, finalPick = nil, secondPick = nil }
-function Scripted.available(_final) return true end
+local Scripted = { id = "scripted", title = "scripted", expectedSeconds = 10, runs = {}, finalRuns = {}, pick = nil, finalPick = nil, secondPick = nil,
+	off = false } -- off: not offered in the main game (the banned-word talk sections), still the final's questions
+function Scripted.available(final) return final or not Scripted.off end
 function Scripted.run(ctx)
 	local list = if ctx.final then Scripted.finalRuns else Scripted.runs
 	table.insert(list, now)
@@ -389,18 +392,17 @@ local function leave(player, stays)
 	playerList = stays
 	task.spawn(Players.PlayerRemoving.fire, player)
 end
--- How many main-game missions of `seconds` start in ROUND_SECONDS (free talk before each; one starts only if it
--- fits with its launches).
+-- Without a presenter each game is named for NEXT_GAME_CARD_SECONDS before it starts (bundle 6a: no free talk).
+local CARD = Config.NEXT_GAME_CARD_SECONDS
+-- How many main-game missions of `seconds` start in ROUND_SECONDS without a presenter (one starts only if it fits
+-- with its launches once its card is over).
 local function expectedRuns(seconds)
 	local count, t = 0, 0
-	while true do
-		t += Config.FREE_TALK_SECONDS
-		if Config.ROUND_SECONDS - t < seconds + Config.FLING_RETURN_SECONDS then
-			return count
-		end
+	while Config.ROUND_SECONDS - t - CARD >= seconds + Config.FLING_RETURN_SECONDS do
 		count += 1
-		t += seconds
+		t += CARD + seconds
 	end
+	return count
 end
 -- Run 1-3 fail both players: everyone falls at once on the last life -> the two play the final.
 local function bothFall(ps)
@@ -414,8 +416,8 @@ playerList = {}
 RoundService.start()
 at(now + 2)
 
--- 7A: three players, nobody fails: missions until the next would not fit, the final at 8 min, then the cap (the last
--- question begins before the cap and is played to its end).
+-- 7A: three players, nobody fails: games back to back until the next would not fit, then the final at once, then the
+-- cap (the last question begins before the cap and is played to its end).
 do
 	local ps = newPlayers(3)
 	local since = now
@@ -430,17 +432,19 @@ do
 	local reseat = find(Seat.reseats, ps[1])
 	check("7a a participant's new character goes back on the chair", reseat ~= nil and reseat.at >= play + 10.4 and reseat.at <= play + 10.7)
 	check("7a the round start sets the server kind (Studio default)", Match.serverKind == Config.STUDIO_SERVER_KIND)
-	at(play + Config.FREE_TALK_SECONDS + 5)
-	NetStub.listeners.DevFling(ps[2])
-	check("7a the Studio fail key is ignored while a mission runs", #Scripted.runs == 1 and Match.participants[ps[2]].lives == Config.LIVES
-		and #Seat.flings == 0)
+	check("7a no free talk: the first game starts once its card is over", #Scripted.runs == 1
+		and math.abs(Scripted.runs[1] - (play + CARD)) < 0.3 and Match.message == string.format(Config.TEXT.NEXT_GAME, Scripted.title),
+		Scripted.runs[1] and string.format("+%.1f", Scripted.runs[1] - play))
 	local list = finish(since)
 	local final, result = phaseAt(list, "Final"), phaseAt(list, "Result")
 	local runs = Scripted.runs
 	check("7b missions run until the next would not fit the time left", #runs == expectedRuns(seconds) and #runs >= 2,
 		string.format("%d runs (expected %d)", #runs, expectedRuns(seconds)))
-	check("7c the final starts when the 8 minutes are up", final ~= nil and final.at - play >= Config.ROUND_SECONDS
-		and final.at - play <= Config.ROUND_SECONDS + 0.5, final and string.format("final at +%.1f", final.at - play))
+	local lastEnd = (runs[#runs] or play) + seconds - play -- (each start drifts by a scheduler tick, so measure the last one)
+	check("7c the final starts as soon as no game fits the time left (not later than the 8 minutes)", final ~= nil
+		and math.abs(final.at - play - lastEnd) < 0.5 and Config.ROUND_SECONDS - lastEnd - CARD < seconds + Config.FLING_RETURN_SECONDS
+		and final.at - play <= Config.ROUND_SECONDS,
+		final and string.format("final at +%.1f (last game over at +%.1f)", final.at - play, lastEnd))
 	local questions = math.ceil(Config.FINAL_MAX_SECONDS / seconds)
 	check("7d final cap -> the survivors share the win; a question begun before the cap is finished", result ~= nil and final ~= nil
 		and #Scripted.finalRuns == questions and result.at - final.at > Config.FINAL_MAX_SECONDS
@@ -554,7 +558,7 @@ do
 	local play = begin(ps, 10, function()
 		return { ps[1] } -- would cost the winner a life if it were still applied
 	end, nil)
-	local missionAt = play + Config.FREE_TALK_SECONDS
+	local missionAt = play + CARD
 	at(missionAt + 5)
 	leave(ps[2], { ps[1] })
 	local list = finish(since)
@@ -572,7 +576,7 @@ do
 	local play = begin(ps, 10, function(_run, alivePlayers)
 		return alivePlayers
 	end, nil)
-	local missionAt = play + Config.FREE_TALK_SECONDS
+	local missionAt = play + CARD
 	at(missionAt + 4)
 	leave(ps[4], { ps[1], ps[2], ps[3], ps[5] })
 	leave(ps[5], { ps[1], ps[2], ps[3] })
@@ -925,12 +929,12 @@ do
 	check("10a a volunteer presents the round and takes no chair", Match.presenter == ps[1] and Match.participants[ps[1]] == nil
 		and Match.participants[ps[2]] ~= nil and state ~= nil and state.presenter == ps[1].UserId)
 	check("10b the presenter is heard by everyone", Voice.speakers ~= nil and table.find(Voice.speakers, ps[1].UserId) ~= nil)
-	local menuAt = play + Config.FREE_TALK_SECONDS - Config.PRESENTER_PICK_SECONDS
+	local menuAt = play -- (no free talk: the presenter picks the first game at once)
 	at(menuAt + 0.5)
 	local opened = menus(since)
-	check("10c the menu opens to the presenter alone for the last PRESENTER_PICK_SECONDS of free talk", #opened == 1
-		and opened[1].to == ps[1] and opened[1].at >= menuAt - 0.3 and opened[1].payload.options[1].id == "scripted"
-		and opened[1].payload.options[1].recommended == true)
+	check("10c the menu opens to the presenter alone between games (the first right away)", #opened == 1
+		and opened[1].to == ps[1] and math.abs(opened[1].at - menuAt) < 0.3 and opened[1].payload.options[1].id == "scripted"
+		and opened[1].payload.options[1].recommended == true and Match.message == Config.TEXT.PICKING)
 	local function closes()
 		local n = 0
 		for _, m in NetStub.sent do
@@ -945,10 +949,11 @@ do
 	at(now + 0.5)
 	local stillOpen = menus(since)
 	local closedEarly = closes()
+	local pickedAt = now
 	pickMission(ps[1], "scripted")
-	at(play + Config.FREE_TALK_SECONDS + 1)
-	check("10d a pick by anyone else or of something not offered is ignored; the presenter's pick runs after free talk",
-		#stillOpen == 1 and closedEarly == 0 and #Scripted.runs == 1 and Scripted.runs[1] >= play + Config.FREE_TALK_SECONDS - 0.3
+	at(now + 1)
+	check("10d a pick by anyone else or of something not offered is ignored; the presenter's pick starts at once",
+		#stillOpen == 1 and closedEarly == 0 and #Scripted.runs == 1 and Scripted.runs[1] - pickedAt < 0.3
 		and noticesWith(Config.TEXT.PICK_AUTO, since) == 0)
 	local before = #sent("Sound", since)
 	pressSound(ps[1], 1)
@@ -960,7 +965,7 @@ do
 	check("10e sound buttons: the presenter only, each button once per PRESENTER_SOUND_COOLDOWN", #sounds == before + 2
 		and sounds[#sounds - 1].payload.index == 1 and sounds[#sounds].payload.index == 2)
 	-- No more picks: the system picks; PRESENTER_MISSES misses in a row and nobody else volunteers -> the system.
-	local cycle = Config.FREE_TALK_SECONDS + Scripted.expectedSeconds
+	local cycle = Config.PRESENTER_PICK_SECONDS + Scripted.expectedSeconds
 	advanceUntil(function() return Match.presenter == nil end, cycle * (Config.PRESENTER_MISSES + 1))
 	check("10f a missed pick is made by the system (notice); PRESENTER_MISSES in a row end the presenting",
 		noticesWith(Config.TEXT.PICK_AUTO, since) == Config.PRESENTER_MISSES and Match.presenter == nil
@@ -1158,8 +1163,8 @@ do
 	local since = now
 	local play = begin(ps, 10, nil, nil)
 	Scripted.missed = function(_alive) return { ps[3] } end
-	local secondEnd = play + 2 * (Config.FREE_TALK_SECONDS + Scripted.expectedSeconds) + 1
-	at(play + Config.FREE_TALK_SECONDS + Scripted.expectedSeconds + 1)
+	local secondEnd = play + 2 * (CARD + Scripted.expectedSeconds) + 1
+	at(play + CARD + Scripted.expectedSeconds + 1)
 	local afterOne = Match.isAlive(ps[3])
 	at(secondEnd)
 	local afk = lifeLost(since, "afk")
@@ -1175,7 +1180,7 @@ do
 	local since2 = now
 	local play2 = begin(qs, 10, function(run, _alive) return if run == 2 then { qs[3] } else {} end, nil)
 	Scripted.missed = function(_alive) return { qs[4] } end
-	at(play2 + 2 * (Config.FREE_TALK_SECONDS + Scripted.expectedSeconds) + 1)
+	at(play2 + 2 * (CARD + Scripted.expectedSeconds) + 1)
 	check("11b an AFK out that decides the final does not drop the same question's wrong answers",
 		not Match.isAlive(qs[4]) and Match.participants[qs[3]].lives == Config.LIVES - 1)
 	finish(since2)
@@ -1204,7 +1209,7 @@ do
 		end
 		return nil
 	end
-	local missionAt = play + Config.FREE_TALK_SECONDS + Scripted.expectedSeconds
+	local missionAt = play + Config.PRESENTER_PICK_SECONDS + Scripted.expectedSeconds -- (the pick menu runs out first)
 	at(missionAt + 0.5)
 	local menu = judgeMenu(since)
 	local target = ps[3]
@@ -1216,7 +1221,7 @@ do
 		and menu.to == ps[1] and Match.participants[target].lives == Config.LIVES - 1 and Scripted.judged[1] == tostring(target.UserId))
 	-- The next mission: the same player again -> public servers allow SUBJECTIVE_FLINGS per player per round.
 	local since2 = now
-	at(missionAt + Config.FREE_TALK_SECONDS + Scripted.expectedSeconds + Config.FLING_RETURN_SECONDS + 1)
+	at(missionAt + 0.5 + Config.FLING_RETURN_SECONDS + Config.PRESENTER_PICK_SECONDS + Scripted.expectedSeconds + 1)
 	local menu2 = judgeMenu(since2)
 	if menu2 then
 		pickMission(ps[1], tostring(target.UserId))
@@ -1231,175 +1236,102 @@ do
 	finish(since)
 end
 
----------------------------------------------------------------- 13. banned words on private servers (bundle 5a)
+---------------------------------------------------------------- 13. the banned-word talk (bundle 6a)
+-- The real BannedTalk mission (the scripted one is switched off for the main game here, so the talk is the only game).
+local ChatGate = require(node("ChatGate"))
+local general = { Name = "RBXGeneral" }
+local whisper = { Name = "RBXWhisper:1_2" }
+local function wordOf(player)
+	local p = Match.participants[player]
+	return p and p.words[1] and p.words[1].text
+end
+-- The latest message `name` (to `to`, of payload kind `kind`, when given) sent since `since`.
+local function lastSent(name, since, to, kind)
+	for i = #NetStub.sent, 1, -1 do
+		local m = NetStub.sent[i]
+		if m.at < since then
+			break
+		end
+		if m.name == name and (to == nil or m.to == to) and (kind == nil or m.payload.kind == kind) then
+			return m
+		end
+	end
+	return nil
+end
+local function lastWordsTo(player, since)
+	local m = lastSent("Words", since, player)
+	return m and m.payload
+end
+local function lastRescueTo(player, since)
+	local m = lastSent("Rescue", since, player)
+	return m and m.payload
+end
+local function beepsSince(since)
+	local n = 0
+	for _, m in sent("Sound", since) do
+		if m.payload.index == Config.HIT_SOUND then
+			n += 1
+		end
+	end
+	return n
+end
+local messages = 0
+local function say(player, text)
+	messages += 1
+	local id = "msg" .. messages
+	ChatGate.received(id, player, text) -- (the delivery callback calls this once per receiver)
+	ChatGate.received(id, player, text)
+	at(now + 0.05)
+end
+-- The presenter picks the banned-word talk from the menu (waits for the menu to open). Returns the menu.
+local function pickTalk(presenter, since)
+	local menu = nil
+	advanceUntil(function()
+		local m = lastSent("PresenterMenu", since, presenter)
+		if m and m.payload.options and m.payload.kind == "pick" then
+			menu = m
+		end
+		return menu ~= nil
+	end, 30)
+	if menu then
+		NetStub.listeners.PresenterPick(presenter, "bannedTalk")
+	end
+	at(now + 0.3)
+	return menu
+end
+local function noticesTo(player, since)
+	local list = {}
+	for _, m in sent("Notice", since) do
+		if m.to == player then
+			table.insert(list, m.payload.text)
+		end
+	end
+	return list
+end
+
+-- 13A: without speech judging the talk is never played (nothing else is offered here: the final comes at once).
+do
+	workspaceAttributes.BW_ServerKind = "private"
+	Scripted.off = true
+	local ps = newPlayers(2)
+	local since = now
+	local play = begin(ps, 10, nil, nil)
+	advanceUntil(function() return Match.phase == "Final" end, 30)
+	local final = phaseAt(phases(since), "Final")
+	check("13a without speech judging the banned-word talk is never played (no game fits: the final at once)", final ~= nil
+		and final.at - play < 1 and lastSent("Mission", since, nil, "talk") == nil and wordOf(ps[1]) == nil)
+	finish(since)
+end
+
+workspaceAttributes.BW_VoiceJudging = true
+
+-- 13B: a private server with a presenter: the prep stage, re-draws, "start now", the ear, chat hits, the settle stage.
 do
 	local volunteer = NetStub.listeners.Volunteer
 	local ear = NetStub.listeners.EarJudge
 	local reroll = NetStub.listeners.Reroll
-	local function wordOf(player)
-		local p = Match.participants[player]
-		return p and p.words[1] and p.words[1].text
-	end
-	local function lastWordsTo(player, since)
-		for i = #NetStub.sent, 1, -1 do
-			local m = NetStub.sent[i]
-			if m.at < since then
-				break
-			end
-			if m.name == "Words" and m.to == player then
-				return m.payload
-			end
-		end
-		return nil
-	end
-
-	-- 13A: a public round has no words.
-	local pub = newPlayers(2)
-	workspaceAttributes.BW_ServerKind = "public"
-	local sincePub = now
-	begin(pub, 10, nil, nil)
-	local pubView = lastWordsTo(pub[1], sincePub)
-	check("13a public servers (stage 1): no banned words, and nothing shows as hidden (no \"???\")", wordOf(pub[1]) == nil
-		and wordOf(pub[2]) == nil and pubView ~= nil and pubView[tostring(pub[1].UserId)].words ~= nil)
-	NetStub.listeners.DevFling(pub[2], "out")
-	finish(sincePub)
-
-	-- 13B: private, a presenter and three players: words at the start, a longer assignment, re-draws by the presenter.
-	workspaceAttributes.BW_ServerKind = "private"
-	local ps = newPlayers(4) -- ps[1] presents
-	at(now + Config.VOLUNTEER_COOLDOWN)
-	volunteer(ps[1], true)
-	local since = now
-	Scripted.expectedSeconds, Scripted.pick, Scripted.finalPick, Scripted.secondPick = 10, nil, nil, nil
-	Scripted.missed, Scripted.judge, Scripted.judged = nil, nil, {}
-	playerList = ps
-	advanceUntil(function() return Match.phase == "Assign" end, 120)
-	local assignAt = now
-	local before = wordOf(ps[2])
-	local seenByPlayer = lastWordsTo(ps[2], since)
-	reroll(ps[3], ps[2].UserId) -- not the presenter
-	local afterStranger = wordOf(ps[2])
-	reroll(ps[1], ps[2].UserId)
-	local afterPresenter = wordOf(ps[2])
-	check("13b private servers: one word each at the start, own word hidden", before ~= nil and wordOf(ps[3]) ~= nil
-		and wordOf(ps[4]) ~= nil and seenByPlayer ~= nil and seenByPlayer[tostring(ps[2].UserId)].words == nil
-		and seenByPlayer[tostring(ps[3].UserId)].words ~= nil)
-	check("13c the presenter (only) re-draws a word during the assignment", afterStranger == before and afterPresenter ~= nil
-		and afterPresenter ~= before)
-	advanceUntil(function() return Match.phase == "Play" end, 60)
-	check("13d with a presenter the assignment lasts ASSIGN_REROLL_SECONDS", math.abs(now - assignAt - Config.ASSIGN_REROLL_SECONDS) < 1)
-	-- Ear judging: the presenter heard ps[3]'s word.
-	at(now + 2)
-	local word3 = wordOf(ps[3])
-	local earAt = now
-	ear(ps[2], ps[3].UserId) -- not the presenter
-	ear(ps[1], ps[3].UserId)
-	ear(ps[1], ps[4].UserId) -- within EAR_COOLDOWN: ignored
-	local levers = #sent("Lever", earAt)
-	at(now + Config.LEVER_SECONDS + 0.2)
-	check("13e the presenter's ear judgment: the lever, then a life and a new word (no rescue); others' presses are ignored",
-		levers == 1 and Match.participants[ps[3]].lives == Config.LIVES - 1 and wordOf(ps[3]) ~= word3
-		and Match.participants[ps[4]].lives == Config.LIVES)
-	-- Everyone falls at once three times -> the three play the final with new words; a word heard in the final is out.
-	Scripted.pick = function(_run, alive)
-		return alive
-	end
-	local wordsBefore = { wordOf(ps[2]), wordOf(ps[4]) }
-	-- The presenter picks every mission menu (two missed picks would hand the round to nobody).
-	local answered = {}
-	advanceUntil(function()
-		for i = #NetStub.sent, 1, -1 do
-			local m = NetStub.sent[i]
-			if m.name == "PresenterMenu" and m.payload.options and m.payload.kind == "pick" and not answered[m] then
-				answered[m] = true
-				NetStub.listeners.PresenterPick(ps[1], m.payload.options[1].id)
-				break
-			end
-		end
-		return Match.phase == "Final"
-	end, 600)
-	check("13f everyone fell at once: the final starts with new words", Match.phase == "Final"
-		and wordOf(ps[2]) ~= wordsBefore[1] and wordOf(ps[4]) ~= wordsBefore[2])
-	at(now + 1)
-	at(now + Config.EAR_COOLDOWN)
-	-- (ps[3] lost a life to the ear judgment above, so it went out a fall earlier: the final is ps[2] and ps[4].)
-	local finalistsOk = Match.isAlive(ps[2]) and Match.isAlive(ps[4]) and not Match.isAlive(ps[3])
-	-- Pressed 0.3 s before the question ends: the lever lands after its end, and still counts for this question.
-	local questionStart = Scripted.finalRuns[#Scripted.finalRuns]
-	at(questionStart + Scripted.expectedSeconds - 0.3)
-	local currentQuestion = #Scripted.finalRuns
-	ear(ps[1], ps[4].UserId)
-	local stillInDuringQuestion = Match.isAlive(ps[4])
-	at(now + Config.LEVER_SECONDS + 1)
-	check("13g a word heard during a final question (even in its last moment) puts that finalist out with that question",
-		finalistsOk and stillInDuringQuestion and not Match.isAlive(ps[4]) and Match.isAlive(ps[2])
-		and #Scripted.finalRuns == currentQuestion)
-	-- The round is decided now (one left): a late ear judgment is dropped; the result shows everyone their own word.
-	at(now + Config.EAR_COOLDOWN)
-	local lateAt = now
-	ear(ps[1], ps[2].UserId)
-	local lateLevers = #sent("Lever", lateAt)
-	advanceUntil(function() return Match.phase == "Result" end, 60)
-	at(now + 0.5)
-	local resultView = lastWordsTo(ps[2], since) -- (the latest one: sent with the Result state)
-	check("13h after the outcome is fixed an ear judgment is dropped; the result shows the winner their own word",
-		lateLevers == 0 and Match.isAlive(ps[2]) and resultView ~= nil and resultView[tostring(ps[2].UserId)].words ~= nil
-		and #resultView[tostring(ps[2].UserId)].words == 1)
-	Scripted.pick = nil
-	finish(since)
-
-	-- 13C: the main game is decided (one left) while the last launch is still in the air: an ear judgment is dropped.
-	local qs = newPlayers(3) -- qs[1] presents
-	at(now + Config.VOLUNTEER_COOLDOWN)
-	volunteer(qs[1], true)
-	local since3 = now
-	begin(qs, 10, nil, nil)
-	at(now + 2)
-	NetStub.listeners.DevFling(qs[3], "out")
-	at(now + 0.5)
-	local phaseThen = Match.phase
-	local decidedAt = now
-	ear(qs[1], qs[2].UserId)
-	at(now + Config.LEVER_SECONDS + 0.2)
-	check("13i once the main game is decided, a late ear judgment is dropped (no lever, no life)", phaseThen == "Play"
-		and #sent("Lever", decidedAt) == 0 and Match.participants[qs[2]].lives == Config.LIVES)
-	workspaceAttributes.BW_ServerKind = nil
-	finish(since3)
-end
-
----------------------------------------------------------------- 14. banned words in chat, the rescue, chat rules (bundle 5b)
-do
-	local ChatGate = require(node("ChatGate"))
-	local volunteer = NetStub.listeners.Volunteer
+	local talkStart = NetStub.listeners.TalkStart
 	local rescue = NetStub.listeners.Rescue
-	local general = { Name = "RBXGeneral" }
-	local whisper = { Name = "RBXWhisper:1_2" }
-	local function wordOf(player)
-		local p = Match.participants[player]
-		return p and p.words[1] and p.words[1].text
-	end
-	local messages = 0
-	local function say(player, text)
-		messages += 1
-		local id = "msg" .. messages
-		ChatGate.received(id, player, text) -- (the delivery callback calls this once per receiver)
-		ChatGate.received(id, player, text)
-		at(now + 0.05)
-	end
-	local function lastRescueTo(player, since)
-		for i = #NetStub.sent, 1, -1 do
-			local m = NetStub.sent[i]
-			if m.at < since then
-				break
-			end
-			if m.name == "Rescue" and m.to == player then
-				return m.payload
-			end
-		end
-		return nil
-	end
-
-	workspaceAttributes.BW_ServerKind = "private"
 	local ps = newPlayers(4) -- ps[1] presents
 	local spectator = newPlayers(1)[1]
 	at(now + Config.VOLUNTEER_COOLDOWN)
@@ -1407,121 +1339,275 @@ do
 	local since = now
 	begin(ps, 10, nil, nil)
 	playerList = { ps[1], ps[2], ps[3], ps[4], spectator }
-	at(now + 1)
-
-	-- 14A: a hit, no rescue: "삐", the presenter's banner, then a life and a new word.
+	local menu = pickTalk(ps[1], since)
+	local prepAt = now
+	local view = lastWordsTo(ps[2], since)
+	local screen = lastSent("Mission", since, nil, "talk")
+	local topic = if screen then screen.payload.topic else ""
+	local clean = true
+	for i = 2, 4 do
+		local word = wordOf(ps[i])
+		clean = clean and word ~= nil and string.find(topic, word, 1, true) == nil
+	end
+	check("13b the talk's prep stage: a word for each player (none for the presenter, none inside the topic), own word hidden",
+		menu ~= nil and #menu.payload.options == 1 and menu.payload.options[1].id == "bannedTalk" and Match.talk == "prep"
+		and clean and Match.participants[ps[1]] == nil and view ~= nil and view[tostring(ps[2].UserId)].words == nil
+		and view[tostring(ps[3].UserId)].words ~= nil and screen ~= nil and screen.payload.stage == "prep" and topic ~= "")
+	check("13c chat rules come with the talk: spectators and the presenter do not reach players; whispers are off",
+		ChatGate.shouldDeliver(general, spectator, ps[2]) == false and ChatGate.shouldDeliver(general, ps[1], ps[2]) == false
+		and ChatGate.shouldDeliver(general, ps[2], spectator) == true and ChatGate.shouldDeliver(whisper, ps[2], ps[3]) == false
+		and fakeWhisperCommand.Enabled == false)
+	local quietAt = now
+	say(ps[2], wordOf(ps[2]))
+	ear(ps[1], ps[3].UserId)
+	at(now + Config.LEVER_SECONDS + 0.2)
+	check("13d the prep stage judges nothing (a player's own word in chat, the presenter's ear)", beepsSince(quietAt) == 0
+		and #sent("Lever", quietAt) == 0 and Match.participants[ps[2]].lives == Config.LIVES
+		and Match.participants[ps[3]].lives == Config.LIVES)
+	at(now + Config.EAR_COOLDOWN)
+	local before = wordOf(ps[2])
+	reroll(ps[3], ps[2].UserId) -- not the presenter
+	local afterStranger = wordOf(ps[2])
+	reroll(ps[1], "all") -- a private server has no "everyone"
+	local afterAll = wordOf(ps[2])
+	at(now + Config.EAR_COOLDOWN)
+	reroll(ps[1], ps[2].UserId)
+	local afterPresenter = wordOf(ps[2])
+	check("13e the presenter (only) re-draws one player's word in the prep stage (private: no \"everyone\")",
+		afterStranger == before and afterAll == before and afterPresenter ~= nil and afterPresenter ~= before
+		and string.find(topic, afterPresenter, 1, true) == nil)
+	talkStart(ps[2]) -- not the presenter
+	at(now + 0.3)
+	local stillPrep = Match.talk == "prep"
+	talkStart(ps[1])
+	at(now + 0.3)
+	local talkAt = now
+	local screen2 = lastSent("Mission", prepAt, nil, "talk")
+	check("13f \"start now\" (the presenter only) ends the prep stage early", stillPrep and Match.talk == "talk"
+		and talkAt - prepAt < Config.TALK_REROLL_SECONDS and screen2 ~= nil and screen2.payload.stage == "talk")
+	-- The presenter's ear: what the system missed.
+	at(now + Config.EAR_COOLDOWN)
+	local word3 = wordOf(ps[3])
+	local earAt = now
+	ear(ps[2], ps[3].UserId) -- not the presenter
+	ear(ps[1], ps[3].UserId)
+	ear(ps[1], ps[4].UserId) -- within EAR_COOLDOWN: ignored
+	local levers = #sent("Lever", earAt)
+	at(now + Config.LEVER_SECONDS + 0.2)
+	check("13g the presenter's ear in the talk: the lever, then a life and a new word (no rescue); others' presses are ignored",
+		levers == 1 and Match.participants[ps[3]].lives == Config.LIVES - 1 and wordOf(ps[3]) ~= word3
+		and Match.participants[ps[4]].lives == Config.LIVES)
+	-- Chat: a hit waits for the presenter's rescue; none -> a life and a new word (a second hit is merged).
 	local word2 = wordOf(ps[2])
 	local hitAt = now
 	say(ps[2], "음 " .. word2 .. " 맞지?")
 	local banner = lastRescueTo(ps[1], hitAt)
-	local beeps = 0
-	for _, m in sent("Sound", hitAt) do
-		if m.payload.index == Config.HIT_SOUND then
-			beeps += 1
-		end
-	end
-	check("14a a banned word in chat: one beep and the presenter's rescue banner (once per message)", beeps == 1
+	check("13h a banned word in chat: one beep and the presenter's rescue banner (once per message)", beepsSince(hitAt) == 1
 		and banner ~= nil and #banner.hits == 1 and banner.hits[1].userId == ps[2].UserId and banner.hits[1].word == word2)
 	say(ps[2], word2 .. " 또") -- while the hit waits: merged
 	at(hitAt + Config.RESCUE_SECONDS + 0.3)
-	check("14b no rescue in time: a life and a new word (a second hit while waiting is merged into the first)",
+	check("13i no rescue in time: a life and a new word (a second hit while waiting is merged)",
 		Match.participants[ps[2]].lives == Config.LIVES - 1 and wordOf(ps[2]) ~= word2)
-
-	-- 14B: rescued: a new word, no life lost.
-	at(now + Config.FLING_RETURN_SECONDS + 1)
-	local word3 = wordOf(ps[3])
-	local hit3 = now
-	say(ps[3], word3)
-	local function bannersSince(t0)
-		local n = 0
-		for _, m in NetStub.sent do
-			if m.name == "Rescue" and m.to == ps[1] and m.at >= t0 then
-				n += 1
-			end
-		end
-		return n
-	end
-	local beforeStranger = bannersSince(hit3)
-	rescue(ps[4], ps[3].UserId) -- not the presenter: nothing happens
-	local afterStranger = bannersSince(hit3)
-	local stillWaiting = lastRescueTo(ps[1], hit3)
-	rescue(ps[1], ps[3].UserId)
-	local afterPresenter = lastRescueTo(ps[1], hit3)
-	at(hit3 + Config.RESCUE_SECONDS + 0.3)
-	check("14c only the presenter rescues (a player's press changes nothing): no life lost, but a new word",
-		afterStranger == beforeStranger and stillWaiting ~= nil and #stillWaiting.hits == 1 and #afterPresenter.hits == 0
-		and Match.participants[ps[3]].lives == Config.LIVES and wordOf(ps[3]) ~= word3
-		and noticesWith(string.format(Config.TEXT.RESCUED, ps[3].DisplayName), hit3) == 1)
-
-	-- 14C: chat rules while the round is on: non-players' messages do not reach players; whispers are off.
-	check("14d chat rules: spectators, out players and the presenter do not reach alive players; players reach everyone",
-		ChatGate.shouldDeliver(general, spectator, ps[2]) == false and ChatGate.shouldDeliver(general, ps[1], ps[2]) == false
-		and ChatGate.shouldDeliver(general, ps[2], spectator) == true and ChatGate.shouldDeliver(general, spectator, ps[1]) == true
-		and ChatGate.shouldDeliver(general, ps[2], ps[3]) == true)
-	check("14e whispers are blocked during the round (the /w command off too)", ChatGate.shouldDeliver(whisper, ps[2], ps[3]) == false
-		and ChatGate.shouldDeliver(whisper, ps[2], ps[2]) == true and fakeWhisperCommand.Enabled == false)
-	local before4 = Match.participants[ps[4]].lives
-	NetStub.listeners.DevFling(ps[2], "out")
+	local word4 = wordOf(ps[4])
+	local hit4 = now
+	say(ps[4], word4)
+	rescue(ps[2], ps[4].UserId) -- not the presenter: nothing happens
+	local stillWaiting = lastRescueTo(ps[1], hit4)
+	rescue(ps[1], ps[4].UserId)
+	local afterRescue = lastRescueTo(ps[1], hit4)
+	at(hit4 + Config.RESCUE_SECONDS + 0.3)
+	check("13j only the presenter rescues: no life lost, but a new word", stillWaiting ~= nil and #stillWaiting.hits == 1
+		and afterRescue ~= nil and #afterRescue.hits == 0 and Match.participants[ps[4]].lives == Config.LIVES
+		and wordOf(ps[4]) ~= word4 and noticesWith(string.format(Config.TEXT.RESCUED, ps[4].DisplayName), hit4) == 1)
+	NetStub.listeners.DevFling(ps[3], "out")
 	at(now + Config.FLING_RETURN_SECONDS + 1)
 	local outAt = now
-	say(ps[2], wordOf(ps[2]) or "?") -- out now: their word no longer counts
-	at(now + 0.5)
-	local outBeeps = 0
-	for _, m in sent("Sound", outAt) do
-		if m.payload.index == Config.HIT_SOUND then
-			outBeeps += 1
-		end
-	end
-	check("14f only alive players' messages are judged (an out player writing their own word: nothing); out players do not reach players",
-		not Match.isAlive(ps[2]) and wordOf(ps[2]) ~= nil and outBeeps == 0
-		and ChatGate.shouldDeliver(general, ps[2], ps[3]) == false and ChatGate.shouldDeliver(general, ps[2], spectator) == true)
+	say(ps[3], wordOf(ps[3]) or "?") -- out now: their word no longer counts
+	check("13k only alive players are judged; out players do not reach players", not Match.isAlive(ps[3])
+		and wordOf(ps[3]) ~= nil and beepsSince(outAt) == 0 and ChatGate.shouldDeliver(general, ps[3], ps[2]) == false)
+	-- The talk ends: the settle stage tells everyone their word, then the words and the chat rules go.
+	local endAt = talkAt + Config.TALK_SECONDS
+	at(endAt - 0.5)
+	local final2, final4 = wordOf(ps[2]), wordOf(ps[4])
+	advanceUntil(function() return Match.talk == nil end, 10)
+	local told2 = noticesTo(ps[2], endAt - 0.5)
+	local view2 = lastWordsTo(ps[2], endAt - 0.5)
+	local entry4 = view2 and view2[tostring(ps[4].UserId)]
+	check("13l the settle stage: everyone is told their word, then the words, the chat rules and the whisper block go",
+		Match.talk == nil and wordOf(ps[2]) == nil and #told2 == 1 and told2[1] == string.format(Config.TEXT.MY_WORD_WAS, final2)
+		and entry4 ~= nil and entry4.count == 0 and ChatGate.shouldDeliver(general, spectator, ps[2]) == true
+		and fakeWhisperCommand.Enabled == true)
+	local lateAt = now
+	say(ps[4], final4)
+	check("13m after the talk nothing is judged", beepsSince(lateAt) == 0 and Match.participants[ps[4]].lives == Config.LIVES)
+	NetStub.listeners.DevFling(ps[4], "out")
+	finish(since)
+end
 
-	-- 14D: no presenter on a private server: chat judging stops (§3).
+-- 13C: a public server with a presenter: re-draws of everyone (REROLLS_PUBLIC), rescues (RESCUES_PUBLIC), the ear is
+-- a subjective launch.
+do
+	workspaceAttributes.BW_ServerKind = "public"
+	local volunteer = NetStub.listeners.Volunteer
+	local ear = NetStub.listeners.EarJudge
+	local reroll = NetStub.listeners.Reroll
+	local rescue = NetStub.listeners.Rescue
+	local ps = newPlayers(4) -- ps[1] presents
 	at(now + Config.VOLUNTEER_COOLDOWN)
-	volunteer(ps[1], false) -- steps down; nobody takes over
-	at(now + 0.5)
-	local word4 = wordOf(ps[4])
-	say(ps[4], word4)
-	at(now + Config.RESCUE_SECONDS + 0.3)
-	check("14g without a presenter, chat judging stops", Match.presenter == nil and Match.participants[ps[4]].lives == before4
-		and wordOf(ps[4]) == word4)
+	volunteer(ps[1], true)
+	local since = now
+	begin(ps, 10, nil, nil)
+	pickTalk(ps[1], since)
+	local before = { wordOf(ps[2]), wordOf(ps[3]), wordOf(ps[4]) }
+	reroll(ps[1], ps[2].UserId) -- public: no single re-draws
+	local afterOne = wordOf(ps[2])
+	at(now + Config.EAR_COOLDOWN)
+	reroll(ps[1], "all")
+	local afterAll = { wordOf(ps[2]), wordOf(ps[3]), wordOf(ps[4]) }
+	at(now + Config.EAR_COOLDOWN)
+	reroll(ps[1], "all") -- past REROLLS_PUBLIC
+	local afterSecond = { wordOf(ps[2]), wordOf(ps[3]), wordOf(ps[4]) }
+	check("13n public servers: the presenter re-draws everyone at once, REROLLS_PUBLIC times a round (no single re-draws)",
+		afterOne == before[1] and (afterAll[1] ~= before[1] or afterAll[2] ~= before[2] or afterAll[3] ~= before[3])
+		and afterSecond[1] == afterAll[1] and afterSecond[2] == afterAll[2] and afterSecond[3] == afterAll[3])
+	NetStub.listeners.TalkStart(ps[1])
+	at(now + 0.3)
+	local hitAt = now
+	say(ps[2], wordOf(ps[2]))
+	say(ps[3], wordOf(ps[3]))
+	rescue(ps[1], ps[2].UserId)
+	rescue(ps[1], ps[3].UserId) -- the second rescue of the round
+	at(hitAt + Config.RESCUE_SECONDS + 0.3)
+	check("13o public servers: RESCUES_PUBLIC rescues a round (the second hit is not rescued)", Match.talk == "talk"
+		and Match.participants[ps[2]].lives == Config.LIVES and Match.participants[ps[3]].lives == Config.LIVES - 1)
+	at(now + Config.EAR_COOLDOWN)
+	ear(ps[1], ps[4].UserId)
+	at(now + Config.LEVER_SECONDS + 0.2)
+	local afterFirst = Match.participants[ps[4]].lives
+	at(now + Config.FLING_RETURN_SECONDS + 1)
+	local secondAt = now
+	ear(ps[1], ps[4].UserId)
+	at(now + Config.LEVER_SECONDS + 0.2)
+	check("13p public servers: the presenter's ear is a subjective launch (once per player a round, no lever beyond it)",
+		afterFirst == Config.LIVES - 1 and Match.participants[ps[4]].lives == Config.LIVES - 1 and #sent("Lever", secondAt) == 0)
 	NetStub.listeners.DevFling(ps[3], "out")
 	NetStub.listeners.DevFling(ps[4], "out")
 	finish(since)
-	check("14h after the round the chat rules are off", ChatGate.shouldDeliver(general, spectator, ps[2]) == true
-		and ChatGate.shouldDeliver(whisper, ps[2], ps[3]) == true and fakeWhisperCommand.Enabled == true)
-
-	-- 14E: public servers (stage 1): no words, no chat rules.
-	workspaceAttributes.BW_ServerKind = "public"
-	local qs = newPlayers(2)
-	local sinceQ = now
-	begin(qs, 10, nil, nil)
-	check("14i public servers: no chat rules (nothing to leak)", ChatGate.shouldDeliver(general, spectator, qs[1]) == true)
-	NetStub.listeners.DevFling(qs[2], "out")
-	finish(sinceQ)
-	workspaceAttributes.BW_ServerKind = nil
+	workspaceAttributes.BW_ServerKind = "private"
 end
 
----------------------------------------------------------------- 15. chat judging at the edges (bundle 5b, after review)
+-- 13D: no presenter: TALK_PREP_SECONDS of prep, a chat hit flies at once; a talk cut short still settles.
 do
-	local ChatGate = require(node("ChatGate"))
-	local volunteer = NetStub.listeners.Volunteer
-	local function wordOf(player)
-		local p = Match.participants[player]
-		return p and p.words[1] and p.words[1].text
-	end
-	local function beepsSince(since)
-		local n = 0
-		for _, m in sent("Sound", since) do
-			if m.payload.index == Config.HIT_SOUND then
-				n += 1
-			end
-		end
-		return n
-	end
-	workspaceAttributes.BW_ServerKind = "private"
+	local ps = newPlayers(3)
+	local since = now
+	begin(ps, 10, nil, nil)
+	advanceUntil(function() return Match.talk == "prep" end, 10)
+	local prepAt = now
+	advanceUntil(function() return Match.talk == "talk" end, Config.TALK_PREP_SECONDS + 2)
+	local talkSeen = now
+	local word2 = wordOf(ps[2])
+	local hitAt = now
+	say(ps[2], word2)
+	check("13q without a presenter: TALK_PREP_SECONDS of prep, and a chat hit flies at once (no rescue wait)",
+		math.abs(talkSeen - prepAt - Config.TALK_PREP_SECONDS) < 0.6 and Match.participants[ps[2]].lives == Config.LIVES - 1
+		and wordOf(ps[2]) ~= word2 and beepsSince(hitAt) == 1 and count(Seat.flings, ps[2]) == 1,
+		string.format("prep %.1f s", talkSeen - prepAt))
+	NetStub.listeners.DevFling(ps[3], "out")
+	NetStub.listeners.DevFling(ps[2], "out") -- ps[1] is the last one: decided in the middle of the talk
+	advanceUntil(function() return Match.phase == "Result" end, 30)
+	check("13r a talk cut short by the round's end still settles (words and chat rules gone by the result)",
+		Match.phase == "Result" and wordOf(ps[1]) == nil and Match.talk == nil
+		and ChatGate.shouldDeliver(general, ps[3], ps[1]) == true)
+	finish(since)
+end
 
-	-- 15A: the real delivery callback on a TextChannel (as TextChatService would call it).
+-- 13E: two players on their last life both wait for a rescue and get none: judged together (everyone at once -> the
+-- final among them), not one after the other (the first out, the second protected and the winner).
+do
+	local volunteer = NetStub.listeners.Volunteer
+	local ps = newPlayers(3) -- ps[1] presents
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(ps[1], true)
+	local since = now
+	begin(ps, 10, nil, nil)
+	pickTalk(ps[1], since)
+	NetStub.listeners.TalkStart(ps[1])
+	at(now + 0.3)
+	Match.participants[ps[2]].lives = 1
+	Match.participants[ps[3]].lives = 1
+	local hitAt = now
+	say(ps[2], wordOf(ps[2]))
+	at(now + 1)
+	say(ps[3], wordOf(ps[3]))
+	at(hitAt + Config.RESCUE_SECONDS + 0.3) -- ps[2]'s wait is over (not rescued), ps[3]'s still runs
+	local heldAt = now
+	NetStub.listeners.EarJudge(ps[1], ps[2].UserId)
+	at(hitAt + 1 + Config.RESCUE_SECONDS + 0.3)
+	local events = lifeLost(hitAt, "fail")
+	check("13s two last-life hits waiting for rescues are judged together: both play the final (one event, final = true)",
+		#events == 1 and #events[1].payload.players == 2 and events[1].payload.final == true
+		and Match.isAlive(ps[2]) and Match.isAlive(ps[3]) and #sent("Lever", heldAt) == 0)
+	finish(since)
+end
+
+-- 13F: the presenter's ear and the talk's end: not while a hit of theirs waits for a rescue; a lever pulled in the last
+-- moment lands in the settle stage; a hit caught near the end costs its life there, and the word told is the one said.
+do
+	local volunteer = NetStub.listeners.Volunteer
+	local ear = NetStub.listeners.EarJudge
+	local ps = newPlayers(4) -- ps[1] presents
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(ps[1], true)
+	local since = now
+	begin(ps, 10, nil, nil)
+	pickTalk(ps[1], since)
+	NetStub.listeners.TalkStart(ps[1])
+	at(now + 0.3)
+	local talkAt = now
+	local waitAt = now
+	say(ps[2], wordOf(ps[2]))
+	ear(ps[1], ps[2].UserId) -- their chat hit waits for a rescue
+	at(now + Config.LEVER_SECONDS + 0.2)
+	check("13t no ear judgment against a player whose hit waits for a rescue (no lever)", #sent("Lever", waitAt) == 0)
+	at(talkAt + Config.TALK_SECONDS - 0.55) -- (the talk began up to 0.3 s before talkAt; no rescue waits at its end)
+	local pressed = Match.talk
+	ear(ps[1], ps[4].UserId) -- its lever lands after the talk's end
+	at(now + Config.LEVER_SECONDS)
+	local landedIn = Match.talk
+	advanceUntil(function() return Match.talk == nil end, 10)
+	check("13u a lever pulled in the talk's last moment still counts (it lands in the settle stage)",
+		pressed == "talk" and landedIn == "settle" and Match.participants[ps[4]].lives == Config.LIVES - 1,
+		tostring(pressed) .. " -> " .. tostring(landedIn))
+	NetStub.listeners.DevFling(ps[3], "out")
+	NetStub.listeners.DevFling(ps[4], "out")
+	finish(since)
+
+	-- A hit caught near the end: its life is taken in the settle stage, and the word told is the one said.
+	local qs = newPlayers(3) -- qs[1] presents
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(qs[1], true)
+	local since2 = now
+	begin(qs, 10, nil, nil)
+	pickTalk(qs[1], since2)
+	NetStub.listeners.TalkStart(qs[1])
+	at(now + 0.3)
+	local talk2 = now
+	at(talk2 + Config.TALK_SECONDS - 1)
+	local said = wordOf(qs[2])
+	say(qs[2], said) -- resolves after the talk's end
+	advanceUntil(function() return Match.talk == nil end, 10)
+	local told = noticesTo(qs[2], talk2 + Config.TALK_SECONDS - 1)
+	check("13v a hit caught near the end costs its life in the settle stage, and the word told is the one said",
+		Match.participants[qs[2]].lives == Config.LIVES - 1 and #told == 1 and told[1] == string.format(Config.TEXT.MY_WORD_WAS, said))
+	NetStub.listeners.DevFling(qs[3], "out")
+	finish(since2)
+end
+
+---------------------------------------------------------------- 14. chat judging at the edges (bundles 5b/6a)
+do
+	local volunteer = NetStub.listeners.Volunteer
+
+	-- 14A: the real delivery callback on a TextChannel (as TextChatService would call it).
 	local channel = {
 		Name = "RBXGeneral",
 		IsA = function(_, className) return className == "TextChannel" end,
@@ -1534,7 +1620,9 @@ do
 	local since = now
 	begin(ps, 10, nil, nil)
 	playerList = { ps[1], ps[2], ps[3], ps[4], ps[5], ps[6], spectator }
-	at(now + 1)
+	pickTalk(ps[1], since)
+	NetStub.listeners.TalkStart(ps[1])
+	at(now + 0.3)
 	local function message(id, from, text)
 		return { MessageId = id, TextSource = { UserId = from.UserId }, Text = text }
 	end
@@ -1542,35 +1630,35 @@ do
 	local word2 = wordOf(ps[2])
 	local cbAt = now
 	local toPlayer = cb and cb(message("real1", spectator, "hi"), { UserId = ps[3].UserId })
-	local toSpectator = cb and cb(message("real1", spectator, "hi"), { UserId = ps[1].UserId })
+	local toPresenter = cb and cb(message("real1", spectator, "hi"), { UserId = ps[1].UserId })
 	if cb then
 		cb(message("real2", ps[2], word2), { UserId = ps[3].UserId })
 		cb(message("real2", ps[2], word2), { UserId = ps[4].UserId })
 	end
 	at(now + 0.1)
-	check("15a the channel callback: a spectator's message does not reach a player, does reach the presenter; a player's word is caught once",
-		cb ~= nil and toPlayer == false and toSpectator == true and beepsSince(cbAt) == 1)
+	check("14a the channel callback: a spectator's message does not reach a player, does reach the presenter; a player's word is caught once",
+		cb ~= nil and toPlayer == false and toPresenter == true and beepsSince(cbAt) == 1)
 
-	-- 15B: a rescue still waiting when the final becomes due (three left) is judged first, by the main game's rule.
+	-- 14B: a rescue still waiting when the final becomes due (three left) is judged first, by the main game's rule.
 	-- (Two leave rather than fly: no flight to wait for, so only the waiting rescue can hold the final back.)
 	leave(ps[5], { ps[1], ps[2], ps[3], ps[4], ps[6], spectator })
 	leave(ps[6], { ps[1], ps[2], ps[3], ps[4], spectator })
 	at(now + 0.5)
 	local phaseWhileWaiting = Match.phase
 	at(cbAt + Config.RESCUE_SECONDS + 0.5)
-	check("15b the final waits for a rescue still waiting; the hit costs a main-game life (not a final out)",
-		phaseWhileWaiting == "Play" and Match.participants[ps[2]].lives == Config.LIVES - 1 and wordOf(ps[2]) ~= word2)
-	NetStub.listeners.DevFling(ps[3], "out")
-	NetStub.listeners.DevFling(ps[4], "out")
+	check("14b the final waits for a rescue still waiting; the hit costs a main-game life (not a final out)",
+		phaseWhileWaiting == "Play" and Match.participants[ps[2]].lives == Config.LIVES - 1 and Match.isAlive(ps[2]))
 	finish(since)
 
-	-- 15C: once the main game is decided, a new message is not judged (even while an older rescue still waits).
+	-- 14C: once the main game is decided, a new message is not judged (even while an older rescue still waits).
 	local qs = newPlayers(4) -- qs[1] presents
 	at(now + Config.VOLUNTEER_COOLDOWN)
 	volunteer(qs[1], true)
 	local since2 = now
 	begin(qs, 10, nil, nil)
-	at(now + 1)
+	pickTalk(qs[1], since2)
+	NetStub.listeners.TalkStart(qs[1])
+	at(now + 0.3)
 	ChatGate.received("edge1", qs[2], wordOf(qs[2])) -- waits for a rescue
 	at(now + 0.1)
 	NetStub.listeners.DevFling(qs[2], "out")
@@ -1579,9 +1667,11 @@ do
 	local lateAt = now
 	ChatGate.received("edge2", qs[4], wordOf(qs[4]))
 	at(now + 0.1)
-	check("15c after the decision a new message is not judged", beepsSince(lateAt) == 0)
+	check("14c after the decision a new message is not judged", beepsSince(lateAt) == 0)
 	finish(since2)
 	workspaceAttributes.BW_ServerKind = nil
+	workspaceAttributes.BW_VoiceJudging = nil
+	Scripted.off = false
 end
 
 ---------------------------------------------------------------- 16. a client flipping "ready" fast

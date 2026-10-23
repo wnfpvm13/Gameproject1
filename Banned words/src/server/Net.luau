@@ -15,14 +15,17 @@
 --   Sound       a presenter sound button: { index } (Config.PRESENTER_SOUNDS)
 --   (client -> server: Volunteer (on), PresenterPick (mission id), PresenterSound (index))
 --   Mission     the running mission's screen (MissionRunner): { kind = "quiz", final, question, choices, endsAt?, id? }
---               | { kind = "quizResult", ..., answer } | { kind = "roulette", ids, pick, spinSeconds } | { kind = "none" }
+--               | { kind = "quizResult", ..., answer } | { kind = "roulette", ids, pick, spinSeconds }
+--               | { kind = "talk", stage = "prep" | "talk", topic, endsAt } | { kind = "none" }
 --   (client -> server: MissionAnswer (question id, choice number) while a question is open)
 --   Notice      short toast text
 --   Reaction    emoji shown above a player
 --   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
 --   Splash      that player hit the water: { userId, position }
 --   Words       to each player: the banned words they may see (WordService.payloadFor; bundle 5a)
---   (client -> server: EarJudge (userId) the presenter heard a banned word, Reroll (userId) a new word; private servers)
+--               (sent during the banned-word talk only, bundle 6a; outside it everyone has no word)
+--   (client -> server, the presenter during the banned-word talk: EarJudge (userId) heard a banned word; Reroll (userId:
+--   private servers, or "all": public servers) new words in the prep stage; TalkStart start the talk now)
 --   Rescue      to the presenter: banned words caught in chat waiting for a rescue { hits = { {userId, word, endsAt} } }
 --               (client -> server: Rescue (userId) the presenter rescues that player)
 -- The speech judging of phase 2 (JudgeService, not running in stage 1) will need Settle (server -> client), Transcript,
@@ -34,7 +37,7 @@ local Net = {}
 local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
 	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer", "Lever",
-	"EarJudge", "Reroll", "Rescue",
+	"EarJudge", "Reroll", "TalkStart", "Rescue",
 	"Words",
 }
 

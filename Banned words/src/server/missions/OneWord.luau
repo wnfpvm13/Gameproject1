@@ -35,6 +35,8 @@ type Ctx = {
 	canFling: (player: Player) -> boolean,
 	presenterPick: (options: { Option }, seconds: number) -> string?,
 	lever: () -> (),
+	talk: (stage: string, topic: string?) -> (),
+	presenterReroll: (seconds: number) -> boolean,
 }
 
 local OneWord = {
@@ -43,7 +45,7 @@ local OneWord = {
 	-- The time budget counts the longest run: everyone swaps the topic and types by chat, then a vote and the result.
 	expectedSeconds = Config.ONE_WORD_MAX_PERFORMERS * (2 * Config.ONE_WORD_PREP_SECONDS + Config.ONE_WORD_CHAT_SECONDS)
 		+ Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS + Config.ONE_WORD_RESULT_SECONDS,
-	maxPerRound = Config.ONE_WORD_PER_ROUND :: number?,
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.ONE_WORD_MIN_PLAYERS :: number?,
 	needsPresenter = true :: boolean?,
 }

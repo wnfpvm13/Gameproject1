@@ -108,11 +108,10 @@ local function refresh()
 	local chatMode = player:GetAttribute("BW_ChatMode") == true
 	PresenterPanel.setVolunteer(not playing and not chatMode, player:GetAttribute("BW_Volunteer") == true, presenting)
 	PresenterPanel.setPresenting(presenting)
-	-- Private servers: the presenter's banned-word list (re-draw during the assignment, ear judging in the round).
+	-- The presenter's banned-word list during the banned-word talk (re-draw in its prep stage, ear judging in the talk).
 	local wordMode = nil
-	if presenting and round.serverKind == "private" then
-		wordMode = if round.phase == "Assign" then "reroll" elseif round.phase == "Play" or round.phase == "Final" then "heard"
-			else nil
+	if presenting then
+		wordMode = if round.talk == "prep" then "reroll" elseif round.talk == "talk" then "heard" else nil
 	end
 	local rows = {}
 	if wordMode then
@@ -124,7 +123,7 @@ local function refresh()
 			end
 		end
 	end
-	PresenterPanel.setWords(rows, wordMode)
+	PresenterPanel.setWords(rows, wordMode, round.serverKind == "public")
 	refreshVoice()
 	applySeatLock()
 end
@@ -147,6 +146,10 @@ end, function(index)
 end, function(mode, userId)
 	if mode == "reroll" then
 		remotes.Reroll:FireServer(userId)
+	elseif mode == "rerollAll" then
+		remotes.Reroll:FireServer("all")
+	elseif mode == "start" then
+		remotes.TalkStart:FireServer()
 	else
 		remotes.EarJudge:FireServer(userId)
 	end
@@ -261,22 +264,9 @@ remotes.Lever.OnClientEvent:Connect(function()
 	Fx.lever()
 end)
 
--- Once out (or at the result), my own word comes in: say it once, since my head no longer shows a bubble.
-local myWordShown = false
-local MY_WORD_TOAST_DELAY = 2.5 -- seconds
+-- The banned words I may see (only during the banned-word talk; the server tells me my own word when it is over).
 remotes.Words.OnClientEvent:Connect(function(words)
 	State.words = words
-	local mine = words[tostring(State.myId())]
-	if State.round.phase == "Assign" then
-		myWordShown = false
-	elseif not myWordShown and State.isParticipant(State.myId()) and mine and mine.words and #mine.words > 0 then
-		myWordShown = true
-		-- A little later, so the toasts of the same event (who flew, who is out) do not cover it.
-		local text = string.format(Config.TEXT.MY_WORD_WAS, table.concat(mine.words, ", "))
-		task.delay(MY_WORD_TOAST_DELAY, function()
-			Toast.show(text, "info")
-		end)
-	end
 	refresh()
 end)
 
@@ -350,7 +340,7 @@ remotes.Splash.OnClientEvent:Connect(function(info)
 	Fx.splash(info.position)
 end)
 
--- Studio only: F costs me a life (there are no real missions yet; the server ignores it on live servers).
+-- Studio only: F costs me a life (for testing; the server ignores it on live servers).
 if RunService:IsStudio() then
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if not processed and input.KeyCode == Enum.KeyCode.F then

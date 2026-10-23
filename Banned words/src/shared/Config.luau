@@ -18,17 +18,21 @@ return {
 	ASSIGN_TIME = 8,
 	RESULT_TIME = 10,
 
-	-- Round (docs/DESIGN_V3.md §2, §4): 8 minutes of free talk and missions, then a sudden-death final.
+	-- Round (docs/DESIGN_V3.md §2, §4; minigame overhaul 2026-10-23): 8 minutes of minigames back to back (no free
+	-- talk), then a sudden-death final.
 	LIVES = 3,
 	ROUND_SECONDS = 480,
 	FINAL_AT_ALIVE = 3, -- a round begun with 4+ players goes to the final as soon as this few are left
 	FINAL_MAX_SECONDS = 90, -- past this the survivors share the win
-	FREE_TALK_SECONDS = 40, -- between missions
+	NEXT_GAME_CARD_SECONDS = 3, -- without a presenter: "next: ..." shows this long before a game starts
 	AFK_MISSES = 2, -- answer missions missed in a row -> out (a spectator)
 	SUBJECTIVE_FLINGS = 1, -- public servers: launches by the presenter or a vote, per player per round
 	-- Studio has no private servers: this says which rules a Studio round plays (workspace attribute BW_ServerKind =
 	-- "public" / "private" overrides it while testing).
 	STUDIO_SERVER_KIND = "public",
+	-- Speech judging of banned words (bundle 6e, after a live test). The banned-word talk is played only while it is on
+	-- (owner 2026-10-23); Studio can pretend it is with the workspace attribute BW_VoiceJudging = true.
+	VOICE_JUDGING = false,
 
 	-- Missions (docs/DESIGN_V3.md §5; bundle 4a, owner 2026-10-23). The quiz: everyone alive answers at once (four
 	-- choices); a wrong answer or none is a fail. The final asks harder questions the same way. The roulette picks one
@@ -43,12 +47,12 @@ return {
 	-- "A word to everyone" (bundle 4b): up to ONE_WORD_MAX_PERFORMERS take turns on a topic (ONE_WORD_PREP_SECONDS to
 	-- read it and maybe swap it once, then ONE_WORD_SECONDS by voice or ONE_WORD_CHAT_SECONDS by chat); then the
 	-- presenter picks the one to launch within PRESENTER_JUDGE_SECONDS, else everyone votes for VOTE_SECONDS. Only
-	-- with a presenter, at most ONE_WORD_PER_ROUND times a round.
+	-- with a presenter, at most GAME_PER_ROUND times a round.
 	ONE_WORD_MAX_PERFORMERS = 5,
 	ONE_WORD_PREP_SECONDS = 3,
 	ONE_WORD_SECONDS = 8,
 	ONE_WORD_CHAT_SECONDS = 15,
-	ONE_WORD_PER_ROUND = 2,
+	GAME_PER_ROUND = 2, -- runs a round of each minigame other than the quiz (no limit) and the roulette (1)
 	ONE_WORD_MIN_PLAYERS = 2, -- performers it needs (alive, on the ground)
 	ONE_WORD_RESULT_SECONDS = 2, -- who flies (or nobody) stays on the status line this long
 	PRESENTER_JUDGE_SECONDS = 10,
@@ -67,9 +71,13 @@ return {
 	TEST_FAIL_CHANCE = 0.3,
 	TEST_FINAL_FAIL_CHANCE = 0.4,
 
-	-- Banned words (docs/DESIGN_V3.md §6; bundle 5a): one each; per player, a speech habit with this chance.
+	-- Banned words (docs/DESIGN_V3.md §6; bundle 5a, the banned-word talk of bundle 6a): one each, only during the talk.
 	HABIT_WORD_CHANCE = 0.3, -- per player: chance that a word is a speech habit (진짜, 대박 ...) instead of a noun
-	ASSIGN_REROLL_SECONDS = 15, -- the assignment with words and a presenter: time to re-draw words (private servers)
+	TALK_SECONDS = 60, -- the talk itself (judged)
+	TALK_PREP_SECONDS = 5, -- without a presenter: words and topic show this long before the talk
+	TALK_REROLL_SECONDS = 15, -- with a presenter: time to re-draw words (or press "start now")
+	REROLLS_PUBLIC = 1, -- public servers: the presenter re-draws everyone's words this often a round
+	RESCUES_PUBLIC = 1, -- public servers: the presenter rescues this often a round (private: no limit)
 	EAR_COOLDOWN = 1, -- seconds between two "I heard a banned word" presses of the presenter
 	RESCUE_SECONDS = 3, -- a banned word caught in chat waits this long for the presenter's rescue (bundle 5b)
 	HIT_SOUND = 5, -- the sound everyone hears when chat catches a banned word (index in PRESENTER_SOUNDS: 땡)
@@ -110,7 +118,7 @@ return {
 	CHAT_BUBBLE_VERTICAL_OFFSET = 2.5,
 
 	-- Presenter (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23): a volunteer runs the round from the podium.
-	PRESENTER_PICK_SECONDS = 15, -- the presenter picks the next mission in the last this-many seconds of free talk
+	PRESENTER_PICK_SECONDS = 10, -- the presenter picks the next game between games (then a random one)
 	PRESENTER_MISSES = 2, -- picks missed in a row -> another presenter (or the system runs the round)
 	PRESENTER_RECOMMENDED = 3, -- the mission menu marks this many at the top as recommended
 	VOLUNTEER_COOLDOWN = 1, -- seconds between two "volunteer / stop" requests from one player
@@ -140,7 +148,8 @@ return {
 		RECOVERING = "잠시 문제가 생겨서 다음 판을 준비해요",
 		ASSIGN = "목숨은 %d개예요 · 미션에 실패하면 날아가요",
 		PLAY_START = "본 경기 시작!",
-		FREE_TALK = "자유롭게 이야기하세요",
+		NEXT_GAME = "다음: %s",
+		PICKING = "진행자가 다음 미션을 고르는 중",
 		TEST_MISSION = "연습 미션 · 운에 맡겨 보세요",
 		FINAL = "결승 · 틀리면 바로 탈락",
 		ALL_WRONG = "모두 틀려서 아무도 탈락하지 않아요 · 다시!",
@@ -187,7 +196,7 @@ return {
 		PRESENTER_CREDIT = "진행 %s",
 		PICK_MISSION = "다음 미션을 골라 주세요",
 		PICK_RECOMMENDED = "추천",
-		PICK_AUTO = "시간이 지나서 추천 미션으로 진행해요",
+		PICK_AUTO = "시간이 지나서 무작위로 골랐어요",
 		TEST_MISSION_TITLE = "연습 미션",
 		QUIZ_TITLE = "퀴즈",
 		QUIZ_START = "퀴즈 · 정답을 골라요 · 틀리거나 안 고르면 날아가요",
@@ -216,9 +225,16 @@ return {
 		RESCUE_WAIT = "🚨 %s 금칙어! 진행자가 구제할 수 있어요",
 		RESCUED = "🛟 구제! %s 무사해요",
 		RESCUE_BUTTON = "🛟 구제",
-		MY_WORD_WAS = "내 금칙어는 '%s'였어요",
+		MY_WORD_WAS = "내 금칙어: '%s'", -- (no particle: it would depend on the word's last syllable)
 		WORDS_TITLE = "금칙어 명단",
 		WORDS_REROLL = "다시 뽑기",
+		WORDS_REROLL_ALL = "전원 다시 뽑기",
+		TALK_START_NOW = "▶ 바로 시작",
+		TALK_TITLE = "금칙어 토크",
+		TALK_SOON = "곧 시작",
+		TALK_PREP = "금칙어를 나눠 주는 중 · 내 머리 위 단어는 나만 몰라요",
+		TALK_ON = "주제로 이야기하세요 · 자기 금칙어를 말하면 날아가요",
+		TALK_TOPIC = "주제: %s",
 		WORDS_HEARD = "🔔 들었다",
 		AFK_OUT = "%s 님은 두 번 연속 답하지 않아 관전으로 바뀌었어요",
 		SOUND_DRUMROLL = "두구두구",

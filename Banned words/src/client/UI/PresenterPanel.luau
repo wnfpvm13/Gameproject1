@@ -1,10 +1,11 @@
 --!strict
 -- The presenter's controls (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23):
 --   - the "volunteer to present" button (row 3 under the status board), for anyone not playing the round;
---   - while I present: the mission menu (right side, open during the last seconds of free talk; recommended missions
---     marked), the same menu for "who flies" after a one-word mission (bundle 4b: tap a name, then "날려!"), the
---     sound buttons (bottom centre), and on private servers the banned-word list (left side, bundle 5a): every alive
---     player with their word and a button, "다시 뽑기" during the assignment, "🔔 들었다" during the round;
+--   - while I present: the mission menu (right side, open between games; recommended missions marked), the same menu
+--     for "who flies" after a one-word mission (bundle 4b: tap a name, then "날려!"), the sound buttons (bottom
+--     centre), and during the banned-word talk the word list (left side, bundles 5a/6a): every alive player with their
+--     word; in the prep stage "다시 뽑기" per player (private servers) or "전원 다시 뽑기" (public servers) and
+--     "▶ 바로 시작", in the talk "🔔 들었다" per player;
 --   - a banned word caught in chat (bundle 5b): a red banner at the top, "name · 'word' · seconds left" and "🛟 구제".
 -- It only shows what it is told and reports presses; the server checks every one of them.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,6 +26,8 @@ local flingButton: TextButton
 local soundBar: Frame
 local wordFrame: Frame
 local wordList: ScrollingFrame
+local wordActions: Frame -- the prep stage's buttons under the list
+local rerollAllButton: TextButton
 local wordKey = "" -- what the list shows now (rebuilt only when it changes)
 local rescueFrame: Frame
 local rescueRows: { { label: TextLabel, endsAt: number, text: string } } = {}
@@ -54,8 +57,8 @@ end
 
 export type WordRow = { userId: number, name: string, word: string }
 
--- onVolunteer(on), onPick(missionId), onSound(index), onWord(mode, userId) ("reroll" / "heard"), onRescueHit(userId):
--- the player pressed one of the controls.
+-- onVolunteer(on), onPick(missionId), onSound(index), onWord(mode, userId) ("reroll" / "heard" with a player,
+-- "rerollAll" / "start" with 0), onRescueHit(userId): the player pressed one of the controls.
 function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> (), onSound: (number) -> (),
 	onWord: (string, number) -> (), onRescueHit: (number) -> ())
 	onPickMission = onPick
@@ -171,6 +174,28 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	listLayout2.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout2.Padding = UDim.new(0, 4)
 	listLayout2.Parent = wordList
+	wordActions = Instance.new("Frame")
+	wordActions.BackgroundTransparency = 1
+	wordActions.Size = UDim2.new(1, 0, 0, 36)
+	wordActions.LayoutOrder = 2
+	wordActions.Visible = false
+	wordActions.Parent = wordFrame
+	local actionsLayout = Instance.new("UIListLayout")
+	actionsLayout.FillDirection = Enum.FillDirection.Horizontal
+	actionsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	actionsLayout.Padding = UDim.new(0, 6)
+	actionsLayout.Parent = wordActions
+	rerollAllButton = button(wordActions, TEXT.WORDS_REROLL_ALL, 136, 32)
+	rerollAllButton.TextSize = 16
+	rerollAllButton.Activated:Connect(function()
+		onWordAction("rerollAll", 0)
+	end)
+	local startButton = button(wordActions, TEXT.TALK_START_NOW, 136, 32)
+	startButton.TextSize = 16
+	startButton.BackgroundColor3 = Style.GREEN
+	startButton.Activated:Connect(function()
+		onWordAction("start", 0)
+	end)
 
 	rescueFrame = Instance.new("Frame")
 	rescueFrame.Name = "Rescues"
@@ -218,14 +243,17 @@ function PresenterPanel.setRescues(rows: { RescueRow })
 	end
 end
 
--- The banned-word list (private servers, while I present): `mode` "reroll" (assignment) or "heard" (round), nil
--- hides it.
-function PresenterPanel.setWords(rows: { WordRow }, mode: string?)
+-- The banned-word list (the banned-word talk, while I present): `mode` "reroll" (prep stage) or "heard" (the talk),
+-- nil hides it. `everyone`: public servers re-draw everyone at once (one button instead of one per player).
+function PresenterPanel.setWords(rows: { WordRow }, mode: string?, everyone: boolean?)
 	wordFrame.Visible = mode ~= nil and #rows > 0
+	wordActions.Visible = mode == "reroll"
+	rerollAllButton.Visible = everyone == true
 	if not mode then
 		return
 	end
-	local parts = { mode }
+	local perPlayer = not (mode == "reroll" and everyone)
+	local parts = { mode, tostring(perPlayer) }
 	for _, row in rows do
 		table.insert(parts, row.userId .. ":" .. row.name .. ":" .. row.word)
 	end
@@ -249,9 +277,12 @@ function PresenterPanel.setWords(rows: { WordRow }, mode: string?)
 		line.LayoutOrder = i
 		line.Parent = wordList
 		local label = Style.label(line, Style.BOLD, 18, Style.WHITE)
-		label.Size = UDim2.new(1, -112, 1, 0)
+		label.Size = UDim2.new(1, if perPlayer then -112 else 0, 1, 0)
 		label.TextXAlignment = Enum.TextXAlignment.Left
 		label.Text = row.name .. " · " .. row.word
+		if not perPlayer then
+			continue
+		end
 		local action = button(line, if mode == "reroll" then TEXT.WORDS_REROLL else TEXT.WORDS_HEARD, 104, 32)
 		action.AnchorPoint = Vector2.new(1, 0.5)
 		action.Position = UDim2.fromScale(1, 0.5)

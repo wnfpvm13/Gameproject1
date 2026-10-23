@@ -1,14 +1,15 @@
 --!strict
 -- Missions (docs/DESIGN_V3.md §5, §13): lists the missions that may run next (recommended order, also the presenter's
--- menu), picks the next mission that fits the time left and runs one at a time with a
+-- menu), picks the next one that fits the time left (the presenter's pick, else at random: missions played less this
+-- round are likelier and the one just played is skipped when another fits) and runs one at a time with a
 -- ctx (missions cannot require services, so everything they may do comes through the ctx RoundService builds). A
 -- mission stops as soon as it is cancelled (the round was decided or is over): its waits wake up and its fails and
 -- notices are dropped. Only this service requires the modules under server/missions (tools/tests/check_deps.py
 -- checks it). It alone listens to the answer remote ("MissionAnswer") and hands answers to the running mission's
 -- question (docs/DESIGN_V3.md §13: Net.listen cannot disconnect, so missions never listen themselves). What a mission
 -- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
--- Bundle 4: the quiz (also the final), the roulette, "a word to everyone" (4b, only with a presenter), and the
--- Studio-only test mission.
+-- Bundle 4: the quiz (also the final), the roulette, "a word to everyone" (4b, only with a presenter); bundle 6a: the
+-- banned-word talk (only while speech judging is on); and the Studio-only test mission.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -19,6 +20,7 @@ local missionFolder = script.Parent.Parent:WaitForChild("missions")
 local Quiz = require(missionFolder:WaitForChild("Quiz"))
 local Roulette = require(missionFolder:WaitForChild("Roulette"))
 local OneWord = require(missionFolder:WaitForChild("OneWord"))
+local BannedTalk = require(missionFolder:WaitForChild("BannedTalk"))
 local TestMission = require(missionFolder:WaitForChild("TestMission"))
 
 local MissionRunner = {}
@@ -42,6 +44,11 @@ export type Ctx = {
 	canFling: (player: Player) -> boolean, -- a subjective launch may hit them now (public limits, not flying)
 	-- The presenter picks one of `options` within `seconds` (nil: none in time, no presenter, or the round is over).
 	presenterPick: (options: { Option }, seconds: number) -> string?,
+	-- The banned-word talk's stage (docs/DESIGN_V3.md §6): "prep" (words drawn avoiding `topic`, shown, chat rules on)
+	-- or "talk" (judged from now on). RoundService runs the settle stage after the mission, whatever happened.
+	talk: (stage: string, topic: string?) -> (),
+	-- The presenter's re-draw window: waits `seconds` or until they press "start now"; false if cancelled meanwhile.
+	presenterReroll: (seconds: number) -> boolean,
 }
 
 -- What a mission gets: the same, with fail/show that do nothing once cancelled, and wait().
@@ -69,6 +76,8 @@ export type MissionCtx = {
 	canFling: (player: Player) -> boolean,
 	presenterPick: (options: { Option }, seconds: number) -> string?,
 	lever: () -> (), -- everyone sees the podium lever pulled (the presenter's launch)
+	talk: (stage: string, topic: string?) -> (),
+	presenterReroll: (seconds: number) -> boolean,
 }
 
 export type Mission = {
@@ -85,7 +94,7 @@ export type Mission = {
 -- An entry of a presenter's menu.
 export type Option = { id: string, title: string, recommended: boolean }
 
-local MISSIONS: { Mission } = { Quiz, Roulette, OneWord, TestMission }
+local MISSIONS: { Mission } = { Quiz, Roulette, OneWord, BannedTalk, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
@@ -138,16 +147,37 @@ function MissionRunner.options(secondsLeft: number, alive: number): { Option }
 	return options
 end
 
--- The next main-game mission: `pickedId` if it may still run, else the top recommendation; nil if none fits.
--- `presenter`: someone presents now (the menu is only ever made then).
-function MissionRunner.choose(secondsLeft: number, alive: number, presenter: boolean, pickedId: string?): Mission?
+-- The next main-game mission: `pickedId` if it may still run, else one at random (docs/DESIGN_V3.md §5.1): weight
+-- 1 / (1 + runs this round), and not `lastId` (the one just played) while another one fits. nil if none fits.
+-- `presenter`: someone presents now.
+function MissionRunner.choose(secondsLeft: number, alive: number, presenter: boolean, pickedId: string?, rng: Random,
+	lastId: string?): Mission?
 	local list = MissionRunner.candidates(secondsLeft, alive, presenter)
 	for _, mission in list do
 		if mission.id == pickedId then
 			return mission
 		end
 	end
-	return list[1]
+	if #list > 1 and lastId then
+		for i, mission in list do
+			if mission.id == lastId then
+				table.remove(list, i)
+				break
+			end
+		end
+	end
+	local total = 0
+	for _, mission in list do
+		total += 1 / (1 + (played[mission.id] or 0))
+	end
+	local roll = rng:NextNumber() * total
+	for _, mission in list do
+		roll -= 1 / (1 + (played[mission.id] or 0))
+		if roll <= 0 then
+			return mission
+		end
+	end
+	return list[#list]
 end
 
 -- A mission that can ask final questions, or nil (then the survivors share the win).
@@ -241,6 +271,17 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			if not ctx.cancelled() then
 				Net.toAll("Lever", {})
 			end
+		end,
+		talk = function(stage: string, topic: string?)
+			if not ctx.cancelled() then
+				ctx.talk(stage, topic)
+			end
+		end,
+		presenterReroll = function(seconds: number): boolean
+			if ctx.cancelled() then
+				return false
+			end
+			return ctx.presenterReroll(seconds)
 		end,
 		show = function(text: string)
 			if not ctx.cancelled() then

@@ -2,9 +2,10 @@
 -- Banned words (V3, docs/DESIGN_V3.md §6; bundle 5a): one word per participant, a speech habit (진짜, 대박 ...) with
 -- HABIT_WORD_CHANCE drawn for each player on their own (a kind shared by everyone could be read off the others'
 -- heads), never overlapping another word in play. A word is replaced after it was said, or by the presenter's re-draw;
--- a new word also avoids `avoid` (the running mission's screen texts). What each viewer may see: everyone's words,
--- except an alive participant's own (shown as hidden until the result). Stage 1 plays words on private servers only
--- (RoundService decides); this module only keeps them in Match.participants.
+-- a new word also avoids `avoid` (the running mission's screen texts, the talk's topic). What each viewer may see:
+-- everyone's words, except an alive participant's own (shown as hidden). Words exist only during the banned-word talk
+-- (bundle 6a: RoundService assigns them in its prep stage and clears them after it); this module only keeps them in
+-- Match.participants.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -59,15 +60,27 @@ local function draw(taken: { string }, avoid: { string }?, rng: Random): WordBan
 	return nil
 end
 
--- Round start: one word for each participant (any old words are dropped).
-function WordService.assign(rng: Random)
+-- The talk's prep stage: one word for each alive participant, none inside `avoid` (the topic) when that can be done
+-- (any old words are dropped). They count from `startJudging` on.
+function WordService.assign(rng: Random, avoid: { string }?)
 	for _, p in Match.participants do
 		table.clear(p.words)
 	end
 	for _, p in Match.participants do
-		local entry = draw(takenBy(nil), nil, rng)
-		if entry then
-			table.insert(p.words, { text = entry.word, aliases = entry.aliases, effectiveAt = 0 })
+		if p.alive then
+			local entry = draw(takenBy(nil), avoid, rng) or draw(takenBy(nil), nil, rng)
+			if entry then
+				table.insert(p.words, { text = entry.word, aliases = entry.aliases, effectiveAt = math.huge })
+			end
+		end
+	end
+end
+
+-- The talk begins: every word counts from `at` (Match.now()).
+function WordService.startJudging(at: number)
+	for _, p in Match.participants do
+		for _, word in p.words do
+			word.effectiveAt = at
 		end
 	end
 end
@@ -97,7 +110,7 @@ function WordService.replace(player: Player, avoid: { string }?, rng: Random): b
 	return true
 end
 
--- Everyone's words go (between rounds, or on a public server in stage 1).
+-- Everyone's words go (after the talk, between rounds).
 function WordService.clear()
 	for _, p in Match.participants do
 		table.clear(p.words)

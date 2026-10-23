@@ -10,7 +10,8 @@ the REAL module sources from src/ + the test file. The modules run unchanged; on
           per-player habit words (kept for phase 2 speech judging and the bundle 5 banned words), and no fixed UI
           text (Config.TEXT) containing a word-bank word
   round   Config, Match, LifeService, Timeline, MissionRunner, ChatService, RoundService (+ stub chairs, stands, voice,
-          scores and a scripted mission): lives rules, the time budget, the final triggers, whole rounds, joining by chat
+          scores and a scripted mission; the real banned-word talk): lives rules, the time budget, the final triggers,
+          whole rounds, joining by chat, the presenter, the banned-word talk (words, chat judging, rescues, ear)
   mission Config, Match, QuizBank, Quiz, Roulette, VoteRules, OneWord(+Topics), TestMission, MissionRunner (+ a fake
           ctx): the quiz (answers, fails,
           the AFK report, no repeats, no words in play, the final bank), the roulette, the menu order, the real bank
@@ -40,6 +41,8 @@ ROUND_MODULES = [
     ("ChatGate", "src/server/services/ChatGate.luau"),
     ("LifeService", "src/server/services/LifeService.luau"),
     ("Timeline", "src/server/services/Timeline.luau"),
+    ("TalkTopics", "src/server/content/TalkTopics.luau"),
+    ("BannedTalk", "src/server/missions/BannedTalk.luau"),
     ("MissionRunner", "src/server/services/MissionRunner.luau"),
     ("ChatService", "src/server/services/ChatService.luau"),
     ("PresenterService", "src/server/services/PresenterService.luau"),
@@ -57,6 +60,8 @@ MISSION_MODULES = [
     ("OneWordTopics", "src/server/content/OneWordTopics.luau"),
     ("OneWord", "src/server/missions/OneWord.luau"),
     ("TestMission", "src/server/missions/TestMission.luau"),
+    ("TalkTopics", "src/server/content/TalkTopics.luau"),
+    ("BannedTalk", "src/server/missions/BannedTalk.luau"),
     ("MissionRunner", "src/server/services/MissionRunner.luau"),
 ]
 

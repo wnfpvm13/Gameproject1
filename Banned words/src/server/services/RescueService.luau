@@ -1,6 +1,7 @@
 --!strict
 -- The presenter's rescue (docs/DESIGN_V3.md §4; bundle 5b): an automatic hit (a banned word in chat) waits
--- RESCUE_SECONDS; the presenter may rescue it with "Rescue" (private servers: no limit). Then it is resolved either
+-- RESCUE_SECONDS; the presenter may rescue it with "Rescue" (private servers: no limit; public servers: RESCUES_PUBLIC
+-- a round, bundle 6a). Then it is resolved either
 -- way: rescued (only a new word) or not (the penalty). A second hit of the same player while one waits is merged into
 -- it. Who is hit and what follows is RoundService's business (`resolve`); this module keeps the waiting hits, tells
 -- the presenter, and checks the presses.
@@ -17,6 +18,7 @@ export type Hit = { player: Player, word: string, data: any, rescued: boolean, e
 
 local waiting: { [Player]: Hit } = {}
 local count = 0
+local rescues = 0 -- rescues used this round (the public servers' limit)
 local resolve: (Hit) -> () = function(_hit) end
 
 -- Everything waiting, as the presenter's list: { { userId, word, endsAt } }.
@@ -45,8 +47,10 @@ function RescueService.start(onResolved: (Hit) -> ())
 		end
 		local target = Players:GetPlayerByUserId(userId)
 		local hit = target and waiting[target]
-		if hit and not hit.rescued and Match.now() <= hit.endsAt then
+		local limited = Match.serverKind == "public" and rescues >= Config.RESCUES_PUBLIC
+		if hit and not hit.rescued and not limited and Match.now() <= hit.endsAt then
 			hit.rescued = true
+			rescues += 1
 			tellPresenter()
 		end
 	end)
@@ -78,15 +82,21 @@ function RescueService.pending(): number
 	return count
 end
 
+-- A hit of `player`'s is waiting (no other judgment of theirs counts meanwhile, §4).
+function RescueService.waiting(player: Player): boolean
+	return waiting[player] ~= nil
+end
+
 -- The presenter asked for the whole state again, or changed.
 function RescueService.send()
 	tellPresenter()
 end
 
--- Round over: waiting hits are dropped.
+-- Round over: waiting hits are dropped (and the rescues used are forgotten).
 function RescueService.endRound()
 	table.clear(waiting)
 	count = 0
+	rescues = 0
 	tellPresenter()
 end
 

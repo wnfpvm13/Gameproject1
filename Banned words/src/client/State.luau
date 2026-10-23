@@ -15,7 +15,7 @@ local State = {
 		maxLives = 0,
 		total = 0,
 	} :: any,
-	-- userId string -> visible words (nil words = my own, hidden). Empty until the banned words come back (bundle 5).
+	-- userId string -> visible words (nil words = my own, hidden). Only during the banned-word talk (bundle 6a).
 	words = {} :: { [string]: WordsEntry },
 	micTested = false,
 	-- May I join by chat? The server tells only me: checking / yes / no / voice (a voice account) / error.

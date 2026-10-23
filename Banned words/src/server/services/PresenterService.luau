@@ -5,10 +5,11 @@
 -- with every voice participant (VoiceChatService:GetChatGroupsAsync), receives every chat participant's messages
 -- (TextChatService:CanUsersChatAsync) and, on public servers, is nobody's Roblox friend. A check that fails to run
 -- disqualifies on live servers; Studio allows it (GetChatGroupsAsync works only in Team Test there).
--- During a round the presenter picks the next mission in the last PRESENTER_PICK_SECONDS of free talk and, in the
+-- During a round the presenter picks the next mission within PRESENTER_PICK_SECONDS between games and, in the
 -- one-word mission, who is launched (a menu of kind "judge"); a missed choice is made by the system (or a vote) and
 -- PRESENTER_MISSES in a row hand the round to another presenter. The presenter also plays sound buttons, may step
--- down, and on private servers judges banned words by ear ("EarJudge") and re-draws words at the start ("Reroll");
+-- down, and in the banned-word talk (bundle 6a) judges words the system missed by ear ("EarJudge"), re-draws words in
+-- its prep stage ("Reroll": one player, or "all" on public servers) and may start it at once ("TalkStart");
 -- this module checks who asks and how often, RoundService decides what happens. A presenter who leaves or steps down is replaced by a volunteer who is not playing (not flying either, and
 -- not someone who presented this round before), else the system runs the round. Who presents is Match.presenter;
 -- RoundService is told of every change during a round (voices, stands).
@@ -43,7 +44,8 @@ local unavailable: (Player) -> boolean = function(_player)
 	return false
 end
 local onHeard: (Player) -> () = function(_target) end
-local onReroll: (Player) -> () = function(_target) end
+local onReroll: (Player?) -> () = function(_target) end
+local onTalkStart: () -> () = function() end
 local lastEar: { [Player]: number } = {}
 -- The open menu (one at a time).
 local menu: { kind: MenuKind, options: { Option }, endsAt: number, picked: string? }? = nil
@@ -255,8 +257,9 @@ end
 export type Hooks = {
 	changed: (Change, Player?, Player?) -> (), -- the presenter changed during a round
 	busy: (Player) -> boolean, -- another service owns the player now (flying), so they cannot take over
-	heard: (Player) -> (), -- the presenter heard this player say their banned word (private servers)
-	reroll: (Player) -> (), -- the presenter asks a new word for this player (private servers, at the start)
+	heard: (Player) -> (), -- the presenter heard this player say their banned word (the banned-word talk)
+	reroll: (Player?) -> (), -- the presenter asks a new word for this player (nil: everyone) in the talk's prep stage
+	talkStart: () -> (), -- the presenter starts the talk now (ends the prep stage)
 }
 
 function PresenterService.start(hooks: Hooks)
@@ -264,6 +267,7 @@ function PresenterService.start(hooks: Hooks)
 	unavailable = hooks.busy
 	onHeard = hooks.heard
 	onReroll = hooks.reroll
+	onTalkStart = hooks.talkStart
 	-- The presenter names a player (by UserId) for an ear judgment or a re-draw; at most one press per EAR_COOLDOWN.
 	local function named(player: Player, userId: any): Player?
 		if player ~= Match.presenter or typeof(userId) ~= "number" or userId ~= userId then
@@ -286,9 +290,23 @@ function PresenterService.start(hooks: Hooks)
 		end
 	end)
 	Net.listen("Reroll", function(player, userId)
+		if userId == "all" then
+			if player == Match.presenter and os.clock() - (lastEar[player] or -math.huge) >= Config.EAR_COOLDOWN then
+				lastEar[player] = os.clock()
+				onReroll(nil)
+			end
+			return
+		end
 		local target = named(player, userId)
 		if target then
 			onReroll(target)
+		end
+	end)
+	local lastStart: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any -- (players who left drop out)
+	Net.listen("TalkStart", function(player)
+		if player == Match.presenter and os.clock() - (lastStart[player] or -math.huge) >= Config.EAR_COOLDOWN then
+			lastStart[player] = os.clock()
+			onTalkStart()
 		end
 	end)
 	Net.listen("Volunteer", function(player, on)

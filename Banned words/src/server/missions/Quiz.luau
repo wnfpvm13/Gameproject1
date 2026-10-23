@@ -28,6 +28,8 @@ type Ctx = {
 	canFling: (player: Player) -> boolean,
 	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
 	lever: () -> (),
+	talk: (stage: string, topic: string?) -> (),
+	presenterReroll: (seconds: number) -> boolean,
 }
 
 local Quiz = {

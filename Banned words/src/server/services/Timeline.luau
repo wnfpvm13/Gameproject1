@@ -1,6 +1,6 @@
 --!strict
 -- The round's clock (docs/DESIGN_V3.md §2): ROUND_SECONDS of main game, a time budget for missions (a mission that
--- would not fit in the time left is not started; free talk fills the rest), and when the final is due: when the time
+-- would not fit in the time left is not started; when none fits, the final starts), and when the final is due: when the time
 -- is up, or as soon as FINAL_AT_ALIVE or fewer are left in a round begun with more than that (3 -> rounds of 4+).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 

@@ -71,6 +71,7 @@ Config.Locomotive = {
 	CowcatcherLength = 2.0,
 	CowcatcherSlats = 5,
 	Colors = {
+		Boiler = Color3.fromRGB(52, 88, 64), -- deep green, so the player's face stands out (owner pick 2026-10-23)
 		Iron = Color3.fromRGB(46, 44, 48),
 		Brass = Color3.fromRGB(196, 150, 64),
 		Wood = Color3.fromRGB(122, 78, 46),

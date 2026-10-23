@@ -2,7 +2,7 @@
 -- Builds one locomotive out of a stripped avatar (AvatarBody): "the locomotive wearing the avatar" (owner pick
 -- 2026-10-23). The head is the face on the smokebox front, the torso stands at the back as the cab (shirt facing
 -- backward, toward the play camera), the arms are the coupling rods between the driving wheels and the lower legs
--- and shoes are the rear buffers. The boiler is a real cylinder in the avatar's torso colour; frame, wheels, crank
+-- and shoes are the rear buffers. The boiler is a real cylinder in Config's boiler colour; frame, wheels, crank
 -- pins, chimney, dome, lamp, buffer beam and a slatted cowcatcher are added. Every moving part gets its rest pose as
 -- attributes (Names.Rest*, and Names.Crank* for the parts that circle with the wheels) for the client's
 -- LocomotiveAnimator. Locomotive space: X right, Y up, Z back (forward is -Z), origin on the rails under the middle.
@@ -162,7 +162,7 @@ local function placeAvatar(avatar: Model, add: Add): (number, number)
 end
 
 -- Boiler, wheels, crank pins, frame and fittings. Returns the cowcatcher's front (Z).
-local function addTrainParts(model: Model, boilerColor: Color3, cabBack: number, add: Add): number
+local function addTrainParts(model: Model, cabBack: number, add: Add): number
 	local L = Config.Locomotive
 	local colors = L.Colors
 	local deck = L.DeckHeight
@@ -170,7 +170,7 @@ local function addTrainParts(model: Model, boilerColor: Color3, cabBack: number,
 	local centreY = boilerCentreY()
 	local top = deck + diameter
 
-	add({ part = cylinder("Boiler", boilerColor, model), size = Vector3.new(diameter, L.BoilerLength, diameter), rest = CFrame.new(0, centreY, L.BoilerLength / 2) * ALONG_TRACK })
+	add({ part = cylinder("Boiler", colors.Boiler, model), size = Vector3.new(diameter, L.BoilerLength, diameter), rest = CFrame.new(0, centreY, L.BoilerLength / 2) * ALONG_TRACK })
 	for _, share in L.BandsAt do
 		local band = cylinder("BoilerBand", colors.Brass, model)
 		add({ part = band, size = Vector3.new(diameter + 0.12, 0.25, diameter + 0.12), rest = CFrame.new(0, centreY, L.BoilerLength * share) * ALONG_TRACK })
@@ -284,8 +284,7 @@ function LocomotiveBuilder.build(avatar: Model, base: CFrame): Model
 	for _, placement in placements do
 		placed[placement.part] = true
 	end
-	local torso = avatar:FindFirstChild("UpperTorso") :: BasePart -- placeAvatar asserted it
-	local front = addTrainParts(model, torso.Color, cabBack, add) -- the boiler takes the avatar's torso colour
+	local front = addTrainParts(model, cabBack, add)
 
 	-- Centre the locomotive over the base, then put every part in its rest pose.
 	local shift = CFrame.new(0, 0, -(front + back) / 2)

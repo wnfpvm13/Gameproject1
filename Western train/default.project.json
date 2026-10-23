@@ -1,0 +1,36 @@
+{
+  "name": "WesternTrain",
+  "tree": {
+    "$className": "DataModel",
+    "$ignoreUnknownInstances": true,
+    "ReplicatedStorage": {
+      "$ignoreUnknownInstances": true,
+      "WesternTrain": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "$ignoreUnknownInstances": true,
+      "WesternTrain": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "$ignoreUnknownInstances": true,
+        "WesternTrainClient": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "StarterGui": {
+      "$ignoreUnknownInstances": true,
+      "$properties": {
+        "ScreenOrientation": "LandscapeSensor"
+      }
+    },
+    "Workspace": {
+      "$ignoreUnknownInstances": true
+    }
+  }
+}

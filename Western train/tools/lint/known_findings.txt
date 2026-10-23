@@ -1,0 +1,2 @@
+# Known static-check findings, reviewed and accepted until a cleanup the owner schedules.
+# Written by tools/lint/run_lint.py --update-known; line numbers are left out on purpose.

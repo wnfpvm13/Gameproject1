@@ -1,0 +1,128 @@
+-- Squash math tests (run by tools/tests/run_tests.py, which puts Config, SquashSpring and SquashPose above this).
+-- Uses the real Config numbers, so a tuning change that breaks the feel (too slow, no bounce, flying parts) fails.
+local passed, failed = 0, 0
+local function check(name: string, ok: boolean, detail: string?)
+	if ok then
+		passed += 1
+	else
+		failed += 1
+		print("FAIL " .. name .. (if detail then ": " .. detail else ""))
+	end
+end
+local function near(a: number, b: number, eps: number?): boolean
+	return math.abs(a - b) <= (eps or 1e-9)
+end
+
+local c = Config.Squash
+
+-- Runs the spring toward target at a frame rate; records the range, crossings of the target and the settle time.
+local function run(state, target: number, seconds: number, fps: number?)
+	local dt = 1 / (fps or 60)
+	local frames = math.floor(seconds / dt + 0.5)
+	local pressing = target == 1
+	local frequency = if pressing then c.PressFrequency else c.ReleaseFrequency
+	local damping = if pressing then c.PressDamping else c.ReleaseDamping
+	local low, high, crossings, lastSide, settledAt = math.huge, -math.huge, 0, nil, nil
+	for i = 1, frames do
+		SquashSpring.step(state, target, dt, frequency, damping, c.MinValue, c.MaxValue)
+		low = math.min(low, state.value)
+		high = math.max(high, state.value)
+		local side = if state.value > target then 1 else -1
+		if lastSide and side ~= lastSide and not settledAt then
+			crossings += 1
+		end
+		lastSide = side
+		if not settledAt and SquashSpring.settle(state, target, c.RestEpsilon) then
+			settledAt = i * dt
+		end
+	end
+	return { low = low, high = high, crossings = crossings, settledAt = settledAt }
+end
+
+-- 1. Pressing folds fast, overshoots a little (extra squish) and settles.
+do
+	local s = SquashSpring.new()
+	run(s, 1, 0.15)
+	check("press is nearly flat after 0.15 s", s.value >= 0.85, tostring(s.value))
+	local r = run(SquashSpring.new(), 1, 1.5)
+	check("press overshoots a little", r.high > 1.0 and r.high < 1.2, tostring(r.high))
+	check("press settles within 1 s", r.settledAt ~= nil and r.settledAt <= 1.0, tostring(r.settledAt))
+end
+
+-- 2. Letting go springs past normal (taller: the bounce), wobbles 2-3 times and settles.
+do
+	local s = SquashSpring.new()
+	s.value = 1
+	local r = run(s, 0, 3)
+	check("release bounces taller than normal", r.low <= -0.15, tostring(r.low))
+	check("release bounce stays inside the limit", r.low >= c.MinValue, tostring(r.low))
+	check("release wobbles a few times", r.crossings >= 3, tostring(r.crossings))
+	check("release settles within 2.5 s", r.settledAt ~= nil and r.settledAt <= 2.5, tostring(r.settledAt))
+	check("settled exactly at normal", s.value == 0 and s.velocity == 0)
+end
+
+-- 3. The same feel at any frame rate, and a hitch or a bad dt can never fling the shape.
+do
+	local slow, fast = SquashSpring.new(), SquashSpring.new()
+	run(slow, 1, 0.3, 30)
+	run(fast, 1, 0.3, 240)
+	check("30 fps and 240 fps agree", near(slow.value, fast.value, 0.02), slow.value .. " vs " .. fast.value)
+	local hitch = SquashSpring.new()
+	SquashSpring.step(hitch, 1, 5, c.PressFrequency, c.PressDamping, c.MinValue, c.MaxValue)
+	check("a 5 s hitch stays in range", hitch.value >= c.MinValue and hitch.value <= c.MaxValue and hitch.value == hitch.value)
+	local back = SquashSpring.new()
+	SquashSpring.step(back, 1, -1, c.PressFrequency, c.PressDamping, c.MinValue, c.MaxValue)
+	check("a negative dt changes nothing", back.value == 0 and back.velocity == 0)
+end
+
+-- 4. Body scale: normal, flat and the tall bounce.
+do
+	local normal = SquashPose.bodyScale(0, c.HeightAtFull, c.WidthAtFull, c.LengthAtFull)
+	check("value 0 is the normal shape", normal.x == 1 and normal.y == 1 and normal.z == 1)
+	local flat = SquashPose.bodyScale(1, c.HeightAtFull, c.WidthAtFull, c.LengthAtFull)
+	check("value 1 is flat and wide", near(flat.x, c.WidthAtFull) and near(flat.y, c.HeightAtFull) and near(flat.z, c.LengthAtFull))
+	local tall = SquashPose.bodyScale(-0.3, c.HeightAtFull, c.WidthAtFull, c.LengthAtFull)
+	check("negative value is tall and thin", tall.y > 1 and tall.x < 1)
+	local crushed = SquashPose.bodyScale(50, c.HeightAtFull, c.WidthAtFull, c.LengthAtFull)
+	check("no axis ever reaches zero", crushed.y >= 0.05 and crushed.x > 0 and crushed.z > 0)
+end
+
+local IDENTITY = { { x = 1, y = 0, z = 0 }, { x = 0, y = 1, z = 0 }, { x = 0, y = 0, z = 1 } }
+local SUPINE = { { x = -1, y = 0, z = 0 }, { x = 0, y = 0, z = -1 }, { x = 0, y = -1, z = 0 } }
+local UPRIGHT = { { x = 0, y = 1, z = 0 }, { x = -1, y = 0, z = 0 }, { x = 0, y = 0, z = 1 } }
+local FLAT = { x = 1.3, y = 0.4, z = 1.08 }
+local function v(x, y, z)
+	return { x = x, y = y, z = z }
+end
+
+-- 5. Part poses.
+do
+	local pos, size = SquashPose.pose({ position = v(1, 2, 3), anchor = v(1, 2, 3), size = v(2, 4, 6), axes = IDENTITY, exponent = 1 }, FLAT)
+	check("centre part moves with the body", near(pos.x, 1.3) and near(pos.y, 0.8) and near(pos.z, 3.24))
+	check("centre part resizes with the body", near(size.x, 2.6) and near(size.y, 1.6) and near(size.z, 6.48))
+
+	local _, torso = SquashPose.pose({ position = v(0, 3, 5), anchor = v(0, 3, 5), size = v(4, 10, 3), axes = SUPINE, exponent = 1 }, FLAT)
+	check("lying torso: own Y (length) follows the track, own Z (thickness) the height",
+		near(torso.x, 5.2) and near(torso.y, 10.8) and near(torso.z, 1.2), torso.x .. "," .. torso.y .. "," .. torso.z)
+
+	local r = 1.3
+	local wheelPos, wheelSize = SquashPose.pose({ position = v(2.3, r, 4), anchor = v(2.3, r, 4), size = v(0.6, 2 * r, 2 * r), axes = IDENTITY, exponent = 1 }, FLAT)
+	check("wheel bottom stays on the rails", near(wheelPos.y - wheelSize.y / 2, 0))
+
+	-- chimney: foot on the boiler top (y 5), 2.6 tall, folding harder than the body
+	local e = c.ChimneyExponent
+	local foot = v(0, 5, 2)
+	local chimneyPos, chimneySize = SquashPose.pose({ position = v(0, 6.3, 2), anchor = foot, size = v(2.6, 1.3, 1.3), axes = UPRIGHT, exponent = e }, FLAT)
+	check("chimney foot rides on the squashed boiler top", near(chimneyPos.y - chimneySize.x / 2, 5 * 0.4))
+	check("chimney folds harder than the body", chimneySize.x < 2.6 * 0.4 and near(chimneySize.x, 2.6 * 0.4 ^ e))
+	local capPos, capSize = SquashPose.pose({ position = v(0, 5 + 2.6 + 0.35, 2), anchor = foot, size = v(0.7, 2.3, 2.3), axes = UPRIGHT, exponent = e }, FLAT)
+	check("cap sits on the folded chimney", near(capPos.y - capSize.x / 2, chimneyPos.y + chimneySize.x / 2))
+
+	local restPos, restSize = SquashPose.pose({ position = v(0, 6.3, 2), anchor = foot, size = v(2.6, 1.3, 1.3), axes = UPRIGHT, exponent = e }, v(1, 1, 1))
+	check("value 0 puts a part exactly back", near(restPos.y, 6.3) and near(restSize.x, 2.6) and near(restSize.y, 1.3))
+end
+
+print(string.format("%d passed, %d failed", passed, failed))
+if failed == 0 then
+	print("ALL PASS")
+end

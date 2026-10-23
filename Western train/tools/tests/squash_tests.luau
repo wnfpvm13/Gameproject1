@@ -1,5 +1,5 @@
--- Squash math tests (run by tools/tests/run_tests.py, which puts Config, SquashSpring, SquashPose and CrankMotion
--- above this).
+-- Squash and run math tests (run by tools/tests/run_tests.py, which puts Config, SquashSpring, SquashPose,
+-- CrankMotion and CourseMath above this).
 -- Uses the real Config numbers, so a tuning change that breaks the feel (too slow, no bounce, flying parts) fails.
 local passed, failed = 0, 0
 local function check(name: string, ok: boolean, detail: string?)
@@ -203,6 +203,65 @@ do
 		tostring(math.deg(releaseLow)) .. " / " .. tostring(math.deg(releaseHigh)))
 	check("the shoes never dig into the rails", pressLowest >= 0 and releaseLowest >= 0,
 		tostring(pressLowest) .. " / " .. tostring(releaseLowest))
+end
+
+-- 8. The run toward the low bridges.
+do
+	local B, R, L = Config.Bridge, Config.Run, Config.Locomotive
+	local run = { start = 100, from = 0, speed = 24 }
+	check("the run waits before its start", CourseMath.distance(run, 90) == 0)
+	check("the run moves at its speed", near(CourseMath.distance(run, 102), 48))
+	check("timeAt is the inverse of distance", near(CourseMath.timeAt(run, 48), 102))
+	check("a held run never reaches anything", CourseMath.timeAt({ start = 0, from = 5, speed = 0 }, 10) == math.huge)
+	local gaps = B.Gaps
+	local cycle = 0
+	for _, gap in gaps do
+		cycle += gap
+	end
+	check("the first bridge is at FirstAt", CourseMath.bridgeAt(1, B.FirstAt, gaps) == B.FirstAt)
+	check("then the gaps in order", CourseMath.bridgeAt(3, B.FirstAt, gaps) == B.FirstAt + gaps[1] + gaps[2])
+	check("the gaps repeat", CourseMath.bridgeAt(1 + #gaps * 2, B.FirstAt, gaps) == B.FirstAt + cycle * 2)
+	local enter, exit = CourseMath.under(200, 6, -8, 8)
+	check("a bridge is over the locomotive from its front to its back", enter == 200 - 3 - 8 and exit == 200 + 3 + 8)
+	check("the next bridge is the first not fully passed", CourseMath.nextBridge(0, B.FirstAt, gaps, B.Depth, 8) == 1
+		and CourseMath.nextBridge(B.FirstAt + B.Depth / 2 + 8 + 0.01, B.FirstAt, gaps, B.Depth, 8) == 2)
+	-- The server's pass check against the squash states it received.
+	local history = { { time = 0, squashed = false }, { time = 10, squashed = true }, { time = 12, squashed = false } }
+	check("flat for the whole window passes", CourseMath.squashedThroughout(history, 10.5, 11.9))
+	check("let go inside the window fails", not CourseMath.squashedThroughout(history, 10.5, 12.5))
+	check("pressed too late fails", not CourseMath.squashedThroughout(history, 9.5, 11))
+	check("an empty window passes", CourseMath.squashedThroughout(history, 5, 5))
+	-- A release in the last moment (inside ReleaseGrace) still passes; an earlier one does not.
+	local exitAt = 20
+	local late = { { time = 0, squashed = true }, { time = exitAt - R.ReleaseGrace / 2, squashed = false } }
+	local early = { { time = 0, squashed = true }, { time = exitAt - R.ReleaseGrace * 2, squashed = false } }
+	check("a release in the last moment still passes", CourseMath.squashedThroughout(late, 10, exitAt - R.ReleaseGrace))
+	check("an earlier release fails", not CourseMath.squashedThroughout(early, 10, exitAt - R.ReleaseGrace))
+	-- nextBridge skips whole cycles: the same answer as counting from the first bridge, also far along the run.
+	local function slowNext(distance)
+		local i = 1
+		while CourseMath.bridgeAt(i, B.FirstAt, gaps) + B.Depth / 2 + 8 < distance do
+			i += 1
+		end
+		return i
+	end
+	local same = true
+	for _, distance in { 0, 100, B.FirstAt + 11, 1234.5, 5000, 20000, 20000 + cycle * 3 + 0.25 } do
+		same = same and CourseMath.nextBridge(distance, B.FirstAt, gaps, B.Depth, 8) == slowNext(distance)
+	end
+	check("nextBridge far along the run matches counting from the start", same)
+	-- The numbers fit together: a standing locomotive cannot pass, a flat one can, a restart does not bring back the
+	-- bridge before, and pressing just before the bridge is enough even with the allowed network delay.
+	local roof = L.DeckHeight + L.CabHeight + L.RoofThickness
+	check("the standing cab roof hits the girder", roof > B.Clearance)
+	check("the flat cab roof passes under it", roof * c.HeightAtFull < B.Clearance)
+	local smallest = math.huge
+	for _, gap in gaps do
+		smallest = math.min(smallest, gap)
+	end
+	local length = 17 -- about the locomotive's length (cowcatcher to soles); the real value is a model attribute
+	check("a restart starts after the bridge before", R.RestartLead < smallest - B.Depth - length)
+	check("the time under a bridge is longer than the delay allowance", (B.Depth + length) / R.Speed > R.PassTolerance * 2)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

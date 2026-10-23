@@ -2,8 +2,9 @@
 -- Animates one locomotive's moving parts on this client: a spring follows the squash target (flat or normal) and
 -- every part is resized and moved from its rest pose (the Names.Rest* attributes written by the server's
 -- LocomotiveBuilder); the coupling rods and crank pins (Names.Crank*) also circle with the driving wheels all the
--- time, and the legs (Names.Kick*) swing about the hip while the spring moves. Local only: the server never moves
--- these parts after building them.
+-- time (as fast as the run moves, see setRunSpeed), and the legs (Names.Kick*) swing about the hip while the spring
+-- moves. It also keeps the locomotive's current top height for the bridge judgement. Local only: the server never
+-- moves these parts after building them.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("WesternTrain")
@@ -44,6 +45,8 @@ type Fields = {
 	settled: boolean,
 	body: SquashPose.Vec, -- the squash scale last drawn
 	angle: number, -- crank angle
+	turnsPerSecond: number, -- crank speed
+	top: number, -- the highest part's top above the rails, as last drawn (locomotive space)
 }
 export type Animator = typeof(setmetatable({} :: Fields, LocomotiveAnimator))
 
@@ -95,6 +98,9 @@ function LocomotiveAnimator.new(locomotive: Model): Animator?
 		if item:IsA("BasePart") then
 			local entry = entryFor(item)
 			if entry then
+				-- The avatar's Humanoid turns collisions back on for its torso parts when the model arrives on this
+				-- client too (no change signal; seen in Studio), and Roblox's camera would then zoom in behind the cab.
+				PartUtil.ghost(item)
 				table.insert(entries, entry)
 				if entry.crank then
 					table.insert(cranks, entry)
@@ -112,8 +118,29 @@ function LocomotiveAnimator.new(locomotive: Model): Animator?
 		settled = false,
 		body = { x = 1, y = 1, z = 1 },
 		angle = 0,
+		turnsPerSecond = Config.Locomotive.CrankTurnsPerSecond,
+		top = 0,
 	}
 	return setmetatable(fields, LocomotiveAnimator)
+end
+
+-- The rods turn as fast as the wheels would roll at this run speed (studs per second; 0 stops them). nil = no run:
+-- the idle speed from Config.
+function LocomotiveAnimator.setRunSpeed(self: Animator, studsPerSecond: number?)
+	self.turnsPerSecond = if studsPerSecond
+		then studsPerSecond / (2 * math.pi * Config.Locomotive.DriverRadius)
+		else Config.Locomotive.CrankTurnsPerSecond
+end
+
+-- A knock (a crash): adds this much spring speed, so the body stretches or folds, wobbles and the legs flail.
+function LocomotiveAnimator.jolt(self: Animator, velocity: number)
+	self.spring.velocity += velocity
+	self.settled = false
+end
+
+-- The locomotive's current height above the rails (its highest part's top, as last drawn).
+function LocomotiveAnimator.height(self: Animator): number
+	return self.top
 end
 
 function LocomotiveAnimator.setTarget(self: Animator, squashed: boolean)
@@ -125,9 +152,10 @@ function LocomotiveAnimator.setTarget(self: Animator, squashed: boolean)
 end
 
 -- Puts one part where the squash scale, crank angle and spring speed say; resize = false skips the size (it has not
--- changed).
-local function place(entry: Entry, baseCFrame: CFrame, body: SquashPose.Vec, angle: number, velocity: number, resize: boolean)
+-- changed). Returns the part's top above the rails (before the crank and leg swing, which only move low parts).
+local function place(entry: Entry, baseCFrame: CFrame, body: SquashPose.Vec, angle: number, velocity: number, resize: boolean): number
 	local position, size = SquashPose.pose(entry.rest, body)
+	local top = position.y + SquashPose.halfHeight(entry.rest, size)
 	if resize then
 		local newSize = Vector3.new(size.x, size.y, size.z)
 		entry.part.Size = newSize
@@ -149,13 +177,14 @@ local function place(entry: Entry, baseCFrame: CFrame, body: SquashPose.Vec, ang
 		local hip = kick.pivot * Vector3.new(body.x, body.y, body.z)
 		local swing = SquashPose.kickAngle(velocity, kick.side, body.y, KICK_LIMITS)
 		entry.part.CFrame = baseCFrame * CFrame.new(hip) * CFrame.Angles(swing, 0, 0) * CFrame.new(Vector3.new(x, y, z) - hip) * entry.rotation
-		return
+		return top
 	end
 	entry.part.CFrame = baseCFrame * CFrame.new(x, y, z) * entry.rotation
+	return top
 end
 
 function LocomotiveAnimator.update(self: Animator, dt: number)
-	self.angle = CrankMotion.advance(self.angle, dt, Config.Locomotive.CrankTurnsPerSecond)
+	self.angle = CrankMotion.advance(self.angle, dt, self.turnsPerSecond)
 	local baseCFrame = self.base.CFrame
 	if self.settled then
 		for _, entry in self.cranks do
@@ -170,9 +199,11 @@ function LocomotiveAnimator.update(self: Animator, dt: number)
 	SquashSpring.step(self.spring, self.target, dt, frequency, damping, c.MinValue, c.MaxValue)
 	self.settled = SquashSpring.settle(self.spring, self.target, c.RestEpsilon)
 	self.body = SquashPose.bodyScale(self.spring.value, c.HeightAtFull, c.WidthAtFull, c.LengthAtFull)
+	local top = 0
 	for _, entry in self.entries do
-		place(entry, baseCFrame, self.body, self.angle, self.spring.velocity, true)
+		top = math.max(top, place(entry, baseCFrame, self.body, self.angle, self.spring.velocity, true))
 	end
+	self.top = top
 end
 
 return LocomotiveAnimator

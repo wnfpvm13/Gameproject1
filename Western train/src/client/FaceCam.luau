@@ -1,30 +1,37 @@
 --!strict
--- The face window: a small framed view at the top middle of the screen that shows the player's own locomotive from
+-- The face window: a small framed view on the right side of the screen that shows the player's own locomotive from
 -- the front, because the play camera looks from behind and the face is out of sight. It grows while the locomotive
--- is flat. A ViewportFrame only draws its own children, so the window holds copies of the locomotive's moving parts
--- and copies their size, place and transparency from the real ones (which LocomotiveAnimator moves) in update();
--- call it after the animator every frame.
+-- is flat, shows short words over itself for run events (flash) and the run's score under itself. A ViewportFrame
+-- only draws its own children, so the window holds copies of the locomotive's moving parts and copies their size,
+-- place and transparency from the real ones (which LocomotiveAnimator moves) in update(); call it after the animator
+-- every frame.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local shared = ReplicatedStorage:WaitForChild("WesternTrain")
 local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
+local PartUtil = require(shared:WaitForChild("PartUtil"))
 
 local FaceCam = {}
 FaceCam.__index = FaceCam
 
 local WHITE = Color3.new(1, 1, 1)
+local OUTLINE = Color3.fromRGB(40, 24, 14)
 
 type Copy = { source: BasePart, copy: BasePart, sourceMesh: SpecialMesh?, copyMesh: SpecialMesh? }
 
 type Fields = {
 	gui: ScreenGui,
 	frame: Frame,
-	viewport: ViewportFrame, -- the locomotive
+	viewport: ViewportFrame,
 	world: WorldModel, -- inside the viewport: holds the avatar copy
-	faceView: ViewportFrame, -- the head alone, drawn over the locomotive (see show)
-	camera: Camera, -- shared by both views
+	camera: Camera,
+	word: TextLabel, -- flash()
+	wordStroke: UIStroke,
+	wordScale: UIScale,
+	flashes: number, -- counts flashes, so an older one's fade-out leaves a newer word alone
+	score: TextLabel,
 	copies: { Copy },
 	shown: { Instance }, -- the top-level copies, destroyed when the window shows another locomotive
 	base: BasePart?,
@@ -38,20 +45,12 @@ local function sizeFor(height: number): UDim2
 	return UDim2.fromScale(height, height) -- the frame's SizeConstraint makes both shares of the screen height
 end
 
-local function newView(name: string, parent: Instance): ViewportFrame
-	local c = Config.FaceCam
-	local view = Instance.new("ViewportFrame")
-	view.Name = name
-	view.AnchorPoint = Vector2.new(0.5, 0.5)
-	view.Position = UDim2.fromScale(0.5, 0.5)
-	view.Size = UDim2.fromScale(0.9, 0.9)
-	view.Ambient = c.Ambient
-	view.LightColor = c.Light
-	view.Parent = parent
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0.1, 0)
-	corner.Parent = view
-	return view
+local function outlined(label: TextLabel, thickness: number): UIStroke
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = thickness
+	stroke.Color = OUTLINE
+	stroke.Parent = label
+	return stroke
 end
 
 function FaceCam.new(playerGui: Instance): FaceCam
@@ -64,8 +63,8 @@ function FaceCam.new(playerGui: Instance): FaceCam
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Window"
-	frame.AnchorPoint = Vector2.new(0.5, 0)
-	frame.Position = UDim2.new(0.5, 0, 0, c.Margin)
+	frame.AnchorPoint = Vector2.new(1, 0)
+	frame.Position = UDim2.new(1, -c.Margin, c.Top, 0)
 	frame.SizeConstraint = Enum.SizeConstraint.RelativeYY
 	frame.Size = sizeFor(c.Height)
 	frame.BackgroundColor3 = colors.Wood
@@ -78,20 +77,54 @@ function FaceCam.new(playerGui: Instance): FaceCam
 	stroke.Thickness = c.BorderThickness
 	stroke.Parent = frame
 
-	local viewport = newView("View", frame)
+	local viewport = Instance.new("ViewportFrame")
+	viewport.Name = "View"
+	viewport.AnchorPoint = Vector2.new(0.5, 0.5)
+	viewport.Position = UDim2.fromScale(0.5, 0.5)
+	viewport.Size = UDim2.fromScale(0.9, 0.9)
 	viewport.BackgroundColor3 = c.Sky
-	viewport.ZIndex = 1
+	viewport.Ambient = c.Ambient
+	viewport.LightColor = c.Light
+	viewport.Parent = frame
+	local viewCorner = Instance.new("UICorner")
+	viewCorner.CornerRadius = UDim.new(0.1, 0)
+	viewCorner.Parent = viewport
 	local world = Instance.new("WorldModel")
 	world.Parent = viewport
-	local faceView = newView("FaceView", frame)
-	faceView.BackgroundTransparency = 1
-	faceView.ZIndex = 2 -- over the locomotive's view, whose sky would otherwise hide the head
-
 	local camera = Instance.new("Camera")
 	camera.FieldOfView = c.FieldOfView
 	camera.Parent = viewport
 	viewport.CurrentCamera = camera
-	faceView.CurrentCamera = camera
+
+	local word = Instance.new("TextLabel")
+	word.Name = "Word"
+	word.AnchorPoint = Vector2.new(0.5, 0.5)
+	word.Position = UDim2.fromScale(0.5, 0.78)
+	word.Size = UDim2.fromScale(1.3, 0.38)
+	word.BackgroundTransparency = 1
+	word.Font = Enum.Font.GothamBlack
+	word.TextScaled = true
+	word.TextColor3 = WHITE
+	word.TextTransparency = 1
+	word.ZIndex = 2
+	word.Parent = frame
+	local wordStroke = outlined(word, 3)
+	wordStroke.Transparency = 1
+	local wordScale = Instance.new("UIScale")
+	wordScale.Parent = word
+
+	local score = Instance.new("TextLabel")
+	score.Name = "Score"
+	score.AnchorPoint = Vector2.new(0.5, 0)
+	score.Position = UDim2.new(0.5, 0, 1, 6)
+	score.Size = UDim2.fromScale(1.4, 0.16)
+	score.BackgroundTransparency = 1
+	score.Font = Enum.Font.GothamBold
+	score.TextScaled = true
+	score.TextColor3 = WHITE
+	score.Text = ""
+	score.Parent = frame
+	outlined(score, 2)
 
 	gui.Parent = playerGui
 	local fields: Fields = {
@@ -99,8 +132,12 @@ function FaceCam.new(playerGui: Instance): FaceCam
 		frame = frame,
 		viewport = viewport,
 		world = world,
-		faceView = faceView,
 		camera = camera,
+		word = word,
+		wordStroke = wordStroke,
+		wordScale = wordScale,
+		flashes = 0,
+		score = score,
 		copies = {},
 		shown = {},
 		base = nil,
@@ -139,15 +176,6 @@ local function pair(self: FaceCam, source: BasePart, copy: BasePart)
 	})
 end
 
-local function hideFace(part: BasePart)
-	part.Transparency = 1
-	for _, decal in part:GetDescendants() do
-		if decal:IsA("Decal") then
-			decal.Transparency = 1
-		end
-	end
-end
-
 -- Shows this locomotive (the player's own); replaces the one shown before.
 function FaceCam.show(self: FaceCam, locomotive: Model)
 	clearCopies(self)
@@ -157,30 +185,21 @@ function FaceCam.show(self: FaceCam, locomotive: Model)
 		return
 	end
 	self.base = base
-	local c = Config.FaceCam
-	local light = base.CFrame:VectorToWorldSpace(c.LightDirection)
-	self.viewport.LightDirection = light
-	self.faceView.LightDirection = light
-	self.faceView.ImageColor3 = WHITE
+	self.viewport.LightDirection = base.CFrame:VectorToWorldSpace(Config.FaceCam.LightDirection)
 
-	-- The avatar is copied as one whole model (Humanoid and clothes included): copies of single body parts lose the
-	-- shirt and pants (seen in Studio), so the sleeves and the cab would show bare skin.
-	local avatar: Model? = nil
-	for _, child in locomotive:GetChildren() do
-		if child:IsA("Model") and child:FindFirstChildOfClass("Humanoid") then
-			avatar = child
-		end
-	end
+	-- The avatar is copied as one whole model (Humanoid, BodyColors and clothes included). Copies of single body parts
+	-- lose the shirt and pants, and a head whose face is in its texture loses its skin colour and draws white (both
+	-- seen in Studio); the whole copy keeps both.
+	local avatar = PartUtil.avatarOf(locomotive)
 	local avatarCopy = if avatar then avatar:Clone() else nil
 	if avatar and avatarCopy then
 		stripToLooks(avatarCopy)
 		for _, part in avatar:GetChildren() do
 			local copy = avatarCopy:FindFirstChild(part.Name)
 			if part:IsA("BasePart") and copy and copy:IsA("BasePart") and part:GetAttribute(Names.RestCFrame) ~= nil then
+				pair(self, part, copy)
 				if part.Name == Names.AvatarHead then
-					hideFace(copy) -- drawn by the face view instead
-				else
-					pair(self, part, copy)
+					self.face = part
 				end
 			end
 		end
@@ -188,35 +207,20 @@ function FaceCam.show(self: FaceCam, locomotive: Model)
 		table.insert(self.shown, avatarCopy)
 	end
 
+	-- The train parts, one copy each.
 	for _, item in locomotive:GetDescendants() do
-		if item:IsA("BasePart") and item:GetAttribute(Names.RestCFrame) ~= nil then
-			local inAvatar = avatar ~= nil and item:IsDescendantOf(avatar)
-			local isHead = inAvatar and item.Name == Names.AvatarHead
-			if isHead or not inAvatar then
-				local copy = item:Clone()
-				stripToLooks(copy)
-				for _, child in copy:GetChildren() do
-					if not (child:IsA("DataModelMesh") or child:IsA("Decal") or child:IsA("SurfaceAppearance")) then
-						child:Destroy()
-					end
+		local inAvatar = avatar ~= nil and item:IsDescendantOf(avatar)
+		if item:IsA("BasePart") and not inAvatar and item:GetAttribute(Names.RestCFrame) ~= nil then
+			local copy = item:Clone()
+			stripToLooks(copy)
+			for _, child in copy:GetChildren() do
+				if not (child:IsA("DataModelMesh") or child:IsA("Decal") or child:IsA("SurfaceAppearance")) then
+					child:Destroy()
 				end
-				if isHead then
-					self.face = item
-					-- A head whose face is in its texture (most new avatars) gets its skin colour from the avatar, which a
-					-- lone copy in a ViewportFrame loses: the skin draws white. Tinting the head's own view by the skin
-					-- colour brings it back and keeps the dark eyes and mouth dark; but it also tints the whites of the
-					-- eyes and any coloured lips, and a texture that already has the skin painted in comes out darker.
-					-- The head is the frontmost part from this angle, so its view on top looks the same.
-					if item:IsA("MeshPart") and item.TextureID ~= "" then
-						self.faceView.ImageColor3 = item.Color
-					end
-					copy.Parent = self.faceView
-				else
-					copy.Parent = self.viewport
-				end
-				table.insert(self.shown, copy)
-				pair(self, item, copy)
 			end
+			copy.Parent = self.viewport
+			table.insert(self.shown, copy)
+			pair(self, item, copy)
 		end
 	end
 	self.gui.Enabled = true
@@ -227,7 +231,7 @@ function FaceCam.hide(self: FaceCam)
 	self.gui.Enabled = false
 end
 
--- Bigger while the locomotive is flat; back with a little bounce.
+-- Bigger while the locomotive is flat (or crashed); back with a little bounce.
 function FaceCam.setBig(self: FaceCam, big: boolean)
 	if big == self.big then
 		return
@@ -243,6 +247,30 @@ function FaceCam.setBig(self: FaceCam, big: boolean)
 	local tween = TweenService:Create(self.frame, info, { Size = sizeFor(if big then c.BigHeight else c.Height) })
 	self.tween = tween
 	tween:Play()
+end
+
+-- A short word popping up over the window (a crash, a pass), fading after Config.FaceCam.FlashSeconds.
+function FaceCam.flash(self: FaceCam, text: string, color: Color3)
+	self.flashes += 1
+	local mine = self.flashes
+	local word = self.word
+	word.Text = text
+	word.TextColor3 = color
+	word.TextTransparency = 0
+	self.wordStroke.Transparency = 0
+	self.wordScale.Scale = 0.4
+	TweenService:Create(self.wordScale, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	task.delay(Config.FaceCam.FlashSeconds, function()
+		if self.flashes == mine then
+			local fade = TweenInfo.new(0.3)
+			TweenService:Create(word, fade, { TextTransparency = 1 }):Play()
+			TweenService:Create(self.wordStroke, fade, { Transparency = 1 }):Play()
+		end
+	end)
+end
+
+function FaceCam.setScore(self: FaceCam, passed: number, crashes: number)
+	self.score.Text = string.format("통과 %d · 쾅 %d", passed, crashes)
 end
 
 function FaceCam.update(self: FaceCam)

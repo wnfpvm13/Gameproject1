@@ -1,6 +1,6 @@
 --!strict
--- The driver's camera: looks at the player's own locomotive from the front-right, so the face shows, then the player
--- can turn and zoom freely. (The hidden character cannot walk: the server anchors it, and SquashInput takes the S key
+-- The driver's camera: starts behind and above the player's own locomotive, looking down the track at what comes
+-- (the face shows in the face window), then the player can turn and zoom freely. (The hidden character cannot walk: the server anchors it, and SquashInput takes the S key
 -- before the walking controls.)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,7 +14,7 @@ local Names = require(shared:WaitForChild("Names"))
 
 local DriverCamera = {}
 
-local VIEW_DIRECTION = Vector3.new(24, 11, -28).Unit -- front-right of the locomotive (its forward is -Z)
+local VIEW_DIRECTION = Vector3.new(5, 11, 24).Unit -- behind (+Z) and above the locomotive (its forward is -Z)
 local HOLD_BIND = "WesternTrainStartView"
 
 function DriverCamera.follow(locomotive: Model)

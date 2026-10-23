@@ -51,6 +51,13 @@ function SquashPose.pose(rest: Rest, body: Vec): (Vec, Vec)
 	return position, size
 end
 
+-- Half the part's height above the rails' plane, from its size along its own axes (exact for parts turned by right
+-- angles): the part's top is its centre's height plus this.
+function SquashPose.halfHeight(rest: Rest, size: Vec): number
+	local axes = rest.axes
+	return (math.abs(axes[1].y) * size.x + math.abs(axes[2].y) * size.y + math.abs(axes[3].y) * size.z) / 2
+end
+
 -- Limits for kickAngle: radians per unit of spring speed, the largest upward and downward swing, and the body height
 -- scale at which the body is fully flat (no room left to swing down).
 export type KickLimits = { gain: number, up: number, down: number, flatHeight: number }

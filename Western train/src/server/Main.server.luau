@@ -1,6 +1,7 @@
 --!strict
 -- Western train server entry point (squash prototype): wiring, plus each player's track slot and locomotive lifetime.
--- Every time a character spawns, it is hidden on its track and the player's avatar is rebuilt as a locomotive there.
+-- Every time a character spawns, it is hidden on its track and the player's avatar is rebuilt as a locomotive there,
+-- and its run toward the low bridges starts (CourseService).
 local Players = game:GetService("Players")
 
 local Net = require(script.Parent:WaitForChild("Net"))
@@ -9,6 +10,7 @@ local AvatarBody = require(script.Parent:WaitForChild("AvatarBody"))
 local LocomotiveBuilder = require(script.Parent:WaitForChild("LocomotiveBuilder"))
 local CharacterHider = require(script.Parent:WaitForChild("CharacterHider"))
 local SquashService = require(script.Parent:WaitForChild("SquashService"))
+local CourseService = require(script.Parent:WaitForChild("CourseService"))
 local Names = require(game:GetService("ReplicatedStorage"):WaitForChild("WesternTrain"):WaitForChild("Names"))
 
 local remotes = Net.create()
@@ -21,6 +23,7 @@ local hidden: { [Player]: CharacterHider.Hidden } = {}
 SquashService.start(remotes.Squash, function(player: Player): Model?
 	return locomotives[player]
 end)
+local course = CourseService.start(remotes.Bridge)
 
 local function freeSlot(): number
 	local used = {}
@@ -35,6 +38,7 @@ local function freeSlot(): number
 end
 
 local function clear(player: Player)
+	course.finish(player)
 	local old = locomotives[player]
 	locomotives[player] = nil
 	if old then
@@ -76,6 +80,7 @@ local function onCharacter(player: Player, character: Model)
 	locomotive:SetAttribute(Names.OwnerUserId, player.UserId)
 	locomotive.Parent = stage.folder
 	locomotives[player] = locomotive
+	course.begin(player, locomotive)
 end
 
 local function onPlayer(player: Player)

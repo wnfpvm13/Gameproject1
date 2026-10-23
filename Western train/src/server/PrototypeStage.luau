@@ -1,20 +1,21 @@
 --!strict
--- Prototype ground and rails: a sand floor and one straight track per locomotive slot, built once at server start
--- into Workspace.WesternTrainStage (only that folder is replaced).
+-- Prototype ground and rails: a sand floor and one straight pair of rails per locomotive slot, built once at server
+-- start into Workspace.WesternTrainStage (only that folder is replaced), plus a light desert haze that hides the far
+-- ends. The sleepers, roadside props and bridges are drawn by each client, moving with the run (TrackScroll,
+-- CourseView).
+local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local shared = ReplicatedStorage:WaitForChild("WesternTrain")
 local Config = require(shared:WaitForChild("Config"))
+local Names = require(shared:WaitForChild("Names"))
 
 local PrototypeStage = {}
 
 export type Stage = { folder: Folder, slotCFrame: (slot: number) -> CFrame }
 
 local FOLDER_NAME = "WesternTrainStage"
-local SAND = Color3.fromRGB(214, 176, 120)
-local RAIL = Color3.fromRGB(92, 88, 86)
-local SLEEPER = Color3.fromRGB(96, 66, 44)
 
 local function block(name: string, size: Vector3, cframe: CFrame, color: Color3, material: Enum.Material, parent: Instance)
 	local part = Instance.new("Part")
@@ -44,18 +45,26 @@ function PrototypeStage.build(): Stage
 	local folder = Instance.new("Folder")
 	folder.Name = FOLDER_NAME
 	local width = stage.Slots * stage.SlotSpacing + 200
-	block("Ground", Vector3.new(width, 2, stage.RailLength + 200), CFrame.new(0, -1, 0), SAND, Enum.Material.Sand, folder)
+	block("Ground", Vector3.new(width, 2, stage.RailLength + 200), CFrame.new(0, -1, 0), stage.Colors.Sand, Enum.Material.Sand, folder)
 	for slot = 1, stage.Slots do
 		local x = slotX(slot)
 		for _, side in { -1, 1 } do
 			local rail = CFrame.new(x + side * track, stage.RailHeight / 2, 0)
-			block("Rail", Vector3.new(0.35, stage.RailHeight, stage.RailLength), rail, RAIL, Enum.Material.Metal, folder)
+			block("Rail", Vector3.new(0.35, stage.RailHeight, stage.RailLength), rail, stage.Colors.Rail, Enum.Material.Metal, folder)
 		end
-		local z = -stage.RailLength / 2
-		while z <= stage.RailLength / 2 do
-			block("Sleeper", Vector3.new(track * 2 + 2, 0.25, 0.8), CFrame.new(x, 0.125, z), SLEEPER, Enum.Material.Wood, folder)
-			z += stage.SleeperSpacing
-		end
+	end
+	local haze = Lighting:FindFirstChild(Names.Haze)
+	if not (haze and haze:IsA("Atmosphere")) then
+		local h = stage.Haze
+		local atmosphere = Instance.new("Atmosphere")
+		atmosphere.Name = Names.Haze
+		atmosphere.Density = h.Density
+		atmosphere.Offset = h.Offset
+		atmosphere.Color = h.Color
+		atmosphere.Decay = h.Decay
+		atmosphere.Glare = h.Glare
+		atmosphere.Haze = h.Haze
+		atmosphere.Parent = Lighting
 	end
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "Spawn"

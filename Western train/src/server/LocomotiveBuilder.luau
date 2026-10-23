@@ -9,6 +9,7 @@
 -- client's LocomotiveAnimator. Locomotive space: X right, Y up, Z back (forward is -Z), origin on the rails under the middle.
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local shared = ReplicatedStorage:WaitForChild("WesternTrain")
 local Config = require(shared:WaitForChild("Config"))
@@ -349,10 +350,25 @@ function LocomotiveBuilder.build(avatar: Model, base: CFrame): Model
 		end
 	end
 	avatar.Parent = model
+	-- The avatar's Humanoid turns collisions back on for its torso parts whenever the model enters the world, with no
+	-- change signal (seen in Studio); that also makes Roblox's camera treat the cab as a wall and zoom in behind it.
+	-- So the avatar's parts are made drawn-only again once the locomotive is in the world.
+	model.AncestryChanged:Connect(function()
+		if model:IsDescendantOf(Workspace) then
+			task.defer(function()
+				for part in placed do
+					PartUtil.ghost(part)
+				end
+			end)
+		end
+	end)
 
 	local basePart = newPart("Part", Names.BasePart, Color3.new(), Enum.Material.SmoothPlastic, model)
 	basePart.Size = Vector3.new(1, 0.2, 1)
 	basePart.CFrame = base
+	-- The two ends after centring, for the bridge judgement (CourseService and the driver's client).
+	model:SetAttribute(Names.SpanFront, (front - back) / 2)
+	model:SetAttribute(Names.SpanBack, (back - front) / 2)
 	local focus = newPart("Part", Names.CameraFocus, Color3.new(), Enum.Material.SmoothPlastic, model)
 	focus.Size = Vector3.new(1, 1, 1)
 	focus.CFrame = base * CFrame.new(0, Config.Locomotive.DeckHeight + Config.Locomotive.BoilerDiameter, 0)

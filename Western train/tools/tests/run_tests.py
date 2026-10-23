@@ -2,11 +2,12 @@
 
   python -I tools/tests/run_tests.py
 
-  squash  src/shared/Config.luau (real numbers), SquashSpring.luau, SquashPose.luau, CrankMotion.luau: press speed
-          and overshoot, the release bounce and wobble, frame-rate independence, hitches, part poses (a lying part,
+  squash  src/shared/Config.luau (real numbers), SquashSpring.luau, SquashPose.luau, CrankMotion.luau, CourseMath.luau:
+          press speed and overshoot, the release bounce and wobble, frame-rate independence, hitches, part poses (a lying part,
           wheels on the rails, the chimney folding harder from its foot, the cap staying on top, exact return to
           rest), the rods' circle (direction, quarter-turn sides, squashing with the wheels), the legs' swing
-          (opposite sides, limits, kick on press, flap on release, the shoes never below the rails)
+          (opposite sides, limits, kick on press, flap on release, the shoes never below the rails), the run toward the
+          bridges (clock, bridge places, when a bridge is over the locomotive, the server's pass check, the clearance)
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
 
 The modules run unchanged; the only fakes are Color3.fromRGB and Vector3.new (Config's colours and face-window
@@ -22,6 +23,7 @@ MODULES = [
     ("SquashSpring", "src/shared/SquashSpring.luau"),
     ("SquashPose", "src/shared/SquashPose.luau"),
     ("CrankMotion", "src/shared/CrankMotion.luau"),
+    ("CourseMath", "src/shared/CourseMath.luau"),
 ]
 PRELUDE = (
     "Color3 = { fromRGB = function(r, g, b) return { r = r, g = g, b = b } end }\n"

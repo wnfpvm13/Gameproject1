@@ -56,7 +56,7 @@ Config.Locomotive = {
 	LeadRadius = 0.85, -- the small leading wheel under the face
 	LeadAt = 1.2,
 	CrankRadius = 0.8, -- the rods (arms) circle this far from the driving wheel centres
-	CrankTurnsPerSecond = 1.5, -- the train always looks like it is running (the world will move, not the train)
+	CrankTurnsPerSecond = 1.5, -- the rods' idle speed until the server starts the run; then they follow the run speed
 	ArmThickness = 0.8,
 	HandSize = 1.3, -- the hand is a fist bigger than the rod (width and height), gripping the front crank pin
 	HandLength = 0.8, -- the fist along the rod
@@ -91,24 +91,92 @@ Config.Locomotive = {
 	},
 }
 
--- Prototype ground and rails.
+-- Prototype ground and rails (the server's), and the scenery each client slides past the locomotives.
 Config.Stage = {
 	Slots = 4, -- one locomotive track per player
 	SlotSpacing = 36,
 	RailHeight = 0.4, -- rail top above the ground
-	RailLength = 120,
+	RailLength = 480, -- longer than the view ahead and behind (Config.Run)
 	SleeperSpacing = 3,
+	RoadsideProps = 16, -- cacti and rocks along each track, spread over the view, both sides
+	RoadsideNear = 7, -- their distance from the track's middle line
+	RoadsideFar = 13,
+	Colors = {
+		Sand = Color3.fromRGB(214, 176, 120),
+		Rail = Color3.fromRGB(92, 88, 86),
+		Sleeper = Color3.fromRGB(96, 66, 44),
+		Cactus = Color3.fromRGB(86, 120, 64),
+		Rock = Color3.fromRGB(150, 116, 86),
+	},
+	-- A light desert haze (Lighting Atmosphere) that hides the far ends of the rails.
+	Haze = {
+		Density = 0.32,
+		Offset = 0.15,
+		Color = Color3.fromRGB(232, 206, 168),
+		Decay = Color3.fromRGB(196, 150, 104),
+		Glare = 0,
+		Haze = 1.4,
+	},
 }
 
--- The face window (top middle of the screen): the play camera looks from behind, so this shows the player's own face.
--- Sizes are shares of the screen height; the frame uses Config.Locomotive.Colors Wood and Brass.
+-- The run toward the low bridges: the locomotive stands still and the world moves back past it.
+Config.Run = {
+	Speed = 24, -- studs per second
+	StartDelay = 3, -- seconds after the locomotive appears before the world starts moving
+	CrashSeconds = 2.2, -- the stamp gag; then the run jumps back to a little before that bridge
+	ResumeDelay = 1.0, -- after the jump back, a moment before moving again
+	RestartLead = 50, -- studs before the crashed bridge the run starts again (less than the smallest gap minus the
+	-- locomotive and the bridge, so the bridge before it does not come again)
+	HoldSeconds = 1.0, -- after a hit seen on this client, how long it waits for the server's crash before following on
+	PassTolerance = 0.35, -- seconds of network delay the server allows for a press when it checks a pass
+	ReleaseGrace = 0.15, -- and for a release just before the bridge's end (the body takes about 0.05 s to rise above it)
+	HistorySeconds = 10, -- how much of each driver's squash history the server keeps
+	PredictionSeconds = 2, -- a crash this client predicted is matched with the server's crash for this long
+	ReportTimeout = 1.5, -- the server judges a bridge alone this long after it passed if the driver said nothing
+	ViewAhead = 220, -- bridges, sleepers and roadside props are drawn this far ahead
+	ViewBehind = 60,
+	CrashJolt = -9, -- spring speed added on a crash: the body stretches up and wobbles, the legs flail
+	Stars = { -- circling above the face after a crash
+		Count = 5,
+		Size = 0.7,
+		Radius = 2.6, -- around the head's middle line
+		Lift = 0.6, -- above the head's top
+		TurnsPerSecond = 0.8,
+		Color = Color3.fromRGB(255, 214, 90),
+	},
+}
+
+-- The low bridges over the track.
+Config.Bridge = {
+	FirstAt = 150, -- run distance of the first bridge (about 6 s after the start)
+	Gaps = { 110, 90, 130, 80, 100 }, -- between bridges, repeating (uneven, so the rhythm does not lull)
+	Clearance = 5.0, -- the girder's underside above the rails: the standing locomotive (7.7 to the cab roof, 8.6 to
+	-- the chimney cap) hits it, a flat one (about 3.1) passes
+	GirderHeight = 3.0,
+	Depth = 6, -- along the track
+	Span = 10, -- between the piers (the wheels and rods are about 6.7 wide)
+	PierWidth = 2,
+	StampFill = 0.9, -- the face stamp's height as a share of the girder
+	StampThickness = 0.12,
+	Colors = {
+		Stone = Color3.fromRGB(176, 140, 104),
+		Wood = Color3.fromRGB(110, 72, 44),
+	},
+}
+
+-- The face window (right side of the screen): the play camera looks from behind, so this shows the player's own face.
+-- The middle of the screen is kept clear for the track ahead (the bridges come from there), the top right for the
+-- player list and the bottom right for the touch buttons. Sizes are shares of the screen height; the frame uses
+-- Config.Locomotive.Colors Wood and Brass.
 Config.FaceCam = {
 	Height = 0.2,
-	BigHeight = 0.3, -- while the locomotive is flat (kept small enough not to cover the track ahead)
+	BigHeight = 0.3, -- while the locomotive is flat or crashed
+	Top = 0.22, -- the window's top edge, as a share of the screen height below the Roblox top bar
 	GrowSeconds = 0.15,
 	ShrinkSeconds = 0.45, -- back to normal with a small bounce
-	Margin = 8, -- pixels below the Roblox top bar
+	Margin = 12, -- pixels from the screen's right edge
 	BorderThickness = 3,
+	FlashSeconds = 0.9, -- how long a word (쾅!, 통과!) stays over the window before fading
 	Distance = 11, -- camera distance in front of the face (studs)
 	FieldOfView = 40,
 	ViewDirection = Vector3.new(0.25, 0.12, -1), -- from the face toward the camera, locomotive space (forward is -Z)

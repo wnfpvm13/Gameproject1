@@ -290,6 +290,9 @@ loaders.OneWord = function() return never("oneWord") end
 loaders.Crocodile = function() return never("croc") end
 loaders.BombPass = function() return never("bomb") end
 loaders.Nunchi = function() return never("nunchi") end
+loaders.Balance = function() return never("balance") end
+loaders.RedLight = function() return never("redLight") end
+loaders.Liar = function() return never("liar") end
 
 local function advanceUntil(cond, limit)
 	local deadline = now + limit

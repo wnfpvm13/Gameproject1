@@ -27,7 +27,7 @@
 --               (sent during the banned-word talk only, bundle 6a; outside it everyone has no word)
 --   (client -> server, the presenter during the banned-word talk: EarJudge (userId) heard a banned word; Reroll (userId:
 --   private servers, or "all": public servers) new words in the prep stage; TalkStart start the talk now)
---   BellOpen    the seat bells open to some players: { open = true, id, ids, endsAt } | { open = false } (bundle 6b)
+--   BellOpen    the seat bells open to some players: { open = true, id, ids, endsAt, repeating } | { open = false } (6b)
 --   BellRang    a seat bell rang: { userId } (client -> server: Bell (window id), ring my bell)
 --   Rescue      to the presenter: banned words caught in chat waiting for a rescue { hits = { {userId, word, endsAt} } }
 --               (client -> server: Rescue (userId) the presenter rescues that player)

@@ -13,7 +13,10 @@
 --     who is answering (the right answer comes as a quiz result);
 --   - bundle 6c: crocodile teeth (whose turn and ten teeth, pressable on my turn, pressed ones shut; the biting one at
 --     the end), the bomb (who holds it, the question, two answers for the holder), nunchi (the rule and the seconds
---     left; at the end the order the bells came in).
+--     left; at the end the order the bells came in);
+--   - bundle 6d: the balance game ("A vs B", who argues, then two picks that may change until the time is up; the
+--     counts), red light (the light big on a green or red card, my steps), the liar (the category, the word — or "you
+--     are the liar" — on my own screen, whose clue it is, the vote, the liar's guess among four, who it was).
 -- It only shows what it is told and reports the button pressed; the server checks every answer.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -28,10 +31,12 @@ local RING_FULL = 6
 local PILL_WIDTH = 104
 local SPIN_TURNS = 4 -- whole turns before the pointer stops
 local COIN_SIZE = 170
-local MAX_BUTTONS = Config.ONE_WORD_MAX_PERFORMERS + 2 -- a vote: the performers, "nobody", "could not hear"
+local MAX_BUTTONS = Config.MAX_PLAYERS + 2 -- a vote: everyone on the ground (the liar game), "nobody", "could not hear"
 local TEXT = Config.TEXT
 local SLICE_COLORS = { Color3.fromRGB(40, 92, 170), Color3.fromRGB(62, 66, 92) } -- name pills, alternating
 local GUM = Color3.fromRGB(226, 110, 132) -- behind a crocodile tooth (a white tooth on white was hard to see)
+local GREEN_LIGHT = Color3.fromRGB(34, 120, 64) -- the red light game's card
+local RED_LIGHT = Color3.fromRGB(160, 36, 44)
 
 local card: Frame
 local cardScale: UIScale
@@ -40,6 +45,7 @@ local timer: TextLabel
 local note: TextLabel
 local swapButton: TextButton
 local answerGrid: Frame
+local answerLayout: UIGridLayout
 local buttons: { TextButton } = {}
 local teethGrid: Frame
 local teeth: { TextButton } = {}
@@ -100,14 +106,16 @@ local function answerButton(index: number): TextButton
 	b.Activated:Connect(function()
 		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt -- (not while the question shows first)
 		local mine = state.kind == "vote" and state.voteIds[index] == state.myId
-		local answering = state.kind == "quiz" or state.kind == "vote" or state.kind == "bomb"
-		if answering and state.canAnswer and open and not state.myPick and not mine then
+		local answering = state.kind == "quiz" or state.kind == "vote" or state.kind == "bomb" or state.kind == "balance"
+			or state.kind == "liarGuess"
+		local repick = state.kind == "balance" -- (a balance pick may change until the time is up)
+		if answering and state.canAnswer and open and (repick or not state.myPick) and not mine then
 			state.myPick = index
 			onAnswer(state.id, index)
 			for i, other in buttons do
 				other.BackgroundColor3 = if i == index then Style.AMBER else Style.PANEL
-				other.TextColor3 = if i == index then Style.PANEL else Style.GREY -- (answered: nothing else can be pressed)
-				other.AutoButtonColor = false
+				other.TextColor3 = if i == index then Style.PANEL elseif repick then Style.WHITE else Style.GREY
+				other.AutoButtonColor = repick -- (answered: nothing else can be pressed, except a balance pick)
 			end
 		end
 	end)
@@ -156,11 +164,11 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	answerGrid.AutomaticSize = Enum.AutomaticSize.Y
 	answerGrid.LayoutOrder = 3
 	answerGrid.Parent = card
-	local grid = Instance.new("UIGridLayout")
-	grid.CellSize = UDim2.new(0.5, -4, 0, 52)
-	grid.CellPadding = UDim2.fromOffset(8, 8)
-	grid.SortOrder = Enum.SortOrder.LayoutOrder
-	grid.Parent = answerGrid
+	answerLayout = Instance.new("UIGridLayout")
+	answerLayout.CellSize = UDim2.new(0.5, -4, 0, 52)
+	answerLayout.CellPadding = UDim2.fromOffset(8, 8)
+	answerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	answerLayout.Parent = answerGrid
 	for i = 1, MAX_BUTTONS do
 		buttons[i] = answerButton(i)
 	end
@@ -317,7 +325,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local kind = payload.kind
 	local quizLike = kind == "quiz" or kind == "quizResult"
 	local newQuestion = if quizLike then payload.question ~= state.question
-		elseif kind == "vote" then payload.id ~= nil and payload.id ~= state.id
+		elseif kind == "vote" or kind == "balance" or kind == "liarGuess" then payload.id ~= nil and payload.id ~= state.id
 		else true
 	if newQuestion then
 		state.myPick = nil -- a new question (a quiz comes twice: before and once the buttons work), a new vote, or none
@@ -330,16 +338,21 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	state.myId = myId
 	local bells = kind == "oneWordBell" or kind == "bellQuiz"
 	local games = kind == "croc" or kind == "crocResult" or kind == "bomb" or kind == "bombResult" or kind == "nunchi"
-		or kind == "nunchiResult"
+		or kind == "nunchiResult" or kind == "balance" or kind == "balanceResult" or kind == "redLight"
+		or kind == "redLightResult" or kind == "liar" or kind == "liarGuess" or kind == "liarResult"
 	card.Visible = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
 		or kind == "talk" or bells or games
-	answerGrid.Visible = quizLike or kind == "vote" or kind == "bomb"
+	answerGrid.Visible = quizLike or kind == "vote" or kind == "bomb" or (kind == "balance" and payload.stage == "pick")
+		or kind == "liarGuess"
 	teethGrid.Visible = kind == "croc" or kind == "crocResult"
 	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
 		or games
 	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc" or kind == "bomb"
-		or kind == "nunchi"
+		or kind == "nunchi" or kind == "balance" or kind == "redLight" or kind == "liar" or kind == "liarGuess"
 	note.Visible = kind == "oneWord" or kind == "bellQuiz" or kind == "bomb" or kind == "nunchi" or kind == "nunchiResult"
+		or kind == "balance" or kind == "balanceResult" or kind == "redLight" or kind == "redLightResult" or kind == "liar"
+	card.BackgroundColor3 = if kind == "redLight" then (if payload.light == "red" then RED_LIGHT else GREEN_LIGHT)
+		else Style.PANEL
 	local slim = kind == "talk"
 	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 0.5)
 	card.Position = if slim then TALK_POSITION else CARD_POSITION
@@ -365,10 +378,11 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			end
 		end
 	elseif kind == "vote" then
-		title.Text = TEXT.JUDGE_VOTE
+		local liarVote = payload.prompt == "liar"
+		title.Text = if liarVote then TEXT.LIAR_VOTE else TEXT.JUDGE_VOTE
 		state.voteIds = payload.ids or {}
 		local labels = table.clone(names)
-		table.insert(labels, TEXT.VOTE_NONE)
+		table.insert(labels, if liarVote then TEXT.LIAR_NONE else TEXT.VOTE_NONE)
 		table.insert(labels, TEXT.VOTE_ABSTAIN)
 		for i, b in buttons do
 			b.Visible = labels[i] ~= nil
@@ -433,6 +447,52 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 				else string.format(TEXT.NUNCHI_NONE, name .. mark))
 		end
 		note.Text = table.concat(order, " · ")
+	elseif kind == "balance" or kind == "balanceResult" then
+		title.Text = string.format(TEXT.BALANCE_VS, payload.a or "", payload.b or "")
+		if kind == "balanceResult" then
+			note.Text = string.format(TEXT.BALANCE_COUNT, payload.a or "", payload.countA or 0, payload.b or "", payload.countB or 0)
+		elseif payload.stage == "bell" then
+			note.Text = TEXT.BALANCE_BELL
+		elseif payload.stage == "talk" then
+			note.Text = string.format(TEXT.BALANCE_TALK, names[1] or "?")
+		else
+			note.Text = TEXT.BALANCE_PICK
+			local choices = payload.choices or {}
+			for i, b in buttons do
+				b.Visible = choices[i] ~= nil
+				b.Text = choices[i] or ""
+				paint(b, canAnswer, i == state.myPick)
+			end
+		end
+	elseif kind == "redLight" or kind == "redLightResult" then
+		title.Text = if kind == "redLightResult" then TEXT.REDLIGHT_TITLE
+			elseif payload.light == "red" then TEXT.REDLIGHT_RED else TEXT.REDLIGHT_GREEN
+		local mine = table.find(payload.ids or {}, myId)
+		local steps = if mine then (payload.steps or {})[mine] or 0 else 0
+		note.Text = if not mine then ""
+			elseif table.find(payload.caught or {}, myId) then TEXT.REDLIGHT_YOU_CAUGHT
+			elseif steps >= (payload.goal or math.huge) then TEXT.REDLIGHT_YOU_SAFE
+			else string.format(TEXT.REDLIGHT_STEPS, steps, payload.goal or 0)
+	elseif kind == "liar" then
+		title.Text = if payload.liar then string.format(TEXT.LIAR_YOU, payload.category or "")
+			elseif payload.word then string.format(TEXT.LIAR_WORD, payload.word)
+			else string.format(TEXT.LIAR_CATEGORY, payload.category or "")
+		note.Text = if payload.stage == "clue" then string.format(TEXT.LIAR_CLUE, names[1] or "?")
+			elseif payload.stage == "accuse" then TEXT.LIAR_ACCUSE
+			else string.format(TEXT.LIAR_CATEGORY, payload.category or "")
+	elseif kind == "liarGuess" then
+		title.Text = TEXT.LIAR_GUESS
+		local ids = payload.ids or {}
+		state.canAnswer = canAnswer and ids[1] == myId
+		local choices = payload.choices or {}
+		for i, b in buttons do
+			b.Visible = choices[i] ~= nil
+			b.Text = choices[i] or ""
+			paint(b, state.canAnswer and not state.myPick, i == state.myPick)
+		end
+	elseif kind == "liarResult" then
+		title.Text = string.format(if payload.caught then TEXT.LIAR_CAUGHT else TEXT.LIAR_ESCAPED, names[1] or "?",
+			payload.word or "")
 	elseif kind == "oneWordBell" then
 		title.Text = TEXT.ONE_WORD_BELL
 	elseif kind == "bellQuiz" then
@@ -453,6 +513,14 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			setRing(names)
 		end
 	end
+	local shownButtons = 0
+	for _, b in buttons do
+		if b.Visible then
+			shownButtons += 1
+		end
+	end
+	-- (a big vote: three smaller columns, so twelve still fit a phone)
+	answerLayout.CellSize = if shownButtons > 6 then UDim2.new(1 / 3, -6, 0, 44) else UDim2.new(0.5, -4, 0, 52)
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end
 
@@ -481,7 +549,8 @@ function MissionPanel.tick(now: number)
 		timer.Text = ""
 		title.Text = string.format("%s · %d", state.topicLine, math.max(0, math.ceil(state.endsAt - now)))
 	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" or state.kind == "oneWordBell"
-		or state.kind == "bellQuiz" or state.kind == "croc" or state.kind == "bomb" or state.kind == "nunchi" then
+		or state.kind == "bellQuiz" or state.kind == "croc" or state.kind == "bomb" or state.kind == "nunchi"
+		or state.kind == "balance" or state.kind == "redLight" or state.kind == "liar" or state.kind == "liarGuess" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""

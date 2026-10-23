@@ -10,7 +10,8 @@
 -- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
 -- Bundle 4: the quiz (also the final), the roulette, "say what you like" (4b, bells since 6b); bundle 6a: the
 -- banned-word talk (only while speech judging is on); bundle 6b: the bell quiz (only with a presenter); bundle 6c:
--- crocodile teeth, the bomb, nunchi; and the Studio-only test mission.
+-- crocodile teeth, the bomb, nunchi; bundle 6d: the balance game, red light, the liar; and the Studio-only test
+-- mission.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -25,6 +26,9 @@ local BannedTalk = require(missionFolder:WaitForChild("BannedTalk"))
 local Crocodile = require(missionFolder:WaitForChild("Crocodile"))
 local BombPass = require(missionFolder:WaitForChild("BombPass"))
 local Nunchi = require(missionFolder:WaitForChild("Nunchi"))
+local Balance = require(missionFolder:WaitForChild("Balance"))
+local RedLight = require(missionFolder:WaitForChild("RedLight"))
+local Liar = require(missionFolder:WaitForChild("Liar"))
 local TestMission = require(missionFolder:WaitForChild("TestMission"))
 
 local MissionRunner = {}
@@ -46,17 +50,20 @@ export type Ctx = {
 	-- An answer mission closed: who answered and who did not (the AFK rule, docs/DESIGN_V3.md §4).
 	answers: (answered: { Player }, missed: { Player }) -> (),
 	canFling: (player: Player) -> boolean, -- a subjective launch may hit them now (public limits, not flying)
-	-- The presenter picks one of `options` within `seconds` (nil: none in time, no presenter, or the round is over).
-	presenterPick: (options: { Option }, seconds: number) -> string?,
+	-- The presenter picks one of `options` within `seconds` (nil: none in time, no presenter, or the round is over);
+	-- `kind`: "judge" (who flies, the default) or "accuse" (who is the liar, bundle 6d).
+	presenterPick: (options: { Option }, seconds: number, kind: string?) -> string?,
 	-- The banned-word talk's stage (docs/DESIGN_V3.md §6): "prep" (words drawn avoiding `topic`, shown, chat rules on)
 	-- or "talk" (judged from now on). RoundService runs the settle stage after the mission, whatever happened.
 	talk: (stage: string, topic: string?) -> (),
 	-- The presenter's re-draw window: waits `seconds` or until they press "start now"; false if cancelled meanwhile.
 	presenterReroll: (seconds: number) -> boolean,
 	-- The seat bells of `from` open for `seconds` (bundle 6b): who rang, first to last, and when (`firstOnly`: closes
-	-- at the first ring; `enough(rung, times)`: closes when the game knows its outcome, bundle 6c).
+	-- at the first ring; `enough(rung, times, presses)`: closes when the game knows its outcome, bundle 6c;
+	-- `repeatEvery`: every press at least that far apart counts and comes back in `presses`, bundle 6d).
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
 	-- The floor (§5.1): only `player` (and the presenter) heard by everyone, alive players receive only their chat;
 	-- nil ends it. RoundService ends it after every mission too.
 	floor: (player: Player?) -> (),
@@ -88,12 +95,16 @@ export type MissionCtx = {
 	-- or the mission is cancelled. Returns the answers.
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 	canFling: (player: Player) -> boolean,
-	presenterPick: (options: { Option }, seconds: number) -> string?,
+	presenterPick: (options: { Option }, seconds: number, kind: string?) -> string?,
 	lever: () -> (), -- everyone sees the podium lever pulled (the presenter's launch)
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	-- One player's own screen instead of everyone's (the liar must not get the word; nil gives them everyone's
+	-- again). Cleared by the next screen for everyone and when the mission ends.
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -113,12 +124,15 @@ export type Mission = {
 -- An entry of a presenter's menu.
 export type Option = { id: string, title: string, recommended: boolean }
 
-local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, Crocodile, BombPass, Nunchi, TestMission }
+local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, Crocodile, BombPass, Nunchi, Balance,
+	RedLight, Liar, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
+local privateScreens: { [Player]: { [string]: any } } = {} -- one player's own screen instead (the liar game)
 -- The open question: its number, who may answer, how many choices, until when (server time), the answers so far.
-type Question = { id: number, from: { [Player]: boolean }, choices: number, endsAt: number, answers: { [Player]: number } }
+type Question = { id: number, from: { [Player]: boolean }, choices: number, endsAt: number, answers: { [Player]: number },
+	changeable: boolean }
 local question: Question? = nil
 local questions = 0 -- question numbers so far (an answer sent for an older question never counts for a newer one)
 
@@ -211,6 +225,7 @@ end
 
 local function setScreen(payload: { [string]: any }?)
 	screenNow = payload
+	table.clear(privateScreens) -- (a new screen for everyone replaces the private ones)
 	Net.toAll("Mission", payload or { kind = "none" })
 end
 
@@ -249,7 +264,9 @@ local function missionCtx(ctx: Ctx): MissionCtx
 		end,
 		ask = function(payload: { [string]: any }, choices: number, seconds: number, from: { Player }): { [Player]: number }
 			questions += 1
-			local open: Question = { id = questions, from = {}, choices = choices, endsAt = Match.now() + seconds, answers = {} }
+			-- (`payload.changeable`: an answer may be changed until the time is up, so it never ends early)
+			local open: Question = { id = questions, from = {}, choices = choices, endsAt = Match.now() + seconds, answers = {},
+				changeable = payload.changeable == true }
 			for _, player in from do
 				open.from[player] = true
 			end
@@ -263,6 +280,9 @@ local function missionCtx(ctx: Ctx): MissionCtx
 				setScreen(shown)
 			end
 			waitOrCancel(ctx, seconds, function()
+				if open.changeable then
+					return false
+				end
 				local alive = ctx.players()
 				for player in open.from do
 					if not open.answers[player] and table.find(alive, player) and not ctx.flying(player) then
@@ -282,11 +302,11 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			end
 		end,
 		canFling = ctx.canFling,
-		presenterPick = function(options: { Option }, seconds: number): string?
+		presenterPick = function(options: { Option }, seconds: number, kind: string?): string?
 			if ctx.cancelled() then
 				return nil
 			end
-			return ctx.presenterPick(options, seconds)
+			return ctx.presenterPick(options, seconds, kind)
 		end,
 		lever = function()
 			if not ctx.cancelled() then
@@ -305,11 +325,22 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			return ctx.presenterReroll(seconds)
 		end,
 		bell = function(from: { Player }, seconds: number, firstOnly: boolean,
-			enough: (({ Player }, { [Player]: number }) -> boolean)?): ({ Player }, { [Player]: number })
+			enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?,
+			repeatEvery: number?): ({ Player }, { [Player]: number }, { { player: Player, at: number } })
 			if ctx.cancelled() then
-				return {}, {}
+				return {}, {}, {}
 			end
-			return ctx.bell(from, seconds, firstOnly, enough)
+			return ctx.bell(from, seconds, firstOnly, enough, repeatEvery)
+		end,
+		screenTo = function(player: Player, payload: { [string]: any }?)
+			if not ctx.cancelled() then
+				if payload then
+					privateScreens[player] = payload
+				else
+					privateScreens[player] = nil
+				end
+				Net.to(player, "Mission", payload or screenNow or { kind = "none" })
+			end
 		end,
 		floor = ctx.floor, -- (also after a cancel: the floor must always be given back)
 		presenterVerdict = function(answer: string, seconds: number): string?
@@ -356,15 +387,19 @@ function MissionRunner.run(mission: Mission, ctx: Ctx): (boolean, boolean)
 	if screenNow then
 		setScreen(nil)
 	end
+	table.clear(privateScreens) -- (also when the mission cleared everyone's screen itself)
 	return ok, didPlay
 end
 
 -- Answers to the open question: its number, a whole number in 1..choices, from someone asked, before the end; the
--- first one counts.
+-- first one counts (the last one for a question whose answers may change).
 function MissionRunner.start()
 	Net.listen("MissionAnswer", function(player, id, choice)
 		local open = question
-		if not open or id ~= open.id or not open.from[player] or open.answers[player] or typeof(choice) ~= "number" then
+		if not open or id ~= open.id or not open.from[player] or typeof(choice) ~= "number" then
+			return
+		end
+		if open.answers[player] and not open.changeable then
 			return
 		end
 		if Match.now() > open.endsAt then
@@ -406,8 +441,9 @@ end
 
 -- A player asked for the whole state again: the mission screen too.
 function MissionRunner.sendScreen(player: Player)
-	if screenNow then
-		Net.to(player, "Mission", screenNow)
+	local own = privateScreens[player] or screenNow
+	if own then
+		Net.to(player, "Mission", own)
 	end
 end
 

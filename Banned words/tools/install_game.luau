@@ -106,6 +106,43 @@ return {
 	NUNCHI_IDLE_SECONDS = 8,
 	NUNCHI_MAX_SECONDS = 30,
 	NUNCHI_MIN_PLAYERS = 3,
+	-- The balance game (bundle 6d): "A vs B"; the bells open BALANCE_BELL_SECONDS and the first BALANCE_TALKERS to ring
+	-- argue in turn on the floor (BALANCE_TALK_SECONDS, chat participants BALANCE_TALK_CHAT_SECONDS); then everyone picks
+	-- in secret within BALANCE_PICK_SECONDS (a pick may change until then); the smaller side flies (a tie or one side:
+	-- nobody), and so does whoever did not pick.
+	BALANCE_MIN_PLAYERS = 3,
+	BALANCE_BELL_SECONDS = 4,
+	BALANCE_TALKERS = 3,
+	BALANCE_TALK_SECONDS = 4,
+	BALANCE_TALK_CHAT_SECONDS = 8,
+	BALANCE_PICK_SECONDS = 10,
+	-- Red light, green light (무궁화 꽃이 피었습니다, bundle 6d): REDLIGHT_SECONDS of lights (green REDLIGHT_GREEN_MIN-MAX
+	-- seconds, red REDLIGHT_RED_MIN-MAX, starting green); each bell press on green moves a player one step (at most
+	-- REDLIGHT_MAX_PRESS a second count); a press on red after REDLIGHT_GRACE is out; at the end whoever is short of
+	-- REDLIGHT_GOAL steps flies too. Reaching the goal is safe.
+	REDLIGHT_SECONDS = 30,
+	REDLIGHT_GREEN_MIN = 2,
+	REDLIGHT_GREEN_MAX = 4,
+	REDLIGHT_RED_MIN = 1.5,
+	REDLIGHT_RED_MAX = 3,
+	REDLIGHT_MAX_PRESS = 4,
+	REDLIGHT_GRACE = 0.3, -- plus the player's round trip (the light reaches them late), up to REDLIGHT_PING_CAP
+	REDLIGHT_PING_CAP = 0.5,
+	REDLIGHT_GOAL = 25,
+	REDLIGHT_UPDATE = 0.5, -- seconds between progress updates on screen
+	REDLIGHT_MIN_PLAYERS = 2,
+	-- The liar game (bundle 6d): one liar does not know the word, only its category. LIAR_READ_SECONDS to read, the bells
+	-- open LIAR_BELL_SECONDS for the order, then each gives one clue on the floor (LIAR_CLUE_SECONDS, chat
+	-- LIAR_CLUE_CHAT_SECONDS); the presenter names the liar (PRESENTER_JUDGE_SECONDS) or everyone votes; a named liar
+	-- guesses the word from four within LIAR_GUESS_SECONDS: wrong or none flies, right (or the liar not named) gets
+	-- SCORE_LIAR_WIN. Nobody else ever flies.
+	LIAR_MIN_PLAYERS = 4,
+	LIAR_READ_SECONDS = 5,
+	LIAR_BELL_SECONDS = 4,
+	LIAR_CLUE_SECONDS = 6,
+	LIAR_CLUE_CHAT_SECONDS = 12,
+	LIAR_GUESS_SECONDS = 8,
+	LIAR_GUESS_CHOICES = 4, -- the word among this many of its category
 	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
 	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
 	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
@@ -304,6 +341,42 @@ return {
 		NUNCHI_NEXT = "다음 숫자: %d",
 		NUNCHI_ORDER = "%d %s",
 		NUNCHI_NONE = "✕ %s",
+		BALANCE_TITLE = "밸런스 게임",
+		BALANCE_START = "밸런스 게임 · 적은 쪽이 날아가요",
+		BALANCE_VS = "%s vs %s",
+		BALANCE_BELL = "🔔 벨을 누르면 먼저 말해요",
+		BALANCE_TALK = "%s 님 차례",
+		BALANCE_PICK = "몰래 골라요 · 시간 안에 바꿀 수 있어요",
+		BALANCE_COUNT = "%s %d · %s %d",
+		BALANCE_EVEN = "반반!",
+		BALANCE_SAME = "모두 같은 쪽!",
+		BALANCE_NOBODY = "아무도 안 날아가요",
+		BALANCE_NONE = "안 고름: %s",
+		REDLIGHT_TITLE = "무궁화 꽃이 피었습니다",
+		REDLIGHT_START = "무궁화 꽃이 피었습니다 · 초록불에 벨! 빨간불엔 멈춰요",
+		REDLIGHT_GREEN = "🟢 가세요!",
+		REDLIGHT_RED = "🔴 멈춰요!",
+		REDLIGHT_STEPS = "내 걸음 %d / %d",
+		REDLIGHT_YOU_CAUGHT = "🔴 걸렸어요! 이번 게임은 여기까지",
+		REDLIGHT_YOU_SAFE = "🏁 도착! 이제 안전해요",
+		REDLIGHT_CAUGHT = "🔴 움직였다! %s",
+		REDLIGHT_SHORT = "🐌 못 왔다! %s",
+		REDLIGHT_ALL_SAFE = "모두 도착!",
+		LIAR_TITLE = "라이어 게임",
+		LIAR_START = "라이어 게임 · 제시어를 모르는 한 명을 찾아요",
+		LIAR_CATEGORY = "주제: %s",
+		LIAR_WORD = "제시어: %s",
+		LIAR_YOU = "🤫 당신이 라이어! 주제: %s",
+		LIAR_CLUE = "%s 님의 설명",
+		LIAR_ACCUSE = "라이어는 누구?",
+		LIAR_VOTE = "투표 · 라이어는 누구?",
+		LIAR_NONE = "모르겠음",
+		LIAR_GUESS = "라이어의 마지막 기회 · 제시어는?",
+		LIAR_CAUGHT = "🎯 잡았다! 라이어는 %s · 제시어 %s",
+		LIAR_ESCAPED = "😎 라이어 %s 승리! 제시어 %s",
+		ACCUSE_PICK = "라이어로 지목할 사람",
+		MINIGAME_TOO_FEW = "사람이 너무 적어져서 이번 게임은 그냥 끝나요",
+		ACCUSE_BUTTON = "지목!",
 		VERDICT_RIGHT = "⭕ 맞음",
 		VERDICT_WRONG = "❌ 틀림",
 		WORDS_TITLE = "금칙어 명단",
@@ -328,6 +401,7 @@ return {
 	SCORE_WIN = 3,
 	SCORE_PRESENTER = 2, -- the presenter at the end of a round (owner 2026-10-23); launches earn nothing
 	SCORE_BELL_QUIZ = 1, -- a right answer in the bell quiz
+	SCORE_LIAR_WIN = 2, -- the liar not caught, or caught and guessing the word
 	ASSIST_WINDOW = 10, -- (speech assist credit, used again with speech judging in phase 2)
 	SCORE_ASSIST = 1,
 
@@ -732,7 +806,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 --               (sent during the banned-word talk only, bundle 6a; outside it everyone has no word)
 --   (client -> server, the presenter during the banned-word talk: EarJudge (userId) heard a banned word; Reroll (userId:
 --   private servers, or "all": public servers) new words in the prep stage; TalkStart start the talk now)
---   BellOpen    the seat bells open to some players: { open = true, id, ids, endsAt } | { open = false } (bundle 6b)
+--   BellOpen    the seat bells open to some players: { open = true, id, ids, endsAt, repeating } | { open = false } (6b)
 --   BellRang    a seat bell rang: { userId } (client -> server: Bell (window id), ring my bell)
 --   Rescue      to the presenter: banned words caught in chat waiting for a rescue { hits = { {userId, word, endsAt} } }
 --               (client -> server: Rescue (userId) the presenter rescues that player)
@@ -1091,11 +1165,11 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 			return LifeService.canFail(player, "subjective")
 		end,
 		-- The one-word mission's launch: the presenter's choice (a missed one counts toward PRESENTER_MISSES).
-		presenterPick = function(options, seconds)
+		presenterPick = function(options, seconds, kind: string?)
 			local function over(): boolean
 				return Match.roundId ~= myRound or settled()
 			end
-			local picked = PresenterService.ask("judge", options, seconds, over)
+			local picked = PresenterService.ask(if kind == "accuse" then "accuse" else "judge", options, seconds, over)
 			return picked
 		end,
 		talk = setTalkStage,
@@ -1105,10 +1179,11 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 			end)
 		end,
 		bell = function(from: { Player }, seconds: number, firstOnly: boolean,
-			enough: (({ Player }, { [Player]: number }) -> boolean)?): ({ Player }, { [Player]: number })
+			enough: (({ Player }, { [Player]: number }, { BellService.Press }) -> boolean)?,
+			repeatEvery: number?): ({ Player }, { [Player]: number }, { BellService.Press })
 			return BellService.collect(from, seconds, firstOnly, function()
 				return Match.roundId ~= myRound or settled()
-			end, enough)
+			end, enough, repeatEvery)
 		end,
 		floor = setFloor,
 		presenterVerdict = function(answer: string, seconds: number): string?
@@ -1734,6 +1809,58 @@ end
 return RoundService
 ]====]; s.Parent = n2 end
 local n3 = Instance.new("Folder"); n3.Name = "content"
+do local s = Instance.new("ModuleScript"); s.Name = "BalanceBank"; s.Source = [====[--!strict
+-- "A vs B" questions for the balance game (docs/DESIGN_V3.md §5.2; bundle 6d). Data only. Light everyday choices that
+-- anyone can argue about around age 17; nothing about real people, groups, politics, religion or other sensitive
+-- matters, and no side that makes fun of anyone.
+
+export type Question = { a: string, b: string }
+
+local BalanceBank: { Question } = {
+	{ a = "짜장면", b = "짬뽕" },
+	{ a = "부먹", b = "찍먹" },
+	{ a = "여름", b = "겨울" },
+	{ a = "바다", b = "산" },
+	{ a = "치킨", b = "피자" },
+	{ a = "아침형 인간", b = "저녁형 인간" },
+	{ a = "강아지", b = "고양이" },
+	{ a = "콜라", b = "사이다" },
+	{ a = "민트초코 좋아", b = "민트초코 싫어" },
+	{ a = "물냉면", b = "비빔냉면" },
+	{ a = "떡볶이", b = "라면" },
+	{ a = "영화관", b = "집에서 영화" },
+	{ a = "비 오는 날", b = "눈 오는 날" },
+	{ a = "놀이공원", b = "워터파크" },
+	{ a = "단짠", b = "맵단" },
+	{ a = "순간이동 초능력", b = "투명 인간 초능력" },
+	{ a = "평생 비 오는 날", b = "평생 바람 부는 날" },
+	{ a = "편의점 도시락", b = "분식집 김밥" },
+	{ a = "카레에 밥 비벼 먹기", b = "카레 따로 먹기" },
+	{ a = "떡볶이 밀떡", b = "떡볶이 쌀떡" },
+	{ a = "아침 산책", b = "저녁 산책" },
+	{ a = "롤러코스터", b = "회전목마" },
+	{ a = "공포 영화", b = "코미디 영화" },
+	{ a = "양념치킨", b = "후라이드" },
+	{ a = "아이스크림 콘", b = "아이스크림 컵" },
+	{ a = "캠핑", b = "호텔" },
+	{ a = "게임 혼자", b = "게임 같이" },
+	{ a = "과거로 시간 여행", b = "미래로 시간 여행" },
+	{ a = "붕어빵 머리부터", b = "붕어빵 꼬리부터" },
+	{ a = "마라탕", b = "쌀국수" },
+	{ a = "자전거", b = "킥보드" },
+	{ a = "아침밥 꼭 먹기", b = "아침밥 건너뛰기" },
+	{ a = "문자로 연락", b = "전화로 연락" },
+	{ a = "케이크", b = "마카롱" },
+	{ a = "꼬들꼬들 라면", b = "푹 익힌 라면" },
+	{ a = "생일 파티 크게", b = "생일은 조용히" },
+	{ a = "용 키우기", b = "유니콘 키우기" },
+	{ a = "찐만두", b = "군만두" },
+	{ a = "우주 여행", b = "심해 탐험" },
+	{ a = "핫초코", b = "아이스티" },
+}
+
+return BalanceBank
+]====]; s.Parent = n3 end
 do local s = Instance.new("ModuleScript"); s.Name = "BombBank"; s.Source = [====[--!strict
 -- Two-choice questions for the bomb (docs/DESIGN_V3.md §5.2; bundle 6c). Data only. Quick to read and answer in a few
 -- seconds, general knowledge and everyday things around age 17; like the quiz bank, nothing about real people,
@@ -1794,6 +1921,28 @@ local BombBank: { Question } = {
 }
 
 return BombBank
+]====]; s.Parent = n3 end
+do local s = Instance.new("ModuleScript"); s.Name = "LiarBank"; s.Source = [====[--!strict
+-- Categories and words for the liar game (docs/DESIGN_V3.md §5.2; bundle 6d). Data only. Everyday words anyone around
+-- age 17 can describe in one clue; no real people, brands or sensitive matters. Each category has at least four words
+-- (the named liar guesses the word among four of its category).
+
+export type Category = { category: string, words: { string } }
+
+local LiarBank: { Category } = {
+	{ category = "음식", words = { "김밥", "떡볶이", "라면", "비빔밥", "치킨", "피자", "햄버거", "초밥" } },
+	{ category = "과일", words = { "사과", "바나나", "수박", "딸기", "포도", "복숭아", "귤", "망고" } },
+	{ category = "동물", words = { "강아지", "고양이", "토끼", "사자", "코끼리", "기린", "펭귄", "판다" } },
+	{ category = "운동", words = { "축구", "농구", "야구", "수영", "배드민턴", "탁구", "볼링", "스키" } },
+	{ category = "장소", words = { "도서관", "놀이공원", "영화관", "편의점", "공항", "병원", "바닷가", "캠핑장" } },
+	{ category = "탈것", words = { "자전거", "버스", "지하철", "비행기", "배", "고속열차", "택시", "헬리콥터" } },
+	{ category = "악기", words = { "피아노", "기타", "드럼", "바이올린", "플루트", "하모니카", "트럼펫", "우쿨렐레" } },
+	{ category = "날씨", words = { "비", "눈", "태풍", "무지개", "안개", "천둥", "우박", "황사" } },
+	{ category = "물건", words = { "우산", "안경", "시계", "가방", "베개", "칫솔", "거울", "열쇠" } },
+	{ category = "직업", words = { "요리사", "소방관", "의사", "선생님", "가수", "경찰관", "우주비행사", "제빵사" } },
+}
+
+return LiarBank
 ]====]; s.Parent = n3 end
 do local s = Instance.new("ModuleScript"); s.Name = "OneWordTopics"; s.Source = [====[--!strict
 -- One-word topics (docs/DESIGN_V3.md §5; bundle 4b, owner 2026-10-23: mostly about yourself — tastes, habits, small
@@ -2176,6 +2325,182 @@ return WordBank
 ]====]; s.Parent = n3 end
 n3.Parent = n2
 local n4 = Instance.new("Folder"); n4.Name = "missions"
+do local s = Instance.new("ModuleScript"); s.Name = "Balance"; s.Source = [====[--!strict
+-- The balance game (docs/DESIGN_V3.md §5.2; bundle 6d): "A vs B". The bells of everyone on the ground open
+-- BALANCE_BELL_SECONDS; the first BALANCE_TALKERS to ring argue in turn, each on the floor for BALANCE_TALK_SECONDS
+-- (chat participants BALANCE_TALK_CHAT_SECONDS). Then everyone on the ground picks in secret within
+-- BALANCE_PICK_SECONDS (a pick may change until then). The smaller side flies; a tie or everyone on one side: nobody.
+-- Whoever did not pick flies too and missed an answer (the AFK rule).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local BalanceBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("BalanceBank"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	stopped: () -> boolean,
+	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number, kind: string?) -> string?,
+	lever: () -> (),
+	talk: (stage: string, topic: string?) -> (),
+	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
+}
+
+local Balance = {
+	id = "balance",
+	title = Config.TEXT.BALANCE_TITLE,
+	expectedSeconds = Config.BALANCE_BELL_SECONDS + Config.BALANCE_TALKERS * Config.BALANCE_TALK_CHAT_SECONDS
+		+ Config.BALANCE_PICK_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
+	minPlayers = Config.BALANCE_MIN_PLAYERS :: number?,
+	needsPresenter = nil :: boolean?,
+}
+
+local function ground(ctx: Ctx): { Player }
+	local list = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(list, player)
+		end
+	end
+	return list
+end
+
+local function names(list: { Player }): string
+	local out = {}
+	for _, player in list do
+		table.insert(out, player.DisplayName)
+	end
+	return table.concat(out, ", ")
+end
+
+function Balance.available(final: boolean): boolean
+	return not final and #BalanceBank > 0
+end
+
+-- Returns false when too few were on the ground to start.
+function Balance.run(ctx: Ctx): boolean?
+	local players = ground(ctx)
+	if #players < Config.BALANCE_MIN_PLAYERS then
+		return false
+	end
+	local question = BalanceBank[ctx.rng:NextInteger(1, #BalanceBank)]
+	-- Too few left in the middle (leaves): the game ends with no penalty (§4).
+	local function tooFew(): boolean
+		local here = 0
+		for _, player in players do
+			if table.find(ctx.players(), player) then
+				here += 1
+			end
+		end
+		return here < Config.BALANCE_MIN_PLAYERS
+	end
+	local function endEarly(): nil
+		ctx.screen(nil)
+		ctx.show(Config.TEXT.MINIGAME_TOO_FEW)
+		return nil
+	end
+	ctx.show(Config.TEXT.BALANCE_START)
+	ctx.screen({ kind = "balance", stage = "bell", a = question.a, b = question.b,
+		endsAt = Match.now() + Config.BALANCE_BELL_SECONDS })
+	local talkers = math.min(Config.BALANCE_TALKERS, #players)
+	local rung = ctx.bell(players, Config.BALANCE_BELL_SECONDS, false, function(rungNow: { Player }): boolean
+		return #rungNow >= talkers -- (enough have rung: on to the talk)
+	end)
+	for i = 1, math.min(#rung, Config.BALANCE_TALKERS) do
+		local talker = rung[i]
+		if ctx.cancelled() then
+			return nil
+		end
+		if tooFew() then
+			return endEarly()
+		end
+		if table.find(ctx.players(), talker) and not ctx.flying(talker) then
+			local p = Match.participants[talker]
+			local seconds = if p and p.chat then Config.BALANCE_TALK_CHAT_SECONDS else Config.BALANCE_TALK_SECONDS
+			ctx.screen({ kind = "balance", stage = "talk", a = question.a, b = question.b, ids = { talker.UserId },
+				endsAt = Match.now() + seconds })
+			ctx.show(string.format(Config.TEXT.BALANCE_TALK, talker.DisplayName))
+			ctx.floor(talker)
+			ctx.wait(seconds)
+			ctx.floor(nil)
+		end
+	end
+	if ctx.cancelled() then
+		return nil
+	end
+	if tooFew() then
+		return endEarly()
+	end
+	local pickers = ground(ctx)
+	ctx.show(Config.TEXT.BALANCE_PICK)
+	local picks = ctx.ask({ kind = "balance", stage = "pick", a = question.a, b = question.b,
+		choices = { question.a, question.b }, changeable = true }, 2, Config.BALANCE_PICK_SECONDS, pickers)
+	if ctx.cancelled() then
+		return nil
+	end
+	if tooFew() then
+		return endEarly()
+	end
+	local sideA: { Player }, sideB: { Player }, none: { Player } = {}, {}, {}
+	for _, player in pickers do
+		if table.find(ctx.players(), player) then
+			local pick = picks[player]
+			table.insert(if pick == 1 then sideA elseif pick == 2 then sideB else none, player)
+		end
+	end
+	local losers: { Player } = table.clone(none)
+	local text
+	if #sideA > 0 and #sideB > 0 and #sideA ~= #sideB then
+		local smaller: { Player } = if #sideA < #sideB then sideA else sideB
+		for _, player in smaller do
+			table.insert(losers, player)
+		end
+		text = string.format(Config.TEXT.BALANCE_COUNT, question.a, #sideA, question.b, #sideB)
+	elseif #sideA > 0 and #sideA == #sideB then
+		text = Config.TEXT.BALANCE_EVEN
+	else
+		text = Config.TEXT.BALANCE_SAME
+	end
+	if #none > 0 then
+		text ..= " · " .. string.format(Config.TEXT.BALANCE_NONE, names(none))
+	elseif #losers == 0 then
+		text ..= " · " .. Config.TEXT.BALANCE_NOBODY
+	end
+	ctx.screen({ kind = "balanceResult", a = question.a, b = question.b, countA = #sideA, countB = #sideB })
+	ctx.show(text)
+	local answered = table.clone(sideA)
+	for _, player in sideB do
+		table.insert(answered, player)
+	end
+	ctx.answers(answered, none) -- (before the fail: a launched player's miss would not count)
+	ctx.fail(losers, "balance")
+	ctx.reveal(Config.MINIGAME_RESULT_SECONDS)
+	return nil
+end
+
+return Balance
+]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "BannedTalk"; s.Source = [====[--!strict
 -- The banned-word talk (docs/DESIGN_V3.md §5-6; bundle 6a, owner 2026-10-23: banned words are one minigame, played
 -- only while speech judging is on). Prep: everyone alive gets a banned word only they do not know (RoundService draws
@@ -2206,12 +2531,14 @@ type Ctx = {
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 	canFling: (player: Player) -> boolean,
-	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number, kind: string?) -> string?,
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -2284,12 +2611,14 @@ type Ctx = {
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 	canFling: (player: Player) -> boolean,
-	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number, kind: string?) -> string?,
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -2439,12 +2768,14 @@ type Ctx = {
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 	canFling: (player: Player) -> boolean,
-	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number, kind: string?) -> string?,
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -2560,6 +2891,284 @@ end
 
 return Crocodile
 ]====]; s.Parent = n4 end
+do local s = Instance.new("ModuleScript"); s.Name = "Liar"; s.Source = [====[--!strict
+-- The liar game (docs/DESIGN_V3.md §5.2; bundle 6d, owner 2026-10-23: the objective rule). One player on the ground is
+-- the liar: everyone else on the ground and the presenter see the word, the liar (and anyone not playing) sees only
+-- its category — the word is sent to each player who may see it on their own screen, so it never reaches the liar's
+-- client. LIAR_READ_SECONDS to read; the bells open LIAR_BELL_SECONDS for the order (who rang first goes first, the
+-- rest after in a drawn order); each on the ground gives one clue on the floor (LIAR_CLUE_SECONDS, chat participants
+-- LIAR_CLUE_CHAT_SECONDS). Then the presenter names someone within PRESENTER_JUDGE_SECONDS ("accuse"), else everyone
+-- votes (VoteRules; "I don't know" counts as nobody, "could not hear" abstains; a vote needs VOTE_MIN_VOTERS; who does
+-- not vote missed an answer). A named liar guesses the word among four of its category within LIAR_GUESS_SECONDS:
+-- wrong or none, the liar flies. Otherwise (a right guess, someone else named, nobody named) nobody flies and the liar
+-- scores SCORE_LIAR_WIN. The presenter knows the word but not the liar.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local shared = ReplicatedStorage:WaitForChild("BannedWords")
+local Config = require(shared:WaitForChild("Config"))
+local VoteRules = require(shared:WaitForChild("VoteRules"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local LiarBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("LiarBank"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	stopped: () -> boolean,
+	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number, kind: string?) -> string?,
+	lever: () -> (),
+	talk: (stage: string, topic: string?) -> (),
+	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
+}
+
+local Liar = {
+	id = "liar",
+	title = Config.TEXT.LIAR_TITLE,
+	-- The longest run: everyone (MAX_PLAYERS) clues by chat, the presenter misses, a vote, the guess.
+	expectedSeconds = Config.LIAR_READ_SECONDS + Config.LIAR_BELL_SECONDS
+		+ Config.MAX_PLAYERS * Config.LIAR_CLUE_CHAT_SECONDS + Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS
+		+ Config.LIAR_GUESS_SECONDS + Config.LEVER_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
+	minPlayers = Config.LIAR_MIN_PLAYERS :: number?,
+	needsPresenter = nil :: boolean?,
+}
+
+local function ids(list: { Player }): { number }
+	local out = {}
+	for _, player in list do
+		table.insert(out, player.UserId)
+	end
+	return out
+end
+
+local function shuffled(list: { any }, rng: Random): { any }
+	local out = table.clone(list)
+	for i = #out, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		out[i], out[j] = out[j], out[i]
+	end
+	return out
+end
+
+function Liar.available(final: boolean): boolean
+	return not final and #LiarBank > 0
+end
+
+-- Returns false when too few were on the ground to start.
+function Liar.run(ctx: Ctx): boolean?
+	local players = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(players, player)
+		end
+	end
+	if #players < Config.LIAR_MIN_PLAYERS then
+		return false
+	end
+	local entry = LiarBank[ctx.rng:NextInteger(1, #LiarBank)]
+	local word = entry.words[ctx.rng:NextInteger(1, #entry.words)]
+	local liar = players[ctx.rng:NextInteger(1, #players)]
+	local function stillIn(player: Player): boolean
+		return table.find(ctx.players(), player) ~= nil and not ctx.flying(player)
+	end
+	-- Too few left in the middle (leaves), or the liar gone: the game ends with no penalty (§4).
+	local function tooFew(): boolean
+		local here = 0
+		for _, player in players do
+			if table.find(ctx.players(), player) then
+				here += 1
+			end
+		end
+		return here < Config.LIAR_MIN_PLAYERS or not table.find(ctx.players(), liar)
+	end
+	local function endEarly(): nil
+		ctx.screen(nil)
+		ctx.show(Config.TEXT.MINIGAME_TOO_FEW)
+		return nil
+	end
+	-- Everyone's screen shows the category; the word goes to each player who may see it, the liar gets told.
+	local function show(stage: string, extra: { [string]: any }?)
+		local base: { [string]: any } = { kind = "liar", stage = stage, category = entry.category }
+		local more: { [string]: any } = extra or {}
+		for key, value in more do
+			base[key] = value
+		end
+		ctx.screen(base)
+		for _, player in Players:GetPlayers() do
+			local sees = player == Match.presenter or (table.find(players, player) ~= nil and player ~= liar)
+			if sees or player == liar then
+				local own = table.clone(base)
+				if player == liar then
+					own.liar = true
+				else
+					own.word = word
+				end
+				ctx.screenTo(player, own)
+			end
+		end
+	end
+	ctx.show(Config.TEXT.LIAR_START)
+	show("read", { endsAt = Match.now() + Config.LIAR_READ_SECONDS })
+	if not ctx.wait(Config.LIAR_READ_SECONDS) then
+		return nil
+	end
+	if tooFew() then
+		return endEarly()
+	end
+	show("bell", { endsAt = Match.now() + Config.LIAR_BELL_SECONDS })
+	local rung = ctx.bell(players, Config.LIAR_BELL_SECONDS, false, function(rungNow: { Player }): boolean
+		return #rungNow >= #players -- (everyone rang: on to the clues)
+	end)
+	if ctx.cancelled() then
+		return nil
+	end
+	if tooFew() then
+		return endEarly()
+	end
+	local order = table.clone(rung)
+	for _, player in shuffled(players, ctx.rng) do
+		if not table.find(order, player) then
+			table.insert(order, player)
+		end
+	end
+	for _, player in order do
+		if ctx.cancelled() then
+			return nil
+		end
+		if tooFew() then
+			return endEarly()
+		end
+		if stillIn(player) then
+			local p = Match.participants[player]
+			local seconds = if p and p.chat then Config.LIAR_CLUE_CHAT_SECONDS else Config.LIAR_CLUE_SECONDS
+			show("clue", { ids = { player.UserId }, endsAt = Match.now() + seconds })
+			ctx.show(string.format(Config.TEXT.LIAR_CLUE, player.DisplayName))
+			ctx.floor(player)
+			ctx.wait(seconds)
+			ctx.floor(nil)
+		end
+	end
+	if ctx.cancelled() then
+		return nil
+	end
+	if tooFew() then
+		return endEarly()
+	end
+	-- Who is the liar: the presenter, else a vote.
+	local candidates = {}
+	for _, player in players do
+		if stillIn(player) then
+			table.insert(candidates, player)
+		end
+	end
+	show("accuse", { ids = ids(candidates) })
+	ctx.show(Config.TEXT.LIAR_ACCUSE)
+	local options = {}
+	for _, player in candidates do
+		table.insert(options, { id = tostring(player.UserId), title = player.DisplayName, recommended = false })
+	end
+	local picked = ctx.presenterPick(options, Config.PRESENTER_JUDGE_SECONDS, "accuse")
+	if ctx.cancelled() then
+		return nil
+	end
+	if tooFew() then
+		return endEarly()
+	end
+	local named: Player? = nil
+	for _, player in candidates do
+		if tostring(player.UserId) == picked then
+			named = player
+		end
+	end
+	if not named then
+		local voters = {}
+		for _, player in candidates do
+			if stillIn(player) then
+				table.insert(voters, player)
+			end
+		end
+		if VoteRules.canVote(#voters) then
+			local votes = ctx.ask({ kind = "vote", prompt = "liar", ids = ids(candidates) }, VoteRules.choices(#candidates),
+				Config.VOTE_SECONDS, voters)
+			if ctx.cancelled() then
+				return nil
+			end
+			if tooFew() then
+				return endEarly()
+			end
+			local voted, silent, stillVoting = {}, {}, {}
+			for _, player in voters do
+				if table.find(ctx.players(), player) then
+					table.insert(stillVoting, player) -- (voters who left or went out meanwhile no longer count)
+					table.insert(if votes[player] then voted else silent, player)
+				end
+			end
+			ctx.answers(voted, silent)
+			local index = VoteRules.decide(votes, candidates, stillVoting)
+			named = if index then candidates[index] else nil
+		end
+	end
+	local caught = false
+	if named == liar and table.find(ctx.players(), liar) then
+		local choices = { word }
+		for _, other in shuffled(entry.words, ctx.rng) do
+			if #choices < Config.LIAR_GUESS_CHOICES and other ~= word then
+				table.insert(choices, other)
+			end
+		end
+		choices = shuffled(choices, ctx.rng)
+		ctx.show(Config.TEXT.LIAR_GUESS)
+		local guess = ctx.ask({ kind = "liarGuess", category = entry.category, ids = { liar.UserId }, choices = choices },
+			#choices, Config.LIAR_GUESS_SECONDS, { liar })
+		if ctx.cancelled() then
+			return nil
+		end
+		if tooFew() then
+			return endEarly()
+		end
+		caught = choices[guess[liar] or 0] ~= word
+	end
+	ctx.screen({ kind = "liarResult", category = entry.category, word = word, ids = { liar.UserId }, caught = caught })
+	ctx.show(string.format(if caught then Config.TEXT.LIAR_CAUGHT else Config.TEXT.LIAR_ESCAPED, liar.DisplayName, word))
+	if caught then
+		ctx.lever() -- (§5.2: the lever is pulled only for a liar who guessed wrong)
+		if not ctx.wait(Config.LEVER_SECONDS) then
+			return nil
+		end
+		if tooFew() then
+			return endEarly() -- (the liar left while the lever came down)
+		end
+		ctx.fail({ liar }, "liar")
+	else
+		-- The points first: the fail counts the votes' answers, which may decide the round and cancel the rest.
+		ctx.score(liar, Config.SCORE_LIAR_WIN)
+		ctx.fail({}, "liar")
+	end
+	ctx.reveal(Config.MINIGAME_RESULT_SECONDS)
+	return nil
+end
+
+return Liar
+]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "Nunchi"; s.Source = [====[--!strict
 -- Nunchi (docs/DESIGN_V3.md §5.2; bundle 6c): the Korean counting game with the seat bells. The bells of everyone on
 -- the ground open; each ring takes the next number (1, 2, 3 ...). Rings within NUNCHI_WINDOW of the first ring of a
@@ -2590,12 +3199,14 @@ type Ctx = {
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 	canFling: (player: Player) -> boolean,
-	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number, kind: string?) -> string?,
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -2784,12 +3395,14 @@ type Ctx = {
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 	canFling: (player: Player) -> boolean,
-	presenterPick: (options: { Option }, seconds: number) -> string?,
+	presenterPick: (options: { Option }, seconds: number, kind: string?) -> string?,
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -3125,12 +3738,14 @@ type Ctx = {
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 	canFling: (player: Player) -> boolean,
-	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number, kind: string?) -> string?,
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -3345,6 +3960,238 @@ Quiz.bell = BellQuiz
 
 return Quiz
 ]====]; s.Parent = n4 end
+do local s = Instance.new("ModuleScript"); s.Name = "RedLight"; s.Source = [====[--!strict
+-- Red light, green light (무궁화 꽃이 피었습니다; docs/DESIGN_V3.md §5.2; bundle 6d). REDLIGHT_SECONDS of lights drawn
+-- at the start (green REDLIGHT_GREEN_MIN-MAX seconds, red REDLIGHT_RED_MIN-MAX, green first), shown on everyone's
+-- screen as they change. Every bell press on green moves a player one step (the bells count at most
+-- REDLIGHT_MAX_PRESS a second, so a macro or a fast phone gains nothing beyond that); a press on red after
+-- REDLIGHT_GRACE (the light may reach a client late) puts the player out of this game: they fly. Reaching REDLIGHT_GOAL
+-- steps is safe (later presses do not matter). At the end everyone still short of the goal flies; who never pressed
+-- missed an answer (the AFK rule). Press times are the server's.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	stopped: () -> boolean,
+	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number, kind: string?) -> string?,
+	lever: () -> (),
+	talk: (stage: string, topic: string?) -> (),
+	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
+}
+
+local RedLight = {
+	id = "redLight",
+	title = Config.TEXT.REDLIGHT_TITLE,
+	expectedSeconds = Config.REDLIGHT_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
+	minPlayers = Config.REDLIGHT_MIN_PLAYERS :: number?,
+	needsPresenter = nil :: boolean?,
+}
+
+type Phase = { light: string, from: number, to: number }
+
+-- The lights from `startAt` (Match.now()) for REDLIGHT_SECONDS, green first.
+function RedLight.lights(startAt: number, rng: Random): { Phase }
+	local phases: { Phase } = {}
+	local t = startAt
+	local green = true
+	while t < startAt + Config.REDLIGHT_SECONDS do
+		local length = if green then rng:NextNumber(Config.REDLIGHT_GREEN_MIN, Config.REDLIGHT_GREEN_MAX)
+			else rng:NextNumber(Config.REDLIGHT_RED_MIN, Config.REDLIGHT_RED_MAX)
+		table.insert(phases, { light = if green then "green" else "red", from = t, to = t + length })
+		t += length
+		green = not green
+	end
+	return phases
+end
+
+-- The light at `at` and when it began.
+local function lightAt(phases: { Phase }, at: number): (string, number)
+	for _, phase in phases do
+		if at < phase.to then
+			return phase.light, phase.from
+		end
+	end
+	local last = phases[#phases]
+	return last.light, last.from
+end
+
+-- A press on red this long after the light changed is caught: REDLIGHT_GRACE, plus the player's round trip (the light
+-- reaches their screen late and the press comes back late), up to REDLIGHT_PING_CAP.
+local function graceOf(player: Player): number
+	local ok, ping = pcall(function(): number
+		return player:GetNetworkPing()
+	end)
+	local extra = if ok and type(ping) == "number" then math.clamp(ping, 0, Config.REDLIGHT_PING_CAP) else 0
+	return Config.REDLIGHT_GRACE + extra
+end
+
+local function ids(list: { Player }): { number }
+	local out = {}
+	for _, player in list do
+		table.insert(out, player.UserId)
+	end
+	return out
+end
+
+local function names(list: { Player }): string
+	local out = {}
+	for _, player in list do
+		table.insert(out, player.DisplayName)
+	end
+	return table.concat(out, ", ")
+end
+
+function RedLight.available(final: boolean): boolean
+	return not final
+end
+
+-- Returns false when too few were on the ground to start.
+function RedLight.run(ctx: Ctx): boolean?
+	local players = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(players, player)
+		end
+	end
+	if #players < Config.REDLIGHT_MIN_PLAYERS then
+		return false
+	end
+	ctx.show(Config.TEXT.REDLIGHT_START)
+	local startAt = Match.now()
+	local endsAt = startAt + Config.REDLIGHT_SECONDS
+	local phases = RedLight.lights(startAt, ctx.rng)
+	local steps: { [Player]: number } = {}
+	local caught: { [Player]: boolean } = {}
+	local touched: { [Player]: boolean } = {} -- pressed at all (an answer for the AFK rule)
+	local seen = 0
+	local shownLight, shownAt = "", -math.huge
+	local function progress(): { number }
+		local list = {}
+		for _, player in players do
+			table.insert(list, math.min(steps[player] or 0, Config.REDLIGHT_GOAL))
+		end
+		return list
+	end
+	-- Too few left in the middle (leaves): the game ends with no penalty (§4).
+	local function tooFew(): boolean
+		local here = 0
+		for _, player in players do
+			if table.find(ctx.players(), player) then
+				here += 1
+			end
+		end
+		return here < Config.REDLIGHT_MIN_PLAYERS
+	end
+	local function caughtIds(): { number }
+		local list = {}
+		for _, player in players do
+			if caught[player] then
+				table.insert(list, player.UserId)
+			end
+		end
+		return list
+	end
+	-- Asked every poll while the bells are open: count the new presses, update the screen, end when nobody is left
+	-- to move (everyone at the goal or caught).
+	local function follow(_rung: { Player }, _times: { [Player]: number }, presses: { { player: Player, at: number } }): boolean
+		for i = seen + 1, #presses do
+			seen = i
+			local press = presses[i]
+			local player = press.player
+			touched[player] = true
+			if not caught[player] and (steps[player] or 0) < Config.REDLIGHT_GOAL then
+				local light, since = lightAt(phases, press.at)
+				if light == "green" then
+					steps[player] = (steps[player] or 0) + 1
+				elseif press.at - since > graceOf(player) then
+					caught[player] = true
+				end
+			end
+		end
+		local now = Match.now()
+		local light = lightAt(phases, now)
+		if light ~= shownLight or now - shownAt >= Config.REDLIGHT_UPDATE then
+			shownLight, shownAt = light, now
+			ctx.screen({ kind = "redLight", light = light, goal = Config.REDLIGHT_GOAL, ids = ids(players),
+				steps = progress(), caught = caughtIds(), endsAt = endsAt })
+		end
+		if tooFew() then
+			return true
+		end
+		for _, player in players do
+			if not caught[player] and (steps[player] or 0) < Config.REDLIGHT_GOAL and table.find(ctx.players(), player) then
+				return false
+			end
+		end
+		return true
+	end
+	local rung, times, presses = ctx.bell(players, Config.REDLIGHT_SECONDS, false, follow, 1 / Config.REDLIGHT_MAX_PRESS)
+	if ctx.cancelled() then
+		return nil
+	end
+	follow(rung, times, presses) -- (the presses after the last check count too)
+	if tooFew() then
+		ctx.screen(nil)
+		ctx.show(Config.TEXT.MINIGAME_TOO_FEW)
+		return nil
+	end
+	local caughtList, short, pressed, never = {}, {}, {}, {}
+	for _, player in players do
+		if table.find(ctx.players(), player) then
+			if caught[player] then
+				table.insert(caughtList, player)
+			elseif (steps[player] or 0) < Config.REDLIGHT_GOAL then
+				table.insert(short, player)
+			end
+			table.insert(if touched[player] then pressed else never, player)
+		end
+	end
+	local losers = table.clone(caughtList)
+	for _, player in short do
+		table.insert(losers, player)
+	end
+	ctx.screen({ kind = "redLightResult", goal = Config.REDLIGHT_GOAL, ids = ids(players), steps = progress(),
+		caught = caughtIds() })
+	local lines = {}
+	if #caughtList > 0 then
+		table.insert(lines, string.format(Config.TEXT.REDLIGHT_CAUGHT, names(caughtList)))
+	end
+	if #short > 0 then
+		table.insert(lines, string.format(Config.TEXT.REDLIGHT_SHORT, names(short)))
+	end
+	ctx.show(if #lines > 0 then table.concat(lines, " · ") else Config.TEXT.REDLIGHT_ALL_SAFE)
+	ctx.answers(pressed, never) -- (before the fail: a launched player's miss would not count)
+	ctx.fail(losers, "redLight")
+	ctx.reveal(Config.MINIGAME_RESULT_SECONDS)
+	return nil
+end
+
+return RedLight
+]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "Roulette"; s.Source = [====[--!strict
 -- The roulette (docs/DESIGN_V3.md §5; bundle 4a, owner 2026-10-23: a 2D wheel on the screen): the server picks one
 -- alive player at random and everyone's screen spins to that name (a coin for two players). The one picked fails.
@@ -3370,12 +4217,14 @@ type Ctx = {
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 	canFling: (player: Player) -> boolean,
-	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number, kind: string?) -> string?,
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -3448,12 +4297,14 @@ type Ctx = {
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 	canFling: (player: Player) -> boolean,
-	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number, kind: string?) -> string?,
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -3498,7 +4349,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "BellService"; s.Source = [=
 -- ring needs the player alive, on the ground, in the main game, and BELL_COOLDOWN after their last ring. Everyone hears
 -- the ding and sees that bell light up ("BellRang"); clients show their bell button while it is open to them
 -- ("BellOpen"). Every window has its own number and a ring must name it (a late ring never counts for a later window);
--- a window that wants only the first ring closes the moment it comes. Outside an open window rings do nothing.
+-- a window that wants only the first ring closes the moment it comes. A repeating window (bundle 6d, red light) takes
+-- every press at least `repeatEvery` apart from each player and keeps them all (with no ding: too many). Outside an
+-- open window rings do nothing.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -3509,8 +4362,9 @@ local BellService = {}
 
 local POLL = 0.05 -- seconds between "done yet?" checks while the bells are open
 
+export type Press = { player: Player, at: number }
 type Window = { id: number, from: { [Player]: boolean }, rung: { Player }, times: { [Player]: number }, endsAt: number,
-	firstOnly: boolean }
+	firstOnly: boolean, repeatEvery: number?, presses: { Press }, lastPress: { [Player]: number } }
 
 local window: Window? = nil
 local windows = 0
@@ -3529,7 +4383,9 @@ end
 
 local function tell(player: Player?)
 	local open = window
-	local payload = if open then { open = true, id = open.id, ids = ids(open.from), endsAt = open.endsAt } else { open = false }
+	local payload = if open
+		then { open = true, id = open.id, ids = ids(open.from), endsAt = open.endsAt, repeating = open.repeatEvery ~= nil }
+		else { open = false }
 	if player then
 		Net.to(player, "BellOpen", payload)
 	else
@@ -3542,7 +4398,11 @@ function BellService.start(isBusy: (Player) -> boolean)
 	unavailable = isBusy
 	Net.listen("Bell", function(player, windowId)
 		local open = window
-		if not open or windowId ~= open.id or not open.from[player] or table.find(open.rung, player) then
+		if not open or windowId ~= open.id or not open.from[player] then
+			return
+		end
+		local every = open.repeatEvery
+		if not every and table.find(open.rung, player) then
 			return
 		end
 		if Match.now() > open.endsAt then
@@ -3552,6 +4412,18 @@ function BellService.start(isBusy: (Player) -> boolean)
 			return
 		end
 		local now = os.clock()
+		if every then
+			if now - (open.lastPress[player] or -math.huge) < every then
+				return
+			end
+			open.lastPress[player] = now
+			table.insert(open.presses, { player = player, at = Match.now() })
+			if not table.find(open.rung, player) then
+				table.insert(open.rung, player)
+				open.times[player] = Match.now()
+			end
+			return
+		end
 		if now - (lastRing[player] or -math.huge) < Config.BELL_COOLDOWN then
 			return
 		end
@@ -3566,28 +4438,30 @@ function BellService.start(isBusy: (Player) -> boolean)
 	end)
 end
 
--- Opens the bells of `from` for `seconds` and waits. Returns who rang, first to last, and when each ring arrived
--- (Match.now()). `firstOnly`: closes at the first ring. Ends early when `enough(rung, times)` says so (a game that
--- knows its outcome) or `stop()` (the mission was cancelled).
+-- Opens the bells of `from` for `seconds` and waits. Returns who rang, first to last, when each first ring arrived
+-- (Match.now()) and, for a repeating window (`repeatEvery`), every press. `firstOnly`: closes at the first ring. Ends
+-- early when `enough(rung, times, presses)` says so (a game that knows its outcome; it is asked every poll, so a game
+-- may also follow the presses live) or `stop()` (the mission was cancelled).
 function BellService.collect(from: { Player }, seconds: number, firstOnly: boolean, stop: () -> boolean,
-	enough: (({ Player }, { [Player]: number }) -> boolean)?): ({ Player }, { [Player]: number })
+	enough: (({ Player }, { [Player]: number }, { Press }) -> boolean)?, repeatEvery: number?)
+	: ({ Player }, { [Player]: number }, { Press })
 	windows += 1
 	local open: Window = { id = windows, from = {}, rung = {}, times = {}, endsAt = Match.now() + seconds,
-		firstOnly = firstOnly }
+		firstOnly = firstOnly, repeatEvery = repeatEvery, presses = {}, lastPress = {} }
 	for _, player in from do
 		open.from[player] = true
 	end
 	window = open
 	tell(nil)
 	local untilAt = os.clock() + seconds
-	while os.clock() < untilAt and not stop() and window == open and not (enough and enough(open.rung, open.times)) do
+	while os.clock() < untilAt and not stop() and window == open and not (enough and enough(open.rung, open.times, open.presses)) do
 		task.wait(math.min(POLL, math.max(0, untilAt - os.clock())))
 	end
 	if window == open then
 		window = nil
 		tell(nil)
 	end
-	return open.rung, open.times
+	return open.rung, open.times, open.presses
 end
 
 -- A mission ended (or the round): the bells close.
@@ -4215,7 +5089,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionRunner"; s.Source = 
 -- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
 -- Bundle 4: the quiz (also the final), the roulette, "say what you like" (4b, bells since 6b); bundle 6a: the
 -- banned-word talk (only while speech judging is on); bundle 6b: the bell quiz (only with a presenter); bundle 6c:
--- crocodile teeth, the bomb, nunchi; and the Studio-only test mission.
+-- crocodile teeth, the bomb, nunchi; bundle 6d: the balance game, red light, the liar; and the Studio-only test
+-- mission.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -4230,6 +5105,9 @@ local BannedTalk = require(missionFolder:WaitForChild("BannedTalk"))
 local Crocodile = require(missionFolder:WaitForChild("Crocodile"))
 local BombPass = require(missionFolder:WaitForChild("BombPass"))
 local Nunchi = require(missionFolder:WaitForChild("Nunchi"))
+local Balance = require(missionFolder:WaitForChild("Balance"))
+local RedLight = require(missionFolder:WaitForChild("RedLight"))
+local Liar = require(missionFolder:WaitForChild("Liar"))
 local TestMission = require(missionFolder:WaitForChild("TestMission"))
 
 local MissionRunner = {}
@@ -4251,17 +5129,20 @@ export type Ctx = {
 	-- An answer mission closed: who answered and who did not (the AFK rule, docs/DESIGN_V3.md §4).
 	answers: (answered: { Player }, missed: { Player }) -> (),
 	canFling: (player: Player) -> boolean, -- a subjective launch may hit them now (public limits, not flying)
-	-- The presenter picks one of `options` within `seconds` (nil: none in time, no presenter, or the round is over).
-	presenterPick: (options: { Option }, seconds: number) -> string?,
+	-- The presenter picks one of `options` within `seconds` (nil: none in time, no presenter, or the round is over);
+	-- `kind`: "judge" (who flies, the default) or "accuse" (who is the liar, bundle 6d).
+	presenterPick: (options: { Option }, seconds: number, kind: string?) -> string?,
 	-- The banned-word talk's stage (docs/DESIGN_V3.md §6): "prep" (words drawn avoiding `topic`, shown, chat rules on)
 	-- or "talk" (judged from now on). RoundService runs the settle stage after the mission, whatever happened.
 	talk: (stage: string, topic: string?) -> (),
 	-- The presenter's re-draw window: waits `seconds` or until they press "start now"; false if cancelled meanwhile.
 	presenterReroll: (seconds: number) -> boolean,
 	-- The seat bells of `from` open for `seconds` (bundle 6b): who rang, first to last, and when (`firstOnly`: closes
-	-- at the first ring; `enough(rung, times)`: closes when the game knows its outcome, bundle 6c).
+	-- at the first ring; `enough(rung, times, presses)`: closes when the game knows its outcome, bundle 6c;
+	-- `repeatEvery`: every press at least that far apart counts and comes back in `presses`, bundle 6d).
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
 	-- The floor (§5.1): only `player` (and the presenter) heard by everyone, alive players receive only their chat;
 	-- nil ends it. RoundService ends it after every mission too.
 	floor: (player: Player?) -> (),
@@ -4293,12 +5174,16 @@ export type MissionCtx = {
 	-- or the mission is cancelled. Returns the answers.
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
 	canFling: (player: Player) -> boolean,
-	presenterPick: (options: { Option }, seconds: number) -> string?,
+	presenterPick: (options: { Option }, seconds: number, kind: string?) -> string?,
 	lever: () -> (), -- everyone sees the podium lever pulled (the presenter's launch)
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	-- One player's own screen instead of everyone's (the liar must not get the word; nil gives them everyone's
+	-- again). Cleared by the next screen for everyone and when the mission ends.
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -4318,12 +5203,15 @@ export type Mission = {
 -- An entry of a presenter's menu.
 export type Option = { id: string, title: string, recommended: boolean }
 
-local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, Crocodile, BombPass, Nunchi, TestMission }
+local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, Crocodile, BombPass, Nunchi, Balance,
+	RedLight, Liar, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
+local privateScreens: { [Player]: { [string]: any } } = {} -- one player's own screen instead (the liar game)
 -- The open question: its number, who may answer, how many choices, until when (server time), the answers so far.
-type Question = { id: number, from: { [Player]: boolean }, choices: number, endsAt: number, answers: { [Player]: number } }
+type Question = { id: number, from: { [Player]: boolean }, choices: number, endsAt: number, answers: { [Player]: number },
+	changeable: boolean }
 local question: Question? = nil
 local questions = 0 -- question numbers so far (an answer sent for an older question never counts for a newer one)
 
@@ -4416,6 +5304,7 @@ end
 
 local function setScreen(payload: { [string]: any }?)
 	screenNow = payload
+	table.clear(privateScreens) -- (a new screen for everyone replaces the private ones)
 	Net.toAll("Mission", payload or { kind = "none" })
 end
 
@@ -4454,7 +5343,9 @@ local function missionCtx(ctx: Ctx): MissionCtx
 		end,
 		ask = function(payload: { [string]: any }, choices: number, seconds: number, from: { Player }): { [Player]: number }
 			questions += 1
-			local open: Question = { id = questions, from = {}, choices = choices, endsAt = Match.now() + seconds, answers = {} }
+			-- (`payload.changeable`: an answer may be changed until the time is up, so it never ends early)
+			local open: Question = { id = questions, from = {}, choices = choices, endsAt = Match.now() + seconds, answers = {},
+				changeable = payload.changeable == true }
 			for _, player in from do
 				open.from[player] = true
 			end
@@ -4468,6 +5359,9 @@ local function missionCtx(ctx: Ctx): MissionCtx
 				setScreen(shown)
 			end
 			waitOrCancel(ctx, seconds, function()
+				if open.changeable then
+					return false
+				end
 				local alive = ctx.players()
 				for player in open.from do
 					if not open.answers[player] and table.find(alive, player) and not ctx.flying(player) then
@@ -4487,11 +5381,11 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			end
 		end,
 		canFling = ctx.canFling,
-		presenterPick = function(options: { Option }, seconds: number): string?
+		presenterPick = function(options: { Option }, seconds: number, kind: string?): string?
 			if ctx.cancelled() then
 				return nil
 			end
-			return ctx.presenterPick(options, seconds)
+			return ctx.presenterPick(options, seconds, kind)
 		end,
 		lever = function()
 			if not ctx.cancelled() then
@@ -4510,11 +5404,22 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			return ctx.presenterReroll(seconds)
 		end,
 		bell = function(from: { Player }, seconds: number, firstOnly: boolean,
-			enough: (({ Player }, { [Player]: number }) -> boolean)?): ({ Player }, { [Player]: number })
+			enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?,
+			repeatEvery: number?): ({ Player }, { [Player]: number }, { { player: Player, at: number } })
 			if ctx.cancelled() then
-				return {}, {}
+				return {}, {}, {}
 			end
-			return ctx.bell(from, seconds, firstOnly, enough)
+			return ctx.bell(from, seconds, firstOnly, enough, repeatEvery)
+		end,
+		screenTo = function(player: Player, payload: { [string]: any }?)
+			if not ctx.cancelled() then
+				if payload then
+					privateScreens[player] = payload
+				else
+					privateScreens[player] = nil
+				end
+				Net.to(player, "Mission", payload or screenNow or { kind = "none" })
+			end
 		end,
 		floor = ctx.floor, -- (also after a cancel: the floor must always be given back)
 		presenterVerdict = function(answer: string, seconds: number): string?
@@ -4561,15 +5466,19 @@ function MissionRunner.run(mission: Mission, ctx: Ctx): (boolean, boolean)
 	if screenNow then
 		setScreen(nil)
 	end
+	table.clear(privateScreens) -- (also when the mission cleared everyone's screen itself)
 	return ok, didPlay
 end
 
 -- Answers to the open question: its number, a whole number in 1..choices, from someone asked, before the end; the
--- first one counts.
+-- first one counts (the last one for a question whose answers may change).
 function MissionRunner.start()
 	Net.listen("MissionAnswer", function(player, id, choice)
 		local open = question
-		if not open or id ~= open.id or not open.from[player] or open.answers[player] or typeof(choice) ~= "number" then
+		if not open or id ~= open.id or not open.from[player] or typeof(choice) ~= "number" then
+			return
+		end
+		if open.answers[player] and not open.changeable then
 			return
 		end
 		if Match.now() > open.endsAt then
@@ -4611,8 +5520,9 @@ end
 
 -- A player asked for the whole state again: the mission screen too.
 function MissionRunner.sendScreen(player: Player)
-	if screenNow then
-		Net.to(player, "Mission", screenNow)
+	local own = privateScreens[player] or screenNow
+	if own then
+		Net.to(player, "Mission", own)
 	end
 end
 
@@ -4647,7 +5557,8 @@ local PresenterService = {}
 
 export type Option = { id: string, title: string, recommended: boolean }
 export type Change = "left" | "misses" | "stepped down"
-export type MenuKind = "pick" | "judge" | "verdict" -- the next mission / who flies / the bell quiz's right or wrong
+export type MenuKind = "pick" | "judge" | "verdict" | "accuse" -- the next mission / who flies / the bell quiz's
+-- right or wrong / who is the liar
 
 local DEFAULT_WALK_SPEED = 16
 local DEFAULT_JUMP_HEIGHT = 7.2
@@ -6223,6 +7134,7 @@ local myFlightEndsAt = 0 -- os.clock(): while my own launch lasts I keep the sho
 local bellOpen = false -- the server has my seat bell open (bundle 6b)
 local bellWindow = 0 -- the open window's number (sent back with my ring)
 local bellRung = false -- I rang it this time (one ring each time it opens)
+local bellRepeating = false -- the open window takes every press (red light): the button stays
 local menuId = 0 -- the presenter menu now open (sent back with my pick)
 
 -- Seated players cannot jump out or reset during a round.
@@ -6358,7 +7270,9 @@ MissionPanel.build(function(questionId, choice)
 	remotes.MissionAnswer:FireServer(questionId, choice)
 end)
 local function ringMyBell()
-	if not bellRung then
+	if bellRepeating then
+		remotes.Bell:FireServer(bellWindow) -- (the server counts at most a few a second)
+	elseif not bellRung then
 		bellRung = true
 		remotes.Bell:FireServer(bellWindow)
 		refresh()
@@ -6481,6 +7395,7 @@ remotes.BellOpen.OnClientEvent:Connect(function(info)
 		bellRung = false -- (a new window; the same one sent again on Sync keeps my ring)
 	end
 	bellWindow = window
+	bellRepeating = info.repeating == true
 	bellOpen = info.open == true and table.find(info.ids or {}, State.myId()) ~= nil
 	refresh()
 end)
@@ -8264,7 +9179,10 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [
 --     who is answering (the right answer comes as a quiz result);
 --   - bundle 6c: crocodile teeth (whose turn and ten teeth, pressable on my turn, pressed ones shut; the biting one at
 --     the end), the bomb (who holds it, the question, two answers for the holder), nunchi (the rule and the seconds
---     left; at the end the order the bells came in).
+--     left; at the end the order the bells came in);
+--   - bundle 6d: the balance game ("A vs B", who argues, then two picks that may change until the time is up; the
+--     counts), red light (the light big on a green or red card, my steps), the liar (the category, the word — or "you
+--     are the liar" — on my own screen, whose clue it is, the vote, the liar's guess among four, who it was).
 -- It only shows what it is told and reports the button pressed; the server checks every answer.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -8279,10 +9197,12 @@ local RING_FULL = 6
 local PILL_WIDTH = 104
 local SPIN_TURNS = 4 -- whole turns before the pointer stops
 local COIN_SIZE = 170
-local MAX_BUTTONS = Config.ONE_WORD_MAX_PERFORMERS + 2 -- a vote: the performers, "nobody", "could not hear"
+local MAX_BUTTONS = Config.MAX_PLAYERS + 2 -- a vote: everyone on the ground (the liar game), "nobody", "could not hear"
 local TEXT = Config.TEXT
 local SLICE_COLORS = { Color3.fromRGB(40, 92, 170), Color3.fromRGB(62, 66, 92) } -- name pills, alternating
 local GUM = Color3.fromRGB(226, 110, 132) -- behind a crocodile tooth (a white tooth on white was hard to see)
+local GREEN_LIGHT = Color3.fromRGB(34, 120, 64) -- the red light game's card
+local RED_LIGHT = Color3.fromRGB(160, 36, 44)
 
 local card: Frame
 local cardScale: UIScale
@@ -8291,6 +9211,7 @@ local timer: TextLabel
 local note: TextLabel
 local swapButton: TextButton
 local answerGrid: Frame
+local answerLayout: UIGridLayout
 local buttons: { TextButton } = {}
 local teethGrid: Frame
 local teeth: { TextButton } = {}
@@ -8351,14 +9272,16 @@ local function answerButton(index: number): TextButton
 	b.Activated:Connect(function()
 		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt -- (not while the question shows first)
 		local mine = state.kind == "vote" and state.voteIds[index] == state.myId
-		local answering = state.kind == "quiz" or state.kind == "vote" or state.kind == "bomb"
-		if answering and state.canAnswer and open and not state.myPick and not mine then
+		local answering = state.kind == "quiz" or state.kind == "vote" or state.kind == "bomb" or state.kind == "balance"
+			or state.kind == "liarGuess"
+		local repick = state.kind == "balance" -- (a balance pick may change until the time is up)
+		if answering and state.canAnswer and open and (repick or not state.myPick) and not mine then
 			state.myPick = index
 			onAnswer(state.id, index)
 			for i, other in buttons do
 				other.BackgroundColor3 = if i == index then Style.AMBER else Style.PANEL
-				other.TextColor3 = if i == index then Style.PANEL else Style.GREY -- (answered: nothing else can be pressed)
-				other.AutoButtonColor = false
+				other.TextColor3 = if i == index then Style.PANEL elseif repick then Style.WHITE else Style.GREY
+				other.AutoButtonColor = repick -- (answered: nothing else can be pressed, except a balance pick)
 			end
 		end
 	end)
@@ -8407,11 +9330,11 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	answerGrid.AutomaticSize = Enum.AutomaticSize.Y
 	answerGrid.LayoutOrder = 3
 	answerGrid.Parent = card
-	local grid = Instance.new("UIGridLayout")
-	grid.CellSize = UDim2.new(0.5, -4, 0, 52)
-	grid.CellPadding = UDim2.fromOffset(8, 8)
-	grid.SortOrder = Enum.SortOrder.LayoutOrder
-	grid.Parent = answerGrid
+	answerLayout = Instance.new("UIGridLayout")
+	answerLayout.CellSize = UDim2.new(0.5, -4, 0, 52)
+	answerLayout.CellPadding = UDim2.fromOffset(8, 8)
+	answerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	answerLayout.Parent = answerGrid
 	for i = 1, MAX_BUTTONS do
 		buttons[i] = answerButton(i)
 	end
@@ -8568,7 +9491,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local kind = payload.kind
 	local quizLike = kind == "quiz" or kind == "quizResult"
 	local newQuestion = if quizLike then payload.question ~= state.question
-		elseif kind == "vote" then payload.id ~= nil and payload.id ~= state.id
+		elseif kind == "vote" or kind == "balance" or kind == "liarGuess" then payload.id ~= nil and payload.id ~= state.id
 		else true
 	if newQuestion then
 		state.myPick = nil -- a new question (a quiz comes twice: before and once the buttons work), a new vote, or none
@@ -8581,16 +9504,21 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	state.myId = myId
 	local bells = kind == "oneWordBell" or kind == "bellQuiz"
 	local games = kind == "croc" or kind == "crocResult" or kind == "bomb" or kind == "bombResult" or kind == "nunchi"
-		or kind == "nunchiResult"
+		or kind == "nunchiResult" or kind == "balance" or kind == "balanceResult" or kind == "redLight"
+		or kind == "redLightResult" or kind == "liar" or kind == "liarGuess" or kind == "liarResult"
 	card.Visible = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
 		or kind == "talk" or bells or games
-	answerGrid.Visible = quizLike or kind == "vote" or kind == "bomb"
+	answerGrid.Visible = quizLike or kind == "vote" or kind == "bomb" or (kind == "balance" and payload.stage == "pick")
+		or kind == "liarGuess"
 	teethGrid.Visible = kind == "croc" or kind == "crocResult"
 	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
 		or games
 	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc" or kind == "bomb"
-		or kind == "nunchi"
+		or kind == "nunchi" or kind == "balance" or kind == "redLight" or kind == "liar" or kind == "liarGuess"
 	note.Visible = kind == "oneWord" or kind == "bellQuiz" or kind == "bomb" or kind == "nunchi" or kind == "nunchiResult"
+		or kind == "balance" or kind == "balanceResult" or kind == "redLight" or kind == "redLightResult" or kind == "liar"
+	card.BackgroundColor3 = if kind == "redLight" then (if payload.light == "red" then RED_LIGHT else GREEN_LIGHT)
+		else Style.PANEL
 	local slim = kind == "talk"
 	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 0.5)
 	card.Position = if slim then TALK_POSITION else CARD_POSITION
@@ -8616,10 +9544,11 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			end
 		end
 	elseif kind == "vote" then
-		title.Text = TEXT.JUDGE_VOTE
+		local liarVote = payload.prompt == "liar"
+		title.Text = if liarVote then TEXT.LIAR_VOTE else TEXT.JUDGE_VOTE
 		state.voteIds = payload.ids or {}
 		local labels = table.clone(names)
-		table.insert(labels, TEXT.VOTE_NONE)
+		table.insert(labels, if liarVote then TEXT.LIAR_NONE else TEXT.VOTE_NONE)
 		table.insert(labels, TEXT.VOTE_ABSTAIN)
 		for i, b in buttons do
 			b.Visible = labels[i] ~= nil
@@ -8684,6 +9613,52 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 				else string.format(TEXT.NUNCHI_NONE, name .. mark))
 		end
 		note.Text = table.concat(order, " · ")
+	elseif kind == "balance" or kind == "balanceResult" then
+		title.Text = string.format(TEXT.BALANCE_VS, payload.a or "", payload.b or "")
+		if kind == "balanceResult" then
+			note.Text = string.format(TEXT.BALANCE_COUNT, payload.a or "", payload.countA or 0, payload.b or "", payload.countB or 0)
+		elseif payload.stage == "bell" then
+			note.Text = TEXT.BALANCE_BELL
+		elseif payload.stage == "talk" then
+			note.Text = string.format(TEXT.BALANCE_TALK, names[1] or "?")
+		else
+			note.Text = TEXT.BALANCE_PICK
+			local choices = payload.choices or {}
+			for i, b in buttons do
+				b.Visible = choices[i] ~= nil
+				b.Text = choices[i] or ""
+				paint(b, canAnswer, i == state.myPick)
+			end
+		end
+	elseif kind == "redLight" or kind == "redLightResult" then
+		title.Text = if kind == "redLightResult" then TEXT.REDLIGHT_TITLE
+			elseif payload.light == "red" then TEXT.REDLIGHT_RED else TEXT.REDLIGHT_GREEN
+		local mine = table.find(payload.ids or {}, myId)
+		local steps = if mine then (payload.steps or {})[mine] or 0 else 0
+		note.Text = if not mine then ""
+			elseif table.find(payload.caught or {}, myId) then TEXT.REDLIGHT_YOU_CAUGHT
+			elseif steps >= (payload.goal or math.huge) then TEXT.REDLIGHT_YOU_SAFE
+			else string.format(TEXT.REDLIGHT_STEPS, steps, payload.goal or 0)
+	elseif kind == "liar" then
+		title.Text = if payload.liar then string.format(TEXT.LIAR_YOU, payload.category or "")
+			elseif payload.word then string.format(TEXT.LIAR_WORD, payload.word)
+			else string.format(TEXT.LIAR_CATEGORY, payload.category or "")
+		note.Text = if payload.stage == "clue" then string.format(TEXT.LIAR_CLUE, names[1] or "?")
+			elseif payload.stage == "accuse" then TEXT.LIAR_ACCUSE
+			else string.format(TEXT.LIAR_CATEGORY, payload.category or "")
+	elseif kind == "liarGuess" then
+		title.Text = TEXT.LIAR_GUESS
+		local ids = payload.ids or {}
+		state.canAnswer = canAnswer and ids[1] == myId
+		local choices = payload.choices or {}
+		for i, b in buttons do
+			b.Visible = choices[i] ~= nil
+			b.Text = choices[i] or ""
+			paint(b, state.canAnswer and not state.myPick, i == state.myPick)
+		end
+	elseif kind == "liarResult" then
+		title.Text = string.format(if payload.caught then TEXT.LIAR_CAUGHT else TEXT.LIAR_ESCAPED, names[1] or "?",
+			payload.word or "")
 	elseif kind == "oneWordBell" then
 		title.Text = TEXT.ONE_WORD_BELL
 	elseif kind == "bellQuiz" then
@@ -8704,6 +9679,14 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			setRing(names)
 		end
 	end
+	local shownButtons = 0
+	for _, b in buttons do
+		if b.Visible then
+			shownButtons += 1
+		end
+	end
+	-- (a big vote: three smaller columns, so twelve still fit a phone)
+	answerLayout.CellSize = if shownButtons > 6 then UDim2.new(1 / 3, -6, 0, 44) else UDim2.new(0.5, -4, 0, 52)
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end
 
@@ -8732,7 +9715,8 @@ function MissionPanel.tick(now: number)
 		timer.Text = ""
 		title.Text = string.format("%s · %d", state.topicLine, math.max(0, math.ceil(state.endsAt - now)))
 	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" or state.kind == "oneWordBell"
-		or state.kind == "bellQuiz" or state.kind == "croc" or state.kind == "bomb" or state.kind == "nunchi" then
+		or state.kind == "bellQuiz" or state.kind == "croc" or state.kind == "bomb" or state.kind == "nunchi"
+		or state.kind == "balance" or state.kind == "redLight" or state.kind == "liar" or state.kind == "liarGuess" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""
@@ -8790,7 +9774,7 @@ local TEXT = Config.TEXT
 local volunteerButton: TextButton
 local menuFrame: Frame
 local menuTitle: TextLabel
-local menuList: Frame
+local menuList: ScrollingFrame
 local flingButton: TextButton
 local soundBar: Frame
 local wordFrame: Frame
@@ -8866,10 +9850,14 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	menuTitle = Style.label(menuFrame, Style.BOLD, 20, Style.AMBER)
 	menuTitle.Size = UDim2.new(1, 0, 0, 26)
 	menuTitle.LayoutOrder = 0
-	menuList = Instance.new("Frame")
+	-- Scrolls when the options do not fit a short screen (the list's height is set in openMenu).
+	menuList = Instance.new("ScrollingFrame")
 	menuList.BackgroundTransparency = 1
+	menuList.BorderSizePixel = 0
+	menuList.ScrollBarThickness = 6
+	menuList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	menuList.CanvasSize = UDim2.new()
 	menuList.Size = UDim2.fromScale(1, 0)
-	menuList.AutomaticSize = Enum.AutomaticSize.Y
 	menuList.LayoutOrder = 1
 	menuList.Parent = menuFrame
 	local listLayout = Instance.new("UIListLayout")
@@ -8883,7 +9871,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	flingButton.TextSize = 24
 	flingButton.Visible = false
 	flingButton.Activated:Connect(function()
-		if menuKind == "judge" and selected then
+		if (menuKind == "judge" or menuKind == "accuse") and selected then
 			onPickMission(selected)
 			PresenterPanel.closeMenu()
 		end
@@ -9094,11 +10082,12 @@ function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: stri
 	menuKind = kind or "pick"
 	menuNote = note or ""
 	selected = nil
-	local judging = menuKind == "judge"
+	local judging = menuKind == "judge" or menuKind == "accuse" -- (tap a name, then the big button)
 	local nameButtons: { [string]: TextButton } = {}
 	for i, option in options do
 		local label = if option.recommended then "★ " .. option.title .. " · " .. TEXT.PICK_RECOMMENDED else option.title
 		local b = button(menuList, label, 240, 40)
+		b.Size = UDim2.new(1, -8, 0, 40) -- (room for the scroll bar)
 		b.LayoutOrder = i
 		b.TextColor3 = if option.recommended then Style.AMBER else Style.WHITE
 		nameButtons[option.id] = b
@@ -9117,7 +10106,11 @@ function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: stri
 			flingButton.BackgroundTransparency = 0
 		end)
 	end
+	local camera = workspace.CurrentCamera
+	local room = (if camera then camera.ViewportSize.Y * 0.8 else 400) - 56 - (if judging then 56 else 0)
+	menuList.Size = UDim2.new(1, 0, 0, math.min(#options * 46, math.max(room, 120))) -- (title, pads, the big button)
 	flingButton.Visible = judging
+	flingButton.Text = if menuKind == "accuse" then TEXT.ACCUSE_BUTTON else TEXT.FLING_BUTTON
 	flingButton.AutoButtonColor = false
 	flingButton.BackgroundTransparency = 0.6 -- dim until a name is selected
 	menuEndsAt = endsAt
@@ -9137,6 +10130,7 @@ function PresenterPanel.tick(now: number)
 	if menuFrame.Visible then
 		local left = math.max(0, math.ceil(menuEndsAt - now))
 		local heading = if menuKind == "judge" then TEXT.JUDGE_PICK
+			elseif menuKind == "accuse" then TEXT.ACCUSE_PICK
 			elseif menuKind == "verdict" then string.format(TEXT.VERDICT_PICK, menuNote)
 			else TEXT.PICK_MISSION
 		menuTitle.Text = string.format("%s · %d", heading, left)

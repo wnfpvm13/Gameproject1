@@ -93,6 +93,43 @@ return {
 	NUNCHI_IDLE_SECONDS = 8,
 	NUNCHI_MAX_SECONDS = 30,
 	NUNCHI_MIN_PLAYERS = 3,
+	-- The balance game (bundle 6d): "A vs B"; the bells open BALANCE_BELL_SECONDS and the first BALANCE_TALKERS to ring
+	-- argue in turn on the floor (BALANCE_TALK_SECONDS, chat participants BALANCE_TALK_CHAT_SECONDS); then everyone picks
+	-- in secret within BALANCE_PICK_SECONDS (a pick may change until then); the smaller side flies (a tie or one side:
+	-- nobody), and so does whoever did not pick.
+	BALANCE_MIN_PLAYERS = 3,
+	BALANCE_BELL_SECONDS = 4,
+	BALANCE_TALKERS = 3,
+	BALANCE_TALK_SECONDS = 4,
+	BALANCE_TALK_CHAT_SECONDS = 8,
+	BALANCE_PICK_SECONDS = 10,
+	-- Red light, green light (무궁화 꽃이 피었습니다, bundle 6d): REDLIGHT_SECONDS of lights (green REDLIGHT_GREEN_MIN-MAX
+	-- seconds, red REDLIGHT_RED_MIN-MAX, starting green); each bell press on green moves a player one step (at most
+	-- REDLIGHT_MAX_PRESS a second count); a press on red after REDLIGHT_GRACE is out; at the end whoever is short of
+	-- REDLIGHT_GOAL steps flies too. Reaching the goal is safe.
+	REDLIGHT_SECONDS = 30,
+	REDLIGHT_GREEN_MIN = 2,
+	REDLIGHT_GREEN_MAX = 4,
+	REDLIGHT_RED_MIN = 1.5,
+	REDLIGHT_RED_MAX = 3,
+	REDLIGHT_MAX_PRESS = 4,
+	REDLIGHT_GRACE = 0.3, -- plus the player's round trip (the light reaches them late), up to REDLIGHT_PING_CAP
+	REDLIGHT_PING_CAP = 0.5,
+	REDLIGHT_GOAL = 25,
+	REDLIGHT_UPDATE = 0.5, -- seconds between progress updates on screen
+	REDLIGHT_MIN_PLAYERS = 2,
+	-- The liar game (bundle 6d): one liar does not know the word, only its category. LIAR_READ_SECONDS to read, the bells
+	-- open LIAR_BELL_SECONDS for the order, then each gives one clue on the floor (LIAR_CLUE_SECONDS, chat
+	-- LIAR_CLUE_CHAT_SECONDS); the presenter names the liar (PRESENTER_JUDGE_SECONDS) or everyone votes; a named liar
+	-- guesses the word from four within LIAR_GUESS_SECONDS: wrong or none flies, right (or the liar not named) gets
+	-- SCORE_LIAR_WIN. Nobody else ever flies.
+	LIAR_MIN_PLAYERS = 4,
+	LIAR_READ_SECONDS = 5,
+	LIAR_BELL_SECONDS = 4,
+	LIAR_CLUE_SECONDS = 6,
+	LIAR_CLUE_CHAT_SECONDS = 12,
+	LIAR_GUESS_SECONDS = 8,
+	LIAR_GUESS_CHOICES = 4, -- the word among this many of its category
 	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
 	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
 	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
@@ -291,6 +328,42 @@ return {
 		NUNCHI_NEXT = "다음 숫자: %d",
 		NUNCHI_ORDER = "%d %s",
 		NUNCHI_NONE = "✕ %s",
+		BALANCE_TITLE = "밸런스 게임",
+		BALANCE_START = "밸런스 게임 · 적은 쪽이 날아가요",
+		BALANCE_VS = "%s vs %s",
+		BALANCE_BELL = "🔔 벨을 누르면 먼저 말해요",
+		BALANCE_TALK = "%s 님 차례",
+		BALANCE_PICK = "몰래 골라요 · 시간 안에 바꿀 수 있어요",
+		BALANCE_COUNT = "%s %d · %s %d",
+		BALANCE_EVEN = "반반!",
+		BALANCE_SAME = "모두 같은 쪽!",
+		BALANCE_NOBODY = "아무도 안 날아가요",
+		BALANCE_NONE = "안 고름: %s",
+		REDLIGHT_TITLE = "무궁화 꽃이 피었습니다",
+		REDLIGHT_START = "무궁화 꽃이 피었습니다 · 초록불에 벨! 빨간불엔 멈춰요",
+		REDLIGHT_GREEN = "🟢 가세요!",
+		REDLIGHT_RED = "🔴 멈춰요!",
+		REDLIGHT_STEPS = "내 걸음 %d / %d",
+		REDLIGHT_YOU_CAUGHT = "🔴 걸렸어요! 이번 게임은 여기까지",
+		REDLIGHT_YOU_SAFE = "🏁 도착! 이제 안전해요",
+		REDLIGHT_CAUGHT = "🔴 움직였다! %s",
+		REDLIGHT_SHORT = "🐌 못 왔다! %s",
+		REDLIGHT_ALL_SAFE = "모두 도착!",
+		LIAR_TITLE = "라이어 게임",
+		LIAR_START = "라이어 게임 · 제시어를 모르는 한 명을 찾아요",
+		LIAR_CATEGORY = "주제: %s",
+		LIAR_WORD = "제시어: %s",
+		LIAR_YOU = "🤫 당신이 라이어! 주제: %s",
+		LIAR_CLUE = "%s 님의 설명",
+		LIAR_ACCUSE = "라이어는 누구?",
+		LIAR_VOTE = "투표 · 라이어는 누구?",
+		LIAR_NONE = "모르겠음",
+		LIAR_GUESS = "라이어의 마지막 기회 · 제시어는?",
+		LIAR_CAUGHT = "🎯 잡았다! 라이어는 %s · 제시어 %s",
+		LIAR_ESCAPED = "😎 라이어 %s 승리! 제시어 %s",
+		ACCUSE_PICK = "라이어로 지목할 사람",
+		MINIGAME_TOO_FEW = "사람이 너무 적어져서 이번 게임은 그냥 끝나요",
+		ACCUSE_BUTTON = "지목!",
 		VERDICT_RIGHT = "⭕ 맞음",
 		VERDICT_WRONG = "❌ 틀림",
 		WORDS_TITLE = "금칙어 명단",
@@ -315,6 +388,7 @@ return {
 	SCORE_WIN = 3,
 	SCORE_PRESENTER = 2, -- the presenter at the end of a round (owner 2026-10-23); launches earn nothing
 	SCORE_BELL_QUIZ = 1, -- a right answer in the bell quiz
+	SCORE_LIAR_WIN = 2, -- the liar not caught, or caught and guessing the word
 	ASSIST_WINDOW = 10, -- (speech assist credit, used again with speech judging in phase 2)
 	SCORE_ASSIST = 1,
 

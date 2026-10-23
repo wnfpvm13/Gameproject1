@@ -34,6 +34,7 @@ local myFlightEndsAt = 0 -- os.clock(): while my own launch lasts I keep the sho
 local bellOpen = false -- the server has my seat bell open (bundle 6b)
 local bellWindow = 0 -- the open window's number (sent back with my ring)
 local bellRung = false -- I rang it this time (one ring each time it opens)
+local bellRepeating = false -- the open window takes every press (red light): the button stays
 local menuId = 0 -- the presenter menu now open (sent back with my pick)
 
 -- Seated players cannot jump out or reset during a round.
@@ -169,7 +170,9 @@ MissionPanel.build(function(questionId, choice)
 	remotes.MissionAnswer:FireServer(questionId, choice)
 end)
 local function ringMyBell()
-	if not bellRung then
+	if bellRepeating then
+		remotes.Bell:FireServer(bellWindow) -- (the server counts at most a few a second)
+	elseif not bellRung then
 		bellRung = true
 		remotes.Bell:FireServer(bellWindow)
 		refresh()
@@ -292,6 +295,7 @@ remotes.BellOpen.OnClientEvent:Connect(function(info)
 		bellRung = false -- (a new window; the same one sent again on Sync keeps my ring)
 	end
 	bellWindow = window
+	bellRepeating = info.repeating == true
 	bellOpen = info.open == true and table.find(info.ids or {}, State.myId()) ~= nil
 	refresh()
 end)

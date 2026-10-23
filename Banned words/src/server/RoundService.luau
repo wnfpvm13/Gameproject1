@@ -294,11 +294,11 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 			return LifeService.canFail(player, "subjective")
 		end,
 		-- The one-word mission's launch: the presenter's choice (a missed one counts toward PRESENTER_MISSES).
-		presenterPick = function(options, seconds)
+		presenterPick = function(options, seconds, kind: string?)
 			local function over(): boolean
 				return Match.roundId ~= myRound or settled()
 			end
-			local picked = PresenterService.ask("judge", options, seconds, over)
+			local picked = PresenterService.ask(if kind == "accuse" then "accuse" else "judge", options, seconds, over)
 			return picked
 		end,
 		talk = setTalkStage,
@@ -308,10 +308,11 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 			end)
 		end,
 		bell = function(from: { Player }, seconds: number, firstOnly: boolean,
-			enough: (({ Player }, { [Player]: number }) -> boolean)?): ({ Player }, { [Player]: number })
+			enough: (({ Player }, { [Player]: number }, { BellService.Press }) -> boolean)?,
+			repeatEvery: number?): ({ Player }, { [Player]: number }, { BellService.Press })
 			return BellService.collect(from, seconds, firstOnly, function()
 				return Match.roundId ~= myRound or settled()
-			end, enough)
+			end, enough, repeatEvery)
 		end,
 		floor = setFloor,
 		presenterVerdict = function(answer: string, seconds: number): string?

@@ -13,6 +13,9 @@ local Crocodile = require(node("Crocodile"))
 local BombPass = require(node("BombPass"))
 local BombBank = require(node("BombBank"))
 local Nunchi = require(node("Nunchi"))
+local Balance = require(node("Balance"))
+local RedLight = require(node("RedLight"))
+local Liar = require(node("Liar"))
 
 local fails = 0
 local function check(name, ok, detail)
@@ -57,7 +60,7 @@ local function fakeCtx(alive, final, flyingSet)
 		players = function() return alive end,
 		rng = Random.new(7),
 		fail = function(players, key, subjective)
-			table.insert(record.fails, { players = players, key = key, subjective = subjective })
+			table.insert(record.fails, { players = players, key = key, subjective = subjective, at = now })
 		end,
 		show = function(text) table.insert(record.shows, text) end,
 		cancelled = function() return record.cancel end,
@@ -74,7 +77,10 @@ local function fakeCtx(alive, final, flyingSet)
 			return if record.pick then record.pick(options) else nil
 		end,
 		-- Bundle 6b: the bells answer at once with the next list of record.rings; floors, verdicts and points recorded.
-		bell = function(from, seconds, firstOnly, enough)
+		bell = function(from, seconds, firstOnly, enough, repeatEvery)
+			if record.bellOverride then
+				return record.bellOverride(from, seconds, firstOnly, enough, repeatEvery)
+			end
 			table.insert(record.bellCalls, { from = from, seconds = seconds, firstOnly = firstOnly, enough = enough })
 			local rung = (if record.rings then table.remove(record.rings, 1) else nil) or {}
 			local times = record.ringTimes or {}
@@ -83,7 +89,10 @@ local function fakeCtx(alive, final, flyingSet)
 					times[player] = i -- (a second apart unless a test says otherwise)
 				end
 			end
-			return rung, times
+			return rung, times, {}
+		end,
+		screenTo = function(player, payload)
+			NetStub.to(player, "Mission", payload) -- (what MissionRunner would send that player)
 		end,
 		floor = function(player)
 			table.insert(record.floors, player or false)
@@ -333,8 +342,9 @@ do
 	at(now + 30)
 	local afterRoulette = menuIds()
 	check("3d the menu order: games not played yet first (list order), played ones after; the roulette once a round",
-		fresh == "quiz,roulette,croc,bomb,nunchi" and afterQuiz == "roulette,croc,bomb,nunchi,quiz"
-		and afterRoulette == "croc,bomb,nunchi,quiz", fresh .. " | " .. afterQuiz .. " | " .. afterRoulette)
+		fresh == "quiz,roulette,croc,bomb,nunchi,balance,redLight,liar"
+		and afterQuiz == "roulette,croc,bomb,nunchi,balance,redLight,liar,quiz"
+		and afterRoulette == "croc,bomb,nunchi,balance,redLight,liar,quiz", fresh .. " | " .. afterQuiz .. " | " .. afterRoulette)
 	MissionRunner.beginRound()
 	local small = MissionRunner.candidates(300, 1, false)
 	local rouletteListed = false
@@ -1003,6 +1013,347 @@ do
 	check("10g the bells close at the right moments: a clash after its window, all but one after the window, long quiet",
 		inWindow == false and afterWindow == true and threeLeftOneOpen == false and threeLeftOneDone == true
 		and quiet == true and busy == false)
+end
+
+---------------------------------------------------------------- 11. the balance game (bundle 6d)
+do
+	local ps = newPlayers(4)
+	local record = fakeCtx(ps, false, nil)
+	record.rings = { { ps[1], ps[2], ps[3], ps[4] } }
+	local since = now
+	local run = start(Balance, record)
+	local untilAt = now + 30
+	while now < untilAt do
+		local shown = lastScreenOf(since, "balance")
+		if shown and shown.stage == "pick" then
+			break
+		end
+		at(now + 0.25)
+	end
+	local talkers = {}
+	for _, floorHolder in record.floors do
+		if floorHolder then
+			table.insert(talkers, floorHolder)
+		end
+	end
+	answer(ps[1], 1)
+	answer(ps[1], 2) -- changed: the last pick counts
+	answer(ps[2], 2)
+	answer(ps[3], 1)
+	-- ps[4] picks nothing
+	at(now + Config.BALANCE_PICK_SECONDS + 0.5)
+	local f = record.fails[1]
+	check("11a the first BALANCE_TALKERS to ring argue on the floor in turn", #talkers == Config.BALANCE_TALKERS
+		and talkers[1] == ps[1] and talkers[2] == ps[2] and talkers[3] == ps[3])
+	check("11b a pick may change until the time is up; the smaller side flies, and so does whoever did not pick (a miss)",
+		f ~= nil and #f.players == 2 and table.find(f.players, ps[3]) ~= nil and table.find(f.players, ps[4]) ~= nil
+		and record.missed ~= nil and #record.missed == 1 and record.missed[1] == ps[4])
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	-- A tie: nobody flies.
+	local record2 = fakeCtx(ps, false, nil)
+	local since2 = now
+	local run2 = start(Balance, record2)
+	local untilAt2 = now + 30
+	while now < untilAt2 do
+		local shown = lastScreenOf(since2, "balance")
+		if shown and shown.stage == "pick" then
+			break
+		end
+		at(now + 0.25)
+	end
+	answer(ps[1], 1)
+	answer(ps[2], 1)
+	answer(ps[3], 2)
+	answer(ps[4], 2)
+	at(now + Config.BALANCE_PICK_SECONDS + 0.5)
+	local f2 = record2.fails[1]
+	check("11c a tie: nobody flies", f2 ~= nil and #f2.players == 0)
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	check("11d (both end)", run.done and run2.done)
+end
+
+---------------------------------------------------------------- 12. red light, green light (bundle 6d)
+do
+	local ps = newPlayers(5)
+	local a, b, c, d, e = ps[1], ps[2], ps[3], ps[4], ps[5]
+	local realLights = RedLight.lights
+	local t0 = now
+	-- Fixed lights for the test: green 0-5 s, red 5-10 s, green 10-30 s.
+	RedLight.lights = function(startAt, _rng)
+		return { { light = "green", from = startAt, to = startAt + 5 }, { light = "red", from = startAt + 5, to = startAt + 10 },
+			{ light = "green", from = startAt + 10, to = startAt + 30 } }
+	end
+	local presses = {}
+	for i = 1, Config.REDLIGHT_GOAL do
+		table.insert(presses, { player = a, at = t0 + 0.1 + i * 0.18 }) -- a reaches the goal on green
+	end
+	for i = 1, 5 do
+		table.insert(presses, { player = b, at = t0 + i * 0.3 })
+	end
+	table.insert(presses, { player = b, at = t0 + 6 }) -- b moves on red
+	for i = 1, 5 do
+		table.insert(presses, { player = d, at = t0 + i * 0.3 }) -- d is short of the goal
+	end
+	for i = 1, 10 do
+		table.insert(presses, { player = e, at = t0 + i * 0.3 })
+	end
+	table.insert(presses, { player = e, at = t0 + 5.2 }) -- e within the grace of the red light: not caught
+	for i = 1, Config.REDLIGHT_GOAL - 10 do
+		table.insert(presses, { player = e, at = t0 + 10 + i * 0.3 }) -- ...and reaches the goal on the next green
+	end
+	table.sort(presses, function(x, y) return x.at < y.at end)
+	local record = fakeCtx(ps, false, nil)
+	record.bellOverride = function(_from, seconds, _firstOnly, enough, repeatEvery)
+		record.repeatEvery = repeatEvery
+		record.bellSeconds = seconds
+		local rung, times = {}, {}
+		for _, press in presses do
+			if not times[press.player] then
+				table.insert(rung, press.player)
+				times[press.player] = press.at
+			end
+		end
+		if enough then
+			enough(rung, times, presses)
+		end
+		return rung, times, presses
+	end
+	local run = start(RedLight, record)
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	RedLight.lights = realLights
+	local f = record.fails[1]
+	local function has(player)
+		return f ~= nil and table.find(f.players, player) ~= nil
+	end
+	check("12a a press on red (after the grace) is out; short of the goal flies; the goal is safe; within the grace is not caught",
+		f ~= nil and has(b) and has(c) and has(d) and not has(e) and not has(a))
+	check("12b the bells count at most REDLIGHT_MAX_PRESS a second, for REDLIGHT_SECONDS", record.repeatEvery ~= nil
+		and math.abs(record.repeatEvery - 1 / Config.REDLIGHT_MAX_PRESS) < 1e-9 and record.bellSeconds == Config.REDLIGHT_SECONDS)
+	check("12c who never pressed missed an answer (only them)", record.missed ~= nil and #record.missed == 1 and record.missed[1] == c)
+	local phases = RedLight.lights(1000, Random.new(3))
+	local alternating, covers = true, phases[#phases].to >= 1000 + Config.REDLIGHT_SECONDS
+	for i, phase in phases do
+		alternating = alternating and phase.light == (if i % 2 == 1 then "green" else "red")
+	end
+	check("12d the lights alternate, green first, and cover REDLIGHT_SECONDS", alternating and covers and run.done)
+end
+
+---------------------------------------------------------------- 13. the liar (bundle 6d)
+do
+	local presenter = newPlayers(1)[1]
+	local ps = newPlayers(4)
+	playerList = { presenter, ps[1], ps[2], ps[3], ps[4] }
+	Match.presenter = presenter
+	local function play(pick, guessRight, votesFor)
+		local record = fakeCtx(ps, false, nil)
+		local since = now
+		record.startedAt = now
+		local run = start(Liar, record)
+		at(now + 0.2)
+		local liar, wordTo, liarSawWord, presenterWord = nil, {}, false, nil
+		for _, m in NetStub.sent do
+			if m.name == "Mission" and m.at >= since and m.to and m.payload.kind == "liar" then
+				if m.payload.liar then
+					liar = m.to
+					liarSawWord = liarSawWord or m.payload.word ~= nil
+				elseif m.payload.word then
+					wordTo[m.to] = m.payload.word
+					if m.to == presenter then
+						presenterWord = m.payload.word
+					end
+				end
+			end
+		end
+		local shared = nil -- the screen everyone gets (not someone's own)
+		for _, m in NetStub.sent do
+			if m.name == "Mission" and m.at >= since and not m.to and m.payload.kind == "liar" then
+				shared = m.payload
+			end
+		end
+		record.pick = function(options)
+			record.accuseOptions = options
+			return pick(options, liar)
+		end
+		local untilAt = now + 120
+		while now < untilAt and not lastScreenOf(since, "liarGuess") and not lastScreenOf(since, "liarResult")
+			and not lastScreenOf(since, "vote") do
+			at(now + 0.25)
+		end
+		local vote = lastScreenOf(since, "vote")
+		if vote and votesFor then
+			for _, p in ps do
+				answer(p, table.find(vote.ids, votesFor(liar).UserId) or 1)
+			end
+			at(now + 0.5)
+			local untilVote = now + Config.VOTE_SECONDS + 1
+			while now < untilVote and not lastScreenOf(since, "liarGuess") and not lastScreenOf(since, "liarResult") do
+				at(now + 0.25)
+			end
+		end
+		local guess = lastScreenOf(since, "liarGuess")
+		if guess then
+			local word = nil
+			for _, w in wordTo do
+				word = w
+			end
+			local index = table.find(guess.choices, word)
+			answer(liar, if guessRight then index else (index % #guess.choices) + 1)
+		end
+		at(now + Config.LIAR_GUESS_SECONDS + Config.MINIGAME_RESULT_SECONDS + 1)
+		return record, run, liar, wordTo, liarSawWord, presenterWord, shared, guess
+	end
+	-- The presenter names the liar; the liar guesses wrong -> the liar flies.
+	local r1, run1, liar1, words1, sawWord1, presenterWord1, shared1, guess1 = play(function(_options, liar)
+		return tostring(liar.UserId)
+	end, false)
+	local wordCount = 0
+	for _ in words1 do
+		wordCount += 1
+	end
+	check("13a the word goes only to the players who may see it (the three others and the presenter); the liar is told, never sent the word; the shared screen has no word",
+		liar1 ~= nil and not sawWord1 and wordCount == 4 and presenterWord1 ~= nil and shared1 ~= nil and shared1.word == nil
+		and words1[liar1] == nil, string.format("liar %s sawWord %s words %d presenter %s shared %s", tostring(liar1 and liar1.Name),
+		tostring(sawWord1), wordCount, tostring(presenterWord1), tostring(shared1 and shared1.word)))
+	check("13b the presenter names the liar (an \"accuse\" menu of everyone on the ground); a wrong guess among four -> the liar flies",
+		r1.accuseOptions ~= nil and #r1.accuseOptions == 4 and guess1 ~= nil and #guess1.choices == 4 and r1.fails[1] ~= nil
+		and #r1.fails[1].players == 1 and r1.fails[1].players[1] == liar1 and r1.fails[1].subjective == nil and #r1.scores == 0)
+	local leverAt = nil
+	for _, m in NetStub.sent do
+		if m.name == "Lever" and m.at >= r1.startedAt then
+			leverAt = m.at
+		end
+	end
+	check("13b2 the lever is pulled LEVER_SECONDS before a wrong-guessing liar flies", leverAt ~= nil and r1.fails[1] ~= nil
+		and r1.fails[1].at - leverAt >= Config.LEVER_SECONDS - 1e-6)
+	-- Someone else named: nobody flies, the liar scores.
+	local r2, _, liar2 = play(function(options, liar)
+		for _, option in options do
+			if option.id ~= tostring(liar.UserId) then
+				return option.id
+			end
+		end
+		return nil
+	end, false)
+	check("13c someone else named: nobody flies and the liar scores SCORE_LIAR_WIN", r2.fails[1] ~= nil and #r2.fails[1].players == 0
+		and #r2.scores == 1 and r2.scores[1].player == liar2 and r2.scores[1].amount == Config.SCORE_LIAR_WIN)
+	-- No pick from the presenter: everyone votes for the liar; the liar guesses right -> nobody flies, the liar scores.
+	local r3, run3, liar3 = play(function()
+		return nil
+	end, true, function(liar)
+		return liar
+	end)
+	check("13d no pick: a vote names the liar; a right guess -> nobody flies, the liar scores", r3.fails[1] ~= nil
+		and #r3.fails[1].players == 0 and #r3.scores == 1 and r3.scores[1].player == liar3)
+	check("13e (the runs end)", run1.done and run3.done)
+	Match.presenter = nil
+	playerList = {}
+	local _ = liar2
+end
+
+---------------------------------------------------------------- 14. leaves in the middle, the last presses, a resync (6d review)
+do
+	-- The balance game: 3 start, one leaves during the talk -> too few: no penalty, no misses.
+	local ps = newPlayers(3)
+	local alive = table.clone(ps)
+	local record = fakeCtx(alive, false, nil)
+	record.rings = { { ps[1], ps[2], ps[3] } }
+	local run = start(Balance, record)
+	at(now + 1)
+	table.remove(alive, table.find(alive, ps[3]))
+	at(now + Config.BALANCE_TALKERS * Config.BALANCE_TALK_CHAT_SECONDS + Config.BALANCE_PICK_SECONDS + 5)
+	check("14a balance: below BALANCE_MIN_PLAYERS in the middle -> ends with no penalty", run.done and #record.fails == 0
+		and record.missed == nil)
+
+	-- Red light: presses the bells took after the last check still count (here: a's last steps reach the goal).
+	local qs = newPlayers(2)
+	local a, b = qs[1], qs[2]
+	local t0 = now
+	local realLights = RedLight.lights
+	RedLight.lights = function(startAt, _rng)
+		return { { light = "green", from = startAt, to = startAt + Config.REDLIGHT_SECONDS } }
+	end
+	local presses = {}
+	for i = 1, Config.REDLIGHT_GOAL do
+		table.insert(presses, { player = a, at = t0 + i * 0.3 })
+		table.insert(presses, { player = b, at = t0 + i * 0.3 + 0.1 })
+	end
+	local record2 = fakeCtx(qs, false, nil)
+	record2.bellOverride = function(_from, _seconds, _firstOnly, enough, _repeatEvery)
+		local rung, times = { a, b }, { [a] = t0, [b] = t0 }
+		if enough then
+			enough(rung, times, table.move(presses, 1, #presses - 2, 1, {})) -- (the last check saw all but two)
+		end
+		return rung, times, presses
+	end
+	local run2 = start(RedLight, record2)
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	check("14b red light: the presses after the last check count (both reach the goal, nobody flies)", run2.done
+		and record2.fails[1] ~= nil and #record2.fails[1].players == 0)
+
+	-- Red light: 2 start, one leaves -> too few: no penalty.
+	local alive3 = table.clone(qs)
+	local record3 = fakeCtx(alive3, false, nil)
+	record3.bellOverride = function(_from, _seconds, _firstOnly, enough, _repeatEvery)
+		table.remove(alive3, table.find(alive3, b))
+		if enough then
+			enough({}, {}, {})
+		end
+		return {}, {}, {}
+	end
+	local run3 = start(RedLight, record3)
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	RedLight.lights = realLights
+	check("14c red light: below REDLIGHT_MIN_PLAYERS -> ends with no penalty", run3.done and #record3.fails == 0)
+
+	-- The liar: the liar leaves during the clues -> no penalty, no points; a resync sends the liar no word and the
+	-- others theirs.
+	local presenter = newPlayers(1)[1]
+	local ls = newPlayers(5)
+	local aliveL = table.clone(ls)
+	playerList = { presenter, ls[1], ls[2], ls[3], ls[4], ls[5] }
+	Match.presenter = presenter
+	local record4 = fakeCtx(aliveL, false, nil)
+	local since = now
+	local run4 = start(Liar, record4)
+	at(now + 0.2)
+	local liar = nil
+	for _, m in NetStub.sent do
+		if m.name == "Mission" and m.at >= since and m.to and m.payload.kind == "liar" and m.payload.liar then
+			liar = m.to
+		end
+	end
+	local other = if ls[1] ~= liar then ls[1] else ls[2]
+	local mark = #NetStub.sent
+	MissionRunner.sendScreen(liar)
+	MissionRunner.sendScreen(other)
+	local liarGot, otherGot = nil, nil
+	for i = mark + 1, #NetStub.sent do
+		local m = NetStub.sent[i]
+		if m.name == "Mission" and m.to == liar then
+			liarGot = m.payload
+		elseif m.name == "Mission" and m.to == other then
+			otherGot = m.payload
+		end
+	end
+	check("14d a resync: the liar gets their own screen without the word, another player theirs with it",
+		liarGot ~= nil and liarGot.liar == true and liarGot.word == nil and otherGot ~= nil and otherGot.word ~= nil)
+	at(now + Config.LIAR_READ_SECONDS + Config.LIAR_BELL_SECONDS + 2)
+	table.remove(aliveL, table.find(aliveL, liar))
+	at(now + 5 * Config.LIAR_CLUE_CHAT_SECONDS + Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS + 20)
+	check("14e the liar leaves in the middle -> ends with no penalty and no points", run4.done and #record4.fails == 0
+		and #record4.scores == 0)
+	local mark2 = #NetStub.sent
+	MissionRunner.sendScreen(other)
+	local after = nil
+	for i = mark2 + 1, #NetStub.sent do
+		local m = NetStub.sent[i]
+		if m.name == "Mission" and m.to == other then
+			after = m.payload
+		end
+	end
+	check("14f after the game no private screen is left to resend", after == nil or after.word == nil)
+	Match.presenter = nil
+	playerList = {}
 end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

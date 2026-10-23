@@ -21,7 +21,7 @@ local TEXT = Config.TEXT
 local volunteerButton: TextButton
 local menuFrame: Frame
 local menuTitle: TextLabel
-local menuList: Frame
+local menuList: ScrollingFrame
 local flingButton: TextButton
 local soundBar: Frame
 local wordFrame: Frame
@@ -97,10 +97,14 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	menuTitle = Style.label(menuFrame, Style.BOLD, 20, Style.AMBER)
 	menuTitle.Size = UDim2.new(1, 0, 0, 26)
 	menuTitle.LayoutOrder = 0
-	menuList = Instance.new("Frame")
+	-- Scrolls when the options do not fit a short screen (the list's height is set in openMenu).
+	menuList = Instance.new("ScrollingFrame")
 	menuList.BackgroundTransparency = 1
+	menuList.BorderSizePixel = 0
+	menuList.ScrollBarThickness = 6
+	menuList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	menuList.CanvasSize = UDim2.new()
 	menuList.Size = UDim2.fromScale(1, 0)
-	menuList.AutomaticSize = Enum.AutomaticSize.Y
 	menuList.LayoutOrder = 1
 	menuList.Parent = menuFrame
 	local listLayout = Instance.new("UIListLayout")
@@ -114,7 +118,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	flingButton.TextSize = 24
 	flingButton.Visible = false
 	flingButton.Activated:Connect(function()
-		if menuKind == "judge" and selected then
+		if (menuKind == "judge" or menuKind == "accuse") and selected then
 			onPickMission(selected)
 			PresenterPanel.closeMenu()
 		end
@@ -325,11 +329,12 @@ function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: stri
 	menuKind = kind or "pick"
 	menuNote = note or ""
 	selected = nil
-	local judging = menuKind == "judge"
+	local judging = menuKind == "judge" or menuKind == "accuse" -- (tap a name, then the big button)
 	local nameButtons: { [string]: TextButton } = {}
 	for i, option in options do
 		local label = if option.recommended then "★ " .. option.title .. " · " .. TEXT.PICK_RECOMMENDED else option.title
 		local b = button(menuList, label, 240, 40)
+		b.Size = UDim2.new(1, -8, 0, 40) -- (room for the scroll bar)
 		b.LayoutOrder = i
 		b.TextColor3 = if option.recommended then Style.AMBER else Style.WHITE
 		nameButtons[option.id] = b
@@ -348,7 +353,11 @@ function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: stri
 			flingButton.BackgroundTransparency = 0
 		end)
 	end
+	local camera = workspace.CurrentCamera
+	local room = (if camera then camera.ViewportSize.Y * 0.8 else 400) - 56 - (if judging then 56 else 0)
+	menuList.Size = UDim2.new(1, 0, 0, math.min(#options * 46, math.max(room, 120))) -- (title, pads, the big button)
 	flingButton.Visible = judging
+	flingButton.Text = if menuKind == "accuse" then TEXT.ACCUSE_BUTTON else TEXT.FLING_BUTTON
 	flingButton.AutoButtonColor = false
 	flingButton.BackgroundTransparency = 0.6 -- dim until a name is selected
 	menuEndsAt = endsAt
@@ -368,6 +377,7 @@ function PresenterPanel.tick(now: number)
 	if menuFrame.Visible then
 		local left = math.max(0, math.ceil(menuEndsAt - now))
 		local heading = if menuKind == "judge" then TEXT.JUDGE_PICK
+			elseif menuKind == "accuse" then TEXT.ACCUSE_PICK
 			elseif menuKind == "verdict" then string.format(TEXT.VERDICT_PICK, menuNote)
 			else TEXT.PICK_MISSION
 		menuTitle.Text = string.format("%s · %d", heading, left)

@@ -27,7 +27,8 @@ local PresenterService = {}
 
 export type Option = { id: string, title: string, recommended: boolean }
 export type Change = "left" | "misses" | "stepped down"
-export type MenuKind = "pick" | "judge" | "verdict" -- the next mission / who flies / the bell quiz's right or wrong
+export type MenuKind = "pick" | "judge" | "verdict" | "accuse" -- the next mission / who flies / the bell quiz's
+-- right or wrong / who is the liar
 
 local DEFAULT_WALK_SPEED = 16
 local DEFAULT_JUMP_HEIGHT = 7.2

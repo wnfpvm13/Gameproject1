@@ -17,4 +17,7 @@ return {
 	RestAnchor = "RestAnchor",
 	RestMeshScale = "RestMeshScale",
 	SquashExponent = "SquashExponent",
+	-- On the coupling rods (arms) and crank pins: they circle with the driving wheels
+	CrankRadius = "CrankRadius",
+	CrankPhase = "CrankPhase",
 }

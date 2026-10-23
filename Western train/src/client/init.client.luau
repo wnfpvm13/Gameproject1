@@ -9,7 +9,7 @@ local RunService = game:GetService("RunService")
 
 local shared = ReplicatedStorage:WaitForChild("WesternTrain")
 local Names = require(shared:WaitForChild("Names"))
-local SquashAnimator = require(script:WaitForChild("SquashAnimator"))
+local LocomotiveAnimator = require(script:WaitForChild("LocomotiveAnimator"))
 local SquashInput = require(script:WaitForChild("SquashInput"))
 local SteamPuff = require(script:WaitForChild("SteamPuff"))
 local DriverCamera = require(script:WaitForChild("DriverCamera"))
@@ -18,7 +18,7 @@ local player = Players.LocalPlayer
 local remote = shared:WaitForChild(Names.RemotesFolder):WaitForChild(Names.SquashRemote) :: RemoteEvent
 
 type Tracked = {
-	animator: SquashAnimator.Animator,
+	animator: LocomotiveAnimator.Animator,
 	puff: SteamPuff.Puff?,
 	squashed: boolean,
 	connection: RBXScriptConnection?, -- following the Squashed attribute (other players' locomotives)
@@ -48,7 +48,7 @@ local function track(instance: Instance)
 	if tracked[locomotive] or not locomotive.Parent or not CollectionService:HasTag(locomotive, Names.LocomotiveTag) then
 		return -- tracked meanwhile by a second signal, or gone / untagged while waiting
 	end
-	local animator = SquashAnimator.new(locomotive)
+	local animator = LocomotiveAnimator.new(locomotive)
 	if not animator then
 		return
 	end

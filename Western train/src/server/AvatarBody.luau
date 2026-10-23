@@ -21,8 +21,11 @@ local RIGID_ACCESSORIES = {
 	"WaistAccessory",
 }
 
--- The player's look without accessories. Test players in Studio have no web avatar, so they fall back to the
--- character's current look and then to the default look.
+local BODY_PARTS = { "Torso", "LeftArm", "RightArm", "LeftLeg", "RightLeg" }
+
+-- The player's look without accessories, on the plain block body (owner 2026-10-23: bundle bodies are too lumpy for
+-- the cab and the rods); the head, face, body colours and clothes stay the player's own. Test players in Studio have
+-- no web avatar, so they fall back to the character's current look and then to the default look.
 function AvatarBody.describe(player: Player): HumanoidDescription
 	local ok, description = pcall(function()
 		return Players:GetHumanoidDescriptionFromUserIdAsync(player.UserId)
@@ -35,6 +38,9 @@ function AvatarBody.describe(player: Player): HumanoidDescription
 	local desc = description :: HumanoidDescription
 	for _, property in RIGID_ACCESSORIES do
 		(desc :: any)[property] = ""
+	end
+	for _, property in BODY_PARTS do
+		(desc :: any)[property] = 0
 	end
 	pcall(function()
 		desc:SetAccessories({}, true) -- layered clothing and any rigid accessory left in the list

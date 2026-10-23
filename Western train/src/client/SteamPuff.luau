@@ -9,7 +9,7 @@ local Names = require(shared:WaitForChild("Names"))
 local SteamPuff = {}
 SteamPuff.__index = SteamPuff
 
-type Side = { attachment: Attachment, emitter: ParticleEmitter, turn: CFrame }
+type Side = { attachment: Attachment, emitter: ParticleEmitter, sign: number, turn: CFrame }
 type Fields = { cap: BasePart, sides: { Side } }
 export type Puff = typeof(setmetatable({} :: Fields, SteamPuff))
 
@@ -37,24 +37,24 @@ function SteamPuff.new(locomotive: Model): Puff?
 	if not (cap and cap:IsA("BasePart")) then
 		return nil
 	end
-	-- The cap is an upright cylinder: its own Y axis points sideways, so attachments on +Y and -Y (the second one
-	-- turned half round) puff out of the left and right sides.
+	-- The cap stands along its own Y axis, so its own X is the train's left-right. Each attachment is turned so its +Y
+	-- (the emitter's Top) points out of its side.
 	local sides = {}
-	for _, angle in { 0, math.pi } do
+	for _, sign in { 1, -1 } do
 		local attachment = Instance.new("Attachment")
 		attachment.Name = "SteamPuff"
 		attachment.Parent = cap
-		table.insert(sides, { attachment = attachment, emitter = emitter(attachment), turn = CFrame.Angles(angle, 0, 0) })
+		local turn = CFrame.Angles(0, 0, -sign * math.pi / 2)
+		table.insert(sides, { attachment = attachment, emitter = emitter(attachment), sign = sign, turn = turn })
 	end
 	return setmetatable({ cap = cap, sides = sides } :: Fields, SteamPuff)
 end
 
--- Puffs from the cap's edge at its current size (the animator keeps resizing the cap). A cylinder is drawn with the
--- smaller of its Y and Z sizes as the diameter.
+-- Puffs from the cap's edge at its current size (the animator keeps resizing the cap; its mesh fills the size).
 function SteamPuff.burst(self: Puff)
-	local radius = math.min(self.cap.Size.Y, self.cap.Size.Z) / 2
+	local radius = self.cap.Size.X / 2
 	for _, side in self.sides do
-		side.attachment.CFrame = side.turn * CFrame.new(0, radius, 0)
+		side.attachment.CFrame = CFrame.new(side.sign * radius, 0, 0) * side.turn
 		side.emitter:Emit(Config.Squash.SteamPuffCount)
 	end
 end

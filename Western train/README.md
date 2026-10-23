@@ -3,17 +3,20 @@
 MonCook, 금칙어 게임과 별개인 로블록스 게임. 첫 콘텐츠는 B안 "지붕 위 오비": 한 명은 자기 아바타로 만든 얼굴 기관차가
 되고(S를 누르면 만화처럼 납작), 다른 한 명은 그 지붕 위에서 오비를 한다. 설계와 결정 기록: [docs/DESIGN.md](docs/DESIGN.md)
 
-**지금 코드: 시제품 1 — 납작해지는 얼굴 기관차** ([docs/PROTOTYPE_SQUASH_2026-10-23.md](docs/PROTOTYPE_SQUASH_2026-10-23.md))
-- 들어오면 내 아바타(머리·몸·옷, 액세서리 없음)가 기관차로 바뀌어 선로 위에 선다. 내 캐릭터는 그 안에 숨는다.
+**지금 코드: 시제품 1 — 납작해지는 얼굴 기관차** ([docs/PROTOTYPE_SQUASH_2026-10-23.md](docs/PROTOTYPE_SQUASH_2026-10-23.md),
+몸체 재설계 [docs/LOCO_DRESSED_2026-10-23.md](docs/LOCO_DRESSED_2026-10-23.md))
+- 들어오면 내 아바타가 "아바타 옷을 입은 기관차"가 되어 선로 위에 선다: 머리는 앞 얼굴, 셔츠 입은 몸통은 뒤 운전실, 팔은 바퀴
+  크랭크 핀을 쥐고 도는 연결봉, 신발은 뒤 범퍼, 보일러는 내 몸 색. 내 캐릭터는 그 안에 숨는다.
 - S(모바일 "납작" 버튼, 게임패드 B)를 누르고 있으면 납작, 떼면 "뽀용" 하고 출렁이며 복귀. 굴뚝 옆으로 증기가 샌다.
 - 아직 없는 것: 배경 흐름, 장애물·판정, 점프, 지붕 위 카우보이, 소리.
 
 ## 폴더
 
-- `src/shared` — 서버·클라이언트 공용: `Config`(조정할 숫자), `Names`(이름), `SquashSpring`·`SquashPose`(순수 수학), `PartUtil`(부품 도우미)
+- `src/shared` — 서버·클라이언트 공용: `Config`(조정할 숫자), `Names`(이름), `SquashSpring`·`SquashPose`·`CrankMotion`(순수 수학),
+  `PartUtil`(부품 도우미)
 - `src/server` — `Main`(연결 + 플레이어별 선로 칸·기관차 수명), `Net`(리모트), `PrototypeStage`(땅·선로), `AvatarBody`, `LocomotiveBuilder`,
   `CharacterHider`, `SquashService`
-- `src/client` — `init`(연결만), `SquashInput`, `SquashAnimator`, `SteamPuff`, `DriverCamera`
+- `src/client` — `init`(연결만), `SquashInput`, `LocomotiveAnimator`, `SteamPuff`, `DriverCamera`
 - `tools/tests` — Studio 없이 도는 테스트, `tools/lint` — 정적 검사
 
 ## 코드 규칙 (전역 규칙 `~/.claude/CLAUDE.md` 3번의 이 게임 구체 사항)
@@ -25,7 +28,7 @@ MonCook, 금칙어 게임과 별개인 로블록스 게임. 첫 콘텐츠는 B�
 
 ## 검사 명령
 
-- `python -I tools/tests/run_tests.py` — 납작 수학 테스트(luau CLI, 실제 Config 수치) + 의존 방향 검사
+- `python -I tools/tests/run_tests.py` — 납작·연결봉 수학 테스트(luau CLI, 실제 Config 수치) + 의존 방향 검사
 - `python -I tools/lint/run_lint.py` — luau-lsp(Roblox API 타입) + selene. luau-lsp·selene·rojo가 PATH에 있어야 한다
   (이 PC: `~/.local/bin`). Roblox 타입 정의는 `.lint/`에 캐시된다(내려받기가 막히면 `Banned words/.lint/`의 파일을 복사).
 - Studio 확인: `rojo build default.project.json -o .qa/<이름>.rbxlx`로 만든 장소를 새 Studio 창에서 열고 Play.

@@ -1,4 +1,5 @@
--- Squash math tests (run by tools/tests/run_tests.py, which puts Config, SquashSpring and SquashPose above this).
+-- Squash math tests (run by tools/tests/run_tests.py, which puts Config, SquashSpring, SquashPose and CrankMotion
+-- above this).
 -- Uses the real Config numbers, so a tuning change that breaks the feel (too slow, no bounce, flying parts) fails.
 local passed, failed = 0, 0
 local function check(name: string, ok: boolean, detail: string?)
@@ -120,6 +121,43 @@ do
 
 	local restPos, restSize = SquashPose.pose({ position = v(0, 6.3, 2), anchor = foot, size = v(2.6, 1.3, 1.3), axes = UPRIGHT, exponent = e }, v(1, 1, 1))
 	check("value 0 puts a part exactly back", near(restPos.y, 6.3) and near(restSize.x, 2.6) and near(restSize.y, 1.3))
+
+	-- The FileMesh cylinders of the dressed locomotive: a boiler along the track and a wheel across it squash into
+	-- ellipses (the narrow axis is the height, the wide one the width or length).
+	local ALONG_TRACK = { { x = 1, y = 0, z = 0 }, { x = 0, y = 0, z = 1 }, { x = 0, y = -1, z = 0 } }
+	local ACROSS = { { x = 0, y = -1, z = 0 }, { x = 1, y = 0, z = 0 }, { x = 0, y = 0, z = 1 } }
+	local _, boiler = SquashPose.pose({ position = v(0, 4, 3.75), anchor = v(0, 4, 3.75), size = v(4, 7.5, 4), axes = ALONG_TRACK, exponent = 1 }, FLAT)
+	check("boiler: width x1.3, length x1.08, height x0.4", near(boiler.x, 5.2) and near(boiler.y, 8.1) and near(boiler.z, 1.6),
+		boiler.x .. "," .. boiler.y .. "," .. boiler.z)
+	local driver = 1.5
+	local dPos, dSize = SquashPose.pose({ position = v(2, driver, 4.4), anchor = v(2, driver, 4.4), size = v(3, 0.5, 3), axes = ACROSS, exponent = 1 }, FLAT)
+	check("driving wheel: an oval 0.4 tall and 1.08 long, still on the rails", near(dSize.x, 1.2) and near(dSize.z, 3.24) and near(dPos.y - dSize.x / 2, 0))
+end
+
+-- 6. Rods and crank pins circle with the driving wheels.
+do
+	local L = Config.Locomotive
+	local r = L.CrankRadius
+	local y0, z0 = CrankMotion.offset(0, 0, r, 1, 1)
+	check("angle 0 is the top of the circle", near(y0, r) and near(z0, 0))
+	local angle = CrankMotion.advance(0, 0.01, L.CrankTurnsPerSecond)
+	local _, z1 = CrankMotion.offset(angle, 0, r, 1, 1)
+	check("running forward moves the top forward (-Z)", angle > 0 and z1 < 0, tostring(z1))
+	local right, left = CrankMotion.forSide(1, r), CrankMotion.forSide(-1, r)
+	local yq, zq = CrankMotion.offset(0, left.phase, r, 1, 1)
+	check("the left side is a quarter turn ahead (at the front when the right is on top)",
+		right.phase == 0 and right.radius == r and near(yq, 0, 1e-9) and near(zq, -r))
+	local ys, zs = CrankMotion.offset(0.7, 0, r, 0.4, 1.08)
+	local yn, zn = CrankMotion.offset(0.7, 0, r, 1, 1)
+	check("the circle squashes with the wheels", near(ys, yn * 0.4) and near(zs, zn * 1.08))
+	check("one second turns the wheels the configured times", near(CrankMotion.advance(0, 1 / L.CrankTurnsPerSecond, L.CrankTurnsPerSecond), 0, 1e-6)
+		or near(CrankMotion.advance(0, 1 / L.CrankTurnsPerSecond, L.CrankTurnsPerSecond), 2 * math.pi, 1e-6))
+	local wrapped = 0
+	for _ = 1, 10000 do
+		wrapped = CrankMotion.advance(wrapped, 1 / 60, L.CrankTurnsPerSecond)
+	end
+	check("the angle stays within one turn", wrapped >= 0 and wrapped < 2 * math.pi)
+	check("a negative dt does not turn backward", CrankMotion.advance(1, -0.5, L.CrankTurnsPerSecond) == 1)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

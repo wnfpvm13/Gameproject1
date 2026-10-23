@@ -1,6 +1,6 @@
 --!strict
 -- Where a locomotive part goes and how big it gets for a squash value. Pure math on plain numbers (no CFrame or
--- Vector3), so the luau CLI tests run it unchanged; SquashAnimator turns the numbers into CFrame/Vector3.
+-- Vector3), so the luau CLI tests run it unchanged; LocomotiveAnimator turns the numbers into CFrame/Vector3.
 -- Locomotive space: X right, Y up, Z back (forward is -Z), origin on the rails under the middle. Requires nothing.
 
 local SquashPose = {}

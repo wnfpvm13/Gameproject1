@@ -2,9 +2,10 @@
 
   python -I tools/tests/run_tests.py
 
-  squash  src/shared/Config.luau (real numbers), SquashSpring.luau, SquashPose.luau: press speed and overshoot,
-          the release bounce and wobble, frame-rate independence, hitches, part poses (lying torso, wheels on the
-          rails, the chimney folding harder from its foot, the cap staying on top, exact return to rest)
+  squash  src/shared/Config.luau (real numbers), SquashSpring.luau, SquashPose.luau, CrankMotion.luau: press speed
+          and overshoot, the release bounce and wobble, frame-rate independence, hitches, part poses (lying torso,
+          wheels on the rails, the chimney folding harder from its foot, the cap staying on top, exact return to
+          rest), the rods' circle (direction, quarter-turn sides, squashing with the wheels)
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
 
 The modules run unchanged; the only fake is Color3.fromRGB (Config's colours), which plain Luau lacks.
@@ -18,6 +19,7 @@ MODULES = [
     ("Config", "src/shared/Config.luau"),
     ("SquashSpring", "src/shared/SquashSpring.luau"),
     ("SquashPose", "src/shared/SquashPose.luau"),
+    ("CrankMotion", "src/shared/CrankMotion.luau"),
 ]
 PRELUDE = "Color3 = { fromRGB = function(r, g, b) return { r = r, g = g, b = b } end }\n"
 

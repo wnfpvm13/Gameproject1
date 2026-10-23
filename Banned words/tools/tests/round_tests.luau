@@ -1584,4 +1584,24 @@ do
 	workspaceAttributes.BW_ServerKind = nil
 end
 
+---------------------------------------------------------------- 16. a client flipping "ready" fast
+do
+	local ready = NetStub.listeners.Ready
+	local rs = newPlayers(1)
+	playerList = rs
+	at(now + 1)
+	local since = now
+	for i = 1, 20 do
+		ready(rs[1], i % 2 == 1) -- true, false, true ... (ends false), all within one moment
+	end
+	ready(rs[1], true)
+	local burst = #sent("RoundState", since)
+	at(now + Config.READY_BROADCAST_DELAY + 0.1)
+	local after = #sent("RoundState", since)
+	check("16a fast ready flips: the last value counts at once, and they cause one state broadcast", Match.ready[rs[1]] == true
+		and burst == 0 and after == 1)
+	playerList = {}
+	at(now + 1)
+end
+
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

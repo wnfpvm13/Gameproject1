@@ -715,6 +715,9 @@ function RoundService.start()
 	LifeService.start(SeatService.isFlying)
 	SpectatorService.start(busy)
 	SeatService.init(onFlightOver)
+	-- "Ready" changes take effect at once; the state broadcast they cause is gathered (at most one per
+	-- READY_BROADCAST_DELAY), so a client flipping it fast cannot make the server message everyone each time.
+	local readyBroadcastQueued = false
 	Net.listen("Ready", function(player, isReady)
 		local value = isReady == true
 		if (Match.ready[player] == true) ~= value then -- repeats change nothing and send nothing
@@ -722,7 +725,13 @@ function RoundService.start()
 			if value then
 				ChatService.voiceReady(player, lockedIn(player)) -- voice players join by voice
 			end
-			Match.broadcast()
+			if not readyBroadcastQueued then
+				readyBroadcastQueued = true
+				task.delay(Config.READY_BROADCAST_DELAY, function()
+					readyBroadcastQueued = false
+					Match.broadcast()
+				end)
+			end
 		end
 	end)
 	local lastChatJoin: { [Player]: number } = {}

@@ -241,6 +241,7 @@ return {
 	STAND_SPOTS_PER_ROW = 10, -- spectator spots along the stands marker, per tier row
 	REACTION_COOLDOWN = 1.2,
 	SYNC_COOLDOWN = 1, -- seconds between two "send me the state" requests from one player
+	READY_BROADCAST_DELAY = 0.5, -- "ready" changes are gathered into one state broadcast at most this often
 	CHAT_JOIN_COOLDOWN = 1, -- seconds between two "join by chat / stop" requests from one player (each one broadcasts)
 	CHAT_CHECK_RETRIES = { 5, 20 }, -- seconds before retrying a failed chat permission check (then: no chat for now)
 

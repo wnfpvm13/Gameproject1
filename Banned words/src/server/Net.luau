@@ -25,7 +25,8 @@
 --   (client -> server: EarJudge (userId) the presenter heard a banned word, Reroll (userId) a new word; private servers)
 --   Rescue      to the presenter: banned words caught in chat waiting for a rescue { hits = { {userId, word, endsAt} } }
 --               (client -> server: Rescue (userId) the presenter rescues that player)
--- Kept for the speech judging (JudgeService, phase 2): Settle (server -> client), Transcript, VoicePing, Settled.
+-- The speech judging of phase 2 (JudgeService, not running in stage 1) will need Settle (server -> client), Transcript,
+-- VoicePing and Settled back in NAMES; they are left out until then so nothing listens-less stays open.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = {}
@@ -34,7 +35,7 @@ local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
 	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer", "Lever",
 	"EarJudge", "Reroll", "Rescue",
-	"Words", "Settle", "Transcript", "VoicePing", "Settled",
+	"Words",
 }
 
 local folder: Folder

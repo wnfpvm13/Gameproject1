@@ -39,6 +39,7 @@ ROUND_MODULES = [
     ("WordService", "src/server/services/WordService.luau"),
     ("RescueService", "src/server/services/RescueService.luau"),
     ("ChatGate", "src/server/services/ChatGate.luau"),
+    ("JudgeService", "src/server/services/JudgeService.luau"),
     ("LifeService", "src/server/services/LifeService.luau"),
     ("Timeline", "src/server/services/Timeline.luau"),
     ("TalkTopics", "src/server/content/TalkTopics.luau"),

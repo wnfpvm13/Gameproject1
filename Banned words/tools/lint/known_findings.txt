@@ -6,5 +6,4 @@ src/client/Billboards.luau: warning[roblox_manual_fromscale_or_fromoffset]: this
 src/client/UI/ReactionBar.luau: warning[roblox_manual_fromscale_or_fromoffset]: this UDim2.new call only sets offset, and can be simplified using UDim2.fromOffset
 src/client/UI/ReactionBar.luau: warning[roblox_manual_fromscale_or_fromoffset]: this UDim2.new call only sets offset, and can be simplified using UDim2.fromOffset
 src/client/UI/Style.luau: warning[roblox_manual_fromscale_or_fromoffset]: this UDim2.new call only sets scale, and can be simplified using UDim2.fromScale
-src/server/services/JudgeService.luau: error[mismatched_arg_count]: this function takes 0 arguments but 1 arguments were supplied
 src/server/services/JudgeService.luau: error[mismatched_arg_count]: this function takes 0 arguments but 2 arguments were supplied

@@ -156,12 +156,14 @@ return {
 	EAR_COOLDOWN = 1, -- seconds between two "I heard a banned word" presses of the presenter
 	RESCUE_SECONDS = 3, -- a banned word caught in chat waits this long for the presenter's rescue (bundle 5b)
 	HIT_SOUND = 5, -- the sound everyone hears when chat catches a banned word (index in PRESENTER_SOUNDS: 땡)
-	-- Speech judging (JudgeService, phase 2 public servers): kept for that module and its tests.
-	-- Speech still counts if it began before the moment the round was decided and ended no later than END_TOLERANCE
-	-- after it; judging waits until every alive player's client says that speech has been sent (SETTLE_MAX at most).
+	-- Speech judging (JudgeService, bundle 6e; only while VOICE_JUDGING): speech in the banned-word talk counts if it
+	-- began inside the talk (before its end, or the moment the round was decided) and ended no later than END_TOLERANCE
+	-- after that; the settle stage waits until every alive voice player's client says that speech has been sent
+	-- (SETTLE_MAX at most).
 	END_TOLERANCE = 0,
 	SETTLE_MAX = 5,
 	SETTLE_NOTICE_AFTER = 1.2,
+	SETTLE_SLACK = 1, -- the settle stage waits at most this much past the rescue and the lever for them to end
 	RESPAWN_TIME = 3,
 
 	-- V3 flying chair (docs/DESIGN_V3.md §10, owner 2026-10-22): the seat flap snaps back with a bang, the player flies
@@ -212,7 +214,6 @@ return {
 	TRANSCRIPT_MAX_BYTES = 600,
 	TRANSCRIPT_BURST = 6, -- at most this many transcripts per window per player (spam guard)
 	TRANSCRIPT_BURST_WINDOW = 3,
-	VOICE_PING_INTERVAL = 1,
 
 	-- Fixed UI texts players may read aloud (checked against the word bank by tools/check_content.luau).
 	-- %s / %d are filled in by the code (names, numbers).

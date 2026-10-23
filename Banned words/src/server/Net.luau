@@ -31,8 +31,9 @@
 --   BellRang    a seat bell rang: { userId } (client -> server: Bell (window id), ring my bell)
 --   Rescue      to the presenter: banned words caught in chat waiting for a rescue { hits = { {userId, word, endsAt} } }
 --               (client -> server: Rescue (userId) the presenter rescues that player)
--- The speech judging of phase 2 (JudgeService, not running in stage 1) will need Settle (server -> client), Transcript,
--- VoicePing and Settled back in NAMES; they are left out until then so nothing listens-less stays open.
+--   Settle      the banned-word talk ended at `cutoff`: { key, cutoff } (client -> server: Settled (key), my speech
+--               from before it has been sent; Transcript (text, earliest, latest, ended, textId), my own speech
+--               transcribed during the talk — speech judging, bundle 6e, JudgeService)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = {}
@@ -41,7 +42,7 @@ local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
 	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer", "Lever",
 	"EarJudge", "Reroll", "TalkStart", "Rescue", "Bell", "BellOpen", "BellRang",
-	"Words",
+	"Words", "Settle", "Transcript", "Settled",
 }
 
 local folder: Folder

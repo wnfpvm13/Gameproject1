@@ -50,9 +50,14 @@ local function applySeatLock()
 	end)
 end
 
--- Ready = voice connected + said something once. The recognizer runs only for that mic test (docs/DESIGN_V3.md §2;
--- judging speech comes back in phase 2). Accounts without voice may join by chat instead (§7; the server decides,
--- tells me alone what I may do ("ChatAccess") and everyone who joins by chat (attribute BW_ChatMode)).
+-- Ready = voice connected + said something once. The recognizer runs for that mic test and, while I play by voice,
+-- during the banned-word talk (speech judging, bundle 6e: requests are limited experience-wide, so not otherwise).
+-- Accounts without voice may join by chat instead (§7; the server decides, tells me alone what I may do
+-- ("ChatAccess") and everyone who joins by chat (attribute BW_ChatMode)).
+local function talkingByVoice(): boolean
+	local talk = State.round.talk
+	return (talk == "talk" or talk == "settle") and State.meAlive() and player:GetAttribute("BW_ChatMode") ~= true
+end
 local function refreshVoice()
 	local status = Speech.status()
 	local isReady = State.micTested and (status == "Listening" or status == "Speaking")
@@ -60,7 +65,7 @@ local function refreshVoice()
 		readySent = isReady
 		remotes.Ready:FireServer(isReady)
 	end
-	Speech.setEnabled(not State.micTested)
+	Speech.setEnabled(not State.micTested or talkingByVoice())
 	MicPanel.set({
 		status = status,
 		micTested = State.micTested,
@@ -187,11 +192,15 @@ ChatLook.start()
 Speech.onStatus(function()
 	refreshVoice()
 end)
-Speech.onText(function()
+Speech.onText(function(text, earliest, latest, ended, textId)
 	if not State.micTested then
 		State.micTested = true
 		Toast.show(Config.TEXT.MIC_TESTED, "info")
 		refreshVoice()
+		return
+	end
+	if talkingByVoice() then
+		remotes.Transcript:FireServer(text, earliest, latest, ended, textId) -- (the server judges it, never shown)
 	end
 end)
 player:GetAttributeChangedSignal("BW_ChatMode"):Connect(refresh)
@@ -366,6 +375,14 @@ end)
 
 remotes.Notice.OnClientEvent:Connect(function(info)
 	Toast.show(info.text, "near")
+end)
+
+-- The banned-word talk ended: once my speech that may still count has been sent, say so (the settle stage waits).
+remotes.Settle.OnClientEvent:Connect(function(info)
+	task.spawn(function()
+		Speech.waitSettled(info.cutoff, info.cutoff + Config.END_TOLERANCE, Config.SETTLE_MAX)
+		remotes.Settled:FireServer(info.key)
+	end)
 end)
 
 remotes.Reaction.OnClientEvent:Connect(function(info)

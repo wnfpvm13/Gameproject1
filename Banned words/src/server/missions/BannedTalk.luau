@@ -46,7 +46,8 @@ local BannedTalk = {
 	title = Config.TEXT.TALK_TITLE,
 	-- The longest run: the presenter's re-draw window, the talk, then the settle stage (a late speech result and a
 	-- rescue still waiting).
-	expectedSeconds = Config.TALK_REROLL_SECONDS + Config.TALK_SECONDS + Config.SETTLE_MAX + Config.RESCUE_SECONDS,
+	expectedSeconds = Config.TALK_REROLL_SECONDS + Config.TALK_SECONDS + Config.SETTLE_MAX + Config.RESCUE_SECONDS
+		+ Config.LEVER_SECONDS + Config.SETTLE_SLACK, -- (the settle stage's longest wait, RoundService.settleTalk)
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TALK_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,

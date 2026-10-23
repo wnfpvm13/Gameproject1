@@ -16,11 +16,9 @@ local function fakePlayer(i)
 end
 
 ---------------------------------------------------------------- 1. judge range rule
-local hits, speeches = {}, 0
+local hits = {}
 JudgeService.start(function(player, word)
 	table.insert(hits, { p = player.Name, w = word, at = now })
-end, function()
-	speeches += 1
 end)
 local p1, p2 = fakePlayer(1), fakePlayer(2)
 playerList = { p1, p2 }
@@ -45,8 +43,7 @@ end
 check("1a exact range after the word -> launch", say(1050, p1, "우리 고양이 귀엽지", 1040, 1040) and lastHit().w == "고양이")
 check("1b range straddles the new word's start -> no launch", not say(1110, p1, "무지개 봤어", 1095, 1105))
 check("1c range wholly after the new word -> launch", say(1112, p1, "무지개 봤어", 1101, 1102) and lastHit().w == "무지개")
-local s0 = speeches
-check("1d may have begun before the talk -> ignored", not say(1115, p1, "고양이", 990, 1001) and speeches == s0)
+check("1d may have begun before the talk -> ignored", not say(1115, p1, "고양이", 990, 1001))
 Match.cutoffAt = 1200
 check("1e may have begun after the cutoff -> ignored", not say(1203, p1, "고양이", 1195, 1201))
 check("1f begun and ended before the cutoff -> launch", say(1203.5, p1, "고양이", 1195, 1199, 1199.8))

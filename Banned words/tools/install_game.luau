@@ -169,12 +169,14 @@ return {
 	EAR_COOLDOWN = 1, -- seconds between two "I heard a banned word" presses of the presenter
 	RESCUE_SECONDS = 3, -- a banned word caught in chat waits this long for the presenter's rescue (bundle 5b)
 	HIT_SOUND = 5, -- the sound everyone hears when chat catches a banned word (index in PRESENTER_SOUNDS: 땡)
-	-- Speech judging (JudgeService, phase 2 public servers): kept for that module and its tests.
-	-- Speech still counts if it began before the moment the round was decided and ended no later than END_TOLERANCE
-	-- after it; judging waits until every alive player's client says that speech has been sent (SETTLE_MAX at most).
+	-- Speech judging (JudgeService, bundle 6e; only while VOICE_JUDGING): speech in the banned-word talk counts if it
+	-- began inside the talk (before its end, or the moment the round was decided) and ended no later than END_TOLERANCE
+	-- after that; the settle stage waits until every alive voice player's client says that speech has been sent
+	-- (SETTLE_MAX at most).
 	END_TOLERANCE = 0,
 	SETTLE_MAX = 5,
 	SETTLE_NOTICE_AFTER = 1.2,
+	SETTLE_SLACK = 1, -- the settle stage waits at most this much past the rescue and the lever for them to end
 	RESPAWN_TIME = 3,
 
 	-- V3 flying chair (docs/DESIGN_V3.md §10, owner 2026-10-22): the seat flap snaps back with a bang, the player flies
@@ -225,7 +227,6 @@ return {
 	TRANSCRIPT_MAX_BYTES = 600,
 	TRANSCRIPT_BURST = 6, -- at most this many transcripts per window per player (spam guard)
 	TRANSCRIPT_BURST_WINDOW = 3,
-	VOICE_PING_INTERVAL = 1,
 
 	-- Fixed UI texts players may read aloud (checked against the word bank by tools/check_content.luau).
 	-- %s / %d are filled in by the code (names, numbers).
@@ -665,10 +666,9 @@ local Match = {
 	startedWith = 0,
 	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
 	chatJoin = {} :: { [Player]: boolean }, -- joins by text chat instead (ChatService decides who may)
-	-- Speech judging (JudgeService, phase 2):
+	-- Speech judging (JudgeService, bundle 6e; the talk stage sets them, the settle stage ends them):
 	talkStartedAt = math.huge, -- Match.now() when the talk began; speech from before it is ignored
 	cutoffAt = math.huge, -- Match.now() when the round is decided; later speech is ignored
-	lastActivityAt = 0, -- os.clock() of the last speech heard from an alive participant
 }
 
 function Match.now(): number
@@ -810,8 +810,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 --   BellRang    a seat bell rang: { userId } (client -> server: Bell (window id), ring my bell)
 --   Rescue      to the presenter: banned words caught in chat waiting for a rescue { hits = { {userId, word, endsAt} } }
 --               (client -> server: Rescue (userId) the presenter rescues that player)
--- The speech judging of phase 2 (JudgeService, not running in stage 1) will need Settle (server -> client), Transcript,
--- VoicePing and Settled back in NAMES; they are left out until then so nothing listens-less stays open.
+--   Settle      the banned-word talk ended at `cutoff`: { key, cutoff } (client -> server: Settled (key), my speech
+--               from before it has been sent; Transcript (text, earliest, latest, ended, textId), my own speech
+--               transcribed during the talk — speech judging, bundle 6e, JudgeService)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = {}
@@ -820,7 +821,7 @@ local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
 	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer", "Lever",
 	"EarJudge", "Reroll", "TalkStart", "Rescue", "Bell", "BellOpen", "BellRang",
-	"Words",
+	"Words", "Settle", "Transcript", "Settled",
 }
 
 local folder: Folder
@@ -878,9 +879,10 @@ do local s = Instance.new("ModuleScript"); s.Name = "RoundService"; s.Source = [
 -- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
 -- join by chat in ChatService, the presenter in PresenterService, banned words in WordService, score in Scores.
 -- Bundle 6a: banned words exist only during the banned-word talk (a minigame, played while speech judging is on): its
--- prep stage draws them (the presenter may re-draw), the talk is judged in chat at once (the presenter rescues, or
--- without a presenter the hit flies at once) and by the presenter's ear, and the settle stage (run here after every
--- talk) ends the rescues, tells everyone their word and clears the words and the chat rules. The other missions are
+-- prep stage draws them (the presenter may re-draw), the talk is judged in chat at once and in speech (JudgeService,
+-- bundle 6e) — the presenter rescues, or without a presenter the hit flies at once — and by the presenter's ear, and
+-- the settle stage (run here after every talk) waits for the last transcripts, ends the rescues, tells everyone their
+-- word and clears the words and the chat rules. The other missions are
 -- the quiz (also the final), the roulette, "a word to everyone" (plus the Studio-only test mission).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -895,6 +897,7 @@ local LifeService = require(services:WaitForChild("LifeService"))
 local Timeline = require(services:WaitForChild("Timeline"))
 local MissionRunner = require(services:WaitForChild("MissionRunner"))
 local WordService = require(services:WaitForChild("WordService"))
+local JudgeService = require(services:WaitForChild("JudgeService"))
 local RescueService = require(services:WaitForChild("RescueService"))
 local ChatGate = require(services:WaitForChild("ChatGate"))
 local BellService = require(services:WaitForChild("BellService"))
@@ -923,6 +926,7 @@ local earsPending = 0 -- ear judgments pressed in the talk whose lever has not l
 -- Chat hits not rescued while other rescues still wait: they are judged together once the last wait is over (§4: the
 -- order the waits end in must not decide who falls "at once").
 local heldFails: { Player } = {}
+local holdingLate = false -- the settle stage waits for the last transcripts: hits are held until it closes (6e)
 
 -- Alive participants and the presenter are heard by everyone; players who are out and spectators only by each other.
 local function refreshSpeakers()
@@ -965,6 +969,8 @@ end
 -- Tells everyone who lost a life or is out (one message per event, so the toast names them together; `final`: they
 -- all fell at once and play the final among themselves).
 
+local noteDecision: () -> () -- (below mainDecided) in the talk, the moment the main game is decided ends speech judging
+
 local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean)
 	local list = {}
 	for _, outcome in outcomes do
@@ -976,6 +982,7 @@ local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: bo
 		})
 	end
 	Net.toAll("LifeLost", { reason = reason, players = list, final = final })
+	noteDecision()
 	refreshSpeakers()
 	Match.broadcast()
 	if talkOn() then
@@ -1031,23 +1038,48 @@ local function mainDecided(): boolean
 	return toFinal or decided() or Timeline.fewLeft(#Match.aliveList())
 end
 
+-- Speech judging (bundle 6e): speech begun after the moment the main game was decided in the talk is not judged
+-- (§2), even when its transcript arrives in the settle stage (the talk goes on until the rescues have ended).
+-- From then on, speech from before it is judged as in the settle stage: its hits are held and fall together there.
+noteDecision = function()
+	if Match.talk == "talk" and mainDecided() then
+		Match.cutoffAt = math.min(Match.cutoffAt, Match.now())
+		if Match.voiceJudging and Match.talkStartedAt < math.huge then
+			holdingLate = true -- (released by settleTalk once the last transcripts are in)
+		end
+	end
+end
+
 -- ...and fixed: the rescues still waiting and the levers already pulled have ended first (they may change who is left).
 local function mainSettled(): boolean
 	return mainDecided() and RescueService.pending() == 0 and earsPending == 0
 end
 
+local releaseHeld: () -> () -- (below chatFail) the held hits fall together
+
 -- The banned-word talk's settle stage (docs/DESIGN_V3.md §6), after every talk, also a cancelled or broken one: no new
--- judgments; chat is judged the moment it arrives, so nothing is queued (speech results would be waited for here,
--- bundle 6e); the rescues still waiting and the levers already pulled end (they cost a life, but no new word any more);
--- everyone who had a word is told it; then the words and the chat rules go.
+-- judgments; chat is judged the moment it arrives, so nothing is queued; speech from before the end is waited for
+-- (every voice player's client says it has sent it, at most SETTLE_MAX; bundle 6e); the rescues still waiting and the
+-- levers already pulled end (they cost a life, but no new word any more); everyone who had a word is told it; then the
+-- words, the speech judging and the chat rules go.
 local TALK_POLL = 0.1
 local function settleTalk()
 	if not talkOn() then
 		return
 	end
 	Match.talk = "settle"
+	Match.cutoffAt = math.min(Match.cutoffAt, Match.now()) -- (speech begun after this is not judged)
 	Match.broadcast()
-	local deadline = os.clock() + Config.RESCUE_SECONDS + Config.LEVER_SECONDS + 1
+	if Match.voiceJudging and Match.talkStartedAt < math.huge then
+		-- Late hits are held meanwhile and fall together once no more can come (the order transcripts arrive in must
+		-- not decide who falls first, e.g. who plays the final when everyone left falls).
+		holdingLate = true
+		JudgeService.settle(Match.cutoffAt)
+		JudgeService.setOpen(false)
+		holdingLate = false
+		releaseHeld()
+	end
+	local deadline = os.clock() + Config.RESCUE_SECONDS + Config.LEVER_SECONDS + Config.SETTLE_SLACK
 	while (RescueService.pending() > 0 or earsPending > 0) and os.clock() < deadline do
 		task.wait(TALK_POLL)
 	end
@@ -1057,6 +1089,7 @@ local function settleTalk()
 			Net.to(player, "Notice", { text = string.format(Config.TEXT.MY_WORD_WAS, word.text) })
 		end
 	end
+	Match.talkStartedAt, Match.cutoffAt = math.huge, math.huge
 	WordService.clear()
 	Match.talk = nil
 	ChatGate.setGuard(false)
@@ -1092,7 +1125,9 @@ local function setTalkStage(stage: string, topic: string?)
 		ChatGate.setGuard(true)
 	elseif stage == "talk" and Match.talk == "prep" then
 		Match.talk = "talk"
+		Match.talkStartedAt, Match.cutoffAt = Match.now(), math.huge
 		WordService.startJudging(Match.now())
+		JudgeService.setOpen(Match.voiceJudging) -- (speech judging: only the talk stage's speech is judged)
 	else
 		return
 	end
@@ -1383,6 +1418,7 @@ local function cleanup()
 	RescueService.endRound() -- (before the presenter goes: their rescue banner is cleared)
 	PresenterService.endRound()
 	ChatGate.setGuard(false)
+	JudgeService.setOpen(false)
 	openVoices()
 	SpectatorService.endRound()
 	Match.resetRound()
@@ -1391,6 +1427,7 @@ local function cleanup()
 	rerollsUsed = 0
 	earsPending = 0
 	heldFails = {}
+	holdingLate = false
 	-- Chat participants whose voice got ready during the round join by voice from now on.
 	for player in Match.chatJoin do
 		if Match.ready[player] then
@@ -1603,6 +1640,34 @@ local function chatFail(targets: { Player })
 	WordService.sendAll()
 end
 
+-- The held hits fall together, once no rescue waits and the settle stage no longer holds them.
+releaseHeld = function()
+	if holdingLate or RescueService.pending() > 0 or #heldFails == 0 then
+		return
+	end
+	local held = heldFails
+	heldFails = {}
+	chatFail(held)
+end
+
+-- A banned word caught by the system (chat or speech): a "땡", then the presenter's rescue wait, or at once a launch.
+local function caught(player: Player, wordText: string)
+	Net.toAll("Sound", { index = Config.HIT_SOUND })
+	if not Match.presenter then
+		newWord(player)
+		if holdingLate then
+			table.insert(heldFails, player) -- (falls with the other late hits, see settleTalk)
+		else
+			chatFail({ player })
+		end
+		return
+	end
+	if not RescueService.hit(player, wordText, { round = Match.roundId, talk = talks }) then
+		return -- a hit of theirs is already waiting: merged
+	end
+	Net.notice(string.format(Config.TEXT.RESCUE_WAIT, player.DisplayName))
+end
+
 local function onChat(player: Player, text: string)
 	if not judgingOpen(player) or judgmentOpen(player) then
 		return -- (a hit of theirs still open: this one is merged into it, §4)
@@ -1612,16 +1677,19 @@ local function onChat(player: Player, text: string)
 	if not (word and Judge.chatHit(word.text, text, word.aliases)) then
 		return
 	end
-	Net.toAll("Sound", { index = Config.HIT_SOUND })
-	if not Match.presenter then
-		newWord(player)
-		chatFail({ player })
-		return
+	caught(player, word.text)
+end
+
+-- Speech judging (bundle 6e): JudgeService found `wordText` in `player`'s speech from inside the talk (its time range
+-- checked there). Its transcript may arrive in the settle stage (speech that began before the end; §6), or after the
+-- round was decided, so a late one still lands then.
+local function onSpeechHit(player: Player, wordText: string)
+	-- (late: in the settle stage, or once the round was decided while the talk goes on — the same speech must count
+	-- the same whenever its transcript arrives)
+	if not judgingOpen(player, Match.talk == "settle" or mainDecided()) or judgmentOpen(player) then
+		return -- (a hit of theirs still open: this one is merged into it, §4)
 	end
-	if not RescueService.hit(player, word.text, { round = Match.roundId, talk = talks }) then
-		return -- a hit of theirs is already waiting: merged
-	end
-	Net.notice(string.format(Config.TEXT.RESCUE_WAIT, player.DisplayName))
+	caught(player, wordText)
 end
 
 -- The rescue wait is over: a new word either way (while the talk goes on); without a rescue, a life. The lives are
@@ -1638,12 +1706,8 @@ local function onRescueResolved(hit: RescueService.Hit)
 		end
 		WordService.sendAll()
 	end
-	if RescueService.pending() == 0 and #heldFails > 0 then
-		local held = heldFails
-		heldFails = {}
-		if data.round == Match.roundId then
-			chatFail(held)
-		end
+	if data.round == Match.roundId then
+		releaseHeld()
 	end
 end
 
@@ -1697,6 +1761,7 @@ function RoundService.start()
 	})
 	RescueService.start(onRescueResolved)
 	ChatGate.start(onChat)
+	JudgeService.start(onSpeechHit)
 	MissionRunner.start()
 	BellService.start(SeatService.isFlying)
 	LifeService.start(SeatService.isFlying)
@@ -2549,7 +2614,8 @@ local BannedTalk = {
 	title = Config.TEXT.TALK_TITLE,
 	-- The longest run: the presenter's re-draw window, the talk, then the settle stage (a late speech result and a
 	-- rescue still waiting).
-	expectedSeconds = Config.TALK_REROLL_SECONDS + Config.TALK_SECONDS + Config.SETTLE_MAX + Config.RESCUE_SECONDS,
+	expectedSeconds = Config.TALK_REROLL_SECONDS + Config.TALK_SECONDS + Config.SETTLE_MAX + Config.RESCUE_SECONDS
+		+ Config.LEVER_SECONDS + Config.SETTLE_SLACK, -- (the settle stage's longest wait, RoundService.settleTalk)
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TALK_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
@@ -4749,17 +4815,19 @@ end
 return ChatService
 ]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "JudgeService"; s.Source = [====[--!strict
--- Transcript intake and judging. Every alive participant is judged on everything they say during the talk
--- (no turns). The client cannot prove a transcript is real speech; these checks only stop spam and mix-ups.
+-- Transcript intake and judging (bundle 6e): every alive participant is judged on everything they say during the
+-- banned-word talk (RoundService opens it for the talk stage while speech judging is on, docs/DESIGN_V3.md §3, §6).
+-- The client cannot prove a transcript is real speech (the owner accepted that limit); these checks only stop spam
+-- and mix-ups.
 --
 -- Boundaries: the client sends the server-time range its speech began in, the latest time it may have ended (and
 -- a text id), see Speech.luau.
---   - speech that may have begun before the talk, or after the round was decided (Match.cutoffAt, at the latest
---     the talk's end), is ignored;
+--   - speech that may have begun before the talk (Match.talkStartedAt), or after its end (Match.cutoffAt: the talk's
+--     end, or the moment the round was decided), is ignored;
 --   - so is speech that may have gone on past cutoffAt + END_TOLERANCE (its words may come after the end);
 --   - a word only counts if it was in effect for the whole range (unsure -> no launch).
--- End of the round: settle() keeps judging open until every alive player's client says that its speech which may
--- still count has been sent (or SETTLE_MAX passes), so a sentence finished right at the end still counts.
+-- End of the talk: settle() keeps judging open until every alive voice player's client says that its speech which
+-- may still count has been sent (or SETTLE_MAX passes), so a sentence finished right at the end still counts.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
@@ -4773,17 +4841,11 @@ local JudgeService = {}
 
 local open = false
 local onHit: (Player, string) -> () = function() end
-local onSpeech: (Player) -> () = function() end
 local recent: { [Player]: { number } } = {} -- os.clock() of recent transcripts (spam guard)
 local seenTexts: { [Player]: { [number]: boolean } } = {}
-local lastPing: { [Player]: number } = {}
 local minuteCount, minuteStart, warnedThisMinute = 0, os.clock(), false
 local settleKey = 0
 local settled: { [Player]: boolean } = {}
-
-local function markActive()
-	Match.lastActivityAt = os.clock()
-end
 
 -- Cuts at a character boundary (never mid-syllable); nil if the text is not valid UTF-8.
 local function cleanText(text: string): string?
@@ -4835,8 +4897,12 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 	if not open or typeof(text) ~= "string" or not Match.isAlive(player) then
 		return
 	end
+	-- The cheap checks first: how often, then how long (a huge text is not even read).
+	if not underBurstLimit(player) or #text > Config.TRANSCRIPT_MAX_BYTES * 4 then
+		return
+	end
 	local cleaned = cleanText(text)
-	if not cleaned or not underBurstLimit(player) then
+	if not cleaned then
 		return
 	end
 	countRequest()
@@ -4849,7 +4915,6 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 		end
 		seen[textId] = true
 	end
-	markActive()
 
 	-- The speech began somewhere in [from, to] and ended by endedBy. Nothing is clamped in the harsher direction:
 	-- an earlier start or a later end can only make judging more lenient (a client could just as well not send it).
@@ -4862,9 +4927,8 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 	local to = math.clamp(latest, from, now)
 	local endedBy = math.max(ended, to)
 	if from < Match.talkStartedAt or to > Match.cutoffAt or endedBy > Match.cutoffAt + Config.END_TOLERANCE then
-		return -- may have been spoken before the talk, after the round was decided, or well past that moment
+		return -- may have been spoken before the talk, after it ended, or well past that moment
 	end
-	onSpeech(player)
 	local p = Match.participants[player]
 	for _, word in p.words do
 		if word.effectiveAt <= from and Judge.isConfirmed(word.text, cleaned, word.aliases) then
@@ -4874,24 +4938,10 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 	end
 end
 
--- The mic hears speech: counts as table activity for the assistant host (never used to judge anyone).
-local function onVoicePing(player: Player)
-	local clock = os.clock()
-	if clock - (lastPing[player] or 0) < Config.VOICE_PING_INTERVAL * 0.5 then
-		return
-	end
-	lastPing[player] = clock
-	if open and Match.isAlive(player) then
-		markActive()
-	end
-end
-
--- hit(player, word): a word was said. speech(player): a judged transcript arrived (assist tracking).
-function JudgeService.start(hit: (Player, string) -> (), speech: (Player) -> ())
+-- hit(player, word): `player` said their banned word `word` in the talk (RoundService decides what follows).
+function JudgeService.start(hit: (Player, string) -> ())
 	onHit = hit
-	onSpeech = speech
 	Net.listen("Transcript", onTranscript)
-	Net.listen("VoicePing", onVoicePing)
 	Net.listen("Settled", function(player, key)
 		if key == settleKey then
 			settled[player] = true
@@ -4900,13 +4950,13 @@ function JudgeService.start(hit: (Player, string) -> (), speech: (Player) -> ())
 	Players.PlayerRemoving:Connect(function(player)
 		recent[player] = nil
 		seenTexts[player] = nil
-		lastPing[player] = nil
 		settled[player] = nil
 	end)
 end
 
--- The round was decided at `cutoff`: blocks until every alive participant's client has sent its speech from
--- before it (at most SETTLE_MAX seconds; a notice if it takes a moment). Judging stays open meanwhile.
+-- The talk ended at `cutoff`: blocks until every alive voice participant's client has sent its speech from before it
+-- (at most SETTLE_MAX seconds; a notice if it takes a moment). Judging stays open meanwhile. Chat participants do
+-- not transcribe, so they are not waited for.
 function JudgeService.settle(cutoff: number)
 	settleKey += 1
 	table.clear(settled)
@@ -4916,7 +4966,8 @@ function JudgeService.settle(cutoff: number)
 	while os.clock() - started < Config.SETTLE_MAX do
 		local pending = false
 		for _, player in Match.aliveList() do
-			if not settled[player] then
+			local p = Match.participants[player]
+			if not settled[player] and not (p and p.chat) then
 				pending = true
 				break
 			end
@@ -4936,7 +4987,7 @@ function JudgeService.setOpen(isOpen: boolean)
 	open = isOpen
 	if isOpen then
 		table.clear(recent)
-		markActive()
+		table.clear(seenTexts) -- (text ids only matter within one talk)
 	end
 end
 
@@ -7150,9 +7201,14 @@ local function applySeatLock()
 	end)
 end
 
--- Ready = voice connected + said something once. The recognizer runs only for that mic test (docs/DESIGN_V3.md §2;
--- judging speech comes back in phase 2). Accounts without voice may join by chat instead (§7; the server decides,
--- tells me alone what I may do ("ChatAccess") and everyone who joins by chat (attribute BW_ChatMode)).
+-- Ready = voice connected + said something once. The recognizer runs for that mic test and, while I play by voice,
+-- during the banned-word talk (speech judging, bundle 6e: requests are limited experience-wide, so not otherwise).
+-- Accounts without voice may join by chat instead (§7; the server decides, tells me alone what I may do
+-- ("ChatAccess") and everyone who joins by chat (attribute BW_ChatMode)).
+local function talkingByVoice(): boolean
+	local talk = State.round.talk
+	return (talk == "talk" or talk == "settle") and State.meAlive() and player:GetAttribute("BW_ChatMode") ~= true
+end
 local function refreshVoice()
 	local status = Speech.status()
 	local isReady = State.micTested and (status == "Listening" or status == "Speaking")
@@ -7160,7 +7216,7 @@ local function refreshVoice()
 		readySent = isReady
 		remotes.Ready:FireServer(isReady)
 	end
-	Speech.setEnabled(not State.micTested)
+	Speech.setEnabled(not State.micTested or talkingByVoice())
 	MicPanel.set({
 		status = status,
 		micTested = State.micTested,
@@ -7287,11 +7343,15 @@ ChatLook.start()
 Speech.onStatus(function()
 	refreshVoice()
 end)
-Speech.onText(function()
+Speech.onText(function(text, earliest, latest, ended, textId)
 	if not State.micTested then
 		State.micTested = true
 		Toast.show(Config.TEXT.MIC_TESTED, "info")
 		refreshVoice()
+		return
+	end
+	if talkingByVoice() then
+		remotes.Transcript:FireServer(text, earliest, latest, ended, textId) -- (the server judges it, never shown)
 	end
 end)
 player:GetAttributeChangedSignal("BW_ChatMode"):Connect(refresh)
@@ -7466,6 +7526,14 @@ end)
 
 remotes.Notice.OnClientEvent:Connect(function(info)
 	Toast.show(info.text, "near")
+end)
+
+-- The banned-word talk ended: once my speech that may still count has been sent, say so (the settle stage waits).
+remotes.Settle.OnClientEvent:Connect(function(info)
+	task.spawn(function()
+		Speech.waitSettled(info.cutoff, info.cutoff + Config.END_TOLERANCE, Config.SETTLE_MAX)
+		remotes.Settled:FireServer(info.key)
+	end)
 end)
 
 remotes.Reaction.OnClientEvent:Connect(function(info)
@@ -8601,8 +8669,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "Speech"; s.Source = [====[-
 -- stays false until the player connects voice from the in-experience settings menu.
 --
 -- STT requests count against an experience-wide limit (1 + 5 x CCU per minute), so the recognizer is only
--- enabled while it matters — see setEnabled. V3 phase 1 uses it for the mic test only; judging speech comes back
--- in phase 2 (docs/DESIGN_V3.md §12).
+-- enabled while it matters — see setEnabled: the mic test, and the banned-word talk while speech judging is on
+-- (bundle 6e, docs/DESIGN_V3.md §3, §6).
 local Players = game:GetService("Players")
 
 local Speech = {}

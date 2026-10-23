@@ -1,15 +1,17 @@
 --!strict
--- Transcript intake and judging. Every alive participant is judged on everything they say during the talk
--- (no turns). The client cannot prove a transcript is real speech; these checks only stop spam and mix-ups.
+-- Transcript intake and judging (bundle 6e): every alive participant is judged on everything they say during the
+-- banned-word talk (RoundService opens it for the talk stage while speech judging is on, docs/DESIGN_V3.md §3, §6).
+-- The client cannot prove a transcript is real speech (the owner accepted that limit); these checks only stop spam
+-- and mix-ups.
 --
 -- Boundaries: the client sends the server-time range its speech began in, the latest time it may have ended (and
 -- a text id), see Speech.luau.
---   - speech that may have begun before the talk, or after the round was decided (Match.cutoffAt, at the latest
---     the talk's end), is ignored;
+--   - speech that may have begun before the talk (Match.talkStartedAt), or after its end (Match.cutoffAt: the talk's
+--     end, or the moment the round was decided), is ignored;
 --   - so is speech that may have gone on past cutoffAt + END_TOLERANCE (its words may come after the end);
 --   - a word only counts if it was in effect for the whole range (unsure -> no launch).
--- End of the round: settle() keeps judging open until every alive player's client says that its speech which may
--- still count has been sent (or SETTLE_MAX passes), so a sentence finished right at the end still counts.
+-- End of the talk: settle() keeps judging open until every alive voice player's client says that its speech which
+-- may still count has been sent (or SETTLE_MAX passes), so a sentence finished right at the end still counts.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
@@ -23,17 +25,11 @@ local JudgeService = {}
 
 local open = false
 local onHit: (Player, string) -> () = function() end
-local onSpeech: (Player) -> () = function() end
 local recent: { [Player]: { number } } = {} -- os.clock() of recent transcripts (spam guard)
 local seenTexts: { [Player]: { [number]: boolean } } = {}
-local lastPing: { [Player]: number } = {}
 local minuteCount, minuteStart, warnedThisMinute = 0, os.clock(), false
 local settleKey = 0
 local settled: { [Player]: boolean } = {}
-
-local function markActive()
-	Match.lastActivityAt = os.clock()
-end
 
 -- Cuts at a character boundary (never mid-syllable); nil if the text is not valid UTF-8.
 local function cleanText(text: string): string?
@@ -85,8 +81,12 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 	if not open or typeof(text) ~= "string" or not Match.isAlive(player) then
 		return
 	end
+	-- The cheap checks first: how often, then how long (a huge text is not even read).
+	if not underBurstLimit(player) or #text > Config.TRANSCRIPT_MAX_BYTES * 4 then
+		return
+	end
 	local cleaned = cleanText(text)
-	if not cleaned or not underBurstLimit(player) then
+	if not cleaned then
 		return
 	end
 	countRequest()
@@ -99,7 +99,6 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 		end
 		seen[textId] = true
 	end
-	markActive()
 
 	-- The speech began somewhere in [from, to] and ended by endedBy. Nothing is clamped in the harsher direction:
 	-- an earlier start or a later end can only make judging more lenient (a client could just as well not send it).
@@ -112,9 +111,8 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 	local to = math.clamp(latest, from, now)
 	local endedBy = math.max(ended, to)
 	if from < Match.talkStartedAt or to > Match.cutoffAt or endedBy > Match.cutoffAt + Config.END_TOLERANCE then
-		return -- may have been spoken before the talk, after the round was decided, or well past that moment
+		return -- may have been spoken before the talk, after it ended, or well past that moment
 	end
-	onSpeech(player)
 	local p = Match.participants[player]
 	for _, word in p.words do
 		if word.effectiveAt <= from and Judge.isConfirmed(word.text, cleaned, word.aliases) then
@@ -124,24 +122,10 @@ local function onTranscript(player: Player, text: any, earliest: any, latest: an
 	end
 end
 
--- The mic hears speech: counts as table activity for the assistant host (never used to judge anyone).
-local function onVoicePing(player: Player)
-	local clock = os.clock()
-	if clock - (lastPing[player] or 0) < Config.VOICE_PING_INTERVAL * 0.5 then
-		return
-	end
-	lastPing[player] = clock
-	if open and Match.isAlive(player) then
-		markActive()
-	end
-end
-
--- hit(player, word): a word was said. speech(player): a judged transcript arrived (assist tracking).
-function JudgeService.start(hit: (Player, string) -> (), speech: (Player) -> ())
+-- hit(player, word): `player` said their banned word `word` in the talk (RoundService decides what follows).
+function JudgeService.start(hit: (Player, string) -> ())
 	onHit = hit
-	onSpeech = speech
 	Net.listen("Transcript", onTranscript)
-	Net.listen("VoicePing", onVoicePing)
 	Net.listen("Settled", function(player, key)
 		if key == settleKey then
 			settled[player] = true
@@ -150,13 +134,13 @@ function JudgeService.start(hit: (Player, string) -> (), speech: (Player) -> ())
 	Players.PlayerRemoving:Connect(function(player)
 		recent[player] = nil
 		seenTexts[player] = nil
-		lastPing[player] = nil
 		settled[player] = nil
 	end)
 end
 
--- The round was decided at `cutoff`: blocks until every alive participant's client has sent its speech from
--- before it (at most SETTLE_MAX seconds; a notice if it takes a moment). Judging stays open meanwhile.
+-- The talk ended at `cutoff`: blocks until every alive voice participant's client has sent its speech from before it
+-- (at most SETTLE_MAX seconds; a notice if it takes a moment). Judging stays open meanwhile. Chat participants do
+-- not transcribe, so they are not waited for.
 function JudgeService.settle(cutoff: number)
 	settleKey += 1
 	table.clear(settled)
@@ -166,7 +150,8 @@ function JudgeService.settle(cutoff: number)
 	while os.clock() - started < Config.SETTLE_MAX do
 		local pending = false
 		for _, player in Match.aliveList() do
-			if not settled[player] then
+			local p = Match.participants[player]
+			if not settled[player] and not (p and p.chat) then
 				pending = true
 				break
 			end
@@ -186,7 +171,7 @@ function JudgeService.setOpen(isOpen: boolean)
 	open = isOpen
 	if isOpen then
 		table.clear(recent)
-		markActive()
+		table.clear(seenTexts) -- (text ids only matter within one talk)
 	end
 end
 

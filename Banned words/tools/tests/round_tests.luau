@@ -1692,9 +1692,11 @@ do
 	leave(ps[6], { ps[1], ps[2], ps[3], ps[4], spectator })
 	at(now + 0.5)
 	local phaseWhileWaiting = Match.phase
-	at(cbAt + Config.RESCUE_SECONDS + 0.5)
+	-- (speech judging is on here: once decided, late results fall together after the settle stage's wait, bundle 6e)
+	advanceUntil(function() return Match.talk == nil end, Config.RESCUE_SECONDS + Config.SETTLE_MAX + 4)
 	check("14b the final waits for a rescue still waiting; the hit costs a main-game life (not a final out)",
-		phaseWhileWaiting == "Play" and Match.participants[ps[2]].lives == Config.LIVES - 1 and Match.isAlive(ps[2]))
+		phaseWhileWaiting == "Play" and Match.participants[ps[2]].lives == Config.LIVES - 1 and Match.isAlive(ps[2])
+		and Match.phase ~= "Final")
 	finish(since)
 
 	-- 14C: once the main game is decided, a new message is not judged (even while an older rescue still waits).
@@ -1716,6 +1718,148 @@ do
 	at(now + 0.1)
 	check("14c after the decision a new message is not judged", beepsSince(lateAt) == 0)
 	finish(since2)
+
+	-- 14D (bundle 6e): speech judging in the talk (JudgeService through RoundService; no presenter: a hit flies at once).
+	local transcript = NetStub.listeners.Transcript
+	local vs = newPlayers(3)
+	local since3 = now
+	begin(vs, 10, nil, nil)
+	advanceUntil(function() return Match.talk == "talk" end, Config.TALK_PREP_SECONDS + 12)
+	local talkAt = now
+	at(now + 1)
+	local early = wordOf(vs[3])
+	if transcript and early then
+		transcript(vs[3], "음 " .. early, talkAt - 2, talkAt - 1, now, 1) -- may have begun before the talk
+	end
+	at(now + 0.1)
+	local w2 = wordOf(vs[2])
+	local hitAt = now
+	if transcript and w2 then
+		transcript(vs[2], "그건 " .. w2 .. " 같아", now - 1, now - 0.5, now, 1)
+	end
+	at(now + 0.1)
+	check("14d speech judging: a transcript from inside the talk with the banned word flies at once (no presenter); one that may have begun before the talk does not count",
+		transcript ~= nil and Match.participants[vs[2]].lives == Config.LIVES - 1 and wordOf(vs[2]) ~= w2
+		and beepsSince(hitAt) == 1 and Match.participants[vs[3]].lives == Config.LIVES and wordOf(vs[3]) == early)
+	advanceUntil(function() return Match.talk == "settle" end, Config.TALK_SECONDS + 2)
+	local settle = lastSent("Settle", since3)
+	local cutoff = if settle then settle.payload.cutoff else now
+	local w3, w1 = wordOf(vs[3]), wordOf(vs[1])
+	if transcript and w3 and w1 then
+		transcript(vs[3], w3, cutoff - 2, cutoff - 1, cutoff, 2) -- began in the talk, arrives in the settle stage
+		transcript(vs[1], w1, cutoff + 0.5, cutoff + 0.6, cutoff + 1, 2) -- began after the talk ended
+	end
+	at(now + 0.1)
+	local heldMeanwhile = Match.participants[vs[3]].lives == Config.LIVES
+	local stillSettling = Match.talk == "settle"
+	local settledAt = now
+	for _, v in vs do
+		if settle then
+			NetStub.listeners.Settled(v, settle.payload.key)
+		end
+	end
+	advanceUntil(function() return Match.talk == nil end, Config.SETTLE_MAX + Config.RESCUE_SECONDS + 3)
+	local lateLanded = Match.participants[vs[3]].lives == Config.LIVES - 1
+	local afterIgnored = Match.participants[vs[1]].lives == Config.LIVES
+	check("14e the settle stage sends Settle with the talk's end and waits: a late transcript of speech from inside the talk lands (held until the wait is over), one begun after it does not; every voice player settled -> it goes on before SETTLE_MAX",
+		settle ~= nil and stillSettling and heldMeanwhile and lateLanded and afterIgnored and Match.talk == nil
+		and now - settledAt < Config.SETTLE_MAX - 1, string.format("%.1f s after Settled", now - settledAt))
+	local talkOver = now
+	if transcript then
+		transcript(vs[1], wordOf(vs[1]) or "x", talkOver - 0.5, talkOver - 0.2, talkOver, 3)
+	end
+	at(now + 0.1)
+	check("14f after the talk the speech judging is closed", beepsSince(talkOver) == 0)
+	finish(since3)
+
+	-- 14G: decided in the middle of the talk while a rescue still waits (so the talk goes on): speech begun after that
+	-- moment is not judged, even when its transcript comes in the settle stage.
+	local gs = newPlayers(4) -- gs[1] presents
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(gs[1], true)
+	local since4 = now
+	begin(gs, 10, nil, nil)
+	pickTalk(gs[1], since4)
+	NetStub.listeners.TalkStart(gs[1])
+	at(now + 0.3)
+	ChatGate.received("g1", gs[2], wordOf(gs[2])) -- waits for a rescue
+	at(now + 0.1)
+	NetStub.listeners.DevFling(gs[3], "out")
+	NetStub.listeners.DevFling(gs[2], "out") -- gs[4] is the last one: decided while the rescue waits
+	local decidedAt = now
+	local stillTalk = Match.talk == "talk"
+	advanceUntil(function() return Match.talk == "settle" end, Config.RESCUE_SECONDS + 3)
+	local inSettle = Match.talk == "settle"
+	local gw = wordOf(gs[4])
+	local sendAt = now
+	if transcript and gw then
+		transcript(gs[4], gw, decidedAt + 0.5, decidedAt + 0.6, decidedAt + 0.8, 7)
+	end
+	at(now + 0.1)
+	check("14g decided in the middle of the talk (a rescue waiting): speech begun after that moment is not judged in the settle stage",
+		stillTalk and inSettle and gw ~= nil and beepsSince(sendAt) == 0 and Match.participants[gs[4]].lives == Config.LIVES)
+	finish(since4)
+
+	-- 14I: the same, but speech from before that moment, its transcript arriving while the talk still goes on: it counts
+	-- (held, it falls in the settle stage), as it would in the settle stage.
+	local is = newPlayers(4) -- is[1] presents
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(is[1], true)
+	local since6 = now
+	begin(is, 10, nil, nil)
+	pickTalk(is[1], since6)
+	NetStub.listeners.TalkStart(is[1])
+	at(now + 0.3)
+	ChatGate.received("i1", is[2], wordOf(is[2])) -- waits for a rescue
+	at(now + 0.5)
+	local beforeAt = now
+	at(now + 0.5)
+	NetStub.listeners.DevFling(is[3], "out")
+	NetStub.listeners.DevFling(is[2], "out") -- is[4] is the last one: decided while the rescue waits
+	local decided6 = now
+	at(now + 0.2)
+	local talkStill = Match.talk == "talk"
+	local iw = wordOf(is[4])
+	local sendAt6 = now
+	if transcript and iw then
+		transcript(is[4], iw, beforeAt - 0.2, beforeAt, decided6 - 0.1, 9) -- spoken before the decision
+	end
+	at(now + 0.1)
+	local beeped = beepsSince(sendAt6) == 1
+	advanceUntil(function() return Match.talk == nil end, Config.RESCUE_SECONDS + Config.SETTLE_MAX + 6)
+	check("14i decided while the talk goes on: speech from before that moment still counts when its transcript comes before the settle stage",
+		talkStill and beeped and Match.participants[is[4]].lives == Config.LIVES - 1)
+	finish(since6)
+
+	-- 14H: late hits in the settle stage fall together once the wait is over (one event, whatever order they came in).
+	local hs = newPlayers(4)
+	local since5 = now
+	begin(hs, 10, nil, nil)
+	advanceUntil(function() return Match.talk == "talk" end, Config.TALK_PREP_SECONDS + 12)
+	advanceUntil(function() return Match.talk == "settle" end, Config.TALK_SECONDS + 2)
+	local settle5 = lastSent("Settle", since5)
+	local cut5 = if settle5 then settle5.payload.cutoff else now
+	if transcript then
+		transcript(hs[1], wordOf(hs[1]) or "x", cut5 - 3, cut5 - 2.5, cut5 - 2, 11)
+	end
+	at(now + 0.5)
+	if transcript then
+		transcript(hs[2], wordOf(hs[2]) or "x", cut5 - 2, cut5 - 1.5, cut5 - 1, 11)
+	end
+	at(now + 0.1)
+	local noneYet = Match.participants[hs[1]].lives == Config.LIVES and Match.participants[hs[2]].lives == Config.LIVES
+	local releaseAt = now
+	for _, h in hs do
+		if settle5 then
+			NetStub.listeners.Settled(h, settle5.payload.key)
+		end
+	end
+	at(now + 0.5)
+	local lost = lastSent("LifeLost", releaseAt)
+	check("14h late hits are held until the settle wait is over, then fall together in one event",
+		noneYet and lost ~= nil and #lost.payload.players == 2 and Match.participants[hs[1]].lives == Config.LIVES - 1
+		and Match.participants[hs[2]].lives == Config.LIVES - 1)
+	finish(since5)
 	workspaceAttributes.BW_ServerKind = nil
 	workspaceAttributes.BW_VoiceJudging = nil
 	Scripted.off = false

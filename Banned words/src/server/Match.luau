@@ -40,10 +40,9 @@ local Match = {
 	startedWith = 0,
 	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
 	chatJoin = {} :: { [Player]: boolean }, -- joins by text chat instead (ChatService decides who may)
-	-- Speech judging (JudgeService, phase 2):
+	-- Speech judging (JudgeService, bundle 6e; the talk stage sets them, the settle stage ends them):
 	talkStartedAt = math.huge, -- Match.now() when the talk began; speech from before it is ignored
 	cutoffAt = math.huge, -- Match.now() when the round is decided; later speech is ignored
-	lastActivityAt = 0, -- os.clock() of the last speech heard from an alive participant
 }
 
 function Match.now(): number

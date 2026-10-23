@@ -7,7 +7,7 @@ local Names = require(shared:WaitForChild("Names"))
 
 local Net = {}
 
-export type Remotes = { Squash: RemoteEvent, Bridge: RemoteEvent }
+export type Remotes = { Squash: RemoteEvent, Bridge: RemoteEvent, Mail: RemoteEvent }
 
 local function child(parent: Instance, className: string, name: string): Instance
 	local existing = parent:FindFirstChild(name)
@@ -29,6 +29,7 @@ function Net.create(): Remotes
 	return {
 		Squash = child(folder, "RemoteEvent", Names.SquashRemote) :: RemoteEvent,
 		Bridge = child(folder, "RemoteEvent", Names.BridgeRemote) :: RemoteEvent,
+		Mail = child(folder, "RemoteEvent", Names.MailRemote) :: RemoteEvent,
 	}
 end
 

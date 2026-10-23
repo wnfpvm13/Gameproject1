@@ -1,8 +1,9 @@
 --!strict
 -- The player's own cowboy on a train's roof: a low bridge passing over a cowboy who is too tall there (in the air, or
 -- not lying flat on a flat roof) knocks them off backward ("splat"); a cowboy who has left the train ("fell") or was
--- knocked off goes back onto the last car after Config.Cowboy.SplatSeconds. The player's client moves its own
--- character, so this runs there.
+-- knocked off goes back onto the last car after Config.Cowboy.SplatSeconds; a cowboy whose middle comes close to the
+-- next mail bag picks it up ("mail", reported to the server once). The player's client moves its own character, so
+-- this runs there.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("WesternTrain")
@@ -10,21 +11,23 @@ local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
 local CourseMath = require(shared:WaitForChild("CourseMath"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
+local TrainState = require(shared:WaitForChild("TrainState"))
 
 local CowboyRules = {}
 CowboyRules.__index = CowboyRules
 
-export type Event = "splat" | "fell"
+export type Event = "splat" | "fell" | "mail"
 
 type Fields = {
 	train: Model,
 	base: BasePart,
 	backUntil: number?, -- os.clock time the cowboy goes back onto the last car (while knocked off or fallen)
+	picked: { index: number, at: number, version: number }?, -- the bag last reported (os.clock, run version)
 }
 export type Rules = typeof(setmetatable({} :: Fields, CowboyRules))
 
 function CowboyRules.new(train: Model, base: BasePart): Rules
-	local fields: Fields = { train = train, base = base, backUntil = nil }
+	local fields: Fields = { train = train, base = base, backUntil = nil, picked = nil }
 	return setmetatable(fields, CowboyRules)
 end
 
@@ -67,8 +70,8 @@ function CowboyRules.stop(self: Rules, character: Model?)
 end
 
 -- Every frame, after RoofRider. distance: the train's run distance (nil before the run); floor: the roof floor under
--- the feet; lie: how far the cowboy lies down. Returns what just happened, if anything.
-function CowboyRules.update(self: Rules, character: Model?, floor: BasePart?, lie: number, distance: number?): Event?
+-- the feet; lie: how far the cowboy lies down. Returns what just happened, if anything (and the bag, for "mail").
+function CowboyRules.update(self: Rules, character: Model?, floor: BasePart?, lie: number, distance: number?): (Event?, number?)
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if not (character and root and root:IsA("BasePart") and humanoid) then
@@ -106,6 +109,22 @@ function CowboyRules.update(self: Rules, character: Model?, floor: BasePart?, li
 			root.AssemblyLinearVelocity = baseCFrame:VectorToWorldSpace(Vector3.new(0, c.KnockUp, c.KnockBack))
 			self.backUntil = os.clock() + c.SplatSeconds
 			return "splat"
+		end
+		-- The next bag: picked up when the cowboy's middle passes close to it. Reported once; again after a second (if the
+		-- server did not take it, e.g. it came in too late) or once the run has changed.
+		local nextBag = PartUtil.number(self.train, Names.MailNext)
+		local _, version = TrainState.run(self.train)
+		local last = self.picked
+		local waiting = last ~= nil and last.index == nextBag and last.version == version and os.clock() - last.at < c.ReportAgain
+		local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or root
+		if nextBag and not waiting and torso and torso:IsA("BasePart") then
+			local m = Config.Mail
+			local at, side = CourseMath.mailAt(nextBag, b.FirstAt, b.Gaps)
+			local bag = Vector3.new(side * m.BagX, m.BagY, distance - at)
+			if (baseCFrame:PointToObjectSpace(torso.Position) - bag).Magnitude <= m.Reach then
+				self.picked = { index = nextBag, at = os.clock(), version = version }
+				return "mail", nextBag
+			end
 		end
 	end
 	return nil

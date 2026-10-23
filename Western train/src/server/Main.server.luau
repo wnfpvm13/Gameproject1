@@ -1,7 +1,8 @@
 --!strict
 -- Western train server entry point: wiring, plus each crew's train lifetime. Players pair up as they join (CrewBook):
 -- a driver's avatar is rebuilt as the train on their track (their character hidden inside), and the next player rides
--- that train's roof as the cowboy. Every new train starts its run toward the low bridges (CourseService). For testing
+-- that train's roof as the cowboy. Every new train starts its run toward the low bridges (CourseService) and the mail
+-- cranes (MailService: a missed bag sends the run back through CourseService). For testing
 -- alone in Studio, the Workspace attribute Names.SoloCowboy makes a lone player a cowboy on a train with a stand-in
 -- driver (BotDriver), built from that player's own avatar.
 local Players = game:GetService("Players")
@@ -18,6 +19,7 @@ local SquashService = require(script.Parent:WaitForChild("SquashService"))
 local CourseService = require(script.Parent:WaitForChild("CourseService"))
 local CrewBook = require(script.Parent:WaitForChild("CrewBook"))
 local BotDriver = require(script.Parent:WaitForChild("BotDriver"))
+local MailService = require(script.Parent:WaitForChild("MailService"))
 local shared = ReplicatedStorage:WaitForChild("WesternTrain")
 local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
@@ -30,6 +32,7 @@ local trains: { [number]: Model } = {} -- by slot
 local builds: { [Player]: number } = {} -- latest build number, so a slow build for an old character is dropped
 local hidden: { [Player]: CharacterHider.Hidden } = {}
 local course = CourseService.start(remotes.Bridge)
+local mail = MailService.start(remotes.Mail, course.missMail)
 local bot = BotDriver.start()
 
 SquashService.start(remotes.Squash, function(player: Player): Model?
@@ -42,6 +45,7 @@ local function removeTrain(slot: number)
 	trains[slot] = nil
 	if train then
 		course.finish(train)
+		mail.untrack(train)
 		bot.stop(train)
 		train:Destroy()
 	end
@@ -125,6 +129,7 @@ local function onCharacter(player: Player, character: Model)
 		train.Parent = stage.folder
 		trains[slot] = train
 		course.begin(train, player)
+		mail.track(train)
 		placeCowboy(slot)
 	else
 		local crew = crews:crew(slot)
@@ -140,6 +145,7 @@ local function onCharacter(player: Player, character: Model)
 			train.Parent = stage.folder
 			trains[slot] = train
 			course.begin(train, nil)
+			mail.track(train)
 			bot.drive(train)
 		end
 		placeCowboy(slot) -- with a player driver whose train is not built yet, their build places the cowboy

@@ -18,6 +18,7 @@ local Workspace = game:GetService("Workspace")
 local shared = ReplicatedStorage:WaitForChild("WesternTrain")
 local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
+local TrainState = require(shared:WaitForChild("TrainState"))
 local LocomotiveAnimator = require(script:WaitForChild("LocomotiveAnimator"))
 local SquashInput = require(script:WaitForChild("SquashInput"))
 local SteamPuff = require(script:WaitForChild("SteamPuff"))
@@ -35,11 +36,13 @@ local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
 local squashRemote = remotes:WaitForChild(Names.SquashRemote) :: RemoteEvent
 local bridgeRemote = remotes:WaitForChild(Names.BridgeRemote) :: RemoteEvent
+local mailRemote = remotes:WaitForChild(Names.MailRemote) :: RemoteEvent
 local faceCam = FaceCam.new(player:WaitForChild("PlayerGui"))
 
 local CRASH_WORD = Color3.fromRGB(255, 120, 70)
 local PASS_WORD = Color3.fromRGB(255, 230, 120)
 local SPLAT_WORD = Color3.fromRGB(255, 160, 200)
+local MAIL_WORD = Color3.fromRGB(150, 230, 140)
 
 type Tracked = {
 	base: BasePart,
@@ -68,8 +71,12 @@ local function refreshFaceSize()
 end
 
 local function showScore(locomotive: Model)
-	local passed, crashes = locomotive:GetAttribute(Names.Passed), locomotive:GetAttribute(Names.Crashes)
-	faceCam:setScore(if typeof(passed) == "number" then passed else 0, if typeof(crashes) == "number" then crashes else 0)
+	local function count(name: string): number
+		local value = locomotive:GetAttribute(name)
+		return if typeof(value) == "number" then value else 0
+	end
+	local mail = if TrainState.hasCowboy(locomotive) then count(Names.MailTaken) else nil
+	faceCam:setScore(count(Names.Passed), count(Names.Crashes), mail)
 end
 
 -- The face window shows the train the player drives or rides.
@@ -188,7 +195,13 @@ local function track(instance: Instance)
 		end
 	end
 	table.insert(entry.connections, locomotive:GetAttributeChangedSignal(Names.CrashIndex):Connect(onCrashIndex))
-	for _, name in { Names.Passed, Names.Crashes } do
+	table.insert(entry.connections, locomotive:GetAttributeChangedSignal(Names.MissedMail):Connect(function()
+		local missed = locomotive:GetAttribute(Names.MissedMail)
+		if typeof(missed) == "number" and missed > 0 and (locomotive == mine or locomotive == riding) then
+			faceCam:flash("우편 놓침!", CRASH_WORD)
+		end
+	end))
+	for _, name in { Names.Passed, Names.Crashes, Names.MailTaken, Names.CowboyUserId } do
 		table.insert(entry.connections, locomotive:GetAttributeChangedSignal(name):Connect(function()
 			if locomotive == shownInWindow then
 				showScore(locomotive)
@@ -298,11 +311,14 @@ RunService.RenderStepped:Connect(function(dt: number)
 			CowboyPose.set(character, lie)
 			local rules = entry.rules
 			if isMe and rules then
-				local event = rules:update(character, floor, lie, distance)
+				local event, bag = rules:update(character, floor, lie, distance)
 				if event == "splat" then
 					faceCam:flash("철퍽!", SPLAT_WORD)
 				elseif event == "fell" then
 					faceCam:flash("앗!", SPLAT_WORD)
+				elseif event == "mail" then
+					mailRemote:FireServer(bag)
+					faceCam:flash("우편!", MAIL_WORD)
 				end
 			end
 		end

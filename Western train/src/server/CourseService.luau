@@ -5,7 +5,8 @@
 -- it is; a pass is checked, once the bridge has gone by, against the squash states the server received
 -- (Config.Run.PassTolerance and ReleaseGrace allow for the network delay and the body's rise); a bridge nobody
 -- reports is judged the same way once it is well past. A hit holds the run for the crash gag, then the run goes again
--- from a little before that bridge.
+-- from a little before that bridge. A missed mail bag (MailService, through Main) holds the run the same way and
+-- sends it back to before the bridge in front of that crane, so the whole section (bridge and crane) comes again.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -23,6 +24,10 @@ export type Service = {
 	-- stand-in driver: its bridges are judged by the server alone).
 	begin: (locomotive: Model, driver: Player?) -> (),
 	finish: (locomotive: Model) -> (),
+	-- Mail bag `index` was missed (MailService): the run stops for Config.Mail.MissSeconds, then goes again from the
+	-- restart point of bridge `index` (crane i stands after bridge i), so that section comes again (Names.MissedMail
+	-- is set meanwhile).
+	missMail: (locomotive: Model, index: number) -> (),
 	stop: () -> (),
 }
 
@@ -36,7 +41,7 @@ type State = {
 	reported: boolean, -- the driver said "passed" for it: judged soon after it has gone by
 	history: { CourseMath.Change },
 	crashed: boolean,
-	generation: number, -- bumped by every crash, so an old restart timer does nothing
+	generation: number, -- bumped by every hold (crash or missed bag), so an old restart timer does nothing
 	watch: RBXScriptConnection,
 }
 
@@ -76,25 +81,33 @@ function CourseService.start(remote: RemoteEvent): Service
 		return CourseMath.under(bridgeAt(i), bridges.Depth, state.front, state.back)
 	end
 
-	local function crash(state: State, index: number, distance: number)
+	-- Holds the run at `distance` for `seconds`, then runs again from `restartFrom` (the next bridge to judge is then
+	-- the first one ahead of it); `after` runs just before the restart is published.
+	local function hold(state: State, distance: number, seconds: number, restartFrom: number, after: () -> ())
 		state.crashed = true
 		state.generation += 1
 		local generation = state.generation
 		state.run = { start = now(), from = distance, speed = 0 }
 		publish(state)
-		count(state.locomotive, Names.Crashes)
-		state.locomotive:SetAttribute(Names.CrashIndex, index)
-		task.delay(run.CrashSeconds, function()
+		task.delay(seconds, function()
 			if states[state.locomotive] ~= state or state.generation ~= generation then
 				return
 			end
 			state.crashed = false
-			state.next = index -- the same bridge again
+			state.next = CourseMath.nextBridge(restartFrom, bridges.FirstAt, bridges.Gaps, bridges.Depth, state.back)
 			state.reported = false
-			state.run = { start = now() + run.ResumeDelay, from = bridgeAt(index) - run.RestartLead, speed = run.Speed }
-			state.locomotive:SetAttribute(Names.CrashIndex, 0)
+			state.run = { start = now() + run.ResumeDelay, from = restartFrom, speed = run.Speed }
+			after()
 			publish(state)
 		end)
+	end
+
+	local function crash(state: State, index: number, distance: number)
+		hold(state, distance, run.CrashSeconds, bridgeAt(index) - run.RestartLead, function()
+			state.locomotive:SetAttribute(Names.CrashIndex, 0)
+		end)
+		count(state.locomotive, Names.Crashes)
+		state.locomotive:SetAttribute(Names.CrashIndex, index)
 	end
 
 	-- A pass stands when the server saw the locomotive flat for the whole time the bridge was over it, allowing for
@@ -178,14 +191,29 @@ function CourseService.start(remote: RemoteEvent): Service
 		}
 		states[locomotive] = state
 		locomotive:SetAttribute(Names.CrashIndex, 0)
+		locomotive:SetAttribute(Names.MissedMail, 0)
 		locomotive:SetAttribute(Names.Passed, 0)
 		locomotive:SetAttribute(Names.Crashes, 0)
 		publish(state)
 	end
 
+	local function missMail(locomotive: Model, index: number)
+		local state = states[locomotive]
+		if not state or state.crashed then
+			return
+		end
+		-- The same restart point as a crash into the bridge in front of the crane: clear of that bridge (and of the
+		-- bridge before it), with the bridge and then the crane coming again.
+		hold(state, CourseMath.distance(state.run, now()), Config.Mail.MissSeconds, bridgeAt(index) - run.RestartLead, function()
+			locomotive:SetAttribute(Names.MissedMail, 0)
+		end)
+		locomotive:SetAttribute(Names.MissedMail, index)
+	end
+
 	return {
 		begin = begin,
 		finish = finish,
+		missMail = missMail,
 		stop = function()
 			received:Disconnect()
 			ticking:Disconnect()

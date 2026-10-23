@@ -100,7 +100,7 @@ function FaceCam.new(playerGui: Instance): FaceCam
 	word.Name = "Word"
 	word.AnchorPoint = Vector2.new(0.5, 0.5)
 	word.Position = UDim2.fromScale(0.5, 0.78)
-	word.Size = UDim2.fromScale(1.3, 0.38)
+	word.Size = UDim2.fromScale(1, 0.34) -- within the window: it sits by the screen's right edge
 	word.BackgroundTransparency = 1
 	word.Font = Enum.Font.GothamBlack
 	word.TextScaled = true
@@ -115,9 +115,11 @@ function FaceCam.new(playerGui: Instance): FaceCam
 
 	local score = Instance.new("TextLabel")
 	score.Name = "Score"
-	score.AnchorPoint = Vector2.new(0.5, 0)
-	score.Position = UDim2.new(0.5, 0, 1, 6)
-	score.Size = UDim2.fromScale(1.4, 0.16)
+	-- Lined up with the window's right edge and growing to the left, so a longer score never runs off the screen.
+	score.AnchorPoint = Vector2.new(1, 0)
+	score.Position = UDim2.new(1, 0, 1, 6)
+	score.Size = UDim2.fromScale(1.9, 0.16)
+	score.TextXAlignment = Enum.TextXAlignment.Right
 	score.BackgroundTransparency = 1
 	score.Font = Enum.Font.GothamBold
 	score.TextScaled = true
@@ -270,8 +272,11 @@ function FaceCam.flash(self: FaceCam, text: string, color: Color3)
 	end)
 end
 
-function FaceCam.setScore(self: FaceCam, passed: number, crashes: number)
-	self.score.Text = string.format("통과 %d · 쾅 %d", passed, crashes)
+-- mail: the bags taken, or nil for a train without a cowboy (no mail then).
+function FaceCam.setScore(self: FaceCam, passed: number, crashes: number, mail: number?)
+	self.score.Text = if mail
+		then string.format("통과 %d · 쾅 %d · 우편 %d", passed, crashes, mail)
+		else string.format("통과 %d · 쾅 %d", passed, crashes)
 end
 
 function FaceCam.update(self: FaceCam)

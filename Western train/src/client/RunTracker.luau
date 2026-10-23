@@ -11,6 +11,7 @@ local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
 local CourseMath = require(shared:WaitForChild("CourseMath"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
+local TrainState = require(shared:WaitForChild("TrainState"))
 
 local RunTracker = {}
 RunTracker.__index = RunTracker
@@ -32,13 +33,7 @@ type Fields = {
 export type Tracker = typeof(setmetatable({} :: Fields, RunTracker))
 
 local function readRun(locomotive: Model): CourseMath.Run?
-	local start = PartUtil.number(locomotive, Names.RunStart)
-	local from = PartUtil.number(locomotive, Names.RunFrom)
-	local speed = PartUtil.number(locomotive, Names.RunSpeed)
-	if start and from and speed then
-		return { start = start, from = from, speed = speed }
-	end
-	return nil
+	return (TrainState.run(locomotive))
 end
 
 function RunTracker.new(locomotive: Model): Tracker

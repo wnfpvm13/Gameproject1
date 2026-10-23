@@ -123,11 +123,34 @@ Config.Cowboy = {
 	OthersReach = 3, -- other players' cowboys: extra reach down to their roof (their place arrives a little late)
 	FloorThickness = 0.6, -- the invisible roof floors
 	BridgeMargin = 0.5, -- a bridge counts as over the cowboy this much beyond its girder (along and across)
+	ReportAgain = 1, -- seconds before a mail pickup the server has not counted yet is reported again
 	SplatSeconds = 1.2, -- after a bridge hits the cowboy or the cowboy falls off: back on the last car after this
 	KnockBack = 28, -- studs per second backward when a bridge hits the cowboy
 	KnockUp = 14,
 	FellBelow = 1.0, -- feet lower than this above the rail tops, on no roof: the cowboy is off the train
 	SpawnLift = 3.5, -- the root above a roof when the cowboy is put on the last car
+}
+
+-- Mail bags on trackside mail cranes, one between every two bridges (left and right in turn): the cowboy picks a bag up
+-- by standing at that side of a roof as it passes. A train without a cowboy has no bags. A missed bag sends the run
+-- back to a little before its crane ("redo the section"). Heights are above the rail tops.
+Config.Mail = {
+	BagX = 3.4, -- the bag hangs this far from the middle line, out past that edge of the roofs (their edge is at 2.6)
+	BagY = 11.1, -- chest height for a cowboy standing on a roof (the floor at 7.8, the upper torso about 3.3 above it)
+	BagSize = Vector3.new(1.2, 1.5, 1.2),
+	Reach = 1.6, -- the cowboy's middle (upper torso) this close to the bag picks it up: only standing near that edge
+	PostX = 5.4, -- the crane's post stands beside the track, clear of the flattened locomotive (fists out to about 4.7)
+	PostHeight = 13.5,
+	PostThickness = 0.6,
+	ArmThickness = 0.35,
+	ArmAboveBag = 1.2, -- the arm runs this far above the bag's top
+	MissSeconds = 1.4, -- after a missed bag, a moment before the run jumps back
+	PickupSlack = 6, -- the server takes a pickup from this far before the train's front (studs; allows for delay)
+	Colors = {
+		Bag = Color3.fromRGB(190, 160, 108),
+		Strap = Color3.fromRGB(96, 60, 36),
+		Post = Color3.fromRGB(104, 70, 42),
+	},
 }
 
 -- A stand-in driver for a cowboy without a partner (Studio testing: set the Workspace attribute Names.SoloCowboy): it

@@ -303,6 +303,30 @@ do
 	check("the stand-in driver's train goes with its cowboy", botGone == "freed" and botBook:crew(1) == nil)
 end
 
+-- 10. The mail bags.
+do
+	local B, M, C = Config.Bridge, Config.Mail, Config.Cars
+	local d1, s1 = CourseMath.mailAt(1, B.FirstAt, B.Gaps)
+	local d2, s2 = CourseMath.mailAt(2, B.FirstAt, B.Gaps)
+	check("a crane stands halfway between two bridges", d1 == (CourseMath.bridgeAt(1, B.FirstAt, B.Gaps) + CourseMath.bridgeAt(2, B.FirstAt, B.Gaps)) / 2)
+	check("cranes take the right and left side in turn", s1 == 1 and s2 == -1 and d2 > d1)
+	-- A standing cowboy's middle (upper torso) is about 3.3 above the roof floor; reach is measured from there.
+	local floorTop = C.RoofTop + C.WalkThickness
+	local torsoY = floorTop + 3.3
+	local function reachFrom(x: number): number
+		return math.sqrt((M.BagX - x) ^ 2 + (M.BagY - torsoY) ^ 2)
+	end
+	local roofEdge = C.Width / 2 + C.RoofOverhang
+	check("from the middle of the roof the bag is out of reach", reachFrom(0) > M.Reach, tostring(reachFrom(0)))
+	check("from the walkway's edge the bag is out of reach", reachFrom(C.WalkWidth / 2) > M.Reach, tostring(reachFrom(C.WalkWidth / 2)))
+	check("near that edge of the roof the bag is in reach", reachFrom(roofEdge - 0.4) <= M.Reach, tostring(reachFrom(roofEdge - 0.4)))
+	local lyingY = floorTop * c.HeightAtFull + 0.7
+	check("lying flat on a flat roof the bag is out of reach", math.abs(M.BagY - lyingY) > M.Reach)
+	-- The flattened locomotive is widest at the fists (about 3.6 out, x1.3 when flat).
+	local flatFists = 3.6 * c.WidthAtFull
+	check("the crane's post stands clear of the flattened train", M.PostX - M.PostThickness / 2 > flatFists + 0.2 and M.PostX > roofEdge * c.WidthAtFull + 1)
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed == 0 then
 	print("ALL PASS")

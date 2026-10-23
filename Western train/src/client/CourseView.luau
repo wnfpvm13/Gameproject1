@@ -1,7 +1,8 @@
 --!strict
--- Draws one locomotive's low bridges on this client, moving toward it with the run distance (bridges are local
--- parts: every client builds the same ones from Config.Bridge and the shared run, so nothing moves over the network).
--- A bridge the locomotive crashed into carries the face stamp until the locomotive has got all the way under it.
+-- Draws one train's low bridges and mail cranes on this client, moving toward it with the run distance (local parts:
+-- every client builds the same ones from Config and the shared run, so nothing moves over the network). A bridge the
+-- train crashed into carries the face stamp until the train has got all the way under it. A crane's bag shows while
+-- the train has a cowboy and the bag is not taken yet (Names.MailNext).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -10,6 +11,7 @@ local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
 local CourseMath = require(shared:WaitForChild("CourseMath"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
+local TrainState = require(shared:WaitForChild("TrainState"))
 
 local CourseView = {}
 CourseView.__index = CourseView
@@ -20,9 +22,10 @@ type Fields = {
 	back: number,
 	folder: Folder,
 	bridges: { [number]: Model },
+	cranes: { [number]: Model },
 	stampIndex: number?,
 	stamp: Model?,
-	drawn: number?, -- the distance last drawn (nothing moves while it stays the same)
+	drawn: string?, -- what was last drawn (distance, next bag, cowboy): nothing changes while it stays the same
 }
 export type View = typeof(setmetatable({} :: Fields, CourseView))
 
@@ -48,6 +51,42 @@ local function buildBridge(parent: Instance): Model
 	return model
 end
 
+-- One mail crane in its own space (origin on the rail tops under its middle; side 1 = right): a post beside the track,
+-- an arm reaching over the roof's edge, and a canvas bag hanging from it on a rope.
+local function buildCrane(parent: Instance, side: number): Model
+	local m = Config.Mail
+	local ground = -Config.Stage.RailHeight
+	local model = Instance.new("Model")
+	model.Name = "MailCrane"
+	local armY = m.BagY + m.BagSize.Y / 2 + m.ArmAboveBag
+	local post = PartUtil.ghostBlock("Post", Vector3.new(m.PostThickness, m.PostHeight - ground, m.PostThickness), m.Colors.Post, Enum.Material.Wood, model)
+	post.CFrame = CFrame.new(side * m.PostX, (m.PostHeight + ground) / 2, 0)
+	local reach = m.PostX - m.BagX + m.ArmThickness
+	local arm = PartUtil.ghostBlock("Arm", Vector3.new(reach, m.ArmThickness, m.ArmThickness), m.Colors.Post, Enum.Material.Wood, model)
+	arm.CFrame = CFrame.new(side * (m.BagX + reach / 2 - m.ArmThickness), armY, 0)
+	local rope = PartUtil.ghostBlock("Rope", Vector3.new(0.08, armY - m.BagY - m.BagSize.Y / 2, 0.08), m.Colors.Strap, Enum.Material.Fabric, model)
+	rope.CFrame = CFrame.new(side * m.BagX, (armY + m.BagY + m.BagSize.Y / 2) / 2, 0)
+	local bag = PartUtil.ghostBlock("Bag", m.BagSize, m.Colors.Bag, Enum.Material.Fabric, model)
+	local sack = Instance.new("SpecialMesh")
+	sack.MeshType = Enum.MeshType.Sphere -- a rounded sack
+	sack.Parent = bag
+	bag.CFrame = CFrame.new(side * m.BagX, m.BagY, 0)
+	local strap = PartUtil.ghostBlock("Strap", Vector3.new(m.BagSize.X * 0.95, 0.18, m.BagSize.Z * 0.95), m.Colors.Strap, Enum.Material.Fabric, model)
+	strap.CFrame = CFrame.new(side * m.BagX, m.BagY + m.BagSize.Y * 0.28, 0)
+	model.WorldPivot = CFrame.new()
+	model.Parent = parent
+	return model
+end
+
+local function setBagShown(crane: Model, shown: boolean)
+	for _, name in { "Bag", "Strap", "Rope" } do
+		local part = crane:FindFirstChild(name)
+		if part and part:IsA("BasePart") then
+			part.Transparency = if shown then 0 else 1
+		end
+	end
+end
+
 function CourseView.new(locomotive: Model, base: BasePart): View
 	local own = Instance.new("Folder")
 	own.Name = locomotive.Name
@@ -58,6 +97,7 @@ function CourseView.new(locomotive: Model, base: BasePart): View
 		back = PartUtil.number(locomotive, Names.SpanBack) or 0,
 		folder = own,
 		bridges = {},
+		cranes = {},
 		stampIndex = nil,
 		stamp = nil,
 		drawn = nil,
@@ -113,17 +153,22 @@ function CourseView.stampFace(self: View, index: number)
 	self.stampIndex = index
 end
 
--- Puts the visible bridges where the run distance says (nil = no run yet: no bridges).
+-- Puts the visible bridges and cranes where the run distance says (nil = no run yet: none).
 function CourseView.update(self: View, distance: number?)
-	if distance ~= nil and distance == self.drawn then
+	local mailNext = PartUtil.number(self.locomotive, Names.MailNext) or 1
+	local hasCowboy = TrainState.hasCowboy(self.locomotive)
+	local key = string.format("%s|%d|%s", tostring(distance), mailNext, tostring(hasCowboy))
+	if distance ~= nil and key == self.drawn then
 		return -- held, crashed or waiting to start: everything is already in place
 	end
-	self.drawn = distance
+	self.drawn = key
 	local b = Config.Bridge
 	local r = Config.Run
 	local keep: { [number]: boolean } = {}
+	local keepCranes: { [number]: boolean } = {}
 	if distance then
-		local index = CourseMath.nextBridge(distance - r.ViewBehind, b.FirstAt, b.Gaps, b.Depth, 0)
+		local firstBridge = CourseMath.nextBridge(distance - r.ViewBehind, b.FirstAt, b.Gaps, b.Depth, 0)
+		local index = firstBridge
 		local baseCFrame = self.base.CFrame
 		while true do
 			local at = CourseMath.bridgeAt(index, b.FirstAt, b.Gaps)
@@ -149,10 +194,30 @@ function CourseView.update(self: View, distance: number?)
 			end
 			index += 1
 		end
+		-- The cranes: crane i stands between bridge i and the next, so the visible ones are around the visible bridges.
+		for i = math.max(1, firstBridge - 1), index do
+			local at, side = CourseMath.mailAt(i, b.FirstAt, b.Gaps)
+			if at - distance <= r.ViewAhead and distance - at <= r.ViewBehind then
+				keepCranes[i] = true
+				local crane = self.cranes[i]
+				if not crane then
+					crane = buildCrane(self.folder, side)
+					self.cranes[i] = crane
+				end
+				crane:PivotTo(baseCFrame * CFrame.new(0, 0, distance - at))
+				setBagShown(crane, hasCowboy and i >= mailNext)
+			end
+		end
 		-- Once the locomotive has got all the way under the stamped bridge, the stamp has done its job.
 		local stampIndex = self.stampIndex
 		if stampIndex and distance > CourseMath.bridgeAt(stampIndex, b.FirstAt, b.Gaps) + b.Depth / 2 + self.back then
 			removeStamp(self)
+		end
+	end
+	for i, crane in self.cranes do
+		if not keepCranes[i] then
+			crane:Destroy()
+			self.cranes[i] = nil
 		end
 	end
 	for index, model in self.bridges do

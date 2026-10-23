@@ -6,7 +6,7 @@ MonCook, 금칙어 게임과 별개인 로블록스 게임. 첫 콘텐츠는 B�
 **지금 코드: 시제품 1 — 납작해지는 얼굴 기관차** ([docs/PROTOTYPE_SQUASH_2026-10-23.md](docs/PROTOTYPE_SQUASH_2026-10-23.md),
 몸체 재설계 [docs/LOCO_DRESSED_2026-10-23.md](docs/LOCO_DRESSED_2026-10-23.md), 얼굴 창·팔다리
 [docs/FACECAM_LEGS_2026-10-24.md](docs/FACECAM_LEGS_2026-10-24.md), 흘러오는 다리 [docs/BRIDGES_2026-10-24.md](docs/BRIDGES_2026-10-24.md), 지붕 위 카우보이
-[docs/COWBOY_2026-10-24.md](docs/COWBOY_2026-10-24.md))
+[docs/COWBOY_2026-10-24.md](docs/COWBOY_2026-10-24.md), 우편 주머니 [docs/MAIL_2026-10-24.md](docs/MAIL_2026-10-24.md))
 - 들어오면 내 아바타가 "아바타 옷을 입은 기관차"가 되어 선로 위에 선다: 머리는 앞 얼굴, 셔츠 입은 몸통은 뒤 운전실, 팔은 바퀴
   크랭크 핀을 큰 주먹으로 쥐고 도는 연결봉, 다리는 뒤로 뻗은 범퍼, 보일러는 짙은 초록, 바퀴는 짙은 빨강. 내 캐릭터는 그 안에 숨는다.
 - 화면 오른쪽 얼굴 창에 내 기관차 얼굴이 앞에서 보인다(플레이 카메라는 뒤에서 보므로). 아래에 "통과 N · 쾅 N".
@@ -17,7 +17,9 @@ MonCook, 금칙어 게임과 별개인 로블록스 게임. 첫 콘텐츠는 B�
 - 기관차 뒤에 화물칸 2량. 두 번째로 들어온 사람은 그 지붕 위의 카우보이가 된다. 지붕이 납작해지면 같이 엎드리고, 공중에
   있다가 다리에 맞으면 "철퍽!" 날아갔다가 마지막 칸으로 돌아온다. 혼자 시험할 때는 Workspace 속성 `WesternTrainSoloCowboy`를 켜면
   봇이 대신 운전한다.
-- 아직 없는 것: 기관차 점프, 우편, 굴러오는 통, 체크포인트 구간, 소리, 짝 고르기.
+- 다리 사이마다 선로 옆 우편 크레인이 주머니를 지붕 끝 바깥에 매달고 있다. 카우보이가 그쪽 지붕 끝에 서 있으면 "우편!" 하고 줍고,
+  놓치면 "우편 놓침!" 하고 그 크레인 앞에서 다시 달린다.
+- 아직 없는 것: 기관차 점프, 금화 우편, 굴러오는 통, 체크포인트 구간, 소리, 짝 고르기.
 
 ## 폴더
 
@@ -25,10 +27,10 @@ MonCook, 금칙어 게임과 별개인 로블록스 게임. 첫 콘텐츠는 B�
   (순수 수학), `PartUtil`(부품 도우미)
 - `src/server` — `Main`(연결 + 짝마다 선로 칸·기차 수명), `Net`(리모트), `PrototypeStage`(땅·선로·안개), `AvatarBody`, `LocomotiveBuilder`,
   `CharacterHider`, `SquashService`, `CourseService`(달리기 시계·다리 판정 확인·충돌 후 재시작), `CrewBook`(운전사·카우보이 짝),
-  `BotDriver`(혼자 시험용 대신 운전사)
+  `BotDriver`(혼자 시험용 대신 운전사), `MailService`(우편 줍기 확인·놓침)
 - `src/client` — `init`(연결만), `SquashInput`, `LocomotiveAnimator`, `SteamPuff`, `DriverCamera`, `FaceCam`(얼굴 창), `RunTracker`(달리기 거리·
-  내 다리 판정), `CourseView`(다리·얼굴 도장), `TrackScroll`(침목·선인장·바위), `RunFeedback`(충돌 별), `RoofRider`(지붕 따라 옮기기),
-  `CowboyRules`(카우보이 철퍽·떨어짐), `CowboyPose`(엎드리기)
+  내 다리 판정), `CourseView`(다리·얼굴 도장·우편 크레인), `TrackScroll`(침목·선인장·바위), `RunFeedback`(충돌 별), `RoofRider`(지붕 따라 옮기기),
+  `CowboyRules`(카우보이 철퍽·떨어짐·우편 줍기), `CowboyPose`(엎드리기)
 - `tools/tests` — Studio 없이 도는 테스트, `tools/lint` — 정적 검사
 
 ## 코드 규칙 (전역 규칙 `~/.claude/CLAUDE.md` 3번의 이 게임 구체 사항)

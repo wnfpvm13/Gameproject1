@@ -39,6 +39,14 @@ function CourseMath.bridgeAt(i: number, firstAt: number, gaps: { number }): numb
 	return d
 end
 
+-- Mail crane i: halfway between bridge i and the next one, on the right (1) for odd i and the left (-1) for even i.
+-- Returns its course distance and side.
+function CourseMath.mailAt(i: number, firstAt: number, gaps: { number }): (number, number)
+	local here = CourseMath.bridgeAt(i, firstAt, gaps)
+	local after = CourseMath.bridgeAt(i + 1, firstAt, gaps)
+	return (here + after) / 2, if i % 2 == 1 then 1 else -1
+end
+
 -- The run distances while bridge b covers any part of the locomotive: from when the bridge's near face meets the
 -- locomotive's front until its far face passes the locomotive's back. front and back are the locomotive's ends in
 -- its own Z (front < 0 < back), depth is the bridge's length along the track.

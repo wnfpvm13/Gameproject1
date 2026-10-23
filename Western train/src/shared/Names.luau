@@ -5,6 +5,7 @@ return {
 	RemotesFolder = "Remotes",
 	SquashRemote = "Squash",
 	BridgeRemote = "Bridge",
+	MailRemote = "Mail",
 	-- Local folders each client makes in Workspace for what it draws, and the stage's haze in Lighting
 	CourseFolder = "WesternTrainCourse",
 	SceneryFolder = "WesternTrainScenery",
@@ -29,6 +30,11 @@ return {
 	CrashIndex = "CrashIndex", -- the bridge being crashed into (0 = none)
 	Passed = "Passed",
 	Crashes = "Crashes",
+	-- Mail: the next bag to pick up and the bags picked up (MailService), and the bag just missed (CourseService; 0 =
+	-- none, the run goes back while it is set)
+	MailNext = "MailNext",
+	MailTaken = "MailTaken",
+	MissedMail = "MissedMail",
 	-- On every part that squashes: its rest pose relative to the Base part
 	RestCFrame = "RestCFrame",
 	RestSize = "RestSize",

@@ -11,6 +11,7 @@ local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
 local CourseMath = require(shared:WaitForChild("CourseMath"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
+local TrainState = require(shared:WaitForChild("TrainState"))
 
 local BotDriver = {}
 
@@ -37,11 +38,9 @@ function BotDriver.start(): Bot
 	local ticking = RunService.Heartbeat:Connect(function()
 		local now = Workspace:GetServerTimeNow()
 		for train in driven do
-			local start = PartUtil.number(train, Names.RunStart)
-			local from = PartUtil.number(train, Names.RunFrom)
-			local speed = PartUtil.number(train, Names.RunSpeed)
-			if start and from and speed then
-				local flat = speed > 0 and wantsFlat(train, CourseMath.distance({ start = start, from = from, speed = speed }, now))
+			local run = TrainState.run(train)
+			if run then
+				local flat = run.speed > 0 and wantsFlat(train, CourseMath.distance(run, now))
 				if (train:GetAttribute(Names.Squashed) == true) ~= flat then
 					train:SetAttribute(Names.Squashed, flat)
 				end

@@ -318,8 +318,9 @@ end
 -- The boxcars, one after another from `start` (Z) backward: plank body with a dark sill, end posts and a framed
 -- sliding door on each side, an iron roof with a plank walkway and a floor for the cowboy, four wheels a side. A
 -- narrow gangplank crosses from the cab roof (its back at `cabBack`) over the legs to the first car's walkway.
--- Every car part is marked Names.CarPart (the face window leaves them out). Returns the last car's back (Z).
-local function addCars(model: Model, start: number, cabBack: number, add: Add): number
+-- Every car part is marked Names.CarPart (the face window leaves them out). Returns the last car's back and where the
+-- first car's roof begins (Z).
+local function addCars(model: Model, start: number, cabBack: number, add: Add): (number, number)
 	local C = Config.Cars
 	local L = Config.Locomotive
 	local colors = C.Colors
@@ -377,7 +378,7 @@ local function addCars(model: Model, start: number, cabBack: number, add: Add): 
 		addCar({ part = newPart("Part", "Coupler", L.Colors.Iron, Enum.Material.Metal, model), size = Vector3.new(0.6, 0.5, C.Gap + 0.4), rest = CFrame.new(0, C.FloorHeight - 0.35, front - C.Gap / 2) })
 		z = front + C.Length
 	end
-	return z
+	return z, firstFront
 end
 
 -- The finished train at `base` (on the rails, facing -Z): the locomotive and its boxcars. The avatar model becomes
@@ -397,7 +398,8 @@ function LocomotiveBuilder.build(avatar: Model, base: CFrame): Model
 	end
 	local front = addTrainParts(model, cabBack, add)
 	local locomotiveBack = back
-	back = addCars(model, back, cabBack, add)
+	local carRoofFront
+	back, carRoofFront = addCars(model, back, cabBack, add)
 
 	-- Centre the train over the base, then put every part in its rest pose.
 	local shift = CFrame.new(0, 0, -(front + back) / 2)
@@ -458,6 +460,7 @@ function LocomotiveBuilder.build(avatar: Model, base: CFrame): Model
 	-- The two ends after centring, for the bridge judgement (CourseService and the driver's client).
 	model:SetAttribute(Names.SpanFront, (front - back) / 2)
 	model:SetAttribute(Names.SpanBack, (back - front) / 2)
+	model:SetAttribute(Names.CarRoofFront, carRoofFront - (front + back) / 2)
 	local focus = newPart("Part", Names.CameraFocus, Color3.new(), Enum.Material.SmoothPlastic, model)
 	focus.Size = Vector3.new(1, 1, 1)
 	-- Over the locomotive's middle (the cars trail behind it): the driver's camera looks at the locomotive.

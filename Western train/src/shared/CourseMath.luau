@@ -47,6 +47,46 @@ function CourseMath.mailAt(i: number, firstAt: number, gaps: { number }): (numbe
 	return (here + after) / 2, if i % 2 == 1 then 1 else -1
 end
 
+-- Barrel i: dropped at `share` of the way from bridge i to the next, after crane i and in the lane on its side (right,
+-- 1, for odd i): a cowboy who has just picked up that bag at the roof's edge must get out of the way. Returns its drop
+-- distance and lane.
+function CourseMath.barrelAt(i: number, firstAt: number, gaps: { number }, share: number): (number, number)
+	local here = CourseMath.bridgeAt(i, firstAt, gaps)
+	local after = CourseMath.bridgeAt(i + 1, firstAt, gaps)
+	return here + (after - here) * share, if i % 2 == 1 then 1 else -1
+end
+
+-- Where a barrel dropped at run distance `drop` is along the train at run distance `distance` (train space Z, back is
+-- +): it lands at `startZ` and rolls back `ratio` studs per stud of run. nil before it drops.
+function CourseMath.barrelZ(drop: number, distance: number, startZ: number, ratio: number): number?
+	if distance < drop then
+		return nil
+	end
+	return startZ + (distance - drop) * ratio
+end
+
+export type Barrel = { index: number, lane: number, drop: number, z: number }
+
+-- The barrels on the roofs at run distance `distance`: dropped already and not yet rolled past `endZ` (the train's
+-- back). `startZ`, `ratio` and `share` as for barrelZ/barrelAt.
+function CourseMath.activeBarrels(distance: number, firstAt: number, gaps: { number }, share: number, startZ: number, endZ: number, ratio: number): { Barrel }
+	local rolling = (endZ - startZ) / ratio -- run distance a barrel stays on the roofs
+	local found = {}
+	local i = math.max(1, CourseMath.nextBridge(distance - rolling, firstAt, gaps, 0, 0) - 1)
+	while true do
+		local drop, lane = CourseMath.barrelAt(i, firstAt, gaps, share)
+		if drop > distance then
+			break
+		end
+		local z = CourseMath.barrelZ(drop, distance, startZ, ratio)
+		if z and z <= endZ then
+			table.insert(found, { index = i, lane = lane, drop = drop, z = z })
+		end
+		i += 1
+	end
+	return found
+end
+
 -- The run distances while bridge b covers any part of the locomotive: from when the bridge's near face meets the
 -- locomotive's front until its far face passes the locomotive's back. front and back are the locomotive's ends in
 -- its own Z (front < 0 < back), depth is the bridge's length along the track.

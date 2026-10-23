@@ -31,6 +31,7 @@ local RunFeedback = require(script:WaitForChild("RunFeedback"))
 local RoofRider = require(script:WaitForChild("RoofRider"))
 local CowboyRules = require(script:WaitForChild("CowboyRules"))
 local CowboyPose = require(script:WaitForChild("CowboyPose"))
+local BarrelView = require(script:WaitForChild("BarrelView"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
@@ -53,6 +54,7 @@ type Tracked = {
 	course: CourseView.View,
 	scenery: TrackScroll.Scroll,
 	rider: RoofRider.Rider,
+	barrels: BarrelView.View,
 	rules: CowboyRules.Rules?, -- while the player rides this train
 	predicted: { index: number, at: number }?, -- own train: a crash our judgement already played (os.clock)
 	connections: { RBXScriptConnection },
@@ -176,6 +178,7 @@ local function track(instance: Instance)
 		course = CourseView.new(locomotive, base),
 		scenery = TrackScroll.new(locomotive, base),
 		rider = RoofRider.new(locomotive),
+		barrels = BarrelView.new(locomotive, base),
 		rules = nil,
 		predicted = nil,
 		connections = {},
@@ -270,6 +273,7 @@ CollectionService:GetInstanceRemovedSignal(Names.LocomotiveTag):Connect(function
 		entry.run:destroy()
 		entry.course:destroy()
 		entry.scenery:destroy()
+		entry.barrels:destroy()
 	end
 	if mine == instance then
 		mine = nil
@@ -302,6 +306,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 		local distance = entry.run:distance(now)
 		entry.course:update(distance)
 		entry.scenery:update(distance)
+		entry.barrels:update(distance)
 		-- The cowboy rides the roof just drawn, lying flat while it is flat.
 		local character = cowboyCharacter(locomotive)
 		if character then
@@ -316,6 +321,8 @@ RunService.RenderStepped:Connect(function(dt: number)
 					faceCam:flash("철퍽!", SPLAT_WORD)
 				elseif event == "fell" then
 					faceCam:flash("앗!", SPLAT_WORD)
+				elseif event == "barrel" then
+					faceCam:flash("쿵!", SPLAT_WORD)
 				elseif event == "mail" then
 					mailRemote:FireServer(bag)
 					faceCam:flash("우편!", MAIL_WORD)

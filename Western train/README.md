@@ -6,7 +6,8 @@ MonCook, 금칙어 게임과 별개인 로블록스 게임. 첫 콘텐츠는 B�
 **지금 코드: 시제품 1 — 납작해지는 얼굴 기관차** ([docs/PROTOTYPE_SQUASH_2026-10-23.md](docs/PROTOTYPE_SQUASH_2026-10-23.md),
 몸체 재설계 [docs/LOCO_DRESSED_2026-10-23.md](docs/LOCO_DRESSED_2026-10-23.md), 얼굴 창·팔다리
 [docs/FACECAM_LEGS_2026-10-24.md](docs/FACECAM_LEGS_2026-10-24.md), 흘러오는 다리 [docs/BRIDGES_2026-10-24.md](docs/BRIDGES_2026-10-24.md), 지붕 위 카우보이
-[docs/COWBOY_2026-10-24.md](docs/COWBOY_2026-10-24.md), 우편 주머니 [docs/MAIL_2026-10-24.md](docs/MAIL_2026-10-24.md))
+[docs/COWBOY_2026-10-24.md](docs/COWBOY_2026-10-24.md), 우편 주머니 [docs/MAIL_2026-10-24.md](docs/MAIL_2026-10-24.md), 굴러오는 통
+[docs/BARRELS_2026-10-24.md](docs/BARRELS_2026-10-24.md))
 - 들어오면 내 아바타가 "아바타 옷을 입은 기관차"가 되어 선로 위에 선다: 머리는 앞 얼굴, 셔츠 입은 몸통은 뒤 운전실, 팔은 바퀴
   크랭크 핀을 큰 주먹으로 쥐고 도는 연결봉, 다리는 뒤로 뻗은 범퍼, 보일러는 짙은 초록, 바퀴는 짙은 빨강. 내 캐릭터는 그 안에 숨는다.
 - 화면 오른쪽 얼굴 창에 내 기관차 얼굴이 앞에서 보인다(플레이 카메라는 뒤에서 보므로). 아래에 "통과 N · 쾅 N".
@@ -19,18 +20,21 @@ MonCook, 금칙어 게임과 별개인 로블록스 게임. 첫 콘텐츠는 B�
   봇이 대신 운전한다.
 - 다리 사이마다 선로 옆 우편 크레인이 주머니를 지붕 끝 바깥에 매달고 있다. 카우보이가 그쪽 지붕 끝에 서 있으면 "우편!" 하고 줍고,
   놓치면 "우편 놓침!" 하고 그 크레인 앞에서 다시 달린다.
-- 아직 없는 것: 기관차 점프, 금화 우편, 굴러오는 통, 체크포인트 구간, 소리, 짝 고르기.
+- 크레인 다음에는 급수탑이 높은 주둥이로 통을 첫 칸 지붕에 떨어뜨리고, 통은 크레인과 같은 쪽 줄로 뒤로 굴러간다. 그 줄에 있으면
+  "쿵!" 하고 떨어진다. 점프로 넘거나 반대쪽으로 비킨다(납작한 지붕에서는 엎드려 있으니 옆으로).
+- 아직 없는 것: 기관차 점프, 금화 우편, 체크포인트 구간, 소리, 짝 고르기.
 
 ## 폴더
 
 - `src/shared` — 서버·클라이언트 공용: `Config`(조정할 숫자), `Names`(이름), `SquashSpring`·`SquashPose`·`CrankMotion`·`CourseMath`
-  (순수 수학), `PartUtil`(부품 도우미)
+  (순수 수학), `PartUtil`(부품 도우미), `TrainState`(기차 속성 읽기: 달리기 시계·카우보이 유무), `BarrelTrack`(지붕 위 통 위치:
+  그림과 판정 공용)
 - `src/server` — `Main`(연결 + 짝마다 선로 칸·기차 수명), `Net`(리모트), `PrototypeStage`(땅·선로·안개), `AvatarBody`, `LocomotiveBuilder`,
   `CharacterHider`, `SquashService`, `CourseService`(달리기 시계·다리 판정 확인·충돌 후 재시작), `CrewBook`(운전사·카우보이 짝),
   `BotDriver`(혼자 시험용 대신 운전사), `MailService`(우편 줍기 확인·놓침)
 - `src/client` — `init`(연결만), `SquashInput`, `LocomotiveAnimator`, `SteamPuff`, `DriverCamera`, `FaceCam`(얼굴 창), `RunTracker`(달리기 거리·
   내 다리 판정), `CourseView`(다리·얼굴 도장·우편 크레인), `TrackScroll`(침목·선인장·바위), `RunFeedback`(충돌 별), `RoofRider`(지붕 따라 옮기기),
-  `CowboyRules`(카우보이 철퍽·떨어짐·우편 줍기), `CowboyPose`(엎드리기)
+  `CowboyRules`(카우보이 철퍽·떨어짐·통·우편 줍기), `CowboyPose`(엎드리기), `BarrelView`(급수탑·굴러오는 통)
 - `tools/tests` — Studio 없이 도는 테스트, `tools/lint` — 정적 검사
 
 ## 코드 규칙 (전역 규칙 `~/.claude/CLAUDE.md` 3번의 이 게임 구체 사항)

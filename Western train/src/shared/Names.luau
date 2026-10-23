@@ -22,6 +22,7 @@ return {
 	ChimneyCap = "ChimneyCap",
 	SpanFront = "SpanFront", -- the train's front and back ends (cowcatcher, last car) in its own Z (front < 0 < back)
 	SpanBack = "SpanBack",
+	CarRoofFront = "CarRoofFront", -- where the first car's roof begins (Z): barrels land there
 	-- The run (CourseService writes them, then bumps RunVersion so a client reads all three together)
 	RunStart = "RunStart",
 	RunFrom = "RunFrom",

@@ -327,6 +327,30 @@ do
 	check("the crane's post stands clear of the flattened train", M.PostX - M.PostThickness / 2 > flatFists + 0.2 and M.PostX > roofEdge * c.WidthAtFull + 1)
 end
 
+-- 11. The barrels.
+do
+	local B, K, C, M = Config.Bridge, Config.Barrels, Config.Cars, Config.Mail
+	local drop1, lane1 = CourseMath.barrelAt(1, B.FirstAt, B.Gaps, K.At)
+	local crane1, side1 = CourseMath.mailAt(1, B.FirstAt, B.Gaps)
+	local _, lane2 = CourseMath.barrelAt(2, B.FirstAt, B.Gaps, K.At)
+	check("a barrel drops after the crane and before the next bridge", drop1 > crane1 and drop1 < CourseMath.bridgeAt(2, B.FirstAt, B.Gaps))
+	check("a barrel rolls in the lane on its gap's crane side, lanes alternate", lane1 == side1 and lane2 == -lane1)
+	check("no barrel before its drop", CourseMath.barrelZ(100, 99, 0, 0.4) == nil and CourseMath.barrelZ(100, 110, 1, 0.5) == 6)
+	local ratio = K.RollSpeed / Config.Run.Speed
+	check("a barrel is on the roofs just after its drop", #CourseMath.activeBarrels(drop1 + 1, B.FirstAt, B.Gaps, K.At, -2, 20, ratio) == 1)
+	check("and gone once it has rolled past the back", #CourseMath.activeBarrels(drop1 + 22 / ratio + 1, B.FirstAt, B.Gaps, K.At, -2, 20, ratio) == 0)
+	check("no barrels before the first drop", #CourseMath.activeBarrels(drop1 - 1, B.FirstAt, B.Gaps, K.At, -2, 20, ratio) == 0)
+	local roofHalf = C.Width / 2 + C.RoofOverhang
+	check("a barrel stays on the roof", K.LaneX + K.Length / 2 <= roofHalf)
+	check("the walkway's middle is clear of both lanes", K.LaneX - (K.Length / 2 + K.HitAcross) >= 0.15)
+	local flatRoof = (C.RoofTop + C.WalkThickness) * c.HeightAtFull
+	check("a barrel on a flat roof fits under a bridge", flatRoof + K.Radius * 2 < B.Clearance)
+	check("the water tower stands outside the mail cranes", K.TowerX - 1.4 > M.PostX + M.PostThickness)
+	check("the spout passes over a tall standing cowboy's head", K.SpoutHeight - 0.2 > C.RoofTop + C.WalkThickness + 6)
+	-- the biggest rock reaches about 1.9 from its middle (size 2.1, turned)
+	check("the roadside props stand outside the water towers", Config.Stage.RoadsideNear - 2 > K.TowerX + 1.6)
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed == 0 then
 	print("ALL PASS")

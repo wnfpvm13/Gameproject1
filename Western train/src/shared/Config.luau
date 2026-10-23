@@ -153,6 +153,28 @@ Config.Mail = {
 	},
 }
 
+-- Barrels: a water tower beside the track drops a barrel onto the front of the first car between every two bridges
+-- (after that gap's mail crane, on its side), and it rolls back along that lane of the roofs. The cowboy jumps it or
+-- steps over to the other half of the roof; under a bridge only stepping aside works (jumping there is a splat). A
+-- barrel hitting the cowboy's legs knocks them off. A train without a cowboy has no barrels.
+Config.Barrels = {
+	At = 0.78, -- the drop point as a share of the gap after its bridge (the mail crane stands at 0.5)
+	RollSpeed = 9, -- studs per second back along the roofs (the world moves at Config.Run.Speed)
+	Radius = 0.8,
+	Length = 1.4, -- along its axle, across the train
+	LaneX = 1.4, -- each lane's distance from the middle line (the walkway's middle stays clear of both)
+	SpoutHeight = 14.5, -- the water tower's spout above the rail tops: over a standing cowboy's head (a barrel falls from it)
+	DropStuds = 8, -- run distance over which a barrel falls onto the roof
+	HitAlong = 0.5, -- a hit reaches this much further along the train than the barrel
+	HitAcross = 0.5, -- and this much further across
+	TowerX = 7.8, -- the water tower stands beside the track, outside the mail cranes
+	Colors = {
+		Wood = Color3.fromRGB(138, 92, 52),
+		Hoop = Color3.fromRGB(58, 54, 56),
+		Tower = Color3.fromRGB(110, 76, 46),
+	},
+}
+
 -- A stand-in driver for a cowboy without a partner (Studio testing: set the Workspace attribute Names.SoloCowboy): it
 -- squashes a little before each bridge and lets go a little after.
 Config.Bot = {
@@ -168,8 +190,8 @@ Config.Stage = {
 	RailLength = 480, -- longer than the view ahead and behind (Config.Run)
 	SleeperSpacing = 3,
 	RoadsideProps = 16, -- cacti and rocks along each track, spread over the view, both sides
-	RoadsideNear = 7, -- their distance from the track's middle line
-	RoadsideFar = 13,
+	RoadsideNear = 11.5, -- their distance from the track's middle line (outside the mail cranes and water towers)
+	RoadsideFar = 17,
 	Colors = {
 		Sand = Color3.fromRGB(214, 176, 120),
 		Rail = Color3.fromRGB(92, 88, 86),

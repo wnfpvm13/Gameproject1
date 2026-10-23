@@ -15,7 +15,7 @@ type Ctx = {
 	final: boolean,
 	players: () -> { Player },
 	rng: Random,
-	fail: (players: { Player }, key: string) -> (),
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
 	show: (text: string) -> (),
 	cancelled: () -> boolean,
 	stopped: () -> boolean,
@@ -25,6 +25,9 @@ type Ctx = {
 	answers: (answered: { Player }, missed: { Player }) -> (),
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	lever: () -> (),
 }
 
 local Quiz = {
@@ -33,6 +36,7 @@ local Quiz = {
 	expectedSeconds = Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.QUIZ_REVEAL_SECONDS,
 	maxPerRound = nil :: number?, -- the basic mission: no limit (§5)
 	minPlayers = nil :: number?,
+	needsPresenter = nil :: boolean?,
 }
 
 local used: { [QuizBank.Question]: boolean } = {} -- asked on this server (main and final banks alike)

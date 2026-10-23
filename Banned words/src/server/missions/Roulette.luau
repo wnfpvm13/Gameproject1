@@ -12,7 +12,7 @@ type Ctx = {
 	final: boolean,
 	players: () -> { Player },
 	rng: Random,
-	fail: (players: { Player }, key: string) -> (),
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
 	show: (text: string) -> (),
 	cancelled: () -> boolean,
 	stopped: () -> boolean,
@@ -22,6 +22,9 @@ type Ctx = {
 	answers: (answered: { Player }, missed: { Player }) -> (),
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	lever: () -> (),
 }
 
 local Roulette = {
@@ -30,6 +33,7 @@ local Roulette = {
 	expectedSeconds = Config.ROULETTE_SPIN_SECONDS + Config.ROULETTE_REVEAL_SECONDS,
 	maxPerRound = Config.ROULETTE_PER_ROUND :: number?,
 	minPlayers = Config.ROULETTE_MIN_PLAYERS :: number?,
+	needsPresenter = nil :: boolean?,
 }
 
 function Roulette.available(final: boolean): boolean

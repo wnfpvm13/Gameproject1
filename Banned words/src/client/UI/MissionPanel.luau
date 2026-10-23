@@ -3,8 +3,14 @@
 --   - quiz: the question, four answer buttons (only for players who may answer) and the seconds left; afterwards the
 --     right answer turns green and my wrong pick red;
 --   - roulette (owner 2026-10-23: a 2D wheel): the names on a ring and a pointer that spins and slows down onto the
---     name the server picked; with two players a coin flips between the two names instead.
+--     name the server picked; with two players a coin flips between the two names instead;
+--   - a word to everyone (bundle 4b): whose turn, the topic, the seconds left, and for the performer a "swap topic"
+--     button while they read it; then "the presenter is choosing", or a vote: the performers, "nobody" and "I could
+--     not hear" (my own name cannot be picked).
 -- It only shows what it is told and reports the button pressed; the server checks every answer.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Style = require(script.Parent:WaitForChild("Style"))
 
 local MissionPanel = {}
@@ -15,12 +21,16 @@ local RING_FULL = 6
 local PILL_WIDTH = 104
 local SPIN_TURNS = 4 -- whole turns before the pointer stops
 local COIN_SIZE = 170
+local MAX_BUTTONS = Config.ONE_WORD_MAX_PERFORMERS + 2 -- a vote: the performers, "nobody", "could not hear"
+local TEXT = Config.TEXT
 local SLICE_COLORS = { Color3.fromRGB(40, 92, 170), Color3.fromRGB(62, 66, 92) } -- name pills, alternating
 
 local card: Frame
 local cardScale: UIScale
 local title: TextLabel
 local timer: TextLabel
+local note: TextLabel
+local swapButton: TextButton
 local answerGrid: Frame
 local buttons: { TextButton } = {}
 local wheel: Frame
@@ -39,6 +49,8 @@ local state = {
 	question = "",
 	id = 0, -- the open question's number (sent back with the answer)
 	myPick = nil :: number?,
+	myId = 0,
+	voteIds = {} :: { number }, -- a vote's candidates (my own name cannot be picked)
 	-- roulette
 	names = {} :: { string },
 	pick = 1,
@@ -69,12 +81,14 @@ local function answerButton(index: number): TextButton
 	b.LayoutOrder = index
 	b.Activated:Connect(function()
 		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt -- (not while the question shows first)
-		if state.kind == "quiz" and state.canAnswer and open and not state.myPick then
+		local mine = state.kind == "vote" and state.voteIds[index] == state.myId
+		if (state.kind == "quiz" or state.kind == "vote") and state.canAnswer and open and not state.myPick and not mine then
 			state.myPick = index
 			onAnswer(state.id, index)
 			for i, other in buttons do
 				other.BackgroundColor3 = if i == index then Style.AMBER else Style.PANEL
-				other.TextColor3 = if i == index then Style.PANEL else Style.WHITE
+				other.TextColor3 = if i == index then Style.PANEL else Style.GREY -- (answered: nothing else can be pressed)
+				other.AutoButtonColor = false
 			end
 		end
 	end)
@@ -113,26 +127,50 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	title = Style.label(card, Style.BOLD, 26, Style.WHITE)
 	title.Size = UDim2.new(1, 0, 0, 64)
 	title.LayoutOrder = 1
+	note = Style.label(card, Style.REGULAR, 18, Style.GREY)
+	note.Size = UDim2.new(1, 0, 0, 22)
+	note.LayoutOrder = 2
 
 	answerGrid = Instance.new("Frame")
 	answerGrid.BackgroundTransparency = 1
-	answerGrid.Size = UDim2.new(1, 0, 0, 2 * 52 + 8)
-	answerGrid.LayoutOrder = 2
+	answerGrid.Size = UDim2.fromScale(1, 0)
+	answerGrid.AutomaticSize = Enum.AutomaticSize.Y
+	answerGrid.LayoutOrder = 3
 	answerGrid.Parent = card
 	local grid = Instance.new("UIGridLayout")
 	grid.CellSize = UDim2.new(0.5, -4, 0, 52)
 	grid.CellPadding = UDim2.fromOffset(8, 8)
 	grid.SortOrder = Enum.SortOrder.LayoutOrder
 	grid.Parent = answerGrid
-	for i = 1, 4 do
+	for i = 1, MAX_BUTTONS do
 		buttons[i] = answerButton(i)
 	end
+
+	swapButton = Instance.new("TextButton")
+	swapButton.Size = UDim2.fromOffset(200, 40)
+	swapButton.BackgroundColor3 = Style.AMBER
+	swapButton.FontFace = Style.BOLD
+	swapButton.TextSize = 20
+	swapButton.TextColor3 = Style.PANEL
+	swapButton.Text = TEXT.ONE_WORD_SWAP
+	swapButton.LayoutOrder = 4
+	swapButton.Visible = false
+	local swapCorner = Instance.new("UICorner")
+	swapCorner.CornerRadius = UDim.new(0, 10)
+	swapCorner.Parent = swapButton
+	swapButton.Parent = card
+	swapButton.Activated:Connect(function()
+		if state.kind == "oneWord" and state.id > 0 and workspace:GetServerTimeNow() < state.endsAt then
+			swapButton.Visible = false
+			onAnswer(state.id, 1)
+		end
+	end)
 
 	-- The wheel: a round disc with an amber rim, the names as pills on a ring, a needle from the hub.
 	wheel = Instance.new("Frame")
 	wheel.BackgroundTransparency = 1
 	wheel.Size = UDim2.fromOffset(2 * RING_RADIUS + 120, 2 * RING_RADIUS + 50)
-	wheel.LayoutOrder = 3
+	wheel.LayoutOrder = 5
 	wheel.Parent = card
 	disc = Style.panel(wheel, Color3.fromRGB(26, 32, 46), 0, 1000)
 	disc.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -170,7 +208,7 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	coin.BackgroundColor3 = Style.AMBER
 	coin.BackgroundTransparency = 0
 	coin.Size = UDim2.fromOffset(COIN_SIZE, COIN_SIZE)
-	coin.LayoutOrder = 4
+	coin.LayoutOrder = 6
 	local round = Instance.new("UICorner")
 	round.CornerRadius = UDim.new(1, 0)
 	round.Parent = coin
@@ -213,42 +251,74 @@ local function easeOut(t: number): number
 	return 1 - (1 - t) ^ 3
 end
 
+-- Colours one answer button: open (can be pressed), mine (my pick), or neither.
+local function paint(b: TextButton, open: boolean, picked: boolean)
+	b.AutoButtonColor = open
+	b.BackgroundColor3 = if picked then Style.AMBER else Style.PANEL
+	b.TextColor3 = if picked then Style.PANEL elseif open then Style.WHITE else Style.GREY
+end
+
 -- What the server says the mission shows now. `canAnswer`: I am alive and on the ground (my buttons work);
--- `names`: the roulette's names in the server's order.
-function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names: { string })
+-- `names`: the payload's players (`ids`) by name, in the server's order; `myId`: my UserId.
+function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names: { string }, myId: number)
 	local kind = payload.kind
 	local quizLike = kind == "quiz" or kind == "quizResult"
-	if not quizLike or payload.question ~= state.question then
-		state.myPick = nil -- a new question (it comes twice: before and once the buttons work) or no quiz
+	local newQuestion = if quizLike then payload.question ~= state.question
+		elseif kind == "vote" then payload.id ~= nil and payload.id ~= state.id
+		else true
+	if newQuestion then
+		state.myPick = nil -- a new question (a quiz comes twice: before and once the buttons work), a new vote, or none
 	end
 	state.question = if quizLike then payload.question else ""
 	state.id = payload.id or 0
 	state.kind = kind
 	state.endsAt = payload.endsAt or 0
 	state.canAnswer = canAnswer
-	card.Visible = kind == "quiz" or kind == "quizResult" or kind == "roulette"
-	answerGrid.Visible = quizLike
-	title.Visible = quizLike
-	timer.Visible = quizLike
+	state.myId = myId
+	card.Visible = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
+	answerGrid.Visible = quizLike or kind == "vote"
+	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
+	timer.Visible = quizLike or kind == "oneWord" or kind == "vote"
+	note.Visible = kind == "oneWord"
+	swapButton.Visible = false
 	wheel.Visible = kind == "roulette" and #names > 2
 	coin.Visible = kind == "roulette" and #names <= 2
-	if kind == "quiz" or kind == "quizResult" then
+	if quizLike then
 		title.Text = payload.question
 		local choices = payload.choices :: { string }
 		for i, b in buttons do
 			b.Visible = choices[i] ~= nil
 			b.Text = choices[i] or ""
 			local open = kind == "quiz" and canAnswer and payload.endsAt ~= nil and not state.myPick
-			b.AutoButtonColor = open
 			if kind == "quizResult" then
 				local right = i == payload.answer
+				b.AutoButtonColor = false
 				b.BackgroundColor3 = if right then Style.GREEN elseif i == state.myPick then Style.RED else Style.PANEL
 				b.TextColor3 = if right or i == state.myPick then Style.PANEL else Style.GREY
-			elseif i ~= state.myPick then
-				b.BackgroundColor3 = Style.PANEL
-				b.TextColor3 = if open then Style.WHITE else Style.GREY
+			else
+				paint(b, open, i == state.myPick)
 			end
 		end
+	elseif kind == "vote" then
+		title.Text = TEXT.JUDGE_VOTE
+		state.voteIds = payload.ids or {}
+		local labels = table.clone(names)
+		table.insert(labels, TEXT.VOTE_NONE)
+		table.insert(labels, TEXT.VOTE_ABSTAIN)
+		for i, b in buttons do
+			b.Visible = labels[i] ~= nil
+			b.Text = labels[i] or ""
+			local mine = state.voteIds[i] == myId
+			paint(b, canAnswer and not state.myPick and not mine, i == state.myPick)
+		end
+	elseif kind == "oneWord" then
+		local current = payload.current or 1
+		title.Text = string.format(TEXT.ONE_WORD_TURN, names[current] or "?", payload.topic or "")
+		note.Text = if payload.phase == "prep" then TEXT.ONE_WORD_PREP elseif payload.chat then TEXT.ONE_WORD_BY_CHAT else ""
+		local ids = payload.ids or {}
+		swapButton.Visible = payload.phase == "prep" and not payload.swapped and payload.id ~= nil and ids[current] == myId
+	elseif kind == "oneWordJudge" then
+		title.Text = TEXT.JUDGE_WAIT
 	elseif kind == "roulette" then
 		title.Text = ""
 		state.names = names
@@ -275,7 +345,7 @@ function MissionPanel.tick(now: number)
 			cardScale.Scale = math.min(1, view.Y * 0.8 / height, view.X * 0.9 / width)
 		end
 	end
-	if state.kind == "quiz" then
+	if state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""

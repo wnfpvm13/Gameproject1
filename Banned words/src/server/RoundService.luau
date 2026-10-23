@@ -92,8 +92,8 @@ end
 
 -- A main-game fail (a mission, a Studio test): a life each, or the final for exactly those players when nobody
 -- would be left.
-local function failPlayers(players: { Player }, eventId: string, reason: Reason)
-	local outcomes, everyone = LifeService.fail(players, eventId, "objective")
+local function failPlayers(players: { Player }, eventId: string, reason: Reason, kind: LifeService.Kind?)
+	local outcomes, everyone = LifeService.fail(players, eventId, kind or "objective")
 	if everyone then
 		toFinal = true
 	end
@@ -126,7 +126,8 @@ end
 -- What a mission may do (docs/DESIGN_V3.md §13). `onFail(players, key)`: who failed the mission's event `key`.
 -- `settled()`: the outcome is already fixed, so the running mission stops and later results are dropped (§2 "확정 뒤에
 -- 도착한 결과는 버린다").
-local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, string) -> (), settled: () -> boolean): MissionRunner.Ctx
+local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, string, boolean?) -> (),
+	settled: () -> boolean): MissionRunner.Ctx
 	-- Who answered the last answer mission and who did not: counted with the fail that follows (the same event), so
 	-- an AFK player going out cannot decide the round before the same question's wrong answers are taken.
 	local pending: { answered: { Player }, missed: { Player } }? = nil
@@ -151,9 +152,9 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 		final = final,
 		players = Match.aliveList,
 		rng = rng,
-		fail = function(players: { Player }, key: string)
+		fail = function(players: { Player }, key: string, subjective: boolean?)
 			countAnswers()
-			onFail(players, key)
+			onFail(players, key, subjective)
 		end,
 		show = function(text: string)
 			Match.setMessage(text)
@@ -170,6 +171,17 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 		-- mission reports its fail (before the launches: a launched player's miss would not count any more).
 		answers = function(answered: { Player }, missed: { Player })
 			pending = { answered = answered, missed = missed }
+		end,
+		canFling = function(player: Player): boolean
+			return LifeService.canFail(player, "subjective")
+		end,
+		-- The one-word mission's launch: the presenter's choice (a missed one counts toward PRESENTER_MISSES).
+		presenterPick = function(options, seconds)
+			local function over(): boolean
+				return Match.roundId ~= myRound or settled()
+			end
+			local picked = PresenterService.ask("judge", options, seconds, over)
+			return picked
 		end,
 	}
 end
@@ -210,7 +222,7 @@ local function playMain(myRound: number)
 			if #options > 0 then
 				freeTalk = true
 				local missed
-				picked, missed = PresenterService.askPick(options, Config.PRESENTER_PICK_SECONDS, over)
+				picked, missed = PresenterService.ask("pick", options, Config.PRESENTER_PICK_SECONDS, over)
 				freeTalk = false
 				if missed then
 					Net.notice(Config.TEXT.PICK_AUTO)
@@ -222,7 +234,7 @@ local function playMain(myRound: number)
 		if over() then
 			return
 		end
-		local mission = if landed then MissionRunner.choose(Timeline.left(), #Match.aliveList(), picked) else nil
+		local mission = if landed then MissionRunner.choose(Timeline.left(), #Match.aliveList(), Match.presenter ~= nil, picked) else nil
 		if landed and not mission then
 			talk(math.huge) -- nothing fits any more: free talk to the end
 			return
@@ -230,8 +242,8 @@ local function playMain(myRound: number)
 		if mission then
 			runs += 1
 			local run = runs
-			MissionRunner.run(mission, missionCtx(myRound, false, function(players, key)
-				failPlayers(players, "m" .. run .. ":" .. key, "fail")
+			MissionRunner.run(mission, missionCtx(myRound, false, function(players, key, subjective)
+				failPlayers(players, "m" .. run .. ":" .. key, "fail", if subjective then "subjective" else "objective")
 			end, mainSettled))
 			waitFlights()
 			if over() then

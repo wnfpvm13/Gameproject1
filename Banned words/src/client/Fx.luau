@@ -224,6 +224,55 @@ function Fx.fling(info: { seatIndex: number? })
 	end
 end
 
+-- The presenter pulled the "날려!" lever on the podium (PoolHall.PodiumSet.Lever: Base, Handle, Knob): the handle
+-- swings down LEVER_DEGREES over its base and comes back within LEVER_SECONDS + LEVER_RETURN_SECONDS (no sound of its
+-- own: the launch right after it bangs).
+local leverRest: { [BasePart]: CFrame } = {}
+local leverPulls = 0
+function Fx.lever()
+	local hall = workspace:FindFirstChild("PoolHall")
+	local set = hall and hall:FindFirstChild("PodiumSet")
+	local lever = set and set:FindFirstChild("Lever")
+	local base = lever and lever:FindFirstChild("Base") :: BasePart?
+	if not (lever and base) then
+		return
+	end
+	local moving: { BasePart } = {}
+	for _, name in { "Handle", "Knob" } do
+		local part = lever:FindFirstChild(name) :: BasePart?
+		if part then
+			leverRest[part] = leverRest[part] or part.CFrame
+			table.insert(moving, part)
+		end
+	end
+	local pivot = base.CFrame * CFrame.new(0, base.Size.Y / 2, 0)
+	leverPulls += 1
+	local pull = leverPulls
+	local started = os.clock()
+	local total = Config.LEVER_SECONDS + Config.LEVER_RETURN_SECONDS
+	local connection: RBXScriptConnection
+	connection = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - started
+		if pull ~= leverPulls or t >= total then
+			if pull == leverPulls then
+				for _, part in moving do
+					part.CFrame = leverRest[part]
+				end
+			end
+			connection:Disconnect()
+			return
+		end
+		-- Down fast (first 30%), held, then back up.
+		local down = math.min(1, t / (Config.LEVER_SECONDS * 0.3))
+		local back = math.clamp((t - Config.LEVER_SECONDS) / Config.LEVER_RETURN_SECONDS, 0, 1)
+		local angle = math.rad(Config.LEVER_DEGREES) * (1 - (1 - down) ^ 2) * (1 - back)
+		local swing = pivot * CFrame.Angles(angle, 0, 0) * pivot:Inverse()
+		for _, part in moving do
+			part.CFrame = swing * leverRest[part]
+		end
+	end)
+end
+
 -- The player hit the water: a white column, a spray of drops and a ring of mist, sized to read from the show camera
 -- (the landing zone is 95-130 studs away).
 function Fx.splash(position: Vector3)

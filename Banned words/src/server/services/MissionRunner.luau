@@ -7,7 +7,8 @@
 -- checks it). It alone listens to the answer remote ("MissionAnswer") and hands answers to the running mission's
 -- question (docs/DESIGN_V3.md §13: Net.listen cannot disconnect, so missions never listen themselves). What a mission
 -- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
--- Bundle 4a: the quiz (also the final), the roulette, and the Studio-only test mission.
+-- Bundle 4: the quiz (also the final), the roulette, "a word to everyone" (4b, only with a presenter), and the
+-- Studio-only test mission.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -16,6 +17,7 @@ local Net = require(script.Parent.Parent:WaitForChild("Net"))
 local missionFolder = script.Parent.Parent:WaitForChild("missions")
 local Quiz = require(missionFolder:WaitForChild("Quiz"))
 local Roulette = require(missionFolder:WaitForChild("Roulette"))
+local OneWord = require(missionFolder:WaitForChild("OneWord"))
 local TestMission = require(missionFolder:WaitForChild("TestMission"))
 
 local MissionRunner = {}
@@ -28,14 +30,17 @@ export type Ctx = {
 	players: () -> { Player }, -- the alive participants now
 	rng: Random,
 	-- Who failed the mission's event `key` (one penalty per event: the same key never costs a player twice);
-	-- RoundService turns that into lives and launches.
-	fail: (players: { Player }, key: string) -> (),
+	-- RoundService turns that into lives and launches. `subjective`: the presenter or a vote decided (limits apply).
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
 	show: (text: string) -> (), -- the status line and a toast
 	cancelled: () -> boolean, -- the round was decided or another one began: stop
 	stopped: () -> boolean, -- another round began (or the round broke): not even a result may stay on screen
 	flying: (player: Player) -> boolean, -- launched and not back yet (cannot answer, takes no penalty)
 	-- An answer mission closed: who answered and who did not (the AFK rule, docs/DESIGN_V3.md §4).
 	answers: (answered: { Player }, missed: { Player }) -> (),
+	canFling: (player: Player) -> boolean, -- a subjective launch may hit them now (public limits, not flying)
+	-- The presenter picks one of `options` within `seconds` (nil: none in time, no presenter, or the round is over).
+	presenterPick: (options: { Option }, seconds: number) -> string?,
 }
 
 -- What a mission gets: the same, with fail/show that do nothing once cancelled, and wait().
@@ -43,7 +48,7 @@ export type MissionCtx = {
 	final: boolean,
 	players: () -> { Player },
 	rng: Random,
-	fail: (players: { Player }, key: string) -> (),
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
 	show: (text: string) -> (),
 	cancelled: () -> boolean,
 	stopped: () -> boolean,
@@ -60,6 +65,9 @@ export type MissionCtx = {
 	-- 1..`choices`, sent with that number) from each of `from` for `seconds`, or until all of them still alive answered
 	-- or the mission is cancelled. Returns the answers.
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { Option }, seconds: number) -> string?,
+	lever: () -> (), -- everyone sees the podium lever pulled (the presenter's launch)
 }
 
 export type Mission = {
@@ -68,14 +76,15 @@ export type Mission = {
 	expectedSeconds: number, -- for the time budget, without the launches afterwards
 	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
 	minPlayers: number?, -- alive participants it needs (nil = any)
+	needsPresenter: boolean?, -- offered only while someone presents (the one-word mission)
 	available: (final: boolean) -> boolean,
 	run: (ctx: MissionCtx) -> boolean?, -- false: it had nothing to play (a quiz with no clean question left)
 }
 
--- An entry of the presenter's menu.
+-- An entry of a presenter's menu.
 export type Option = { id: string, title: string, recommended: boolean }
 
-local MISSIONS: { Mission } = { Quiz, Roulette, TestMission }
+local MISSIONS: { Mission } = { Quiz, Roulette, OneWord, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
@@ -94,13 +103,14 @@ function MissionRunner.beginRound()
 end
 
 -- The main-game missions that may run now, in recommended order (not played yet this round first): available, under
--- their per-round limit, enough players for them, and fitting `secondsLeft` with the launches.
-function MissionRunner.candidates(secondsLeft: number, alive: number): { Mission }
+-- their per-round limit, enough players for them, a presenter if they need one, and fitting `secondsLeft` with the
+-- launches.
+function MissionRunner.candidates(secondsLeft: number, alive: number, presenter: boolean): { Mission }
 	local list = {}
 	for _, mission in MISSIONS do
 		local count = played[mission.id] or 0
 		if mission.available(false) and fits(mission, secondsLeft) and (mission.maxPerRound == nil or count < mission.maxPerRound)
-			and alive >= (mission.minPlayers or 0) then
+			and alive >= (mission.minPlayers or 0) and (presenter or not mission.needsPresenter) then
 			table.insert(list, mission)
 		end
 	end
@@ -121,15 +131,16 @@ end
 -- The presenter's menu for the same choice.
 function MissionRunner.options(secondsLeft: number, alive: number): { Option }
 	local options = {}
-	for i, mission in MissionRunner.candidates(secondsLeft, alive) do
+	for i, mission in MissionRunner.candidates(secondsLeft, alive, true) do
 		table.insert(options, { id = mission.id, title = mission.title, recommended = i <= Config.PRESENTER_RECOMMENDED })
 	end
 	return options
 end
 
 -- The next main-game mission: `pickedId` if it may still run, else the top recommendation; nil if none fits.
-function MissionRunner.choose(secondsLeft: number, alive: number, pickedId: string?): Mission?
-	local list = MissionRunner.candidates(secondsLeft, alive)
+-- `presenter`: someone presents now (the menu is only ever made then).
+function MissionRunner.choose(secondsLeft: number, alive: number, presenter: boolean, pickedId: string?): Mission?
+	local list = MissionRunner.candidates(secondsLeft, alive, presenter)
 	for _, mission in list do
 		if mission.id == pickedId then
 			return mission
@@ -213,9 +224,21 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			end
 			return open.answers
 		end,
-		fail = function(players: { Player }, key: string)
+		fail = function(players: { Player }, key: string, subjective: boolean?)
 			if not ctx.cancelled() then
-				ctx.fail(players, key)
+				ctx.fail(players, key, subjective)
+			end
+		end,
+		canFling = ctx.canFling,
+		presenterPick = function(options: { Option }, seconds: number): string?
+			if ctx.cancelled() then
+				return nil
+			end
+			return ctx.presenterPick(options, seconds)
+		end,
+		lever = function()
+			if not ctx.cancelled() then
+				Net.toAll("Lever", {})
 			end
 		end,
 		show = function(text: string)

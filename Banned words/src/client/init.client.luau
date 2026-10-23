@@ -198,7 +198,7 @@ end)
 
 remotes.PresenterMenu.OnClientEvent:Connect(function(info)
 	if info.options then
-		PresenterPanel.openMenu(info.options, info.endsAt)
+		PresenterPanel.openMenu(info.options, info.endsAt, info.kind)
 	else
 		PresenterPanel.closeMenu()
 	end
@@ -208,14 +208,19 @@ remotes.Sound.OnClientEvent:Connect(function(info)
 	Fx.presenterSound(info.index)
 end)
 
--- The mission card (quiz, roulette). My answer buttons work while I am alive and not flying.
+-- The mission card (quiz, roulette, a word to everyone, votes). My buttons work while I am alive and not flying.
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	local names = {}
 	for _, userId in payload.ids or {} do
 		table.insert(names, nameOf(userId))
 	end
 	local canAnswer = State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
-	MissionPanel.show(payload, canAnswer, names)
+	MissionPanel.show(payload, canAnswer, names, State.myId())
+end)
+
+-- The presenter pulled the podium lever (their launch follows).
+remotes.Lever.OnClientEvent:Connect(function()
+	Fx.lever()
 end)
 
 remotes.Words.OnClientEvent:Connect(function(words)

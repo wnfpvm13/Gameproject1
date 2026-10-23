@@ -40,6 +40,26 @@ return {
 	ROULETTE_REVEAL_SECONDS = 2,
 	ROULETTE_MIN_PLAYERS = 2,
 	ROULETTE_PER_ROUND = 1,
+	-- "A word to everyone" (bundle 4b): up to ONE_WORD_MAX_PERFORMERS take turns on a topic (ONE_WORD_PREP_SECONDS to
+	-- read it and maybe swap it once, then ONE_WORD_SECONDS by voice or ONE_WORD_CHAT_SECONDS by chat); then the
+	-- presenter picks the one to launch within PRESENTER_JUDGE_SECONDS, else everyone votes for VOTE_SECONDS. Only
+	-- with a presenter, at most ONE_WORD_PER_ROUND times a round.
+	ONE_WORD_MAX_PERFORMERS = 5,
+	ONE_WORD_PREP_SECONDS = 3,
+	ONE_WORD_SECONDS = 8,
+	ONE_WORD_CHAT_SECONDS = 15,
+	ONE_WORD_PER_ROUND = 2,
+	ONE_WORD_MIN_PLAYERS = 2, -- performers it needs (alive, on the ground)
+	ONE_WORD_RESULT_SECONDS = 2, -- who flies (or nobody) stays on the status line this long
+	PRESENTER_JUDGE_SECONDS = 10,
+	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
+	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
+	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
+	-- Votes (docs/DESIGN_V3.md §5): the top choice wins with VOTE_MIN_VALID valid votes, at least half of the voters
+	-- who did not abstain, and no tie; fewer than VOTE_MIN_VOTERS voters -> no vote.
+	VOTE_SECONDS = 10,
+	VOTE_MIN_VALID = 3,
+	VOTE_MIN_VOTERS = 4,
 
 	-- The Studio-only test mission (bundle 2b, until the real missions of bundle 4): everyone alive fails with
 	-- TEST_FAIL_CHANCE; a final question knocks out each finalist with TEST_FINAL_FAIL_CHANCE.
@@ -178,6 +198,21 @@ return {
 		ROULETTE_TITLE = "룰렛",
 		ROULETTE_START = "룰렛이 돌아가요 · 걸린 한 명이 날아가요",
 		ROULETTE_HIT = "%s 당첨!",
+		ONE_WORD_TITLE = "모두에게 한마디",
+		ONE_WORD_START = "모두에게 한마디 · 주제에 맞게 한마디씩!",
+		ONE_WORD_TURN = "%s 차례 · %s",
+		ONE_WORD_PREP = "곧 시작",
+		ONE_WORD_SWAP = "주제 바꾸기",
+		ONE_WORD_BY_CHAT = "채팅으로 한마디!",
+		JUDGE_PICK = "날릴 사람을 골라 주세요",
+		FLING_BUTTON = "날려!",
+		JUDGE_WAIT = "진행자가 날릴 사람을 고르는 중",
+		JUDGE_VOTE = "투표 · 가장 아쉬운 한마디는?",
+		JUDGE_TO_VOTE = "시간이 지나서 투표로 정해요",
+		VOTE_NONE = "안 날림",
+		VOTE_ABSTAIN = "안 들려요",
+		NOBODY_FLUNG = "아무도 안 날아가요",
+		FLUNG = "%s 날아가요!",
 		AFK_OUT = "%s 님은 두 번 연속 답하지 않아 관전으로 바뀌었어요",
 		SOUND_DRUMROLL = "두구두구",
 		SOUND_APPLAUSE = "박수",

@@ -9,7 +9,9 @@
 --               }, final = they all fell at   ChatJoin    (on) join rounds by text chat instead of voice
 --               once and play the final }
 --   ChatAccess  to one player only: may I join by chat? { state = checking / yes / no / voice / error }
---   PresenterMenu to the presenter: { options = { {id, title, recommended} } | nil (closed), endsAt }
+--   PresenterMenu to the presenter: { kind = "pick" (next mission) | "judge" (who to launch), options = { {id, title,
+--               recommended} } | nil (closed), endsAt }
+--   Lever       the presenter pulled the podium lever (a launch by their choice follows)
 --   Sound       a presenter sound button: { index } (Config.PRESENTER_SOUNDS)
 --   (client -> server: Volunteer (on), PresenterPick (mission id), PresenterSound (index))
 --   Mission     the running mission's screen (MissionRunner): { kind = "quiz", final, question, choices, endsAt?, id? }
@@ -27,7 +29,7 @@ local Net = {}
 
 local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
-	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer",
+	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer", "Lever",
 	"Words", "WordWarn", "Settle", "Transcript", "VoicePing", "Settled",
 }
 

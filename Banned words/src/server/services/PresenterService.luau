@@ -5,8 +5,9 @@
 -- with every voice participant (VoiceChatService:GetChatGroupsAsync), receives every chat participant's messages
 -- (TextChatService:CanUsersChatAsync) and, on public servers, is nobody's Roblox friend. A check that fails to run
 -- disqualifies on live servers; Studio allows it (GetChatGroupsAsync works only in Team Test there).
--- During a round the presenter picks the next mission in the last PRESENTER_PICK_SECONDS of free talk (missed picks:
--- the system picks; PRESENTER_MISSES in a row hand the round to another presenter), plays sound buttons, and may step
+-- During a round the presenter picks the next mission in the last PRESENTER_PICK_SECONDS of free talk and, in the
+-- one-word mission, who is launched (a menu of kind "judge"); a missed choice is made by the system (or a vote) and
+-- PRESENTER_MISSES in a row hand the round to another presenter. The presenter also plays sound buttons and may step
 -- down. A presenter who leaves or steps down is replaced by a volunteer who is not playing (not flying either, and
 -- not someone who presented this round before), else the system runs the round. Who presents is Match.presenter;
 -- RoundService is told of every change during a round (voices, stands).
@@ -24,6 +25,7 @@ local PresenterService = {}
 
 export type Option = { id: string, title: string, recommended: boolean }
 export type Change = "left" | "misses" | "stepped down"
+export type MenuKind = "pick" | "judge" -- the next mission / who the one-word mission launches
 
 local DEFAULT_WALK_SPEED = 16
 local DEFAULT_JUMP_HEIGHT = 7.2
@@ -39,8 +41,8 @@ local onChange: (Change, Player?, Player?) -> () = function(_reason, _old, _new)
 local unavailable: (Player) -> boolean = function(_player)
 	return false
 end
--- The open mission menu (one at a time).
-local menu: { options: { Option }, endsAt: number, picked: string? }? = nil
+-- The open menu (one at a time).
+local menu: { kind: MenuKind, options: { Option }, endsAt: number, picked: string? }? = nil
 
 -- Runs one yielding check. Returns (ok, answer); a call that errors is reported and returns ok = false.
 local function try<T>(what: string, call: () -> T): (boolean, T?)
@@ -323,17 +325,17 @@ function PresenterService.choose(candidates: { Player }): Player?
 	return nil
 end
 
--- Opens the mission menu to the presenter for `seconds` and waits. Returns the id they picked (or nil), and whether
--- they let the time run out (false when the presenter changed or `stop()` became true). A missed pick counts;
+-- Opens a menu of `kind` to the presenter for `seconds` and waits. Returns the id they picked (or nil), and whether
+-- they let the time run out (false when the presenter changed or `stop()` became true). A missed choice counts;
 -- PRESENTER_MISSES in a row replace them.
-function PresenterService.askPick(options: { Option }, seconds: number, stop: () -> boolean): (string?, boolean)
+function PresenterService.ask(kind: MenuKind, options: { Option }, seconds: number, stop: () -> boolean): (string?, boolean)
 	local presenter = Match.presenter
 	if not presenter or #options == 0 then
 		return nil, false
 	end
 	local endsAt = os.clock() + seconds
-	menu = { options = options, endsAt = Match.now() + seconds, picked = nil }
-	Net.to(presenter, "PresenterMenu", { options = options, endsAt = Match.now() + seconds })
+	menu = { kind = kind, options = options, endsAt = Match.now() + seconds, picked = nil }
+	Net.to(presenter, "PresenterMenu", { kind = kind, options = options, endsAt = Match.now() + seconds })
 	while os.clock() < endsAt and menu and not menu.picked and Match.presenter == presenter and not stop() do
 		task.wait(0.1)
 	end
@@ -361,7 +363,7 @@ end
 -- The presenter asked for the whole state again: the open menu too.
 function PresenterService.sendMenu(player: Player)
 	if menu and player == Match.presenter then
-		Net.to(player, "PresenterMenu", { options = menu.options, endsAt = menu.endsAt })
+		Net.to(player, "PresenterMenu", { kind = menu.kind, options = menu.options, endsAt = menu.endsAt })
 	end
 end
 

@@ -12,7 +12,7 @@ type Ctx = {
 	final: boolean,
 	players: () -> { Player },
 	rng: Random,
-	fail: (players: { Player }, key: string) -> (),
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
 	show: (text: string) -> (),
 	cancelled: () -> boolean,
 	stopped: () -> boolean,
@@ -22,6 +22,9 @@ type Ctx = {
 	answers: (answered: { Player }, missed: { Player }) -> (),
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	lever: () -> (),
 }
 
 local TestMission = {
@@ -30,6 +33,7 @@ local TestMission = {
 	expectedSeconds = Config.TEST_MISSION_SECONDS,
 	maxPerRound = nil :: number?, -- like the quiz: no limit
 	minPlayers = nil :: number?,
+	needsPresenter = nil :: boolean?,
 }
 
 function TestMission.available(_final: boolean): boolean

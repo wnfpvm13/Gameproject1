@@ -11,7 +11,8 @@ the REAL module sources from src/ + the test file. The modules run unchanged; on
           text (Config.TEXT) containing a word-bank word
   round   Config, Match, LifeService, Timeline, MissionRunner, ChatService, RoundService (+ stub chairs, stands, voice,
           scores and a scripted mission): lives rules, the time budget, the final triggers, whole rounds, joining by chat
-  mission Config, Match, QuizBank, Quiz, Roulette, TestMission, MissionRunner (+ a fake ctx): the quiz (answers, fails,
+  mission Config, Match, QuizBank, Quiz, Roulette, VoteRules, OneWord(+Topics), TestMission, MissionRunner (+ a fake
+          ctx): the quiz (answers, fails,
           the AFK report, no repeats, no words in play, the final bank), the roulette, the menu order, the real bank
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
 """
@@ -47,6 +48,9 @@ MISSION_MODULES = [
     ("QuizBank", "src/server/content/QuizBank.luau"),
     ("Quiz", "src/server/missions/Quiz.luau"),
     ("Roulette", "src/server/missions/Roulette.luau"),
+    ("VoteRules", "src/shared/VoteRules.luau"),
+    ("OneWordTopics", "src/server/content/OneWordTopics.luau"),
+    ("OneWord", "src/server/missions/OneWord.luau"),
     ("TestMission", "src/server/missions/TestMission.luau"),
     ("MissionRunner", "src/server/services/MissionRunner.luau"),
 ]

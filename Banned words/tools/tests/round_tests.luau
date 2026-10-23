@@ -242,6 +242,20 @@ function Scripted.run(ctx)
 	if Scripted.missed and not ctx.final then -- an answer mission: these players did not answer (the AFK rule)
 		ctx.answers({}, Scripted.missed(ctx.players()))
 	end
+	if Scripted.judge and not ctx.final then -- the one-word mission's ending: the presenter picks, a subjective launch
+		local options = {}
+		for _, player in ctx.players() do
+			table.insert(options, { id = tostring(player.UserId), title = player.Name, recommended = false })
+		end
+		local picked = ctx.presenterPick(options, Config.PRESENTER_JUDGE_SECONDS)
+		table.insert(Scripted.judged, picked or "none")
+		for _, player in ctx.players() do
+			if tostring(player.UserId) == picked then
+				ctx.fail({ player }, "judge", true)
+			end
+		end
+		return
+	end
 	local pick = if ctx.final then Scripted.finalPick else Scripted.pick
 	ctx.fail(if pick then pick(#list, ctx.players()) else {}, "result")
 	local second = if ctx.final then nil else Scripted.secondPick
@@ -257,6 +271,7 @@ local function never(id)
 end
 loaders.Quiz = function() return never("quiz") end
 loaders.Roulette = function() return never("roulette") end
+loaders.OneWord = function() return never("oneWord") end
 
 local function advanceUntil(cond, limit)
 	local deadline = now + limit
@@ -345,6 +360,8 @@ local function begin(players, expectedSeconds, pick, finalPick, secondPick)
 	Scripted.finalPick = finalPick
 	Scripted.secondPick = secondPick
 	Scripted.missed = nil
+	Scripted.judge = nil
+	Scripted.judged = {}
 	playerList = players
 	local since = now
 	advanceUntil(function() return Match.phase == "Play" end, 60)
@@ -1162,6 +1179,56 @@ do
 	check("11b an AFK out that decides the final does not drop the same question's wrong answers",
 		not Match.isAlive(qs[4]) and Match.participants[qs[3]].lives == Config.LIVES - 1)
 	finish(since2)
+end
+
+---------------------------------------------------------------- 12. the presenter judges (the one-word mission's launch)
+do
+	local volunteer = NetStub.listeners.Volunteer
+	local pickMission = NetStub.listeners.PresenterPick
+	local ps = newPlayers(4) -- ps[1] presents, three play
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(ps[1], true)
+	workspaceAttributes.BW_ServerKind = "public"
+	local since = now
+	local play = begin(ps, 10, nil, nil)
+	Scripted.judge = true
+	local function judgeMenu(after)
+		for i = #NetStub.sent, 1, -1 do
+			local m = NetStub.sent[i]
+			if m.at < after then
+				break
+			end
+			if m.name == "PresenterMenu" and m.payload.kind == "judge" and m.payload.options then
+				return m
+			end
+		end
+		return nil
+	end
+	local missionAt = play + Config.FREE_TALK_SECONDS + Scripted.expectedSeconds
+	at(missionAt + 0.5)
+	local menu = judgeMenu(since)
+	local target = ps[3]
+	if menu then
+		pickMission(ps[1], tostring(target.UserId))
+	end
+	at(now + 1)
+	check("12a the judge menu goes to the presenter alone; their pick launches that player (subjective)", menu ~= nil
+		and menu.to == ps[1] and Match.participants[target].lives == Config.LIVES - 1 and Scripted.judged[1] == tostring(target.UserId))
+	-- The next mission: the same player again -> public servers allow SUBJECTIVE_FLINGS per player per round.
+	local since2 = now
+	at(missionAt + Config.FREE_TALK_SECONDS + Scripted.expectedSeconds + Config.FLING_RETURN_SECONDS + 1)
+	local menu2 = judgeMenu(since2)
+	if menu2 then
+		pickMission(ps[1], tostring(target.UserId))
+	end
+	at(now + 1)
+	check("12b public servers: a second subjective launch of the same player in a round costs nothing", menu2 ~= nil
+		and Match.participants[target].lives == Config.LIVES - 1)
+	workspaceAttributes.BW_ServerKind = nil
+	Scripted.judge = nil
+	NetStub.listeners.DevFling(ps[2], "out")
+	NetStub.listeners.DevFling(ps[4], "out")
+	finish(since)
 end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

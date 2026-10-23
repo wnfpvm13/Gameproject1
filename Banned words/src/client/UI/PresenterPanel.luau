@@ -2,7 +2,8 @@
 -- The presenter's controls (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23):
 --   - the "volunteer to present" button (row 3 under the status board), for anyone not playing the round;
 --   - while I present: the mission menu (right side, open during the last seconds of free talk; recommended missions
---     marked) and the sound buttons (bottom centre).
+--     marked), the same menu for "who flies" after a one-word mission (bundle 4b: tap a name, then "날려!"), and the
+--     sound buttons (bottom centre).
 -- It only shows what it is told and reports presses; the server checks every one of them.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -18,9 +19,12 @@ local volunteerButton: TextButton
 local menuFrame: Frame
 local menuTitle: TextLabel
 local menuList: Frame
+local flingButton: TextButton
 local soundBar: Frame
 local volunteered = false
 local menuEndsAt = 0
+local menuKind = "pick"
+local selected: string? = nil -- the name tapped in a "judge" menu
 local onPickMission: (string) -> () = function(_id) end
 
 local function button(parent: Instance, text: string, width: number, height: number): TextButton
@@ -82,6 +86,18 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Padding = UDim.new(0, 6)
 	listLayout.Parent = menuList
+	flingButton = button(menuFrame, TEXT.FLING_BUTTON, 240, 48)
+	flingButton.Name = "Fling"
+	flingButton.LayoutOrder = 2
+	flingButton.BackgroundColor3 = Style.RED
+	flingButton.TextSize = 24
+	flingButton.Visible = false
+	flingButton.Activated:Connect(function()
+		if menuKind == "judge" and selected then
+			onPickMission(selected)
+			PresenterPanel.closeMenu()
+		end
+	end)
 
 	soundBar = Instance.new("Frame")
 	soundBar.Name = "SoundBar"
@@ -119,23 +135,42 @@ function PresenterPanel.setPresenting(on: boolean)
 	end
 end
 
--- The mission menu (server time `endsAt`); a press picks and closes it.
-function PresenterPanel.openMenu(options: { Option }, endsAt: number)
+-- A menu (server time `endsAt`). "pick" (the next mission): a press picks and closes it. "judge" (who flies): a press
+-- selects a name, "날려!" sends it.
+function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: string?)
 	for _, child in menuList:GetChildren() do
 		if child:IsA("TextButton") then
 			child:Destroy()
 		end
 	end
+	menuKind = kind or "pick"
+	selected = nil
+	local judging = menuKind == "judge"
+	local nameButtons: { [string]: TextButton } = {}
 	for i, option in options do
 		local label = if option.recommended then "★ " .. option.title .. " · " .. TEXT.PICK_RECOMMENDED else option.title
 		local b = button(menuList, label, 240, 40)
 		b.LayoutOrder = i
 		b.TextColor3 = if option.recommended then Style.AMBER else Style.WHITE
+		nameButtons[option.id] = b
 		b.Activated:Connect(function()
-			onPickMission(option.id)
-			PresenterPanel.closeMenu()
+			if not judging then
+				onPickMission(option.id)
+				PresenterPanel.closeMenu()
+				return
+			end
+			selected = option.id
+			for id, other in nameButtons do
+				other.BackgroundColor3 = if id == option.id then Style.AMBER else Style.PANEL
+				other.TextColor3 = if id == option.id then Style.PANEL else Style.WHITE
+			end
+			flingButton.AutoButtonColor = true
+			flingButton.BackgroundTransparency = 0
 		end)
 	end
+	flingButton.Visible = judging
+	flingButton.AutoButtonColor = false
+	flingButton.BackgroundTransparency = 0.6 -- dim until a name is selected
 	menuEndsAt = endsAt
 	menuFrame.Visible = true
 	PresenterPanel.tick(workspace:GetServerTimeNow())
@@ -149,7 +184,7 @@ end
 function PresenterPanel.tick(now: number)
 	if menuFrame.Visible then
 		local left = math.max(0, math.ceil(menuEndsAt - now))
-		menuTitle.Text = string.format("%s · %d", TEXT.PICK_MISSION, left)
+		menuTitle.Text = string.format("%s · %d", if menuKind == "judge" then TEXT.JUDGE_PICK else TEXT.PICK_MISSION, left)
 	end
 end
 

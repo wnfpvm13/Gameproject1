@@ -53,6 +53,26 @@ return {
 	ROULETTE_REVEAL_SECONDS = 2,
 	ROULETTE_MIN_PLAYERS = 2,
 	ROULETTE_PER_ROUND = 1,
+	-- "A word to everyone" (bundle 4b): up to ONE_WORD_MAX_PERFORMERS take turns on a topic (ONE_WORD_PREP_SECONDS to
+	-- read it and maybe swap it once, then ONE_WORD_SECONDS by voice or ONE_WORD_CHAT_SECONDS by chat); then the
+	-- presenter picks the one to launch within PRESENTER_JUDGE_SECONDS, else everyone votes for VOTE_SECONDS. Only
+	-- with a presenter, at most ONE_WORD_PER_ROUND times a round.
+	ONE_WORD_MAX_PERFORMERS = 5,
+	ONE_WORD_PREP_SECONDS = 3,
+	ONE_WORD_SECONDS = 8,
+	ONE_WORD_CHAT_SECONDS = 15,
+	ONE_WORD_PER_ROUND = 2,
+	ONE_WORD_MIN_PLAYERS = 2, -- performers it needs (alive, on the ground)
+	ONE_WORD_RESULT_SECONDS = 2, -- who flies (or nobody) stays on the status line this long
+	PRESENTER_JUDGE_SECONDS = 10,
+	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
+	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
+	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
+	-- Votes (docs/DESIGN_V3.md §5): the top choice wins with VOTE_MIN_VALID valid votes, at least half of the voters
+	-- who did not abstain, and no tie; fewer than VOTE_MIN_VOTERS voters -> no vote.
+	VOTE_SECONDS = 10,
+	VOTE_MIN_VALID = 3,
+	VOTE_MIN_VOTERS = 4,
 
 	-- The Studio-only test mission (bundle 2b, until the real missions of bundle 4): everyone alive fails with
 	-- TEST_FAIL_CHANCE; a final question knocks out each finalist with TEST_FINAL_FAIL_CHANCE.
@@ -191,6 +211,21 @@ return {
 		ROULETTE_TITLE = "룰렛",
 		ROULETTE_START = "룰렛이 돌아가요 · 걸린 한 명이 날아가요",
 		ROULETTE_HIT = "%s 당첨!",
+		ONE_WORD_TITLE = "모두에게 한마디",
+		ONE_WORD_START = "모두에게 한마디 · 주제에 맞게 한마디씩!",
+		ONE_WORD_TURN = "%s 차례 · %s",
+		ONE_WORD_PREP = "곧 시작",
+		ONE_WORD_SWAP = "주제 바꾸기",
+		ONE_WORD_BY_CHAT = "채팅으로 한마디!",
+		JUDGE_PICK = "날릴 사람을 골라 주세요",
+		FLING_BUTTON = "날려!",
+		JUDGE_WAIT = "진행자가 날릴 사람을 고르는 중",
+		JUDGE_VOTE = "투표 · 가장 아쉬운 한마디는?",
+		JUDGE_TO_VOTE = "시간이 지나서 투표로 정해요",
+		VOTE_NONE = "안 날림",
+		VOTE_ABSTAIN = "안 들려요",
+		NOBODY_FLUNG = "아무도 안 날아가요",
+		FLUNG = "%s 날아가요!",
 		AFK_OUT = "%s 님은 두 번 연속 답하지 않아 관전으로 바뀌었어요",
 		SOUND_DRUMROLL = "두구두구",
 		SOUND_APPLAUSE = "박수",
@@ -301,6 +336,64 @@ function Judge.josa(word: string, withFinal: string, withoutFinal: string): stri
 end
 
 return Judge
+]====]; s.Parent = n1 end
+do local s = Instance.new("ModuleScript"); s.Name = "VoteRules"; s.Source = [====[--!strict
+-- Who a launch vote picks (docs/DESIGN_V3.md §5 "한마디 투표"): rules only, no remotes. The ballot lists the
+-- candidates (1..n), then "nobody" (n + 1) and "I could not hear / see" (n + 2, an abstention). Voters cannot pick
+-- themselves (such a vote does not count). The top choice wins when there are at least VOTE_MIN_VALID valid votes
+-- (a candidate or "nobody"), the valid votes are at least half of the voters who did not abstain, and it beats the
+-- second; if "nobody" wins or a rule is not met, nobody is launched. With fewer than VOTE_MIN_VOTERS voters there is
+-- no vote at all.
+local Config = require(script.Parent:WaitForChild("Config"))
+
+local VoteRules = {}
+
+-- Whether a vote can be held with this many voters.
+function VoteRules.canVote(voters: number): boolean
+	return voters >= Config.VOTE_MIN_VOTERS
+end
+
+-- The ballot size for `candidates` (+ "nobody" + abstain).
+function VoteRules.choices(candidates: number): number
+	return candidates + 2
+end
+
+-- `answers[voter]` = the ballot number each voter chose. Returns the candidate picked (its index), or nil.
+function VoteRules.decide(answers: { [Player]: number }, candidates: { Player }, voters: { Player }): number?
+	if not VoteRules.canVote(#voters) then
+		return nil
+	end
+	local n = #candidates
+	local counts: { [number]: number } = {}
+	local valid, abstained = 0, 0
+	for _, voter in voters do
+		local choice = answers[voter]
+		if choice == n + 2 then
+			abstained += 1
+		elseif choice and choice >= 1 and choice <= n + 1 and candidates[choice] ~= voter then
+			valid += 1
+			counts[choice] = (counts[choice] or 0) + 1
+		end
+	end
+	if valid < Config.VOTE_MIN_VALID or valid * 2 < #voters - abstained then
+		return nil
+	end
+	local top, topCount, second = nil :: number?, 0, 0
+	for choice, count in counts do
+		if count > topCount then
+			second = topCount
+			top, topCount = choice, count
+		elseif count > second then
+			second = count
+		end
+	end
+	if top == nil or topCount == second or top == n + 1 then
+		return nil
+	end
+	return top
+end
+
+return VoteRules
 ]====]; s.Parent = n1 end
 n1.Parent = parents[1]
 local n2 = Instance.new("Folder"); n2.Name = "BannedWords"
@@ -492,7 +585,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 --               }, final = they all fell at   ChatJoin    (on) join rounds by text chat instead of voice
 --               once and play the final }
 --   ChatAccess  to one player only: may I join by chat? { state = checking / yes / no / voice / error }
---   PresenterMenu to the presenter: { options = { {id, title, recommended} } | nil (closed), endsAt }
+--   PresenterMenu to the presenter: { kind = "pick" (next mission) | "judge" (who to launch), options = { {id, title,
+--               recommended} } | nil (closed), endsAt }
+--   Lever       the presenter pulled the podium lever (a launch by their choice follows)
 --   Sound       a presenter sound button: { index } (Config.PRESENTER_SOUNDS)
 --   (client -> server: Volunteer (on), PresenterPick (mission id), PresenterSound (index))
 --   Mission     the running mission's screen (MissionRunner): { kind = "quiz", final, question, choices, endsAt?, id? }
@@ -510,7 +605,7 @@ local Net = {}
 
 local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
-	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer",
+	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer", "Lever",
 	"Words", "WordWarn", "Settle", "Transcript", "VoicePing", "Settled",
 }
 
@@ -654,8 +749,8 @@ end
 
 -- A main-game fail (a mission, a Studio test): a life each, or the final for exactly those players when nobody
 -- would be left.
-local function failPlayers(players: { Player }, eventId: string, reason: Reason)
-	local outcomes, everyone = LifeService.fail(players, eventId, "objective")
+local function failPlayers(players: { Player }, eventId: string, reason: Reason, kind: LifeService.Kind?)
+	local outcomes, everyone = LifeService.fail(players, eventId, kind or "objective")
 	if everyone then
 		toFinal = true
 	end
@@ -688,7 +783,8 @@ end
 -- What a mission may do (docs/DESIGN_V3.md §13). `onFail(players, key)`: who failed the mission's event `key`.
 -- `settled()`: the outcome is already fixed, so the running mission stops and later results are dropped (§2 "확정 뒤에
 -- 도착한 결과는 버린다").
-local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, string) -> (), settled: () -> boolean): MissionRunner.Ctx
+local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, string, boolean?) -> (),
+	settled: () -> boolean): MissionRunner.Ctx
 	-- Who answered the last answer mission and who did not: counted with the fail that follows (the same event), so
 	-- an AFK player going out cannot decide the round before the same question's wrong answers are taken.
 	local pending: { answered: { Player }, missed: { Player } }? = nil
@@ -713,9 +809,9 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 		final = final,
 		players = Match.aliveList,
 		rng = rng,
-		fail = function(players: { Player }, key: string)
+		fail = function(players: { Player }, key: string, subjective: boolean?)
 			countAnswers()
-			onFail(players, key)
+			onFail(players, key, subjective)
 		end,
 		show = function(text: string)
 			Match.setMessage(text)
@@ -732,6 +828,17 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 		-- mission reports its fail (before the launches: a launched player's miss would not count any more).
 		answers = function(answered: { Player }, missed: { Player })
 			pending = { answered = answered, missed = missed }
+		end,
+		canFling = function(player: Player): boolean
+			return LifeService.canFail(player, "subjective")
+		end,
+		-- The one-word mission's launch: the presenter's choice (a missed one counts toward PRESENTER_MISSES).
+		presenterPick = function(options, seconds)
+			local function over(): boolean
+				return Match.roundId ~= myRound or settled()
+			end
+			local picked = PresenterService.ask("judge", options, seconds, over)
+			return picked
 		end,
 	}
 end
@@ -772,7 +879,7 @@ local function playMain(myRound: number)
 			if #options > 0 then
 				freeTalk = true
 				local missed
-				picked, missed = PresenterService.askPick(options, Config.PRESENTER_PICK_SECONDS, over)
+				picked, missed = PresenterService.ask("pick", options, Config.PRESENTER_PICK_SECONDS, over)
 				freeTalk = false
 				if missed then
 					Net.notice(Config.TEXT.PICK_AUTO)
@@ -784,7 +891,7 @@ local function playMain(myRound: number)
 		if over() then
 			return
 		end
-		local mission = if landed then MissionRunner.choose(Timeline.left(), #Match.aliveList(), picked) else nil
+		local mission = if landed then MissionRunner.choose(Timeline.left(), #Match.aliveList(), Match.presenter ~= nil, picked) else nil
 		if landed and not mission then
 			talk(math.huge) -- nothing fits any more: free talk to the end
 			return
@@ -792,8 +899,8 @@ local function playMain(myRound: number)
 		if mission then
 			runs += 1
 			local run = runs
-			MissionRunner.run(mission, missionCtx(myRound, false, function(players, key)
-				failPlayers(players, "m" .. run .. ":" .. key, "fail")
+			MissionRunner.run(mission, missionCtx(myRound, false, function(players, key, subjective)
+				failPlayers(players, "m" .. run .. ":" .. key, "fail", if subjective then "subjective" else "objective")
 			end, mainSettled))
 			waitFlights()
 			if over() then
@@ -1130,6 +1237,77 @@ end
 return RoundService
 ]====]; s.Parent = n2 end
 local n3 = Instance.new("Folder"); n3.Name = "content"
+do local s = Instance.new("ModuleScript"); s.Name = "OneWordTopics"; s.Source = [====[--!strict
+-- One-word topics (docs/DESIGN_V3.md §5; bundle 4b, owner 2026-10-23: mostly about yourself — tastes, habits, small
+-- experiences). Data only. Each performer gets one and may swap it once. No topic names or points at a real person,
+-- asks for personal details (school, where you live, real name, contacts, age, looks) or touches sensitive matters.
+-- Topics holding a banned word in play are skipped at run time (missions/OneWord).
+
+local OneWordTopics: { string } = {
+	"제일 좋아하는 라면 먹는 법",
+	"요즘 빠져 있는 것",
+	"아침에 일어나서 제일 먼저 하는 일",
+	"편의점에서 꼭 사는 조합",
+	"제일 좋아하는 계절과 이유",
+	"초능력 하나 갖는다면",
+	"잠들기 전에 꼭 하는 일",
+	"치킨에서 제일 좋아하는 부위",
+	"키워 보고 싶은 동물",
+	"최근에 한 소소한 실수",
+	"완벽한 주말 하루 보내는 법",
+	"가방에 항상 들고 다니는 것",
+	"노래 부를 때 생기는 버릇",
+	"내가 좋아하는 떡볶이 스타일",
+	"최근에 처음 해 본 것",
+	"엘리베이터 안에서 하는 행동",
+	"여름에 꼭 하는 것",
+	"자주 잃어버리는 물건",
+	"탕수육 부먹 찍먹과 그 이유",
+	"나만 아는 사소한 행복",
+	"배워 보고 싶은 취미 하나",
+	"양치할 때 하는 딴짓",
+	"순간이동 가능하면 갈 곳",
+	"도저히 못 먹겠는 음식",
+	"방학 때 꼭 해 보고 싶은 것",
+	"내 성격과 닮은 동물",
+	"제일 아끼는 물건",
+	"기분 좋을 때 흥얼거리는 노래",
+	"비 오는 날 생각나는 음식",
+	"내가 은근히 잘하는 것",
+	"이동할 때 주로 하는 일",
+	"겨울에 제일 좋은 순간",
+	"잠을 깨는 나만의 방법",
+	"자신 있게 만들 수 있는 요리",
+	"요즘 제일 웃겼던 일",
+	"여행 가면 꼭 하는 것",
+	"낙서할 때 자주 그리는 것",
+	"제일 귀엽다고 생각하는 동물",
+	"있었으면 하는 발명품",
+	"아이스크림 고르는 나만의 기준",
+	"심심할 때 하는 일",
+	"책상 위에 꼭 있는 것",
+	"들으면 신나는 노래 장르",
+	"오랫동안 잘못 알던 것",
+	"제일 좋아하는 김밥 속 재료",
+	"놀이공원 가면 먼저 타는 것",
+	"기분 좋아지는 나만의 방법",
+	"요즘 자주 보는 영상 종류",
+	"눈 오는 날 하고 싶은 것",
+	"하루 동물이 된다면 될 동물",
+	"제일 끌리는 야식 메뉴",
+	"집에 오면 제일 먼저 하는 일",
+	"나를 한 단어로 표현하기",
+	"직접 만들어 본 것",
+	"제일 좋아하는 계란 요리",
+	"집에서 제일 좋아하는 자리",
+	"무인도에 가져갈 물건 하나",
+	"해 보고 싶은 운동 하나",
+	"요즘 제일 갖고 싶은 물건",
+	"어릴 때 좋아했던 놀이",
+}
+
+return OneWordTopics
+]====]; s.Parent = n3 end
 do local s = Instance.new("ModuleScript"); s.Name = "QuizBank"; s.Source = [====[--!strict
 -- Quiz bank (docs/DESIGN_V3.md §5, bundle 4a, owner 2026-10-23: general knowledge mixed with light fun, no sensitive
 -- topics, around age 17). Data only. `main`: the main-game quiz (four choices, one right); `final`: harder questions
@@ -1387,6 +1565,308 @@ return WordBank
 ]====]; s.Parent = n3 end
 n3.Parent = n2
 local n4 = Instance.new("Folder"); n4.Name = "missions"
+do local s = Instance.new("ModuleScript"); s.Name = "OneWord"; s.Source = [====[--!strict
+-- "A word to everyone" (docs/DESIGN_V3.md §5; bundle 4b, owner 2026-10-23: topics mostly about yourself, the presenter
+-- picks on screen and the podium lever is pulled). Up to ONE_WORD_MAX_PERFORMERS alive players on the ground take
+-- turns, those who performed least first: each gets a topic (ONE_WORD_PREP_SECONDS to read it and swap it once),
+-- then speaks for ONE_WORD_SECONDS (chat participants type for ONE_WORD_CHAT_SECONDS). Nothing is judged while they
+-- speak. Then the presenter picks the one to launch (the saddest word) within PRESENTER_JUDGE_SECONDS; with no pick
+-- everyone votes (VoteRules). The launch is subjective: in public servers it never takes a last life and hits a
+-- player at most SUBJECTIVE_FLINGS times a round, so those players are not offered. Only while someone presents
+-- (the system never picks this mission by itself). Who flew during the performances (a banned word, bundle 5) or
+-- skipped their turn is not offered (§4 "한마디에서 금칙어로 이미 날아간 사람은 … 빠진다").
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local shared = ReplicatedStorage:WaitForChild("BannedWords")
+local Config = require(shared:WaitForChild("Config"))
+local VoteRules = require(shared:WaitForChild("VoteRules"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local OneWordTopics = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("OneWordTopics"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Option = { id: string, title: string, recommended: boolean }
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	stopped: () -> boolean,
+	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { Option }, seconds: number) -> string?,
+	lever: () -> (),
+}
+
+local OneWord = {
+	id = "oneWord",
+	title = Config.TEXT.ONE_WORD_TITLE,
+	-- The time budget counts the longest run: everyone swaps the topic and types by chat, then a vote and the result.
+	expectedSeconds = Config.ONE_WORD_MAX_PERFORMERS * (2 * Config.ONE_WORD_PREP_SECONDS + Config.ONE_WORD_CHAT_SECONDS)
+		+ Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS + Config.ONE_WORD_RESULT_SECONDS,
+	maxPerRound = Config.ONE_WORD_PER_ROUND :: number?,
+	minPlayers = Config.ONE_WORD_MIN_PLAYERS :: number?,
+	needsPresenter = true :: boolean?,
+}
+
+-- Turns performed on this server (the least go first); weak keys, so players who left drop out.
+local performed: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
+
+local function ids(list: { Player }): { number }
+	local out = {}
+	for _, player in list do
+		table.insert(out, player.UserId)
+	end
+	return out
+end
+
+-- Up to ONE_WORD_MAX_PERFORMERS alive players on the ground, those who performed least first (random among equals).
+local function choosePerformers(ctx: Ctx): { Player }
+	local pool = {}
+	local order: { [Player]: number } = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(pool, player)
+			order[player] = ctx.rng:NextNumber()
+		end
+	end
+	table.sort(pool, function(a, b)
+		local na, nb = performed[a] or 0, performed[b] or 0
+		if na ~= nb then
+			return na < nb
+		end
+		return order[a] < order[b]
+	end)
+	local list = {}
+	for i = 1, math.min(#pool, Config.ONE_WORD_MAX_PERFORMERS) do
+		table.insert(list, pool[i])
+	end
+	return list
+end
+
+-- A topic not given yet in this run and free of the banned words in play (nil if none is left).
+local function pickTopic(ctx: Ctx, given: { [string]: boolean }): string?
+	local words = Match.wordsInPlay()
+	local free = {}
+	for _, topic in OneWordTopics do
+		local clean = not given[topic]
+		for _, word in words do
+			clean = clean and string.find(topic, word, 1, true) == nil
+		end
+		if clean then
+			table.insert(free, topic)
+		end
+	end
+	if #free == 0 then
+		return nil
+	end
+	local topic = free[ctx.rng:NextInteger(1, #free)]
+	given[topic] = true
+	return topic
+end
+
+local function stillIn(ctx: Ctx, player: Player): boolean
+	return table.find(ctx.players(), player) ~= nil
+end
+
+-- What this run saw: who took their turn, who flew meanwhile (they are not offered as targets).
+type Seen = { done: { [Player]: boolean }, flew: { [Player]: boolean } }
+
+local function noteFlights(ctx: Ctx, performers: { Player }, seen: Seen)
+	for _, player in performers do
+		if ctx.flying(player) then
+			seen.flew[player] = true
+		end
+	end
+end
+
+-- Waits `seconds` (false if cancelled), noting flights; ends early when the performer is gone.
+local function watchWait(ctx: Ctx, seconds: number, performers: { Player }, performer: Player, seen: Seen): boolean
+	local untilAt = os.clock() + seconds
+	while os.clock() < untilAt do
+		noteFlights(ctx, performers, seen)
+		if not stillIn(ctx, performer) then
+			return not ctx.cancelled()
+		end
+		if not ctx.wait(math.min(0.25, untilAt - os.clock())) then
+			return false
+		end
+	end
+	noteFlights(ctx, performers, seen)
+	return true
+end
+
+-- One performer's turn. Returns false if the mission was cancelled.
+local function turn(ctx: Ctx, performers: { Player }, index: number, given: { [string]: boolean }, seen: Seen): boolean
+	local performer = performers[index]
+	if not stillIn(ctx, performer) or ctx.flying(performer) then
+		noteFlights(ctx, performers, seen)
+		return not ctx.cancelled() -- gone or flying: the turn is skipped
+	end
+	local topic = pickTopic(ctx, given)
+	if not topic then
+		return not ctx.cancelled()
+	end
+	performed[performer] = (performed[performer] or 0) + 1
+	seen.done[performer] = true
+	local p = Match.participants[performer]
+	local chat = p ~= nil and p.chat
+	local function screen(phase: string, swapped: boolean, endsAt: number?)
+		ctx.screen({ kind = "oneWord", ids = ids(performers), current = index, topic = topic, phase = phase,
+			swapped = swapped, chat = chat, endsAt = endsAt })
+	end
+	ctx.show(string.format(Config.TEXT.ONE_WORD_TURN, performer.DisplayName, topic))
+	-- Reading time; the performer may swap the topic once (their answer 1 = "swap").
+	local swap = ctx.ask({ kind = "oneWord", ids = ids(performers), current = index, topic = topic, phase = "prep",
+		swapped = false, chat = chat }, 1, Config.ONE_WORD_PREP_SECONDS, { performer })
+	if ctx.cancelled() then
+		return false
+	end
+	noteFlights(ctx, performers, seen)
+	if swap[performer] then
+		topic = pickTopic(ctx, given) or topic
+		ctx.show(string.format(Config.TEXT.ONE_WORD_TURN, performer.DisplayName, topic))
+		screen("prep", true, Match.now() + Config.ONE_WORD_PREP_SECONDS)
+		if not watchWait(ctx, Config.ONE_WORD_PREP_SECONDS, performers, performer, seen) then
+			return false
+		end
+	end
+	local seconds = if chat then Config.ONE_WORD_CHAT_SECONDS else Config.ONE_WORD_SECONDS
+	screen("talk", true, Match.now() + seconds)
+	return watchWait(ctx, seconds, performers, performer, seen)
+end
+
+-- Who flies: the presenter's pick, else a vote; nil for nobody. `eligible()` gives the targets still allowed now
+-- (they are looked at again after each wait: someone may leave or fly meanwhile).
+local function judge(ctx: Ctx, eligible: () -> { Player }): (Player?, boolean)
+	local targets = eligible()
+	if #targets == 0 then
+		return nil, false
+	end
+	ctx.screen({ kind = "oneWordJudge", ids = ids(targets) })
+	ctx.show(Config.TEXT.JUDGE_WAIT)
+	local options: { Option } = {}
+	for _, player in targets do
+		table.insert(options, { id = tostring(player.UserId), title = player.DisplayName, recommended = false })
+	end
+	local picked = ctx.presenterPick(options, Config.PRESENTER_JUDGE_SECONDS)
+	if ctx.cancelled() then
+		return nil, false
+	end
+	targets = eligible()
+	if picked then
+		for _, player in targets do
+			if tostring(player.UserId) == picked then
+				return player, true
+			end
+		end
+	end
+	if #targets == 0 then
+		return nil, false
+	end
+	local voters = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(voters, player)
+		end
+	end
+	if not VoteRules.canVote(#voters) then
+		return nil, false
+	end
+	ctx.show(Config.TEXT.JUDGE_TO_VOTE)
+	local answers = ctx.ask({ kind = "vote", ids = ids(targets) }, VoteRules.choices(#targets), Config.VOTE_SECONDS, voters)
+	if ctx.cancelled() then
+		return nil, false
+	end
+	-- Voters who left or went out meanwhile no longer count (the voters are the alive participants, §5).
+	local stillVoting = {}
+	for _, player in voters do
+		if stillIn(ctx, player) then
+			table.insert(stillVoting, player)
+		end
+	end
+	local index = VoteRules.decide(answers, targets, stillVoting)
+	local winner = if index then targets[index] else nil
+	if winner and not table.find(eligible(), winner) then
+		return nil, false -- the winner left or flew during the vote
+	end
+	return winner, false
+end
+
+function OneWord.available(final: boolean): boolean
+	return not final and #OneWordTopics > 0
+end
+
+-- Returns false when it could not start (nobody presents any more, or too few on the ground).
+function OneWord.run(ctx: Ctx): boolean?
+	if not Match.presenter then
+		return false
+	end
+	local performers = choosePerformers(ctx)
+	if #performers < Config.ONE_WORD_MIN_PLAYERS then
+		return false
+	end
+	ctx.show(Config.TEXT.ONE_WORD_START)
+	local given: { [string]: boolean } = {}
+	local seen: Seen = { done = {}, flew = {} }
+	-- Flights are noted all through the mission (also while the presenter chooses and during the vote).
+	local running = true
+	task.spawn(function()
+		while running and not ctx.cancelled() do -- (an error in the mission still ends it with the round)
+			noteFlights(ctx, performers, seen)
+			task.wait(0.25)
+		end
+	end)
+	local function finish(result: boolean?): boolean?
+		running = false
+		return result
+	end
+	for index = 1, #performers do
+		if not turn(ctx, performers, index, given, seen) then
+			return finish(nil)
+		end
+	end
+	if not next(seen.done) then
+		return finish(false) -- nobody could take a turn (no topic left)
+	end
+	local function eligible(): { Player }
+		noteFlights(ctx, performers, seen)
+		local targets = {}
+		for _, player in performers do
+			if seen.done[player] and not seen.flew[player] and stillIn(ctx, player) and ctx.canFling(player) then
+				table.insert(targets, player)
+			end
+		end
+		return targets
+	end
+	local target, byPresenter = judge(ctx, eligible)
+	if ctx.cancelled() then
+		return finish(nil)
+	end
+	if target and ctx.canFling(target) then
+		if byPresenter then
+			ctx.lever()
+			if not ctx.wait(Config.LEVER_SECONDS) then
+				return finish(nil)
+			end
+		end
+		ctx.show(string.format(Config.TEXT.FLUNG, target.DisplayName))
+		ctx.fail({ target }, "fling", true)
+	else
+		ctx.show(Config.TEXT.NOBODY_FLUNG)
+	end
+	ctx.reveal(Config.ONE_WORD_RESULT_SECONDS)
+	return finish(nil)
+end
+
+return OneWord
+]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "Quiz"; s.Source = [====[--!strict
 -- The quiz (docs/DESIGN_V3.md §5; bundle 4a): everyone alive answers one four-choice question at once; the right
 -- answer stays on the server until the time is up. A wrong answer or none is a fail. As a final question it uses the
@@ -1404,7 +1884,7 @@ type Ctx = {
 	final: boolean,
 	players: () -> { Player },
 	rng: Random,
-	fail: (players: { Player }, key: string) -> (),
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
 	show: (text: string) -> (),
 	cancelled: () -> boolean,
 	stopped: () -> boolean,
@@ -1414,6 +1894,9 @@ type Ctx = {
 	answers: (answered: { Player }, missed: { Player }) -> (),
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	lever: () -> (),
 }
 
 local Quiz = {
@@ -1422,6 +1905,7 @@ local Quiz = {
 	expectedSeconds = Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.QUIZ_REVEAL_SECONDS,
 	maxPerRound = nil :: number?, -- the basic mission: no limit (§5)
 	minPlayers = nil :: number?,
+	needsPresenter = nil :: boolean?,
 }
 
 local used: { [QuizBank.Question]: boolean } = {} -- asked on this server (main and final banks alike)
@@ -1532,7 +2016,7 @@ type Ctx = {
 	final: boolean,
 	players: () -> { Player },
 	rng: Random,
-	fail: (players: { Player }, key: string) -> (),
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
 	show: (text: string) -> (),
 	cancelled: () -> boolean,
 	stopped: () -> boolean,
@@ -1542,6 +2026,9 @@ type Ctx = {
 	answers: (answered: { Player }, missed: { Player }) -> (),
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	lever: () -> (),
 }
 
 local Roulette = {
@@ -1550,6 +2037,7 @@ local Roulette = {
 	expectedSeconds = Config.ROULETTE_SPIN_SECONDS + Config.ROULETTE_REVEAL_SECONDS,
 	maxPerRound = Config.ROULETTE_PER_ROUND :: number?,
 	minPlayers = Config.ROULETTE_MIN_PLAYERS :: number?,
+	needsPresenter = nil :: boolean?,
 }
 
 function Roulette.available(final: boolean): boolean
@@ -1599,7 +2087,7 @@ type Ctx = {
 	final: boolean,
 	players: () -> { Player },
 	rng: Random,
-	fail: (players: { Player }, key: string) -> (),
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
 	show: (text: string) -> (),
 	cancelled: () -> boolean,
 	stopped: () -> boolean,
@@ -1609,6 +2097,9 @@ type Ctx = {
 	answers: (answered: { Player }, missed: { Player }) -> (),
 	screen: (payload: { [string]: any }?) -> (),
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	lever: () -> (),
 }
 
 local TestMission = {
@@ -1617,6 +2108,7 @@ local TestMission = {
 	expectedSeconds = Config.TEST_MISSION_SECONDS,
 	maxPerRound = nil :: number?, -- like the quiz: no limit
 	minPlayers = nil :: number?,
+	needsPresenter = nil :: boolean?,
 }
 
 function TestMission.available(_final: boolean): boolean
@@ -2120,7 +2612,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionRunner"; s.Source = 
 -- checks it). It alone listens to the answer remote ("MissionAnswer") and hands answers to the running mission's
 -- question (docs/DESIGN_V3.md §13: Net.listen cannot disconnect, so missions never listen themselves). What a mission
 -- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
--- Bundle 4a: the quiz (also the final), the roulette, and the Studio-only test mission.
+-- Bundle 4: the quiz (also the final), the roulette, "a word to everyone" (4b, only with a presenter), and the
+-- Studio-only test mission.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -2129,6 +2622,7 @@ local Net = require(script.Parent.Parent:WaitForChild("Net"))
 local missionFolder = script.Parent.Parent:WaitForChild("missions")
 local Quiz = require(missionFolder:WaitForChild("Quiz"))
 local Roulette = require(missionFolder:WaitForChild("Roulette"))
+local OneWord = require(missionFolder:WaitForChild("OneWord"))
 local TestMission = require(missionFolder:WaitForChild("TestMission"))
 
 local MissionRunner = {}
@@ -2141,14 +2635,17 @@ export type Ctx = {
 	players: () -> { Player }, -- the alive participants now
 	rng: Random,
 	-- Who failed the mission's event `key` (one penalty per event: the same key never costs a player twice);
-	-- RoundService turns that into lives and launches.
-	fail: (players: { Player }, key: string) -> (),
+	-- RoundService turns that into lives and launches. `subjective`: the presenter or a vote decided (limits apply).
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
 	show: (text: string) -> (), -- the status line and a toast
 	cancelled: () -> boolean, -- the round was decided or another one began: stop
 	stopped: () -> boolean, -- another round began (or the round broke): not even a result may stay on screen
 	flying: (player: Player) -> boolean, -- launched and not back yet (cannot answer, takes no penalty)
 	-- An answer mission closed: who answered and who did not (the AFK rule, docs/DESIGN_V3.md §4).
 	answers: (answered: { Player }, missed: { Player }) -> (),
+	canFling: (player: Player) -> boolean, -- a subjective launch may hit them now (public limits, not flying)
+	-- The presenter picks one of `options` within `seconds` (nil: none in time, no presenter, or the round is over).
+	presenterPick: (options: { Option }, seconds: number) -> string?,
 }
 
 -- What a mission gets: the same, with fail/show that do nothing once cancelled, and wait().
@@ -2156,7 +2653,7 @@ export type MissionCtx = {
 	final: boolean,
 	players: () -> { Player },
 	rng: Random,
-	fail: (players: { Player }, key: string) -> (),
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
 	show: (text: string) -> (),
 	cancelled: () -> boolean,
 	stopped: () -> boolean,
@@ -2173,6 +2670,9 @@ export type MissionCtx = {
 	-- 1..`choices`, sent with that number) from each of `from` for `seconds`, or until all of them still alive answered
 	-- or the mission is cancelled. Returns the answers.
 	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { Option }, seconds: number) -> string?,
+	lever: () -> (), -- everyone sees the podium lever pulled (the presenter's launch)
 }
 
 export type Mission = {
@@ -2181,14 +2681,15 @@ export type Mission = {
 	expectedSeconds: number, -- for the time budget, without the launches afterwards
 	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
 	minPlayers: number?, -- alive participants it needs (nil = any)
+	needsPresenter: boolean?, -- offered only while someone presents (the one-word mission)
 	available: (final: boolean) -> boolean,
 	run: (ctx: MissionCtx) -> boolean?, -- false: it had nothing to play (a quiz with no clean question left)
 }
 
--- An entry of the presenter's menu.
+-- An entry of a presenter's menu.
 export type Option = { id: string, title: string, recommended: boolean }
 
-local MISSIONS: { Mission } = { Quiz, Roulette, TestMission }
+local MISSIONS: { Mission } = { Quiz, Roulette, OneWord, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
@@ -2207,13 +2708,14 @@ function MissionRunner.beginRound()
 end
 
 -- The main-game missions that may run now, in recommended order (not played yet this round first): available, under
--- their per-round limit, enough players for them, and fitting `secondsLeft` with the launches.
-function MissionRunner.candidates(secondsLeft: number, alive: number): { Mission }
+-- their per-round limit, enough players for them, a presenter if they need one, and fitting `secondsLeft` with the
+-- launches.
+function MissionRunner.candidates(secondsLeft: number, alive: number, presenter: boolean): { Mission }
 	local list = {}
 	for _, mission in MISSIONS do
 		local count = played[mission.id] or 0
 		if mission.available(false) and fits(mission, secondsLeft) and (mission.maxPerRound == nil or count < mission.maxPerRound)
-			and alive >= (mission.minPlayers or 0) then
+			and alive >= (mission.minPlayers or 0) and (presenter or not mission.needsPresenter) then
 			table.insert(list, mission)
 		end
 	end
@@ -2234,15 +2736,16 @@ end
 -- The presenter's menu for the same choice.
 function MissionRunner.options(secondsLeft: number, alive: number): { Option }
 	local options = {}
-	for i, mission in MissionRunner.candidates(secondsLeft, alive) do
+	for i, mission in MissionRunner.candidates(secondsLeft, alive, true) do
 		table.insert(options, { id = mission.id, title = mission.title, recommended = i <= Config.PRESENTER_RECOMMENDED })
 	end
 	return options
 end
 
 -- The next main-game mission: `pickedId` if it may still run, else the top recommendation; nil if none fits.
-function MissionRunner.choose(secondsLeft: number, alive: number, pickedId: string?): Mission?
-	local list = MissionRunner.candidates(secondsLeft, alive)
+-- `presenter`: someone presents now (the menu is only ever made then).
+function MissionRunner.choose(secondsLeft: number, alive: number, presenter: boolean, pickedId: string?): Mission?
+	local list = MissionRunner.candidates(secondsLeft, alive, presenter)
 	for _, mission in list do
 		if mission.id == pickedId then
 			return mission
@@ -2326,9 +2829,21 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			end
 			return open.answers
 		end,
-		fail = function(players: { Player }, key: string)
+		fail = function(players: { Player }, key: string, subjective: boolean?)
 			if not ctx.cancelled() then
-				ctx.fail(players, key)
+				ctx.fail(players, key, subjective)
+			end
+		end,
+		canFling = ctx.canFling,
+		presenterPick = function(options: { Option }, seconds: number): string?
+			if ctx.cancelled() then
+				return nil
+			end
+			return ctx.presenterPick(options, seconds)
+		end,
+		lever = function()
+			if not ctx.cancelled() then
+				Net.toAll("Lever", {})
 			end
 		end,
 		show = function(text: string)
@@ -2400,8 +2915,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "PresenterService"; s.Source
 -- with every voice participant (VoiceChatService:GetChatGroupsAsync), receives every chat participant's messages
 -- (TextChatService:CanUsersChatAsync) and, on public servers, is nobody's Roblox friend. A check that fails to run
 -- disqualifies on live servers; Studio allows it (GetChatGroupsAsync works only in Team Test there).
--- During a round the presenter picks the next mission in the last PRESENTER_PICK_SECONDS of free talk (missed picks:
--- the system picks; PRESENTER_MISSES in a row hand the round to another presenter), plays sound buttons, and may step
+-- During a round the presenter picks the next mission in the last PRESENTER_PICK_SECONDS of free talk and, in the
+-- one-word mission, who is launched (a menu of kind "judge"); a missed choice is made by the system (or a vote) and
+-- PRESENTER_MISSES in a row hand the round to another presenter. The presenter also plays sound buttons and may step
 -- down. A presenter who leaves or steps down is replaced by a volunteer who is not playing (not flying either, and
 -- not someone who presented this round before), else the system runs the round. Who presents is Match.presenter;
 -- RoundService is told of every change during a round (voices, stands).
@@ -2419,6 +2935,7 @@ local PresenterService = {}
 
 export type Option = { id: string, title: string, recommended: boolean }
 export type Change = "left" | "misses" | "stepped down"
+export type MenuKind = "pick" | "judge" -- the next mission / who the one-word mission launches
 
 local DEFAULT_WALK_SPEED = 16
 local DEFAULT_JUMP_HEIGHT = 7.2
@@ -2434,8 +2951,8 @@ local onChange: (Change, Player?, Player?) -> () = function(_reason, _old, _new)
 local unavailable: (Player) -> boolean = function(_player)
 	return false
 end
--- The open mission menu (one at a time).
-local menu: { options: { Option }, endsAt: number, picked: string? }? = nil
+-- The open menu (one at a time).
+local menu: { kind: MenuKind, options: { Option }, endsAt: number, picked: string? }? = nil
 
 -- Runs one yielding check. Returns (ok, answer); a call that errors is reported and returns ok = false.
 local function try<T>(what: string, call: () -> T): (boolean, T?)
@@ -2718,17 +3235,17 @@ function PresenterService.choose(candidates: { Player }): Player?
 	return nil
 end
 
--- Opens the mission menu to the presenter for `seconds` and waits. Returns the id they picked (or nil), and whether
--- they let the time run out (false when the presenter changed or `stop()` became true). A missed pick counts;
+-- Opens a menu of `kind` to the presenter for `seconds` and waits. Returns the id they picked (or nil), and whether
+-- they let the time run out (false when the presenter changed or `stop()` became true). A missed choice counts;
 -- PRESENTER_MISSES in a row replace them.
-function PresenterService.askPick(options: { Option }, seconds: number, stop: () -> boolean): (string?, boolean)
+function PresenterService.ask(kind: MenuKind, options: { Option }, seconds: number, stop: () -> boolean): (string?, boolean)
 	local presenter = Match.presenter
 	if not presenter or #options == 0 then
 		return nil, false
 	end
 	local endsAt = os.clock() + seconds
-	menu = { options = options, endsAt = Match.now() + seconds, picked = nil }
-	Net.to(presenter, "PresenterMenu", { options = options, endsAt = Match.now() + seconds })
+	menu = { kind = kind, options = options, endsAt = Match.now() + seconds, picked = nil }
+	Net.to(presenter, "PresenterMenu", { kind = kind, options = options, endsAt = Match.now() + seconds })
 	while os.clock() < endsAt and menu and not menu.picked and Match.presenter == presenter and not stop() do
 		task.wait(0.1)
 	end
@@ -2756,7 +3273,7 @@ end
 -- The presenter asked for the whole state again: the open menu too.
 function PresenterService.sendMenu(player: Player)
 	if menu and player == Match.presenter then
-		Net.to(player, "PresenterMenu", { options = menu.options, endsAt = menu.endsAt })
+		Net.to(player, "PresenterMenu", { kind = menu.kind, options = menu.options, endsAt = menu.endsAt })
 	end
 end
 
@@ -3946,7 +4463,7 @@ end)
 
 remotes.PresenterMenu.OnClientEvent:Connect(function(info)
 	if info.options then
-		PresenterPanel.openMenu(info.options, info.endsAt)
+		PresenterPanel.openMenu(info.options, info.endsAt, info.kind)
 	else
 		PresenterPanel.closeMenu()
 	end
@@ -3956,14 +4473,19 @@ remotes.Sound.OnClientEvent:Connect(function(info)
 	Fx.presenterSound(info.index)
 end)
 
--- The mission card (quiz, roulette). My answer buttons work while I am alive and not flying.
+-- The mission card (quiz, roulette, a word to everyone, votes). My buttons work while I am alive and not flying.
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	local names = {}
 	for _, userId in payload.ids or {} do
 		table.insert(names, nameOf(userId))
 	end
 	local canAnswer = State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
-	MissionPanel.show(payload, canAnswer, names)
+	MissionPanel.show(payload, canAnswer, names, State.myId())
+end)
+
+-- The presenter pulled the podium lever (their launch follows).
+remotes.Lever.OnClientEvent:Connect(function()
+	Fx.lever()
 end)
 
 remotes.Words.OnClientEvent:Connect(function(words)
@@ -4658,6 +5180,55 @@ function Fx.fling(info: { seatIndex: number? })
 	if seat then
 		burst(seat.Position + Vector3.new(0, 1, 0))
 	end
+end
+
+-- The presenter pulled the "날려!" lever on the podium (PoolHall.PodiumSet.Lever: Base, Handle, Knob): the handle
+-- swings down LEVER_DEGREES over its base and comes back within LEVER_SECONDS + LEVER_RETURN_SECONDS (no sound of its
+-- own: the launch right after it bangs).
+local leverRest: { [BasePart]: CFrame } = {}
+local leverPulls = 0
+function Fx.lever()
+	local hall = workspace:FindFirstChild("PoolHall")
+	local set = hall and hall:FindFirstChild("PodiumSet")
+	local lever = set and set:FindFirstChild("Lever")
+	local base = lever and lever:FindFirstChild("Base") :: BasePart?
+	if not (lever and base) then
+		return
+	end
+	local moving: { BasePart } = {}
+	for _, name in { "Handle", "Knob" } do
+		local part = lever:FindFirstChild(name) :: BasePart?
+		if part then
+			leverRest[part] = leverRest[part] or part.CFrame
+			table.insert(moving, part)
+		end
+	end
+	local pivot = base.CFrame * CFrame.new(0, base.Size.Y / 2, 0)
+	leverPulls += 1
+	local pull = leverPulls
+	local started = os.clock()
+	local total = Config.LEVER_SECONDS + Config.LEVER_RETURN_SECONDS
+	local connection: RBXScriptConnection
+	connection = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - started
+		if pull ~= leverPulls or t >= total then
+			if pull == leverPulls then
+				for _, part in moving do
+					part.CFrame = leverRest[part]
+				end
+			end
+			connection:Disconnect()
+			return
+		end
+		-- Down fast (first 30%), held, then back up.
+		local down = math.min(1, t / (Config.LEVER_SECONDS * 0.3))
+		local back = math.clamp((t - Config.LEVER_SECONDS) / Config.LEVER_RETURN_SECONDS, 0, 1)
+		local angle = math.rad(Config.LEVER_DEGREES) * (1 - (1 - down) ^ 2) * (1 - back)
+		local swing = pivot * CFrame.Angles(angle, 0, 0) * pivot:Inverse()
+		for _, part in moving do
+			part.CFrame = swing * leverRest[part]
+		end
+	end)
 end
 
 -- The player hit the water: a white column, a spray of drops and a ring of mist, sized to read from the show camera
@@ -5522,8 +6093,14 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [
 --   - quiz: the question, four answer buttons (only for players who may answer) and the seconds left; afterwards the
 --     right answer turns green and my wrong pick red;
 --   - roulette (owner 2026-10-23: a 2D wheel): the names on a ring and a pointer that spins and slows down onto the
---     name the server picked; with two players a coin flips between the two names instead.
+--     name the server picked; with two players a coin flips between the two names instead;
+--   - a word to everyone (bundle 4b): whose turn, the topic, the seconds left, and for the performer a "swap topic"
+--     button while they read it; then "the presenter is choosing", or a vote: the performers, "nobody" and "I could
+--     not hear" (my own name cannot be picked).
 -- It only shows what it is told and reports the button pressed; the server checks every answer.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Style = require(script.Parent:WaitForChild("Style"))
 
 local MissionPanel = {}
@@ -5534,12 +6111,16 @@ local RING_FULL = 6
 local PILL_WIDTH = 104
 local SPIN_TURNS = 4 -- whole turns before the pointer stops
 local COIN_SIZE = 170
+local MAX_BUTTONS = Config.ONE_WORD_MAX_PERFORMERS + 2 -- a vote: the performers, "nobody", "could not hear"
+local TEXT = Config.TEXT
 local SLICE_COLORS = { Color3.fromRGB(40, 92, 170), Color3.fromRGB(62, 66, 92) } -- name pills, alternating
 
 local card: Frame
 local cardScale: UIScale
 local title: TextLabel
 local timer: TextLabel
+local note: TextLabel
+local swapButton: TextButton
 local answerGrid: Frame
 local buttons: { TextButton } = {}
 local wheel: Frame
@@ -5558,6 +6139,8 @@ local state = {
 	question = "",
 	id = 0, -- the open question's number (sent back with the answer)
 	myPick = nil :: number?,
+	myId = 0,
+	voteIds = {} :: { number }, -- a vote's candidates (my own name cannot be picked)
 	-- roulette
 	names = {} :: { string },
 	pick = 1,
@@ -5588,12 +6171,14 @@ local function answerButton(index: number): TextButton
 	b.LayoutOrder = index
 	b.Activated:Connect(function()
 		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt -- (not while the question shows first)
-		if state.kind == "quiz" and state.canAnswer and open and not state.myPick then
+		local mine = state.kind == "vote" and state.voteIds[index] == state.myId
+		if (state.kind == "quiz" or state.kind == "vote") and state.canAnswer and open and not state.myPick and not mine then
 			state.myPick = index
 			onAnswer(state.id, index)
 			for i, other in buttons do
 				other.BackgroundColor3 = if i == index then Style.AMBER else Style.PANEL
-				other.TextColor3 = if i == index then Style.PANEL else Style.WHITE
+				other.TextColor3 = if i == index then Style.PANEL else Style.GREY -- (answered: nothing else can be pressed)
+				other.AutoButtonColor = false
 			end
 		end
 	end)
@@ -5632,26 +6217,50 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	title = Style.label(card, Style.BOLD, 26, Style.WHITE)
 	title.Size = UDim2.new(1, 0, 0, 64)
 	title.LayoutOrder = 1
+	note = Style.label(card, Style.REGULAR, 18, Style.GREY)
+	note.Size = UDim2.new(1, 0, 0, 22)
+	note.LayoutOrder = 2
 
 	answerGrid = Instance.new("Frame")
 	answerGrid.BackgroundTransparency = 1
-	answerGrid.Size = UDim2.new(1, 0, 0, 2 * 52 + 8)
-	answerGrid.LayoutOrder = 2
+	answerGrid.Size = UDim2.fromScale(1, 0)
+	answerGrid.AutomaticSize = Enum.AutomaticSize.Y
+	answerGrid.LayoutOrder = 3
 	answerGrid.Parent = card
 	local grid = Instance.new("UIGridLayout")
 	grid.CellSize = UDim2.new(0.5, -4, 0, 52)
 	grid.CellPadding = UDim2.fromOffset(8, 8)
 	grid.SortOrder = Enum.SortOrder.LayoutOrder
 	grid.Parent = answerGrid
-	for i = 1, 4 do
+	for i = 1, MAX_BUTTONS do
 		buttons[i] = answerButton(i)
 	end
+
+	swapButton = Instance.new("TextButton")
+	swapButton.Size = UDim2.fromOffset(200, 40)
+	swapButton.BackgroundColor3 = Style.AMBER
+	swapButton.FontFace = Style.BOLD
+	swapButton.TextSize = 20
+	swapButton.TextColor3 = Style.PANEL
+	swapButton.Text = TEXT.ONE_WORD_SWAP
+	swapButton.LayoutOrder = 4
+	swapButton.Visible = false
+	local swapCorner = Instance.new("UICorner")
+	swapCorner.CornerRadius = UDim.new(0, 10)
+	swapCorner.Parent = swapButton
+	swapButton.Parent = card
+	swapButton.Activated:Connect(function()
+		if state.kind == "oneWord" and state.id > 0 and workspace:GetServerTimeNow() < state.endsAt then
+			swapButton.Visible = false
+			onAnswer(state.id, 1)
+		end
+	end)
 
 	-- The wheel: a round disc with an amber rim, the names as pills on a ring, a needle from the hub.
 	wheel = Instance.new("Frame")
 	wheel.BackgroundTransparency = 1
 	wheel.Size = UDim2.fromOffset(2 * RING_RADIUS + 120, 2 * RING_RADIUS + 50)
-	wheel.LayoutOrder = 3
+	wheel.LayoutOrder = 5
 	wheel.Parent = card
 	disc = Style.panel(wheel, Color3.fromRGB(26, 32, 46), 0, 1000)
 	disc.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -5689,7 +6298,7 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	coin.BackgroundColor3 = Style.AMBER
 	coin.BackgroundTransparency = 0
 	coin.Size = UDim2.fromOffset(COIN_SIZE, COIN_SIZE)
-	coin.LayoutOrder = 4
+	coin.LayoutOrder = 6
 	local round = Instance.new("UICorner")
 	round.CornerRadius = UDim.new(1, 0)
 	round.Parent = coin
@@ -5732,42 +6341,74 @@ local function easeOut(t: number): number
 	return 1 - (1 - t) ^ 3
 end
 
+-- Colours one answer button: open (can be pressed), mine (my pick), or neither.
+local function paint(b: TextButton, open: boolean, picked: boolean)
+	b.AutoButtonColor = open
+	b.BackgroundColor3 = if picked then Style.AMBER else Style.PANEL
+	b.TextColor3 = if picked then Style.PANEL elseif open then Style.WHITE else Style.GREY
+end
+
 -- What the server says the mission shows now. `canAnswer`: I am alive and on the ground (my buttons work);
--- `names`: the roulette's names in the server's order.
-function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names: { string })
+-- `names`: the payload's players (`ids`) by name, in the server's order; `myId`: my UserId.
+function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names: { string }, myId: number)
 	local kind = payload.kind
 	local quizLike = kind == "quiz" or kind == "quizResult"
-	if not quizLike or payload.question ~= state.question then
-		state.myPick = nil -- a new question (it comes twice: before and once the buttons work) or no quiz
+	local newQuestion = if quizLike then payload.question ~= state.question
+		elseif kind == "vote" then payload.id ~= nil and payload.id ~= state.id
+		else true
+	if newQuestion then
+		state.myPick = nil -- a new question (a quiz comes twice: before and once the buttons work), a new vote, or none
 	end
 	state.question = if quizLike then payload.question else ""
 	state.id = payload.id or 0
 	state.kind = kind
 	state.endsAt = payload.endsAt or 0
 	state.canAnswer = canAnswer
-	card.Visible = kind == "quiz" or kind == "quizResult" or kind == "roulette"
-	answerGrid.Visible = quizLike
-	title.Visible = quizLike
-	timer.Visible = quizLike
+	state.myId = myId
+	card.Visible = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
+	answerGrid.Visible = quizLike or kind == "vote"
+	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
+	timer.Visible = quizLike or kind == "oneWord" or kind == "vote"
+	note.Visible = kind == "oneWord"
+	swapButton.Visible = false
 	wheel.Visible = kind == "roulette" and #names > 2
 	coin.Visible = kind == "roulette" and #names <= 2
-	if kind == "quiz" or kind == "quizResult" then
+	if quizLike then
 		title.Text = payload.question
 		local choices = payload.choices :: { string }
 		for i, b in buttons do
 			b.Visible = choices[i] ~= nil
 			b.Text = choices[i] or ""
 			local open = kind == "quiz" and canAnswer and payload.endsAt ~= nil and not state.myPick
-			b.AutoButtonColor = open
 			if kind == "quizResult" then
 				local right = i == payload.answer
+				b.AutoButtonColor = false
 				b.BackgroundColor3 = if right then Style.GREEN elseif i == state.myPick then Style.RED else Style.PANEL
 				b.TextColor3 = if right or i == state.myPick then Style.PANEL else Style.GREY
-			elseif i ~= state.myPick then
-				b.BackgroundColor3 = Style.PANEL
-				b.TextColor3 = if open then Style.WHITE else Style.GREY
+			else
+				paint(b, open, i == state.myPick)
 			end
 		end
+	elseif kind == "vote" then
+		title.Text = TEXT.JUDGE_VOTE
+		state.voteIds = payload.ids or {}
+		local labels = table.clone(names)
+		table.insert(labels, TEXT.VOTE_NONE)
+		table.insert(labels, TEXT.VOTE_ABSTAIN)
+		for i, b in buttons do
+			b.Visible = labels[i] ~= nil
+			b.Text = labels[i] or ""
+			local mine = state.voteIds[i] == myId
+			paint(b, canAnswer and not state.myPick and not mine, i == state.myPick)
+		end
+	elseif kind == "oneWord" then
+		local current = payload.current or 1
+		title.Text = string.format(TEXT.ONE_WORD_TURN, names[current] or "?", payload.topic or "")
+		note.Text = if payload.phase == "prep" then TEXT.ONE_WORD_PREP elseif payload.chat then TEXT.ONE_WORD_BY_CHAT else ""
+		local ids = payload.ids or {}
+		swapButton.Visible = payload.phase == "prep" and not payload.swapped and payload.id ~= nil and ids[current] == myId
+	elseif kind == "oneWordJudge" then
+		title.Text = TEXT.JUDGE_WAIT
 	elseif kind == "roulette" then
 		title.Text = ""
 		state.names = names
@@ -5794,7 +6435,7 @@ function MissionPanel.tick(now: number)
 			cardScale.Scale = math.min(1, view.Y * 0.8 / height, view.X * 0.9 / width)
 		end
 	end
-	if state.kind == "quiz" then
+	if state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""
@@ -5833,7 +6474,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "PresenterPanel"; s.Source =
 -- The presenter's controls (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23):
 --   - the "volunteer to present" button (row 3 under the status board), for anyone not playing the round;
 --   - while I present: the mission menu (right side, open during the last seconds of free talk; recommended missions
---     marked) and the sound buttons (bottom centre).
+--     marked), the same menu for "who flies" after a one-word mission (bundle 4b: tap a name, then "날려!"), and the
+--     sound buttons (bottom centre).
 -- It only shows what it is told and reports presses; the server checks every one of them.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -5849,9 +6491,12 @@ local volunteerButton: TextButton
 local menuFrame: Frame
 local menuTitle: TextLabel
 local menuList: Frame
+local flingButton: TextButton
 local soundBar: Frame
 local volunteered = false
 local menuEndsAt = 0
+local menuKind = "pick"
+local selected: string? = nil -- the name tapped in a "judge" menu
 local onPickMission: (string) -> () = function(_id) end
 
 local function button(parent: Instance, text: string, width: number, height: number): TextButton
@@ -5913,6 +6558,18 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Padding = UDim.new(0, 6)
 	listLayout.Parent = menuList
+	flingButton = button(menuFrame, TEXT.FLING_BUTTON, 240, 48)
+	flingButton.Name = "Fling"
+	flingButton.LayoutOrder = 2
+	flingButton.BackgroundColor3 = Style.RED
+	flingButton.TextSize = 24
+	flingButton.Visible = false
+	flingButton.Activated:Connect(function()
+		if menuKind == "judge" and selected then
+			onPickMission(selected)
+			PresenterPanel.closeMenu()
+		end
+	end)
 
 	soundBar = Instance.new("Frame")
 	soundBar.Name = "SoundBar"
@@ -5950,23 +6607,42 @@ function PresenterPanel.setPresenting(on: boolean)
 	end
 end
 
--- The mission menu (server time `endsAt`); a press picks and closes it.
-function PresenterPanel.openMenu(options: { Option }, endsAt: number)
+-- A menu (server time `endsAt`). "pick" (the next mission): a press picks and closes it. "judge" (who flies): a press
+-- selects a name, "날려!" sends it.
+function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: string?)
 	for _, child in menuList:GetChildren() do
 		if child:IsA("TextButton") then
 			child:Destroy()
 		end
 	end
+	menuKind = kind or "pick"
+	selected = nil
+	local judging = menuKind == "judge"
+	local nameButtons: { [string]: TextButton } = {}
 	for i, option in options do
 		local label = if option.recommended then "★ " .. option.title .. " · " .. TEXT.PICK_RECOMMENDED else option.title
 		local b = button(menuList, label, 240, 40)
 		b.LayoutOrder = i
 		b.TextColor3 = if option.recommended then Style.AMBER else Style.WHITE
+		nameButtons[option.id] = b
 		b.Activated:Connect(function()
-			onPickMission(option.id)
-			PresenterPanel.closeMenu()
+			if not judging then
+				onPickMission(option.id)
+				PresenterPanel.closeMenu()
+				return
+			end
+			selected = option.id
+			for id, other in nameButtons do
+				other.BackgroundColor3 = if id == option.id then Style.AMBER else Style.PANEL
+				other.TextColor3 = if id == option.id then Style.PANEL else Style.WHITE
+			end
+			flingButton.AutoButtonColor = true
+			flingButton.BackgroundTransparency = 0
 		end)
 	end
+	flingButton.Visible = judging
+	flingButton.AutoButtonColor = false
+	flingButton.BackgroundTransparency = 0.6 -- dim until a name is selected
 	menuEndsAt = endsAt
 	menuFrame.Visible = true
 	PresenterPanel.tick(workspace:GetServerTimeNow())
@@ -5980,7 +6656,7 @@ end
 function PresenterPanel.tick(now: number)
 	if menuFrame.Visible then
 		local left = math.max(0, math.ceil(menuEndsAt - now))
-		menuTitle.Text = string.format("%s · %d", TEXT.PICK_MISSION, left)
+		menuTitle.Text = string.format("%s · %d", if menuKind == "judge" then TEXT.JUDGE_PICK else TEXT.PICK_MISSION, left)
 	end
 end
 

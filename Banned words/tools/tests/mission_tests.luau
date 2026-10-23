@@ -6,6 +6,9 @@ local QuizBank = require(node("QuizBank"))
 local MissionRunner = require(node("MissionRunner"))
 local Quiz = require(node("Quiz"))
 local Roulette = require(node("Roulette"))
+local VoteRules = require(node("VoteRules"))
+local OneWord = require(node("OneWord"))
+local OneWordTopics = require(node("OneWordTopics"))
 
 local fails = 0
 local function check(name, ok, detail)
@@ -48,8 +51,8 @@ local function fakeCtx(alive, final, flyingSet)
 		final = final,
 		players = function() return alive end,
 		rng = Random.new(7),
-		fail = function(players, key)
-			table.insert(record.fails, { players = players, key = key })
+		fail = function(players, key, subjective)
+			table.insert(record.fails, { players = players, key = key, subjective = subjective })
 		end,
 		show = function(text) table.insert(record.shows, text) end,
 		cancelled = function() return record.cancel end,
@@ -57,6 +60,13 @@ local function fakeCtx(alive, final, flyingSet)
 		flying = function(player) return flyingSet ~= nil and flyingSet[player] == true end,
 		answers = function(answered, missed)
 			record.answered, record.missed = answered, missed
+		end,
+		-- One-word mission: who a subjective launch may hit, the presenter's pick (record.pick(options) answers it).
+		canFling = function(player) return not (record.protected and record.protected[player]) end,
+		presenterPick = function(options, seconds)
+			record.pickOptions = options
+			record.pickSeconds = seconds
+			return if record.pick then record.pick(options) else nil
 		end,
 	}
 	return record
@@ -70,6 +80,15 @@ local function screens(since)
 		end
 	end
 	return list
+end
+local function levers(since)
+	local n = 0
+	for _, m in NetStub.sent do
+		if m.name == "Lever" and m.at >= since then
+			n += 1
+		end
+	end
+	return n
 end
 local function has(list, player)
 	return table.find(list or {}, player) ~= nil
@@ -262,7 +281,7 @@ do
 	local order = {}
 	for _ = 1, 4 do
 		local pickNow = nil
-		for _, m in MissionRunner.candidates(300, 4) do
+		for _, m in MissionRunner.candidates(300, 4, false) do
 			if m.id ~= "test" then -- (the Studio test mission is listed too; leave it out)
 				pickNow = m
 				break
@@ -277,7 +296,7 @@ do
 	check("3d automatic order: quiz, roulette, then quizzes (the roulette once a round)", order[1] == "quiz"
 		and order[2] == "roulette" and order[3] == "quiz" and order[4] == "quiz", table.concat(order, ","))
 	MissionRunner.beginRound()
-	local small = MissionRunner.candidates(300, 1)
+	local small = MissionRunner.candidates(300, 1, false)
 	local rouletteListed = false
 	for _, m in small do
 		rouletteListed = rouletteListed or m.id == "roulette"
@@ -329,6 +348,244 @@ do
 	local finalSpread, finalCounts = spread(QuizBank.final)
 	check("4d right answers are spread over the four buttons (each at least 1/8, both banks; facts are a reviewer's job)",
 		mainSpread and finalSpread, mainCounts or finalCounts)
+end
+
+---------------------------------------------------------------- 5. vote rules
+do
+	local v = newPlayers(6)
+	local cands = { v[1], v[2] } -- ballot: 1 = v1, 2 = v2, 3 = nobody, 4 = could not hear
+	local function decide(ballot, voters)
+		return VoteRules.decide(ballot, cands, voters or { v[1], v[2], v[3], v[4], v[5], v[6] })
+	end
+	check("5a fewer than VOTE_MIN_VOTERS voters: no vote", decide({ [v[3]] = 1, [v[4]] = 1, [v[5]] = 1 }, { v[3], v[4], v[5] }) == nil
+		and not VoteRules.canVote(Config.VOTE_MIN_VOTERS - 1) and VoteRules.canVote(Config.VOTE_MIN_VOTERS))
+	check("5b a clear top candidate with enough valid votes wins", decide({ [v[3]] = 1, [v[4]] = 1, [v[5]] = 1, [v[6]] = 2 }) == 1)
+	check("5c fewer than VOTE_MIN_VALID valid votes: nobody", decide({ [v[3]] = 1, [v[4]] = 1 }) == nil)
+	check("5d a tie: nobody", decide({ [v[3]] = 1, [v[4]] = 1, [v[5]] = 2, [v[6]] = 2 }) == nil)
+	check("5e \"nobody\" on top: nobody", decide({ [v[3]] = 3, [v[4]] = 3, [v[5]] = 3, [v[6]] = 1 }) == nil)
+	check("5f a vote for yourself does not count (v1's own vote would have tied it)",
+		decide({ [v[1]] = 1, [v[3]] = 1, [v[4]] = 2, [v[5]] = 2 }) == 2)
+	local seventh = newPlayers(1)[1]
+	local seven = { v[1], v[2], v[3], v[4], v[5], v[6], seventh }
+	check("5g abstaining voters leave the half rule; silent voters stay in it (3 of 7, one abstains: 3*2 >= 7-1)",
+		VoteRules.decide({ [v[3]] = 1, [v[4]] = 1, [v[5]] = 1, [v[6]] = 4 }, cands, seven) == 1
+		and VoteRules.decide({ [v[3]] = 1, [v[4]] = 1, [v[5]] = 1 }, cands, seven) == nil)
+	check("5h the ballot is the candidates + nobody + could not hear", VoteRules.choices(3) == 5)
+end
+
+---------------------------------------------------------------- 6. a word to everyone
+do
+	local presenter = newPlayers(1)[1]
+	local function oneWordRun(record)
+		local run = start(OneWord, record)
+		return run
+	end
+	local function turnSeconds(count)
+		return count * (Config.ONE_WORD_PREP_SECONDS + Config.ONE_WORD_SECONDS)
+	end
+	local function lastScreen(since, kind)
+		local found = nil
+		for _, m in screens(since) do
+			if kind == nil or m.payload.kind == kind then
+				found = m.payload
+			end
+		end
+		return found
+	end
+
+	-- 6A: no presenter -> it does not start.
+	Match.presenter = nil
+	local nobody = fakeCtx(newPlayers(4), false, nil)
+	local idle = oneWordRun(nobody)
+	at(now + 1)
+	check("6a without a presenter it does not start (and says it played nothing)", idle.done and idle.played == false
+		and OneWord.needsPresenter == true)
+
+	-- 6B: seven alive (one flying): five performers on the ground, a swap, the presenter picks, the lever, a launch.
+	Match.presenter = presenter
+	local ps = newPlayers(7)
+	local record = fakeCtx(ps, false, { [ps[7]] = true })
+	local since = now
+	local run = oneWordRun(record)
+	local first = lastScreen(since, "oneWord")
+	local performerIds = first.ids
+	local onGround = true
+	for _, id in performerIds do
+		onGround = onGround and id ~= ps[7].UserId
+	end
+	check("6b at most ONE_WORD_MAX_PERFORMERS perform, nobody flying", #performerIds == Config.ONE_WORD_MAX_PERFORMERS and onGround)
+	local firstPerformer = nil
+	for _, p in ps do
+		if p.UserId == performerIds[1] then
+			firstPerformer = p
+		end
+	end
+	local oldTopic = first.topic
+	local other = nil
+	for _, p in ps do
+		if p ~= firstPerformer and p ~= ps[7] then
+			other = p
+			break
+		end
+	end
+	answer(other, 1) -- not the performer: no swap
+	answer(firstPerformer, 1) -- swap
+	at(now + 0.3)
+	local swapped = lastScreen(since, "oneWord")
+	check("6c the performer (only) may swap the topic once while reading it", first.phase == "prep" and first.id ~= nil
+		and swapped.swapped == true and swapped.topic ~= oldTopic and swapped.id == nil)
+	at(now + Config.ONE_WORD_PREP_SECONDS + 0.2)
+	local talking = lastScreen(since, "oneWord")
+	check("6d then the talk with its end time (voice: ONE_WORD_SECONDS)", talking.phase == "talk" and talking.endsAt ~= nil
+		and math.abs(talking.endsAt - now - Config.ONE_WORD_SECONDS) < 0.5)
+	record.pick = function(options) return options[2].id end
+	at(now + turnSeconds(Config.ONE_WORD_MAX_PERFORMERS) + 2)
+	local f = record.fails[1]
+	check("6e the presenter picks among the performers within PRESENTER_JUDGE_SECONDS; the lever, then a subjective launch",
+		record.pickSeconds == Config.PRESENTER_JUDGE_SECONDS and #record.pickOptions == Config.ONE_WORD_MAX_PERFORMERS
+		and levers(since) == 1 and f ~= nil and f.subjective == true and #f.players == 1
+		and tostring(f.players[1].UserId) == record.pickOptions[2].id)
+	at(now + 5)
+	check("6f (the mission ends after the result)", run.done and run.ok)
+
+	-- 6C: next run: who performed least goes first; protected players are not offered; no pick -> a vote.
+	local record2 = fakeCtx(ps, false, nil)
+	record2.protected = { [ps[1]] = true }
+	local since2 = now
+	local run2 = oneWordRun(record2)
+	local ids2 = lastScreen(since2, "oneWord").ids
+	local fresh = 0
+	for _, id in ids2 do
+		if not table.find(performerIds, id) then
+			fresh += 1
+		end
+	end
+	-- 7 players, 5 performed last time: both who never performed must be in this run.
+	check("6g those who performed least go first", fresh == 7 - Config.ONE_WORD_MAX_PERFORMERS)
+	at(now + turnSeconds(Config.ONE_WORD_MAX_PERFORMERS) + 1)
+	local offered = true
+	for _, option in record2.pickOptions or {} do
+		offered = offered and option.id ~= tostring(ps[1].UserId)
+	end
+	check("6h a player a subjective launch may not hit (public limits) is not offered", record2.pickOptions ~= nil and offered)
+	at(now + 0.5) -- (the fake presenter answers at once: no pick)
+	local vote = lastScreen(since2, "vote")
+	check("6i no pick from the presenter: everyone votes on the same names", vote ~= nil and vote.id ~= nil
+		and #vote.ids == #record2.pickOptions)
+	-- Everyone on the ground votes for the first candidate (whoever is not that candidate).
+	local target = nil
+	for _, p in ps do
+		if p.UserId == vote.ids[1] then
+			target = p
+		end
+	end
+	for _, p in ps do
+		answer(p, 1)
+	end
+	at(now + Config.VOTE_SECONDS + 1)
+	local f2 = record2.fails[1]
+	check("6j the vote's winner is launched (subjective, no lever)", f2 ~= nil and f2.players[1] == target and f2.subjective == true
+		and levers(since2) == 0)
+	at(now + 5)
+	check("6k (and it ends)", run2.done)
+
+	-- 6D: a chat participant types for ONE_WORD_CHAT_SECONDS; a topic holding a word in play is never given (every
+	-- topic but the last is "in play" here, so only that one may come, and only once).
+	local cs = newPlayers(4)
+	local inPlay = {}
+	for i = 1, #OneWordTopics - 1 do
+		table.insert(inPlay, { text = OneWordTopics[i] })
+	end
+	Match.participants[cs[1]] = { player = cs[1], words = inPlay, alive = true, lives = 3, afkMisses = 0, chat = true }
+	for i = 2, 4 do
+		Match.participants[cs[i]] = { player = cs[i], words = {}, alive = true, lives = 3, afkMisses = 0, chat = true }
+	end
+	local record3 = fakeCtx(cs, false, nil)
+	local since3 = now
+	local run3 = oneWordRun(record3)
+	at(now + Config.ONE_WORD_PREP_SECONDS + 0.2)
+	local chatTalk = lastScreen(since3, "oneWord")
+	check("6l a chat participant types for ONE_WORD_CHAT_SECONDS", chatTalk.phase == "talk" and chatTalk.chat == true
+		and math.abs(chatTalk.endsAt - now - Config.ONE_WORD_CHAT_SECONDS) < 0.5)
+	at(now + 4 * (Config.ONE_WORD_PREP_SECONDS + Config.ONE_WORD_CHAT_SECONDS) + 30)
+	local given = {}
+	for _, m in screens(since3) do
+		if m.payload.kind == "oneWord" then
+			given[m.payload.topic] = true
+		end
+	end
+	local onlyClean = true
+	for topic in given do
+		onlyClean = onlyClean and topic == OneWordTopics[#OneWordTopics]
+	end
+	check("6m a topic holding a banned word in play is never given (the only clean one, to one performer)", onlyClean
+		and given[OneWordTopics[#OneWordTopics]] == true and run3.done)
+	for _, p in cs do
+		Match.participants[p] = nil
+	end
+	check("6n the topic list has 60 topics, none empty or repeated", (function()
+		local seen = {}
+		for _, topic in OneWordTopics do
+			if topic == "" or seen[topic] then
+				return false
+			end
+			seen[topic] = true
+		end
+		return #OneWordTopics >= 60
+	end)())
+
+	-- 6E: a performer who flies during the performances is not offered; a voter who leaves during the vote no longer
+	-- counts (their vote with them).
+	local es = newPlayers(7)
+	local alive = table.clone(es)
+	local flyingNow = {}
+	local record5 = fakeCtx(alive, false, flyingNow)
+	local since5 = now
+	local begun5 = now
+	local run5 = oneWordRun(record5)
+	local ids5 = lastScreen(since5, "oneWord").ids
+	local function byId(id)
+		for _, p in es do
+			if p.UserId == id then
+				return p
+			end
+		end
+		return nil
+	end
+	at(now + Config.ONE_WORD_PREP_SECONDS + 1)
+	local flier = byId(ids5[1])
+	flyingNow[flier] = true -- launched (a banned word in bundle 5) while talking
+	at(now + Config.FLING_RETURN_SECONDS)
+	flyingNow[flier] = nil -- back on the chair long before the judging
+	at(begun5 + turnSeconds(Config.ONE_WORD_MAX_PERFORMERS) + 0.5) -- the judging (the fake presenter does not pick)
+	local offeredFlier = false
+	for _, option in record5.pickOptions or {} do
+		offeredFlier = offeredFlier or option.id == tostring(flier.UserId)
+	end
+	check("6o a performer who flew during the performances is not offered (even back on the chair)",
+		record5.pickOptions ~= nil and not offeredFlier)
+	local vote5 = lastScreen(since5, "vote")
+	local c1, c2 = byId(vote5.ids[1]), byId(vote5.ids[2])
+	local others = {}
+	for _, p in es do
+		if not table.find(ids5, p.UserId) then
+			table.insert(others, p) -- the two who did not perform
+		end
+	end
+	local c3 = byId(vote5.ids[3])
+	local c4 = byId(vote5.ids[4])
+	answer(others[1], 1)
+	answer(others[2], 1)
+	answer(c3, 1)
+	answer(c4, 2)
+	answer(c1, 2)
+	table.remove(alive, table.find(alive, others[1])) -- leaves during the vote: c1 2 - 2 c2, a tie
+	at(now + Config.VOTE_SECONDS + 1)
+	check("6p a voter who leaves during the vote no longer counts (here: a tie, nobody flies)", c2 ~= nil
+		and vote5.endsAt > now - Config.VOTE_SECONDS and #record5.fails == 0)
+	at(now + 5)
+	check("6q (and it ends)", run5.done)
+	Match.presenter = nil
 end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

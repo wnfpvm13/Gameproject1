@@ -160,6 +160,51 @@ do
 	check("a negative dt does not turn backward", CrankMotion.advance(1, -0.5, L.CrankTurnsPerSecond) == 1)
 end
 
+-- 7. The legs swing about the hip while the spring moves (they lag behind the body).
+do
+	local L = Config.Locomotive
+	local limits = { gain = c.LegKickGain, up = c.LegKickUp, down = c.LegKickDown, flatHeight = c.HeightAtFull }
+	check("still spring, still legs", SquashPose.kickAngle(0, 1, 1, limits) == 0 and SquashPose.kickAngle(0, -1, 1, limits) == 0)
+	check("the two legs swing opposite ways", near(SquashPose.kickAngle(3, 1, 1, limits), -SquashPose.kickAngle(3, -1, 1, limits)))
+	check("the swing never passes its limits", near(SquashPose.kickAngle(1e6, 1, 1, limits), c.LegKickDown)
+		and near(SquashPose.kickAngle(-1e6, 1, 1, limits), -c.LegKickUp))
+	check("no downward swing once fully flat", SquashPose.kickAngle(1e6, 1, c.HeightAtFull, limits) == 0
+		and near(SquashPose.kickAngle(-1e6, 1, c.HeightAtFull, limits), -c.LegKickUp))
+	-- With the real spring numbers: a press kicks clearly, the release flaps both ways, and the lowest shoe corner
+	-- never goes below the rail tops (y = 0). The leg reach adds about 0.4 for the shoe (avatar foot size, not in
+	-- Config); the shoe stands FootLength tall (toes up) and folds with the body.
+	local hipY = L.DeckHeight + L.CabWaist / 2
+	local reach = L.LegLength + 0.4
+	local function swings(target: number, from: number)
+		local state = SquashSpring.new()
+		state.value = from
+		local pressing = target == 1
+		local frequency = if pressing then c.PressFrequency else c.ReleaseFrequency
+		local damping = if pressing then c.PressDamping else c.ReleaseDamping
+		local low, high, lowest = 0, 0, math.huge
+		for _ = 1, 120 do
+			SquashSpring.step(state, target, 1 / 60, frequency, damping, c.MinValue, c.MaxValue)
+			local body = SquashPose.bodyScale(state.value, c.HeightAtFull, c.WidthAtFull, c.LengthAtFull)
+			for _, side in { 1, -1 } do
+				local a = SquashPose.kickAngle(state.velocity, side, body.y, limits)
+				low, high = math.min(low, a), math.max(high, a) -- up (negative) and down over both legs
+				local down = math.max(0, a)
+				local shoeBottom = hipY * body.y - reach * body.z * math.sin(down) - L.FootLength / 2 * body.y * math.cos(down)
+				lowest = math.min(lowest, shoeBottom)
+			end
+		end
+		return low, high, lowest
+	end
+	local pressLow, pressHigh, pressLowest = swings(1, 0)
+	check("a press kicks a leg up at least 30 degrees", -pressLow >= math.rad(30),
+		tostring(math.deg(pressLow)) .. " / " .. tostring(math.deg(pressHigh)))
+	local releaseLow, releaseHigh, releaseLowest = swings(0, 1)
+	check("the release flaps the legs up and down", releaseLow <= -math.rad(20) and releaseHigh >= math.rad(10),
+		tostring(math.deg(releaseLow)) .. " / " .. tostring(math.deg(releaseHigh)))
+	check("the shoes never dig into the rails", pressLowest >= 0 and releaseLowest >= 0,
+		tostring(pressLowest) .. " / " .. tostring(releaseLowest))
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed == 0 then
 	print("ALL PASS")

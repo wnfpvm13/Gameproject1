@@ -1,7 +1,7 @@
 --!strict
 -- Western train client entry point (squash prototype): only wiring. Every locomotive gets an animator and a steam
--- puff; the player's own locomotive follows the squash key at once (and tells the server), other locomotives follow
--- their Squashed attribute.
+-- puff; the player's own locomotive follows the squash key at once (and tells the server) and shows in the face
+-- window, other locomotives follow their Squashed attribute.
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -13,9 +13,11 @@ local LocomotiveAnimator = require(script:WaitForChild("LocomotiveAnimator"))
 local SquashInput = require(script:WaitForChild("SquashInput"))
 local SteamPuff = require(script:WaitForChild("SteamPuff"))
 local DriverCamera = require(script:WaitForChild("DriverCamera"))
+local FaceCam = require(script:WaitForChild("FaceCam"))
 
 local player = Players.LocalPlayer
 local remote = shared:WaitForChild(Names.RemotesFolder):WaitForChild(Names.SquashRemote) :: RemoteEvent
+local faceCam = FaceCam.new(player:WaitForChild("PlayerGui"))
 
 type Tracked = {
 	animator: LocomotiveAnimator.Animator,
@@ -57,6 +59,8 @@ local function track(instance: Instance)
 	if locomotive:GetAttribute(Names.OwnerUserId) == player.UserId then
 		mine = locomotive
 		DriverCamera.follow(locomotive)
+		faceCam:show(locomotive)
+		faceCam:setBig(inputDown)
 		setSquashed(locomotive, inputDown)
 		remote:FireServer(inputDown) -- also replaces a state the server still holds back from the old locomotive
 	else
@@ -85,6 +89,7 @@ CollectionService:GetInstanceRemovedSignal(Names.LocomotiveTag):Connect(function
 	end
 	if mine == instance then
 		mine = nil
+		faceCam:hide()
 	end
 end)
 for _, instance in CollectionService:GetTagged(Names.LocomotiveTag) do
@@ -97,6 +102,7 @@ SquashInput.bind(function(isDown: boolean)
 	if own then
 		setSquashed(own, isDown)
 	end
+	faceCam:setBig(isDown)
 	remote:FireServer(isDown) -- even without a locomotive, so the server's latest state is never a stale one
 end)
 
@@ -104,4 +110,5 @@ RunService.RenderStepped:Connect(function(dt: number)
 	for _, entry in tracked do
 		entry.animator:update(dt)
 	end
+	faceCam:update() -- after the animators: it copies the parts they just moved
 end)

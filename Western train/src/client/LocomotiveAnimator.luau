@@ -2,7 +2,8 @@
 -- Animates one locomotive's moving parts on this client: a spring follows the squash target (flat or normal) and
 -- every part is resized and moved from its rest pose (the Names.Rest* attributes written by the server's
 -- LocomotiveBuilder); the coupling rods and crank pins (Names.Crank*) also circle with the driving wheels all the
--- time. Local only: the server never moves these parts after building them.
+-- time, and the legs (Names.Kick*) swing about the hip while the spring moves. Local only: the server never moves
+-- these parts after building them.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("WesternTrain")
@@ -16,6 +17,13 @@ local CrankMotion = require(shared:WaitForChild("CrankMotion"))
 local LocomotiveAnimator = {}
 LocomotiveAnimator.__index = LocomotiveAnimator
 
+local KICK_LIMITS: SquashPose.KickLimits = {
+	gain = Config.Squash.LegKickGain,
+	up = Config.Squash.LegKickUp,
+	down = Config.Squash.LegKickDown,
+	flatHeight = Config.Squash.HeightAtFull,
+}
+
 type Entry = {
 	part: BasePart,
 	rotation: CFrame, -- rest rotation only
@@ -24,6 +32,7 @@ type Entry = {
 	mesh: SpecialMesh?, -- a FileMesh whose scale follows the size
 	meshScale: Vector3?,
 	crank: CrankMotion.Crank?,
+	kick: { pivot: Vector3, side: number }?, -- pivot at rest, relative to the Base part
 }
 
 type Fields = {
@@ -55,6 +64,8 @@ local function entryFor(part: BasePart): Entry?
 	local hasMeshScale = mesh ~= nil and typeof(meshScale) == "Vector3"
 	local radius = part:GetAttribute(Names.CrankRadius)
 	local phase = part:GetAttribute(Names.CrankPhase)
+	local pivot = part:GetAttribute(Names.KickPivot)
+	local side = part:GetAttribute(Names.KickSide)
 	return {
 		part = part,
 		rotation = rest - rest.Position,
@@ -69,6 +80,7 @@ local function entryFor(part: BasePart): Entry?
 		mesh = if hasMeshScale then mesh else nil,
 		meshScale = if hasMeshScale then meshScale :: Vector3 else nil,
 		crank = if typeof(radius) == "number" then { radius = radius, phase = if typeof(phase) == "number" then phase else 0 } else nil,
+		kick = if typeof(pivot) == "Vector3" and typeof(side) == "number" then { pivot = pivot, side = side } else nil,
 	}
 end
 
@@ -112,8 +124,9 @@ function LocomotiveAnimator.setTarget(self: Animator, squashed: boolean)
 	end
 end
 
--- Puts one part where the squash scale and crank angle say; resize = false skips the size (it has not changed).
-local function place(entry: Entry, baseCFrame: CFrame, body: SquashPose.Vec, angle: number, resize: boolean)
+-- Puts one part where the squash scale, crank angle and spring speed say; resize = false skips the size (it has not
+-- changed).
+local function place(entry: Entry, baseCFrame: CFrame, body: SquashPose.Vec, angle: number, velocity: number, resize: boolean)
 	local position, size = SquashPose.pose(entry.rest, body)
 	if resize then
 		local newSize = Vector3.new(size.x, size.y, size.z)
@@ -130,6 +143,14 @@ local function place(entry: Entry, baseCFrame: CFrame, body: SquashPose.Vec, ang
 		y += dy
 		z += dz
 	end
+	local kick = entry.kick
+	if kick then
+		-- The hip rides on the body like an anchor; the leg turns about it.
+		local hip = kick.pivot * Vector3.new(body.x, body.y, body.z)
+		local swing = SquashPose.kickAngle(velocity, kick.side, body.y, KICK_LIMITS)
+		entry.part.CFrame = baseCFrame * CFrame.new(hip) * CFrame.Angles(swing, 0, 0) * CFrame.new(Vector3.new(x, y, z) - hip) * entry.rotation
+		return
+	end
 	entry.part.CFrame = baseCFrame * CFrame.new(x, y, z) * entry.rotation
 end
 
@@ -138,7 +159,7 @@ function LocomotiveAnimator.update(self: Animator, dt: number)
 	local baseCFrame = self.base.CFrame
 	if self.settled then
 		for _, entry in self.cranks do
-			place(entry, baseCFrame, self.body, self.angle, false)
+			place(entry, baseCFrame, self.body, self.angle, 0, false)
 		end
 		return
 	end
@@ -150,7 +171,7 @@ function LocomotiveAnimator.update(self: Animator, dt: number)
 	self.settled = SquashSpring.settle(self.spring, self.target, c.RestEpsilon)
 	self.body = SquashPose.bodyScale(self.spring.value, c.HeightAtFull, c.WidthAtFull, c.LengthAtFull)
 	for _, entry in self.entries do
-		place(entry, baseCFrame, self.body, self.angle, true)
+		place(entry, baseCFrame, self.body, self.angle, self.spring.velocity, true)
 	end
 end
 

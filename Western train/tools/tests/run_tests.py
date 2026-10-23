@@ -3,12 +3,14 @@
   python -I tools/tests/run_tests.py
 
   squash  src/shared/Config.luau (real numbers), SquashSpring.luau, SquashPose.luau, CrankMotion.luau: press speed
-          and overshoot, the release bounce and wobble, frame-rate independence, hitches, part poses (lying torso,
+          and overshoot, the release bounce and wobble, frame-rate independence, hitches, part poses (a lying part,
           wheels on the rails, the chimney folding harder from its foot, the cap staying on top, exact return to
-          rest), the rods' circle (direction, quarter-turn sides, squashing with the wheels)
+          rest), the rods' circle (direction, quarter-turn sides, squashing with the wheels), the legs' swing
+          (opposite sides, limits, kick on press, flap on release, the shoes never below the rails)
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
 
-The modules run unchanged; the only fake is Color3.fromRGB (Config's colours), which plain Luau lacks.
+The modules run unchanged; the only fakes are Color3.fromRGB and Vector3.new (Config's colours and face-window
+directions), which plain Luau lacks.
 """
 import io, os, subprocess, sys, tempfile
 
@@ -21,7 +23,10 @@ MODULES = [
     ("SquashPose", "src/shared/SquashPose.luau"),
     ("CrankMotion", "src/shared/CrankMotion.luau"),
 ]
-PRELUDE = "Color3 = { fromRGB = function(r, g, b) return { r = r, g = g, b = b } end }\n"
+PRELUDE = (
+    "Color3 = { fromRGB = function(r, g, b) return { r = r, g = g, b = b } end }\n"
+    "Vector3 = { new = function(x, y, z) return { X = x, Y = y, Z = z } end }\n"
+)
 
 
 def read(path):

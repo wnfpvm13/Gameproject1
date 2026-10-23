@@ -1,11 +1,12 @@
 --!strict
 -- Builds one locomotive out of a stripped avatar (AvatarBody): "the locomotive wearing the avatar" (owner pick
 -- 2026-10-23). The head is the face on the smokebox front, the torso stands at the back as the cab (shirt facing
--- backward, toward the play camera), the arms are the coupling rods between the driving wheels and the lower legs
--- and shoes are the rear buffers. The boiler is a real cylinder in Config's boiler colour; frame, wheels, crank
--- pins, chimney, dome, lamp, buffer beam and a slatted cowcatcher are added. Every moving part gets its rest pose as
--- attributes (Names.Rest*, and Names.Crank* for the parts that circle with the wheels) for the client's
--- LocomotiveAnimator. Locomotive space: X right, Y up, Z back (forward is -Z), origin on the rails under the middle.
+-- backward, toward the play camera), the arms are the coupling rods between the driving wheels (the hands are big
+-- fists on the front crank pins) and the legs stick straight out of the back, the soles as the rear buffers. The
+-- boiler is a real cylinder in Config's boiler colour; frame, red wheels, crank pins, chimney, dome, lamp, buffer
+-- beam and a slatted cowcatcher are added. Every moving part gets its rest pose as attributes (Names.Rest*,
+-- Names.Crank* for the parts that circle with the wheels, Names.Kick* for the legs that swing about the hip) for the
+-- client's LocomotiveAnimator. Locomotive space: X right, Y up, Z back (forward is -Z), origin on the rails under the middle.
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -38,6 +39,7 @@ type Placement = {
 	anchor: Vector3?, -- nil = the part's centre
 	exponent: number?, -- nil = 1
 	crank: CrankMotion.Crank?,
+	kick: { pivot: Vector3, side: number }?, -- a leg: swings about this hip point, each side the other way
 }
 type Add = (Placement) -> ()
 
@@ -77,16 +79,41 @@ local function avatarPart(avatar: Model, name: string): BasePart?
 	return if part and part:IsA("BasePart") then part else nil
 end
 
+-- The avatar's limb pieces that exist (an arm or a leg, top to bottom), with the sizes that stretch them end to end
+-- over `length` (each keeps its share of the limb's own length) at `thickness` (taken from the first piece's width).
+local function stretchedLimb(avatar: Model, side: string, names: { string }, length: number, thickness: number): ({ BasePart }, { Vector3 })
+	local parts = {}
+	for _, name in names do
+		local part = avatarPart(avatar, side .. name)
+		if part then
+			table.insert(parts, part)
+		end
+	end
+	local own = 0
+	for _, part in parts do
+		own += part.Size.Y
+	end
+	local sizes = {}
+	if #parts > 0 then
+		local stretch = length / own
+		local thick = thickness / parts[1].Size.X
+		for _, part in parts do
+			table.insert(sizes, Vector3.new(part.Size.X * thick, part.Size.Y * stretch, part.Size.Z * thick))
+		end
+	end
+	return parts, sizes
+end
+
 -- Z distances in Config are measured back from the boiler front (z = 0 here until the whole train is centred).
 local function boilerCentreY(): number
 	local L = Config.Locomotive
 	return L.DeckHeight + L.BoilerDiameter / 2
 end
 
--- The avatar's pieces: face, cab, rods and buffers. Returns the cab's back and the shoe buffers' back (Z).
+-- The avatar's pieces: face, cab, rods and legs. Returns the cab's back and the soles' back (Z).
 local function placeAvatar(avatar: Model, add: Add): (number, number)
 	local L = Config.Locomotive
-	local head = avatarPart(avatar, "Head")
+	local head = avatarPart(avatar, Names.AvatarHead)
 	local upper = avatarPart(avatar, "UpperTorso")
 	local lower = avatarPart(avatar, "LowerTorso")
 	assert(head and upper and lower, "the avatar has no R15 head or torso")
@@ -109,51 +136,47 @@ local function placeAvatar(avatar: Model, add: Add): (number, number)
 	local cabBack = cabFront + L.CabDepth
 
 	-- The rods: each arm runs from the rear driving wheel's crank pin (shoulder end) to the front one, which the hand
-	-- holds. Each side's crank comes from CrankMotion.forSide, shared with the crank pins.
+	-- holds as a big fist (so the rods read from the play camera). Each side's crank comes from CrankMotion.forSide,
+	-- shared with the crank pins.
 	local front, rear = L.DriversAt[1], L.DriversAt[2]
 	local rodX = L.WheelTrack + L.WheelWidth / 2 + L.PinLength + L.ArmThickness / 2
 	for _, side in { "Right", "Left" } do
 		local sign = if side == "Right" then 1 else -1
 		local crank = CrankMotion.forSide(sign, L.CrankRadius)
-		local pieces = {}
-		for _, piece in { "UpperArm", "LowerArm", "Hand" } do
-			local part = avatarPart(avatar, side .. piece)
-			if part then
-				table.insert(pieces, part)
-			end
+		local hand = avatarPart(avatar, side .. "Hand")
+		local handLength = if hand then L.HandLength else 0
+		local parts, sizes = stretchedLimb(avatar, side, { "UpperArm", "LowerArm" }, rear - front - handLength / 2, L.ArmThickness)
+		local z = rear
+		for i, part in parts do
+			local size = sizes[i]
+			add({ part = part, size = size, rest = CFrame.new(sign * rodX, L.DriverRadius, z - size.Y / 2) * ROD, crank = crank })
+			z -= size.Y
 		end
-		if #pieces > 0 then
-			local reach = 0 -- arm length (own Y) up to the hand's middle
-			for i, part in pieces do
-				reach += if i == #pieces then part.Size.Y / 2 else part.Size.Y
-			end
-			local stretch = (rear - front) / reach
-			local thick = L.ArmThickness / pieces[1].Size.X
-			local z = rear
-			for _, part in pieces do
-				local size = Vector3.new(part.Size.X * thick, part.Size.Y * stretch, part.Size.Z * thick)
-				add({ part = part, size = size, rest = CFrame.new(sign * rodX, L.DriverRadius, z - size.Y / 2) * ROD, crank = crank })
-				z -= size.Y
-			end
+		if hand then
+			local size = Vector3.new(L.HandSize, handLength, L.HandSize)
+			add({ part = hand, size = size, rest = CFrame.new(sign * rodX, L.DriverRadius, front) * ROD, crank = crank })
 		end
 	end
 
-	-- The buffers: lower legs sticking out of the cab back, shoes on their ends with the soles facing backward.
+	-- The legs: straight out of the cab back at the waist, thigh and shin sharing LegLength, the shoes on their ends
+	-- with the soles facing backward (the buffers). The whole leg swings about the hip.
 	local rearEnd = cabBack
+	local hipY = L.DeckHeight + L.CabWaist / 2
 	for _, side in { "Right", "Left" } do
-		local x = if side == "Right" then L.BufferSpread else -L.BufferSpread
-		local shin = avatarPart(avatar, side .. "LowerLeg")
-		local foot = avatarPart(avatar, side .. "Foot")
+		local sign = if side == "Right" then 1 else -1
+		local x = sign * L.LegSpread
+		local kick = { pivot = Vector3.new(x, hipY, cabBack), side = sign }
+		local parts, sizes = stretchedLimb(avatar, side, { "UpperLeg", "LowerLeg" }, L.LegLength, L.LegThickness)
 		local z = cabBack
-		if shin then
-			local thick = 0.7 / shin.Size.X
-			local size = Vector3.new(shin.Size.X * thick, L.ShinLength, shin.Size.Z * thick)
-			add({ part = shin, size = size, rest = CFrame.new(x, L.BufferHeight, z + size.Y / 2) * SUPINE })
+		for i, part in parts do
+			local size = sizes[i]
+			add({ part = part, size = size, rest = CFrame.new(x, hipY, z + size.Y / 2) * SUPINE, kick = kick })
 			z += size.Y
 		end
+		local foot = avatarPart(avatar, side .. "Foot")
 		if foot then
 			local size = foot.Size * (L.FootLength / foot.Size.Z)
-			add({ part = foot, size = size, rest = CFrame.new(x, L.BufferHeight, z + size.Y / 2) * SUPINE })
+			add({ part = foot, size = size, rest = CFrame.new(x, hipY, z + size.Y / 2) * SUPINE, kick = kick })
 			z += size.Y
 		end
 		rearEnd = math.max(rearEnd, z)
@@ -179,19 +202,24 @@ local function addTrainParts(model: Model, cabBack: number, add: Add): number
 	add({ part = door, size = Vector3.new(L.DoorDiameter, L.DoorThickness, L.DoorDiameter), rest = CFrame.new(0, centreY, -L.DoorThickness / 2) * ALONG_TRACK })
 
 	-- Wheels stay still (a squashed round wheel turning would wobble); the crank pins and the arms show the turning.
+	-- Each wheel is an iron tyre with a red centre a little proud of it on both sides.
 	local wheelX = L.WheelTrack
+	local function wheel(x: number, r: number, z: number)
+		add({ part = cylinder("Wheel", colors.Iron, model), size = Vector3.new(r * 2, L.WheelWidth, r * 2), rest = CFrame.new(x, r, z) * ACROSS })
+		local inner = (r - L.TyreThickness) * 2
+		add({ part = cylinder("WheelCentre", colors.Wheel, model), size = Vector3.new(inner, L.WheelWidth + 0.04, inner), rest = CFrame.new(x, r, z) * ACROSS })
+	end
 	for _, sign in { -1, 1 } do
 		local crank = CrankMotion.forSide(sign, L.CrankRadius) -- the same circle as that side's arm
 		for _, z in L.DriversAt do
 			local r = L.DriverRadius
-			add({ part = cylinder("Wheel", colors.Iron, model), size = Vector3.new(r * 2, L.WheelWidth, r * 2), rest = CFrame.new(sign * wheelX, r, z) * ACROSS })
+			wheel(sign * wheelX, r, z)
 			local face = wheelX + L.WheelWidth / 2
 			add({ part = cylinder("Hub", colors.Brass, model), size = Vector3.new(r * 0.6, 0.12, r * 0.6), rest = CFrame.new(sign * (face + 0.06), r, z) * ACROSS })
 			local pin = cylinder("CrankPin", colors.Brass, model)
 			add({ part = pin, size = Vector3.new(0.4, L.PinLength, 0.4), rest = CFrame.new(sign * (face + L.PinLength / 2), r, z) * ACROSS, crank = crank })
 		end
-		local r = L.LeadRadius
-		add({ part = cylinder("Wheel", colors.Iron, model), size = Vector3.new(r * 2, L.WheelWidth, r * 2), rest = CFrame.new(sign * wheelX, r, L.LeadAt) * ACROSS })
+		wheel(sign * wheelX, L.LeadRadius, L.LeadAt)
 	end
 
 	-- Cab roof over the standing torso (the cowboy's floor later).
@@ -307,8 +335,13 @@ function LocomotiveBuilder.build(avatar: Model, base: CFrame): Model
 			part:SetAttribute(Names.CrankRadius, crank.radius)
 			part:SetAttribute(Names.CrankPhase, crank.phase)
 		end
+		local kick = placement.kick
+		if kick then
+			part:SetAttribute(Names.KickPivot, shift * kick.pivot)
+			part:SetAttribute(Names.KickSide, kick.side)
+		end
 	end
-	-- Anything else in the avatar (root part, upper legs, an unexpected extra part) waits invisibly at the base.
+	-- Anything else in the avatar (the root part, an unexpected extra part) waits invisibly at the base.
 	for _, item in avatar:GetDescendants() do
 		if item:IsA("BasePart") and not placed[item] then
 			item.Transparency = 1

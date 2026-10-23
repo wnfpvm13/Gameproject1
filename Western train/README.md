@@ -4,10 +4,13 @@ MonCook, 금칙어 게임과 별개인 로블록스 게임. 첫 콘텐츠는 B�
 되고(S를 누르면 만화처럼 납작), 다른 한 명은 그 지붕 위에서 오비를 한다. 설계와 결정 기록: [docs/DESIGN.md](docs/DESIGN.md)
 
 **지금 코드: 시제품 1 — 납작해지는 얼굴 기관차** ([docs/PROTOTYPE_SQUASH_2026-10-23.md](docs/PROTOTYPE_SQUASH_2026-10-23.md),
-몸체 재설계 [docs/LOCO_DRESSED_2026-10-23.md](docs/LOCO_DRESSED_2026-10-23.md))
+몸체 재설계 [docs/LOCO_DRESSED_2026-10-23.md](docs/LOCO_DRESSED_2026-10-23.md), 얼굴 창·팔다리
+[docs/FACECAM_LEGS_2026-10-24.md](docs/FACECAM_LEGS_2026-10-24.md))
 - 들어오면 내 아바타가 "아바타 옷을 입은 기관차"가 되어 선로 위에 선다: 머리는 앞 얼굴, 셔츠 입은 몸통은 뒤 운전실, 팔은 바퀴
-  크랭크 핀을 쥐고 도는 연결봉, 신발은 뒤 범퍼, 보일러는 짙은 초록. 내 캐릭터는 그 안에 숨는다.
-- S(모바일 "납작" 버튼, 게임패드 B)를 누르고 있으면 납작, 떼면 "뽀용" 하고 출렁이며 복귀. 굴뚝 옆으로 증기가 샌다.
+  크랭크 핀을 큰 주먹으로 쥐고 도는 연결봉, 다리는 뒤로 뻗은 범퍼, 보일러는 짙은 초록, 바퀴는 짙은 빨강. 내 캐릭터는 그 안에 숨는다.
+- 화면 위 가운데 얼굴 창에 내 기관차 얼굴이 앞에서 보인다(플레이 카메라는 뒤에서 보므로).
+- S(모바일 "납작" 버튼, 게임패드 B)를 누르고 있으면 납작, 떼면 "뽀용" 하고 출렁이며 복귀. 굴뚝 옆으로 증기가 새고, 뒤로 뻗은
+  다리가 버둥거리고, 얼굴 창이 커진다.
 - 아직 없는 것: 배경 흐름, 장애물·판정, 점프, 지붕 위 카우보이, 소리.
 
 ## 폴더
@@ -16,7 +19,7 @@ MonCook, 금칙어 게임과 별개인 로블록스 게임. 첫 콘텐츠는 B�
   `PartUtil`(부품 도우미)
 - `src/server` — `Main`(연결 + 플레이어별 선로 칸·기관차 수명), `Net`(리모트), `PrototypeStage`(땅·선로), `AvatarBody`, `LocomotiveBuilder`,
   `CharacterHider`, `SquashService`
-- `src/client` — `init`(연결만), `SquashInput`, `LocomotiveAnimator`, `SteamPuff`, `DriverCamera`
+- `src/client` — `init`(연결만), `SquashInput`, `LocomotiveAnimator`, `SteamPuff`, `DriverCamera`, `FaceCam`(얼굴 창)
 - `tools/tests` — Studio 없이 도는 테스트, `tools/lint` — 정적 검사
 
 ## 코드 규칙 (전역 규칙 `~/.claude/CLAUDE.md` 3번의 이 게임 구체 사항)

@@ -51,4 +51,17 @@ function SquashPose.pose(rest: Rest, body: Vec): (Vec, Vec)
 	return position, size
 end
 
+-- Limits for kickAngle: radians per unit of spring speed, the largest upward and downward swing, and the body height
+-- scale at which the body is fully flat (no room left to swing down).
+export type KickLimits = { gain: number, up: number, down: number, flatHeight: number }
+
+-- Swing (radians about the locomotive's X axis; positive turns a leg pointing backward downward) of a leg that hangs
+-- off the body, for the spring's speed and the body's height scale. The legs lag behind the body, so they kick when
+-- it folds and flap while it bounces; side is 1 or -1, so the two legs go opposite ways. The downward limit shrinks
+-- as the body folds, so a low hip never swings the shoes into the rails.
+function SquashPose.kickAngle(velocity: number, side: number, bodyY: number, limits: KickLimits): number
+	local room = math.clamp((bodyY - limits.flatHeight) / (1 - limits.flatHeight), 0, 1)
+	return math.clamp(side * velocity * limits.gain, -limits.up, limits.down * room)
+end
+
 return SquashPose

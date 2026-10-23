@@ -4,7 +4,7 @@ MonCook과 별개인 로블록스 음성 파티 게임. V3: 밝은 실내 수영
 금칙어(머리 위, 본인만 못 봄)를 피한다. 실패하면 의자가 뒤로 젖혀지며 "펑" 하고 래그돌로 수영장에 날아간다.
 (V2는 원형 라운지 의자에서 받아쓰기로 판정했다.)
 
-**설계 기준: V3 (2026-10-22) — [docs/DESIGN_V3.md](docs/DESIGN_V3.md)** (실내 수영장 미션 + 진행자 + 금칙어, 1단계 구현 중).
+**설계 기준: V3 (2026-10-22, 2026-10-23 미니게임 개편으로 최신화) — [docs/DESIGN_V3.md](docs/DESIGN_V3.md)** (실내 수영장 + 진행자 + 미니게임 10가지, 금칙어는 미니게임 "금칙어 토크" 하나, 의자 벨·발언권, 자유 대화 없음). 개편은 묶음 6a~6e로 만든다(설계 12번); 아래 "지금 코드"는 개편 전 흐름이다.
 지금 코드는 V3 1단계 묶음 5b까지(1단계 전체) — 채팅 자동 판정·구제·채팅 전달 규칙: [docs/CHAT_JUDGING_2026-10-23.md](docs/CHAT_JUDGING_2026-10-23.md), 비공개 서버 금칙어(1인 1단어, 진행자 귀 판정·다시 뽑기): [docs/BANNED_WORDS_2026-10-23.md](docs/BANNED_WORDS_2026-10-23.md), 한마디·투표·진행자 판정(단상 레버): [docs/ONE_WORD_2026-10-23.md](docs/ONE_WORD_2026-10-23.md), 퀴즈·결승 퀴즈·룰렛(2D 원판): [docs/QUIZ_ROULETTE_2026-10-23.md](docs/QUIZ_ROULETTE_2026-10-23.md), 진행자 모드(지원·선정·미션 메뉴·효과음·판 중 교체): [docs/PRESENTER_2026-10-23.md](docs/PRESENTER_2026-10-23.md), 채팅 참가(음성이 안 되는 사람, 말풍선 강조): [docs/CHAT_JOIN_2026-10-23.md](docs/CHAT_JOIN_2026-10-23.md), 판 규칙(목숨 3개·8분·결승): [docs/ROUND_RULES_2026-10-22.md](docs/ROUND_RULES_2026-10-22.md), 발사 연출: [docs/FLING_2026-10-22.md](docs/FLING_2026-10-22.md). 공개 서버는 금칙어 없이 미션만(1단계), 비공개 서버는 진행자가 귀로(음성) 판정하고 채팅은 자동 판정 + 진행자 구제다. 2단계(공개 서버 금칙어, 음성 인식)는 실기기 시험 뒤. V2 규칙·코드 구조·테스트 기록은 [docs/DESIGN_V2.md](docs/DESIGN_V2.md), V2 마지막 상태는 git 태그 `banned-words-v2-final`.
 - V3 맵(밝은 실내 수영장, 맵 `tools/build_pool_hall.luau` → 조명 `tools/build_pool_lighting.luau`): [docs/VISUAL_V3_POOL_2026-10-22.md](docs/VISUAL_V3_POOL_2026-10-22.md)
 - 제작 내역 전체(처음부터 V2.1.1까지): [docs/HISTORY_2026-10-20.md](docs/HISTORY_2026-10-20.md)

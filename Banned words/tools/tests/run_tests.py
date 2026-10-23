@@ -43,6 +43,10 @@ ROUND_MODULES = [
     ("Timeline", "src/server/services/Timeline.luau"),
     ("TalkTopics", "src/server/content/TalkTopics.luau"),
     ("BannedTalk", "src/server/missions/BannedTalk.luau"),
+    ("BombBank", "src/server/content/BombBank.luau"),
+    ("Crocodile", "src/server/missions/Crocodile.luau"),
+    ("BombPass", "src/server/missions/BombPass.luau"),
+    ("Nunchi", "src/server/missions/Nunchi.luau"),
     ("MissionRunner", "src/server/services/MissionRunner.luau"),
     ("ChatService", "src/server/services/ChatService.luau"),
     ("PresenterService", "src/server/services/PresenterService.luau"),
@@ -63,6 +67,10 @@ MISSION_MODULES = [
     ("TestMission", "src/server/missions/TestMission.luau"),
     ("TalkTopics", "src/server/content/TalkTopics.luau"),
     ("BannedTalk", "src/server/missions/BannedTalk.luau"),
+    ("BombBank", "src/server/content/BombBank.luau"),
+    ("Crocodile", "src/server/missions/Crocodile.luau"),
+    ("BombPass", "src/server/missions/BombPass.luau"),
+    ("Nunchi", "src/server/missions/Nunchi.luau"),
     ("MissionRunner", "src/server/services/MissionRunner.luau"),
 ]
 

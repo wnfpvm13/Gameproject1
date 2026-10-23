@@ -9,8 +9,8 @@
 -- question (docs/DESIGN_V3.md §13: Net.listen cannot disconnect, so missions never listen themselves). What a mission
 -- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
 -- Bundle 4: the quiz (also the final), the roulette, "say what you like" (4b, bells since 6b); bundle 6a: the
--- banned-word talk (only while speech judging is on); bundle 6b: the bell quiz (only with a presenter); and the
--- Studio-only test mission.
+-- banned-word talk (only while speech judging is on); bundle 6b: the bell quiz (only with a presenter); bundle 6c:
+-- crocodile teeth, the bomb, nunchi; and the Studio-only test mission.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -22,6 +22,9 @@ local Quiz = require(missionFolder:WaitForChild("Quiz"))
 local Roulette = require(missionFolder:WaitForChild("Roulette"))
 local OneWord = require(missionFolder:WaitForChild("OneWord"))
 local BannedTalk = require(missionFolder:WaitForChild("BannedTalk"))
+local Crocodile = require(missionFolder:WaitForChild("Crocodile"))
+local BombPass = require(missionFolder:WaitForChild("BombPass"))
+local Nunchi = require(missionFolder:WaitForChild("Nunchi"))
 local TestMission = require(missionFolder:WaitForChild("TestMission"))
 
 local MissionRunner = {}
@@ -50,8 +53,10 @@ export type Ctx = {
 	talk: (stage: string, topic: string?) -> (),
 	-- The presenter's re-draw window: waits `seconds` or until they press "start now"; false if cancelled meanwhile.
 	presenterReroll: (seconds: number) -> boolean,
-	-- The seat bells of `from` open for `seconds` (bundle 6b): who rang, first to last (`firstOnly`: closes at the first).
-	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	-- The seat bells of `from` open for `seconds` (bundle 6b): who rang, first to last, and when (`firstOnly`: closes
+	-- at the first ring; `enough(rung, times)`: closes when the game knows its outcome, bundle 6c).
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
 	-- The floor (§5.1): only `player` (and the presenter) heard by everyone, alive players receive only their chat;
 	-- nil ends it. RoundService ends it after every mission too.
 	floor: (player: Player?) -> (),
@@ -87,7 +92,8 @@ export type MissionCtx = {
 	lever: () -> (), -- everyone sees the podium lever pulled (the presenter's launch)
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
-	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -107,7 +113,7 @@ export type Mission = {
 -- An entry of a presenter's menu.
 export type Option = { id: string, title: string, recommended: boolean }
 
-local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, TestMission }
+local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, Crocodile, BombPass, Nunchi, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
@@ -249,7 +255,9 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			end
 			question = open
 			local shown = table.clone(payload)
-			shown.endsAt = open.endsAt
+			-- (`shownEndsAt`: what the clients see instead of the real end, kept on the server — the bomb's bang)
+			shown.endsAt = payload.shownEndsAt or open.endsAt
+			shown.shownEndsAt = nil
 			shown.id = open.id
 			if not ctx.cancelled() then
 				setScreen(shown)
@@ -257,8 +265,8 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			waitOrCancel(ctx, seconds, function()
 				local alive = ctx.players()
 				for player in open.from do
-					if not open.answers[player] and table.find(alive, player) then
-						return false -- (someone who left or went out meanwhile is not waited for)
+					if not open.answers[player] and table.find(alive, player) and not ctx.flying(player) then
+						return false -- (someone who left, went out or flies meanwhile is not waited for)
 					end
 				end
 				return true
@@ -296,11 +304,12 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			end
 			return ctx.presenterReroll(seconds)
 		end,
-		bell = function(from: { Player }, seconds: number, firstOnly: boolean): { Player }
+		bell = function(from: { Player }, seconds: number, firstOnly: boolean,
+			enough: (({ Player }, { [Player]: number }) -> boolean)?): ({ Player }, { [Player]: number })
 			if ctx.cancelled() then
-				return {}
+				return {}, {}
 			end
-			return ctx.bell(from, seconds, firstOnly)
+			return ctx.bell(from, seconds, firstOnly, enough)
 		end,
 		floor = ctx.floor, -- (also after a cancel: the floor must always be given back)
 		presenterVerdict = function(answer: string, seconds: number): string?

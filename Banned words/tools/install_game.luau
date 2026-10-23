@@ -85,6 +85,27 @@ return {
 	BELL_ANSWER_SECONDS = 5,
 	BELL_ANSWER_CHAT_SECONDS = 10,
 	BELL_VERDICT_SECONDS = 5,
+	-- System minigames (bundle 6c, docs/DESIGN_V3.md §5.2). Each result stays on screen MINIGAME_RESULT_SECONDS.
+	MINIGAME_RESULT_SECONDS = 3,
+	-- Crocodile teeth: in a random order everyone presses one of CROC_TEETH teeth in turn (CROC_TURN_SECONDS each,
+	-- too late is bitten too); one tooth, hidden on the server, bites.
+	CROC_TEETH = 10,
+	CROC_TURN_SECONDS = 5,
+	CROC_MIN_PLAYERS = 2,
+	-- The bomb: whoever holds it answers a two-choice question in BOMB_ANSWER_SECONDS; right passes it on (a ring in
+	-- an order drawn at the start), wrong or too late keeps it with a new question; it goes off after a hidden time
+	-- between BOMB_MIN_SECONDS and BOMB_MAX_SECONDS, and whoever holds it then flies.
+	BOMB_MIN_SECONDS = 20,
+	BOMB_MAX_SECONDS = 35,
+	BOMB_ANSWER_SECONDS = 4,
+	BOMB_MIN_PLAYERS = 2,
+	-- Nunchi: everyone rings once to take the next number; two rings within NUNCHI_WINDOW of each other clash (both fly,
+	-- it ends there); with no clash the one who never rang flies; NUNCHI_IDLE_SECONDS without a ring (or
+	-- NUNCHI_MAX_SECONDS in all) and everyone who has not rung flies.
+	NUNCHI_WINDOW = 0.5,
+	NUNCHI_IDLE_SECONDS = 8,
+	NUNCHI_MAX_SECONDS = 30,
+	NUNCHI_MIN_PLAYERS = 3,
 	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
 	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
 	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
@@ -266,6 +287,23 @@ return {
 		BELL_QUIZ_WRONG = "❌ 땡! %s",
 		BELL_QUIZ_NOBODY = "아무도 안 눌러서 모두 답해요",
 		VERDICT_PICK = "맞았나요? 정답: %s",
+		CROC_TITLE = "악어 이빨",
+		CROC_START = "악어 이빨 · 차례대로 이빨을 하나 눌러요 · 물리면 날아가요",
+		CROC_TURN = "%s 차례",
+		CROC_BITE = "😱 덥석! %s",
+		CROC_LATE = "⏰ 시간 초과! %s",
+		BOMB_TITLE = "폭탄 돌리기",
+		BOMB_START = "폭탄 돌리기 · 맞히면 다음 사람에게 넘어가요",
+		BOMB_HOLDER = "💣 %s",
+		BOMB_BOOM = "💥 펑! %s",
+		NUNCHI_TITLE = "눈치 게임",
+		NUNCHI_START = "눈치 게임 · 1부터 한 명씩 벨! 겹치거나 꼴찌면 날아가요",
+		NUNCHI_CLASH = "💥 겹쳤다! %s",
+		NUNCHI_LAST = "🐢 꼴찌! %s",
+		NUNCHI_IDLE = "벨을 안 눌러서 날아가요: %s",
+		NUNCHI_NEXT = "다음 숫자: %d",
+		NUNCHI_ORDER = "%d %s",
+		NUNCHI_NONE = "✕ %s",
 		VERDICT_RIGHT = "⭕ 맞음",
 		VERDICT_WRONG = "❌ 틀림",
 		WORDS_TITLE = "금칙어 명단",
@@ -1066,10 +1104,11 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 				return Match.roundId ~= myRound or settled()
 			end)
 		end,
-		bell = function(from: { Player }, seconds: number, firstOnly: boolean): { Player }
+		bell = function(from: { Player }, seconds: number, firstOnly: boolean,
+			enough: (({ Player }, { [Player]: number }) -> boolean)?): ({ Player }, { [Player]: number })
 			return BellService.collect(from, seconds, firstOnly, function()
 				return Match.roundId ~= myRound or settled()
-			end)
+			end, enough)
 		end,
 		floor = setFloor,
 		presenterVerdict = function(answer: string, seconds: number): string?
@@ -1695,6 +1734,67 @@ end
 return RoundService
 ]====]; s.Parent = n2 end
 local n3 = Instance.new("Folder"); n3.Name = "content"
+do local s = Instance.new("ModuleScript"); s.Name = "BombBank"; s.Source = [====[--!strict
+-- Two-choice questions for the bomb (docs/DESIGN_V3.md §5.2; bundle 6c). Data only. Quick to read and answer in a few
+-- seconds, general knowledge and everyday things around age 17; like the quiz bank, nothing about real people,
+-- politics, religion, accidents or other sensitive matters. `answer` is the index of the right choice (1 or 2).
+
+export type Question = { q: string, choices: { string }, answer: number }
+
+local BombBank: { Question } = {
+	{ q = "바다 물은 짜다", choices = { "O", "X" }, answer = 1 },
+	{ q = "거미의 다리는 6개다", choices = { "O", "X" }, answer = 2 },
+	{ q = "태양은 동쪽에서 뜬다", choices = { "O", "X" }, answer = 1 },
+	{ q = "펭귄은 날 수 있다", choices = { "O", "X" }, answer = 2 },
+	{ q = "1년은 12달이다", choices = { "O", "X" }, answer = 1 },
+	{ q = "물은 1기압에서 100도에 끓는다", choices = { "O", "X" }, answer = 1 },
+	{ q = "고래는 물고기다", choices = { "O", "X" }, answer = 2 },
+	{ q = "무지개 색은 7가지로 센다", choices = { "O", "X" }, answer = 1 },
+	{ q = "달은 스스로 빛을 낸다", choices = { "O", "X" }, answer = 2 },
+	{ q = "삼각형의 각을 모두 더하면 180도", choices = { "O", "X" }, answer = 1 },
+	{ q = "박쥐는 새다", choices = { "O", "X" }, answer = 2 },
+	{ q = "얼음은 물에 뜬다", choices = { "O", "X" }, answer = 1 },
+	{ q = "일주일은 8일이다", choices = { "O", "X" }, answer = 2 },
+	{ q = "오이는 보통 초록색이다", choices = { "O", "X" }, answer = 1 },
+	{ q = "문어의 다리는 10개다", choices = { "O", "X" }, answer = 2 },
+	{ q = "축구는 한 팀 11명이 뛴다", choices = { "O", "X" }, answer = 1 },
+	{ q = "지구는 태양 주위를 돈다", choices = { "O", "X" }, answer = 1 },
+	{ q = "소리는 빛보다 빠르다", choices = { "O", "X" }, answer = 2 },
+	{ q = "하루는 24시간이다", choices = { "O", "X" }, answer = 1 },
+	{ q = "식물은 햇빛으로 양분을 만든다", choices = { "O", "X" }, answer = 1 },
+	{ q = "개구리는 포유류다", choices = { "O", "X" }, answer = 2 },
+	{ q = "윤년의 2월은 29일까지 있다", choices = { "O", "X" }, answer = 1 },
+	{ q = "농구공보다 탁구공이 무겁다", choices = { "O", "X" }, answer = 2 },
+	{ q = "사계절 중 가장 더운 것은 여름", choices = { "O", "X" }, answer = 1 },
+	{ q = "꿀벌은 꿀을 만든다", choices = { "O", "X" }, answer = 1 },
+	{ q = "남극에는 북극곰이 산다", choices = { "O", "X" }, answer = 2 },
+	{ q = "7 곱하기 8은 56", choices = { "O", "X" }, answer = 1 },
+	{ q = "9 곱하기 6은 56", choices = { "O", "X" }, answer = 2 },
+	{ q = "한글 자음 ㄱ의 이름은 기역", choices = { "O", "X" }, answer = 1 },
+	{ q = "피아노 건반은 모두 흰색이다", choices = { "O", "X" }, answer = 2 },
+	{ q = "더 큰 쪽은?", choices = { "코끼리", "고양이" }, answer = 1 },
+	{ q = "더 빠른 쪽은?", choices = { "달팽이", "치타" }, answer = 2 },
+	{ q = "물이 어는 온도는?", choices = { "0도", "50도" }, answer = 1 },
+	{ q = "하늘이 맑을 때의 색은?", choices = { "파랑", "초록" }, answer = 1 },
+	{ q = "더 긴 쪽은?", choices = { "1미터", "1센티미터" }, answer = 1 },
+	{ q = "알을 낳는 쪽은?", choices = { "닭", "강아지" }, answer = 1 },
+	{ q = "바나나 껍질 색은 보통?", choices = { "보라", "노랑" }, answer = 2 },
+	{ q = "더 많은 쪽은?", choices = { "100", "99" }, answer = 1 },
+	{ q = "겨울에 내리는 하얀 것은?", choices = { "눈", "모래" }, answer = 1 },
+	{ q = "시계 분침이 한 바퀴 돌면 몇 분?", choices = { "60분", "100분" }, answer = 1 },
+	{ q = "다리가 없는 쪽은?", choices = { "뱀", "도마뱀" }, answer = 1 },
+	{ q = "더 작은 수는?", choices = { "0.5", "0.05" }, answer = 2 },
+	{ q = "주사위에서 1의 맞은편 눈은?", choices = { "6", "2" }, answer = 1 },
+	{ q = "빨강과 파랑 물감을 섞으면?", choices = { "보라", "노랑" }, answer = 1 },
+	{ q = "축구공의 모양은?", choices = { "공 모양", "정육면체" }, answer = 1 },
+	{ q = "사람의 뼈가 더 많은 때는?", choices = { "아기", "어른" }, answer = 1 },
+	{ q = "더 추운 곳은?", choices = { "북극", "사막의 한낮" }, answer = 1 },
+	{ q = "반대말: 위", choices = { "아래", "옆" }, answer = 1 },
+	{ q = "반대말: 빠르다", choices = { "느리다", "가볍다" }, answer = 1 },
+}
+
+return BombBank
+]====]; s.Parent = n3 end
 do local s = Instance.new("ModuleScript"); s.Name = "OneWordTopics"; s.Source = [====[--!strict
 -- One-word topics (docs/DESIGN_V3.md §5; bundle 4b, owner 2026-10-23: mostly about yourself — tastes, habits, small
 -- experiences). Data only. Each performer gets one and may swap it once. No topic names or points at a real person,
@@ -2110,7 +2210,8 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
-	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -2150,6 +2251,501 @@ function BannedTalk.run(ctx: Ctx): boolean?
 end
 
 return BannedTalk
+]====]; s.Parent = n4 end
+do local s = Instance.new("ModuleScript"); s.Name = "BombPass"; s.Source = [====[--!strict
+-- The bomb (docs/DESIGN_V3.md §5.2; bundle 6c, owner 2026-10-23). Everyone on the ground stands in a ring drawn at the
+-- start (shown on screen; missions do not know the seats). Whoever holds the bomb answers a two-choice question within
+-- BOMB_ANSWER_SECONDS: right passes it to the next in the ring (skipping anyone who left or flies), wrong or too late
+-- keeps it: the rest of that question's time passes (no guessing at speed), then a new question. Each question's two
+-- choices come in a random order. It goes off after a hidden time between BOMB_MIN_SECONDS and BOMB_MAX_SECONDS (the
+-- question timer on screen always shows BOMB_ANSWER_SECONDS, so it gives nothing away); only an answer the server got
+-- before that counts (answers are taken until the bomb goes off at the latest); whoever holds it then flies. A holder
+-- who leaves or flies hands it on at once. Who held it for a whole question and never answered missed an answer (the
+-- AFK rule).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local BombBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("BombBank"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	stopped: () -> boolean,
+	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	lever: () -> (),
+	talk: (stage: string, topic: string?) -> (),
+	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
+}
+
+local BombPass = {
+	id = "bomb",
+	title = Config.TEXT.BOMB_TITLE,
+	expectedSeconds = Config.BOMB_MAX_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
+	minPlayers = Config.BOMB_MIN_PLAYERS :: number?,
+	needsPresenter = nil :: boolean?,
+}
+
+local function ids(list: { Player }): { number }
+	local out = {}
+	for _, player in list do
+		table.insert(out, player.UserId)
+	end
+	return out
+end
+
+function BombPass.available(final: boolean): boolean
+	return not final and #BombBank > 0
+end
+
+-- Returns false when too few were on the ground to start.
+function BombPass.run(ctx: Ctx): boolean?
+	local ring = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(ring, player)
+		end
+	end
+	if #ring < Config.BOMB_MIN_PLAYERS then
+		return false
+	end
+	for i = #ring, 2, -1 do
+		local j = ctx.rng:NextInteger(1, i)
+		ring[i], ring[j] = ring[j], ring[i]
+	end
+	local function holding(index: number): boolean
+		local player = ring[index]
+		return table.find(ctx.players(), player) ~= nil and not ctx.flying(player)
+	end
+	-- The next one in the ring from `index` (itself first when `including`) who can hold it; nil if nobody can.
+	local function nextFrom(index: number, including: boolean): number?
+		for step = if including then 0 else 1, #ring do
+			local candidate = (index - 1 + step) % #ring + 1
+			if holding(candidate) then
+				return candidate
+			end
+		end
+		return nil
+	end
+	ctx.show(Config.TEXT.BOMB_START)
+	local deadline = os.clock() + ctx.rng:NextNumber(Config.BOMB_MIN_SECONDS, Config.BOMB_MAX_SECONDS)
+	local holder: number? = 1
+	local held: { [Player]: boolean } = {}
+	local answered: { [Player]: boolean } = {}
+	local last = 0
+	while os.clock() < deadline do
+		holder = nextFrom(holder or 1, true)
+		if not holder then
+			return nil -- (nobody left to hold it)
+		end
+		local player = ring[holder]
+		local pick = ctx.rng:NextInteger(1, #BombBank)
+		if pick == last and #BombBank > 1 then
+			pick = pick % #BombBank + 1 -- (never the same question twice in a row)
+		end
+		last = pick
+		local question = BombBank[pick]
+		local order = if ctx.rng:NextNumber() < 0.5 then { 1, 2 } else { 2, 1 }
+		local choices = { question.choices[order[1]], question.choices[order[2]] }
+		local right = table.find(order, question.answer)
+		ctx.show(string.format(Config.TEXT.BOMB_HOLDER, player.DisplayName))
+		local seconds = math.min(Config.BOMB_ANSWER_SECONDS, deadline - os.clock())
+		local questionEnds = os.clock() + seconds
+		-- (answers are taken until the bomb goes off at the latest, so an answer that came in counts even if this
+		-- loop looks again a moment after the bang)
+		local answers = ctx.ask({ kind = "bomb", ids = ids(ring), holder = holder, question = question.q, choices = choices,
+			shownEndsAt = Match.now() + Config.BOMB_ANSWER_SECONDS }, #choices, seconds, { player })
+		if ctx.cancelled() then
+			return nil
+		end
+		local choice = answers[player]
+		if choice then
+			answered[player] = true
+			held[player] = true
+		elseif seconds >= Config.BOMB_ANSWER_SECONDS and os.clock() >= questionEnds - 0.05 and holding(holder) then
+			held[player] = true -- (a whole question to answer and no answer: it counts; cut short by a flight it does not)
+		end
+		if choice and choice == right then
+			holder = nextFrom(holder, false) or holder
+		elseif choice then
+			local lockEnds = math.min(questionEnds, deadline) -- (wrong: the rest of the question's time first)
+			while os.clock() < lockEnds and not ctx.cancelled() and holding(holder) do
+				ctx.wait(math.min(0.1, lockEnds - os.clock()))
+			end
+		end
+	end
+	holder = if holder then nextFrom(holder, true) else nil
+	if not holder then
+		return nil
+	end
+	local loser = ring[holder]
+	local yes, no = {}, {}
+	for player in held do
+		table.insert(if answered[player] then yes else no, player)
+	end
+	ctx.screen({ kind = "bombResult", ids = ids(ring), holder = holder })
+	ctx.show(string.format(Config.TEXT.BOMB_BOOM, loser.DisplayName))
+	ctx.answers(yes, no) -- (before the fail: a launched player's miss would not count)
+	ctx.fail({ loser }, "boom")
+	ctx.reveal(Config.MINIGAME_RESULT_SECONDS)
+	return nil
+end
+
+return BombPass
+]====]; s.Parent = n4 end
+do local s = Instance.new("ModuleScript"); s.Name = "Crocodile"; s.Source = [====[--!strict
+-- Crocodile teeth (docs/DESIGN_V3.md §5.2; bundle 6c, owner 2026-10-23). Everyone on the ground takes turns in an
+-- order drawn at the start; on their turn a player presses one of CROC_TEETH teeth on screen within
+-- CROC_TURN_SECONDS. One tooth, hidden on the server, bites: whoever presses it flies, and so does a player whose time
+-- runs out (an answer the AFK rule counts). A tooth pressed once stays down (a press on it is ignored and the turn
+-- goes on), so at most CROC_TEETH - 1 safe presses can happen: it always ends with someone. A player who left or flies
+-- when their turn comes, or during it, is skipped (no tooth goes down); a cap of CROC_TEETH turns' time keeps the
+-- whole game within its time budget (past it, nobody flies).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	stopped: () -> boolean,
+	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	lever: () -> (),
+	talk: (stage: string, topic: string?) -> (),
+	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
+}
+
+local Crocodile = {
+	id = "croc",
+	title = Config.TEXT.CROC_TITLE,
+	-- The longest run (capped in `run`): CROC_TEETH turns at the last moment, then the result.
+	expectedSeconds = Config.CROC_TEETH * Config.CROC_TURN_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
+	minPlayers = Config.CROC_MIN_PLAYERS :: number?,
+	needsPresenter = nil :: boolean?,
+}
+
+local function ids(list: { Player }): { number }
+	local out = {}
+	for _, player in list do
+		table.insert(out, player.UserId)
+	end
+	return out
+end
+
+-- Everyone on the ground, in a random order.
+local function drawOrder(ctx: Ctx): { Player }
+	local order = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(order, player)
+		end
+	end
+	for i = #order, 2, -1 do
+		local j = ctx.rng:NextInteger(1, i)
+		order[i], order[j] = order[j], order[i]
+	end
+	return order
+end
+
+function Crocodile.available(final: boolean): boolean
+	return not final
+end
+
+-- Returns false when too few were on the ground to start.
+function Crocodile.run(ctx: Ctx): boolean?
+	local order = drawOrder(ctx)
+	if #order < Config.CROC_MIN_PLAYERS then
+		return false
+	end
+	ctx.show(Config.TEXT.CROC_START)
+	local bad = ctx.rng:NextInteger(1, Config.CROC_TEETH)
+	local down: { boolean } = table.create(Config.CROC_TEETH, false)
+	local answered: { Player } = {}
+	local loser: Player? = nil
+	local late = false
+	local index = 0
+	local skipped = 0
+	local capAt = os.clock() + Config.CROC_TEETH * Config.CROC_TURN_SECONDS
+	while not loser do
+		if os.clock() >= capAt then
+			return nil -- (turns kept being skipped: the time budget is up, nobody flies)
+		end
+		index = index % #order + 1
+		local player = order[index]
+		if not table.find(ctx.players(), player) or ctx.flying(player) then
+			skipped += 1
+			if skipped >= #order then
+				return nil -- (nobody left to take a turn)
+			end
+			continue
+		end
+		skipped = 0
+		ctx.show(string.format(Config.TEXT.CROC_TURN, player.DisplayName))
+		-- A press on a tooth already down is ignored: the turn goes on for the time left.
+		local turnEnds = math.min(os.clock() + Config.CROC_TURN_SECONDS, capAt)
+		local tooth: number? = nil
+		repeat
+			local answers = ctx.ask({ kind = "croc", ids = ids(order), current = index, down = table.clone(down) },
+				Config.CROC_TEETH, math.max(0, turnEnds - os.clock()), { player })
+			if ctx.cancelled() then
+				return nil
+			end
+			local pressed = answers[player]
+			if pressed and not down[pressed] then
+				tooth = pressed
+			end
+		until tooth or not answers[player] or os.clock() >= turnEnds
+		if not table.find(ctx.players(), player) or ctx.flying(player) then
+			continue -- (left or flew during the turn: skipped, nothing goes down)
+		end
+		if tooth == nil then
+			if os.clock() >= capAt then
+				return nil -- (the time budget ran out during this turn: nobody flies)
+			end
+			loser, late = player, true
+			continue
+		end
+		if not table.find(answered, player) then
+			table.insert(answered, player)
+		end
+		down[tooth] = true
+		if tooth == bad then
+			loser = player
+		end
+	end
+	local who = loser :: Player
+	ctx.screen({ kind = "crocResult", ids = ids(order), down = down, bad = bad, loser = table.find(order, who), late = late })
+	ctx.show(string.format(if late then Config.TEXT.CROC_LATE else Config.TEXT.CROC_BITE, who.DisplayName))
+	ctx.answers(answered, if late then { who } else {}) -- (before the fail: a launched player's miss would not count)
+	ctx.fail({ who }, "bite")
+	ctx.reveal(Config.MINIGAME_RESULT_SECONDS)
+	return nil
+end
+
+return Crocodile
+]====]; s.Parent = n4 end
+do local s = Instance.new("ModuleScript"); s.Name = "Nunchi"; s.Source = [====[--!strict
+-- Nunchi (docs/DESIGN_V3.md §5.2; bundle 6c): the Korean counting game with the seat bells. The bells of everyone on
+-- the ground open; each ring takes the next number (1, 2, 3 ...). Rings within NUNCHI_WINDOW of the first ring of a
+-- number clash: they all fly and it ends once that window is over (so three at once all clash). With no clash, once
+-- all but one of those still in have rung (and the window after the last ring is over), the one who never rang flies;
+-- if they rang in that last moment after all, the last to ring is the last. NUNCHI_IDLE_SECONDS without a ring (or
+-- NUNCHI_MAX_SECONDS in all) ends it too: everyone still in who has not rung flies (and missed an answer: the AFK
+-- rule). Fewer than NUNCHI_MIN_PLAYERS left in the middle: it ends with no penalty. Ring times are the server's (ping
+-- plays a part, known and accepted).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	stopped: () -> boolean,
+	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number) -> string?,
+	lever: () -> (),
+	talk: (stage: string, topic: string?) -> (),
+	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
+}
+
+local Nunchi = {
+	id = "nunchi",
+	title = Config.TEXT.NUNCHI_TITLE,
+	expectedSeconds = Config.NUNCHI_MAX_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
+	minPlayers = Config.NUNCHI_MIN_PLAYERS :: number?,
+	needsPresenter = nil :: boolean?,
+}
+
+local function ids(list: { Player }): { number }
+	local out = {}
+	for _, player in list do
+		table.insert(out, player.UserId)
+	end
+	return out
+end
+
+-- The first clash in `rung` (the rings within NUNCHI_WINDOW of the first ring of one number) and that first ring's
+-- time, or nil.
+function Nunchi.clash(rung: { Player }, times: { [Player]: number }): ({ Player }?, number?)
+	local k = 1
+	while k < #rung do
+		local first = rung[k]
+		local group = { first }
+		local j = k + 1
+		while j <= #rung and times[rung[j]] - times[first] <= Config.NUNCHI_WINDOW do
+			table.insert(group, rung[j])
+			j += 1
+		end
+		if #group > 1 then
+			return group, times[first]
+		end
+		k += 1
+	end
+	return nil, nil
+end
+
+local function names(list: { Player }): string
+	local out = {}
+	for _, player in list do
+		table.insert(out, player.DisplayName)
+	end
+	return table.concat(out, ", ")
+end
+
+function Nunchi.available(final: boolean): boolean
+	return not final
+end
+
+-- Returns false when too few were on the ground to start.
+function Nunchi.run(ctx: Ctx): boolean?
+	local from = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(from, player)
+		end
+	end
+	if #from < Config.NUNCHI_MIN_PLAYERS then
+		return false
+	end
+	ctx.show(Config.TEXT.NUNCHI_START)
+	local startedAt = Match.now()
+	ctx.screen({ kind = "nunchi", endsAt = startedAt + Config.NUNCHI_MAX_SECONDS })
+	local function present(): { Player } -- who of those who began is still in (not out, not flying)
+		local list = {}
+		for _, player in from do
+			if table.find(ctx.players(), player) and not ctx.flying(player) then
+				table.insert(list, player)
+			end
+		end
+		return list
+	end
+	local function lastAtOf(rung: { Player }, times: { [Player]: number }): number
+		return if #rung > 0 then times[rung[#rung]] else startedAt
+	end
+	local function allButOne(rung: { Player }): boolean
+		local here = present()
+		local rangHere = 0
+		for _, player in here do
+			if table.find(rung, player) then
+				rangHere += 1
+			end
+		end
+		return rangHere >= #here - 1
+	end
+	local function settled(rung: { Player }, times: { [Player]: number }): boolean
+		local now = Match.now()
+		local clash, firstAt = Nunchi.clash(rung, times)
+		if clash and firstAt then
+			return now - firstAt > Config.NUNCHI_WINDOW -- (the clash window is over: everyone in it is in the clash)
+		end
+		if #present() < Config.NUNCHI_MIN_PLAYERS then
+			return true
+		end
+		local quiet = now - lastAtOf(rung, times)
+		return (allButOne(rung) and quiet > Config.NUNCHI_WINDOW) or quiet >= Config.NUNCHI_IDLE_SECONDS
+	end
+	local rung, times = ctx.bell(from, Config.NUNCHI_MAX_SECONDS, false, settled)
+	if ctx.cancelled() then
+		return nil
+	end
+	local clash = Nunchi.clash(rung, times)
+	local here = present()
+	if not clash and #here < Config.NUNCHI_MIN_PLAYERS then
+		ctx.screen(nil)
+		return nil -- (too few left in the middle: no penalty)
+	end
+	local still = {} -- who is still in and never rang
+	for _, player in here do
+		if not table.find(rung, player) then
+			table.insert(still, player)
+		end
+	end
+	local quiet = Match.now() - lastAtOf(rung, times)
+	local timedOut = quiet >= Config.NUNCHI_IDLE_SECONDS or Match.now() - startedAt >= Config.NUNCHI_MAX_SECONDS
+	local losers: { Player } = {}
+	local text = ""
+	local missed: { Player } = {}
+	if clash then
+		losers, text = clash, string.format(Config.TEXT.NUNCHI_CLASH, names(clash))
+	elseif #still == 1 and not timedOut then
+		losers, text = still, string.format(Config.TEXT.NUNCHI_LAST, names(still))
+	elseif #still == 0 and #rung > 0 then
+		local lastOne = rung[#rung] -- (rang in the very last moment: the last to ring is the last)
+		losers, text = { lastOne }, string.format(Config.TEXT.NUNCHI_LAST, lastOne.DisplayName)
+	else
+		losers, text, missed = still, string.format(Config.TEXT.NUNCHI_IDLE, names(still)), still
+	end
+	local shown = table.clone(rung)
+	for _, player in losers do
+		if not table.find(shown, player) then
+			table.insert(shown, player) -- (after the rings: those who never rang)
+		end
+	end
+	ctx.screen({ kind = "nunchiResult", ids = ids(shown), rang = #rung, losers = ids(losers) })
+	if text ~= "" then
+		ctx.show(text)
+	end
+	ctx.answers(rung, missed) -- (before the fail: a launched player's miss would not count)
+	ctx.fail(losers, "nunchi") -- (also with nobody: the answers above are counted with it)
+	ctx.reveal(Config.MINIGAME_RESULT_SECONDS)
+	return nil
+end
+
+return Nunchi
 ]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "OneWord"; s.Source = [====[--!strict
 -- "Say what you like" (docs/DESIGN_V3.md §5: bundle 4b's "a word to everyone", owner 2026-10-23: topics mostly about
@@ -2192,7 +2788,8 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
-	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -2532,7 +3129,8 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
-	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -2776,7 +3374,8 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
-	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -2853,7 +3452,8 @@ type Ctx = {
 	lever: () -> (),
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
-	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -2909,7 +3509,8 @@ local BellService = {}
 
 local POLL = 0.05 -- seconds between "done yet?" checks while the bells are open
 
-type Window = { id: number, from: { [Player]: boolean }, rung: { Player }, endsAt: number, firstOnly: boolean }
+type Window = { id: number, from: { [Player]: boolean }, rung: { Player }, times: { [Player]: number }, endsAt: number,
+	firstOnly: boolean }
 
 local window: Window? = nil
 local windows = 0
@@ -2956,6 +3557,7 @@ function BellService.start(isBusy: (Player) -> boolean)
 		end
 		lastRing[player] = now
 		table.insert(open.rung, player)
+		open.times[player] = Match.now()
 		Net.toAll("BellRang", { userId = player.UserId })
 		if open.firstOnly then
 			window = nil -- (closed at once: nobody else rings in the moment before collect looks again)
@@ -2964,25 +3566,28 @@ function BellService.start(isBusy: (Player) -> boolean)
 	end)
 end
 
--- Opens the bells of `from` for `seconds` and waits. Returns who rang, first to last. `firstOnly`: closes at the first
--- ring. Ends early when `stop()` (the mission was cancelled).
-function BellService.collect(from: { Player }, seconds: number, firstOnly: boolean, stop: () -> boolean): { Player }
+-- Opens the bells of `from` for `seconds` and waits. Returns who rang, first to last, and when each ring arrived
+-- (Match.now()). `firstOnly`: closes at the first ring. Ends early when `enough(rung, times)` says so (a game that
+-- knows its outcome) or `stop()` (the mission was cancelled).
+function BellService.collect(from: { Player }, seconds: number, firstOnly: boolean, stop: () -> boolean,
+	enough: (({ Player }, { [Player]: number }) -> boolean)?): ({ Player }, { [Player]: number })
 	windows += 1
-	local open: Window = { id = windows, from = {}, rung = {}, endsAt = Match.now() + seconds, firstOnly = firstOnly }
+	local open: Window = { id = windows, from = {}, rung = {}, times = {}, endsAt = Match.now() + seconds,
+		firstOnly = firstOnly }
 	for _, player in from do
 		open.from[player] = true
 	end
 	window = open
 	tell(nil)
 	local untilAt = os.clock() + seconds
-	while os.clock() < untilAt and not stop() and window == open do
+	while os.clock() < untilAt and not stop() and window == open and not (enough and enough(open.rung, open.times)) do
 		task.wait(math.min(POLL, math.max(0, untilAt - os.clock())))
 	end
 	if window == open then
 		window = nil
 		tell(nil)
 	end
-	return open.rung
+	return open.rung, open.times
 end
 
 -- A mission ended (or the round): the bells close.
@@ -3609,8 +4214,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionRunner"; s.Source = 
 -- question (docs/DESIGN_V3.md §13: Net.listen cannot disconnect, so missions never listen themselves). What a mission
 -- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
 -- Bundle 4: the quiz (also the final), the roulette, "say what you like" (4b, bells since 6b); bundle 6a: the
--- banned-word talk (only while speech judging is on); bundle 6b: the bell quiz (only with a presenter); and the
--- Studio-only test mission.
+-- banned-word talk (only while speech judging is on); bundle 6b: the bell quiz (only with a presenter); bundle 6c:
+-- crocodile teeth, the bomb, nunchi; and the Studio-only test mission.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -3622,6 +4227,9 @@ local Quiz = require(missionFolder:WaitForChild("Quiz"))
 local Roulette = require(missionFolder:WaitForChild("Roulette"))
 local OneWord = require(missionFolder:WaitForChild("OneWord"))
 local BannedTalk = require(missionFolder:WaitForChild("BannedTalk"))
+local Crocodile = require(missionFolder:WaitForChild("Crocodile"))
+local BombPass = require(missionFolder:WaitForChild("BombPass"))
+local Nunchi = require(missionFolder:WaitForChild("Nunchi"))
 local TestMission = require(missionFolder:WaitForChild("TestMission"))
 
 local MissionRunner = {}
@@ -3650,8 +4258,10 @@ export type Ctx = {
 	talk: (stage: string, topic: string?) -> (),
 	-- The presenter's re-draw window: waits `seconds` or until they press "start now"; false if cancelled meanwhile.
 	presenterReroll: (seconds: number) -> boolean,
-	-- The seat bells of `from` open for `seconds` (bundle 6b): who rang, first to last (`firstOnly`: closes at the first).
-	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	-- The seat bells of `from` open for `seconds` (bundle 6b): who rang, first to last, and when (`firstOnly`: closes
+	-- at the first ring; `enough(rung, times)`: closes when the game knows its outcome, bundle 6c).
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
 	-- The floor (§5.1): only `player` (and the presenter) heard by everyone, alive players receive only their chat;
 	-- nil ends it. RoundService ends it after every mission too.
 	floor: (player: Player?) -> (),
@@ -3687,7 +4297,8 @@ export type MissionCtx = {
 	lever: () -> (), -- everyone sees the podium lever pulled (the presenter's launch)
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
-	bell: (from: { Player }, seconds: number, firstOnly: boolean) -> { Player },
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }) -> boolean)?) -> ({ Player }, { [Player]: number }),
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
@@ -3707,7 +4318,7 @@ export type Mission = {
 -- An entry of a presenter's menu.
 export type Option = { id: string, title: string, recommended: boolean }
 
-local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, TestMission }
+local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, Crocodile, BombPass, Nunchi, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
@@ -3849,7 +4460,9 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			end
 			question = open
 			local shown = table.clone(payload)
-			shown.endsAt = open.endsAt
+			-- (`shownEndsAt`: what the clients see instead of the real end, kept on the server — the bomb's bang)
+			shown.endsAt = payload.shownEndsAt or open.endsAt
+			shown.shownEndsAt = nil
 			shown.id = open.id
 			if not ctx.cancelled() then
 				setScreen(shown)
@@ -3857,8 +4470,8 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			waitOrCancel(ctx, seconds, function()
 				local alive = ctx.players()
 				for player in open.from do
-					if not open.answers[player] and table.find(alive, player) then
-						return false -- (someone who left or went out meanwhile is not waited for)
+					if not open.answers[player] and table.find(alive, player) and not ctx.flying(player) then
+						return false -- (someone who left, went out or flies meanwhile is not waited for)
 					end
 				end
 				return true
@@ -3896,11 +4509,12 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			end
 			return ctx.presenterReroll(seconds)
 		end,
-		bell = function(from: { Player }, seconds: number, firstOnly: boolean): { Player }
+		bell = function(from: { Player }, seconds: number, firstOnly: boolean,
+			enough: (({ Player }, { [Player]: number }) -> boolean)?): ({ Player }, { [Player]: number })
 			if ctx.cancelled() then
-				return {}
+				return {}, {}
 			end
-			return ctx.bell(from, seconds, firstOnly)
+			return ctx.bell(from, seconds, firstOnly, enough)
 		end,
 		floor = ctx.floor, -- (also after a cancel: the floor must always be given back)
 		presenterVerdict = function(answer: string, seconds: number): string?
@@ -5831,8 +6445,11 @@ remotes.Sound.OnClientEvent:Connect(function(info)
 	Fx.presenterSound(info.index)
 end)
 
--- The mission card (quiz, roulette, a word to everyone, votes). My buttons work while I am alive and not flying.
-remotes.Mission.OnClientEvent:Connect(function(payload)
+-- The mission card (quiz, roulette, a word to everyone, votes). My buttons work while I am alive and not flying (it
+-- is shown again when my flight starts and ends).
+local lastMission: { [string]: any } = { kind = "none" }
+local function showMission()
+	local payload = lastMission
 	local names = {}
 	for _, userId in payload.ids or {} do
 		table.insert(names, nameOf(userId))
@@ -5842,6 +6459,10 @@ remotes.Mission.OnClientEvent:Connect(function(payload)
 		payload = { kind = "none" } -- the presenter judges in their own menu ("the presenter is choosing" is for the others)
 	end
 	MissionPanel.show(payload, canAnswer, names, State.myId())
+end
+remotes.Mission.OnClientEvent:Connect(function(payload)
+	lastMission = payload
+	showMission()
 end)
 
 -- To the presenter: banned words caught in chat waiting for a rescue (bundle 5b).
@@ -5866,6 +6487,7 @@ end)
 remotes.BellRang.OnClientEvent:Connect(function(info)
 	local who = Players:GetPlayerByUserId(info.userId)
 	Fx.bellRang(if who then Bell.bellOf(who) else nil)
+	MissionPanel.bellRang()
 end)
 
 -- The presenter pulled the podium lever (their launch follows).
@@ -5941,7 +6563,11 @@ remotes.Fling.OnClientEvent:Connect(function(info)
 	if info.userId == State.myId() then
 		myFlightEndsAt = os.clock() + Config.FLING_RETURN_SECONDS + 0.5
 		refresh()
-		task.delay(Config.FLING_RETURN_SECONDS + 0.6, refresh)
+		showMission()
+		task.delay(Config.FLING_RETURN_SECONDS + 0.6, function()
+			refresh()
+			showMission()
+		end)
 	end
 end)
 
@@ -7635,7 +8261,10 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [
 --   - the banned-word talk (bundle 6a): one slim line under the status board, "topic · seconds left" (the middle of the
 --     screen stays free: the players read each other's words over their heads there);
 --   - the bells (bundle 6b): "ring to speak first" before "say what you like", and the bell quiz: the question, then
---     who is answering (the right answer comes as a quiz result).
+--     who is answering (the right answer comes as a quiz result);
+--   - bundle 6c: crocodile teeth (whose turn and ten teeth, pressable on my turn, pressed ones shut; the biting one at
+--     the end), the bomb (who holds it, the question, two answers for the holder), nunchi (the rule and the seconds
+--     left; at the end the order the bells came in).
 -- It only shows what it is told and reports the button pressed; the server checks every answer.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -7653,6 +8282,7 @@ local COIN_SIZE = 170
 local MAX_BUTTONS = Config.ONE_WORD_MAX_PERFORMERS + 2 -- a vote: the performers, "nobody", "could not hear"
 local TEXT = Config.TEXT
 local SLICE_COLORS = { Color3.fromRGB(40, 92, 170), Color3.fromRGB(62, 66, 92) } -- name pills, alternating
+local GUM = Color3.fromRGB(226, 110, 132) -- behind a crocodile tooth (a white tooth on white was hard to see)
 
 local card: Frame
 local cardScale: UIScale
@@ -7662,6 +8292,8 @@ local note: TextLabel
 local swapButton: TextButton
 local answerGrid: Frame
 local buttons: { TextButton } = {}
+local teethGrid: Frame
+local teeth: { TextButton } = {}
 local wheel: Frame
 local pointer: Frame
 local disc: Frame
@@ -7680,6 +8312,10 @@ local state = {
 	myPick = nil :: number?,
 	myId = 0,
 	voteIds = {} :: { number }, -- a vote's candidates (my own name cannot be picked)
+	myTurn = false, -- crocodile teeth: my turn now
+	rings = 0, -- nunchi: bells rung so far (the next number is one more)
+	nunchiEndsAt = 0, -- nunchi: which game `rings` counts
+	down = {} :: { boolean }, -- crocodile teeth: the teeth already pressed
 	-- roulette
 	names = {} :: { string },
 	pick = 1,
@@ -7715,7 +8351,8 @@ local function answerButton(index: number): TextButton
 	b.Activated:Connect(function()
 		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt -- (not while the question shows first)
 		local mine = state.kind == "vote" and state.voteIds[index] == state.myId
-		if (state.kind == "quiz" or state.kind == "vote") and state.canAnswer and open and not state.myPick and not mine then
+		local answering = state.kind == "quiz" or state.kind == "vote" or state.kind == "bomb"
+		if answering and state.canAnswer and open and not state.myPick and not mine then
 			state.myPick = index
 			onAnswer(state.id, index)
 			for i, other in buttons do
@@ -7777,6 +8414,40 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	grid.Parent = answerGrid
 	for i = 1, MAX_BUTTONS do
 		buttons[i] = answerButton(i)
+	end
+
+	-- Crocodile teeth: two rows of five.
+	teethGrid = Instance.new("Frame")
+	teethGrid.BackgroundTransparency = 1
+	teethGrid.Size = UDim2.fromScale(1, 0)
+	teethGrid.AutomaticSize = Enum.AutomaticSize.Y
+	teethGrid.LayoutOrder = 3
+	teethGrid.Visible = false
+	teethGrid.Parent = card
+	local teethLayout = Instance.new("UIGridLayout")
+	teethLayout.CellSize = UDim2.new(0.2, -6, 0, 56)
+	teethLayout.CellPadding = UDim2.fromOffset(6, 6)
+	teethLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	teethLayout.Parent = teethGrid
+	for i = 1, Config.CROC_TEETH do
+		local tooth = Instance.new("TextButton")
+		tooth.BackgroundColor3 = GUM
+		tooth.FontFace = Style.BOLD
+		tooth.TextScaled = true
+		tooth.LayoutOrder = i
+		local toothCorner = Instance.new("UICorner")
+		toothCorner.CornerRadius = UDim.new(0, 12)
+		toothCorner.Parent = tooth
+		tooth.Activated:Connect(function()
+			local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt
+			if state.kind == "croc" and state.myTurn and open and not state.down[i] and not state.myPick then
+				state.myPick = i
+				onAnswer(state.id, i)
+				tooth.BackgroundColor3 = Style.AMBER
+			end
+		end)
+		tooth.Parent = teethGrid
+		teeth[i] = tooth
 	end
 
 	swapButton = Instance.new("TextButton")
@@ -7905,16 +8576,21 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	state.question = if quizLike then payload.question else ""
 	state.id = payload.id or 0
 	state.kind = kind
-	state.endsAt = payload.endsAt or 0
+	state.endsAt = payload.shownEndsAt or payload.endsAt or 0 -- (the bomb shows a full question time, never the bang)
 	state.canAnswer = canAnswer
 	state.myId = myId
 	local bells = kind == "oneWordBell" or kind == "bellQuiz"
+	local games = kind == "croc" or kind == "crocResult" or kind == "bomb" or kind == "bombResult" or kind == "nunchi"
+		or kind == "nunchiResult"
 	card.Visible = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
-		or kind == "talk" or bells
-	answerGrid.Visible = quizLike or kind == "vote"
+		or kind == "talk" or bells or games
+	answerGrid.Visible = quizLike or kind == "vote" or kind == "bomb"
+	teethGrid.Visible = kind == "croc" or kind == "crocResult"
 	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
-	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells
-	note.Visible = kind == "oneWord" or kind == "bellQuiz"
+		or games
+	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc" or kind == "bomb"
+		or kind == "nunchi"
+	note.Visible = kind == "oneWord" or kind == "bellQuiz" or kind == "bomb" or kind == "nunchi" or kind == "nunchiResult"
 	local slim = kind == "talk"
 	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 0.5)
 	card.Position = if slim then TALK_POSITION else CARD_POSITION
@@ -7959,6 +8635,55 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		swapButton.Visible = payload.phase == "prep" and not payload.swapped and payload.id ~= nil and ids[current] == myId
 	elseif kind == "oneWordJudge" then
 		title.Text = TEXT.JUDGE_WAIT
+	elseif kind == "croc" or kind == "crocResult" then
+		local ids = payload.ids or {}
+		state.down = payload.down or {}
+		state.myTurn = kind == "croc" and canAnswer and ids[payload.current or 0] == myId
+		title.Text = if kind == "croc" then string.format(TEXT.CROC_TURN, names[payload.current or 0] or "?")
+			else string.format(if payload.late then TEXT.CROC_LATE else TEXT.CROC_BITE, names[payload.loser or 0] or "?")
+		for i, tooth in teeth do
+			local bitten = kind == "crocResult" and i == payload.bad
+			local shut = state.down[i] == true
+			tooth.Text = if bitten then "😱" elseif shut then "✕" else "🦷"
+			tooth.BackgroundColor3 = if bitten then Style.RED elseif shut then Style.GREY else GUM
+			tooth.AutoButtonColor = state.myTurn and not shut
+		end
+	elseif kind == "bomb" then
+		local ids = payload.ids or {}
+		local holding = ids[payload.holder or 0] == myId
+		state.canAnswer = canAnswer and holding
+		title.Text = payload.question or ""
+		local ring = {} -- the passing order, the holder marked
+		for i, name in names do
+			table.insert(ring, if i == payload.holder then string.format(TEXT.BOMB_HOLDER, name) else name)
+		end
+		note.Text = table.concat(ring, " → ")
+		local choices = payload.choices or {}
+		for i, b in buttons do
+			b.Visible = choices[i] ~= nil
+			b.Text = choices[i] or ""
+			paint(b, state.canAnswer and not state.myPick, i == state.myPick)
+		end
+	elseif kind == "bombResult" then
+		title.Text = string.format(TEXT.BOMB_BOOM, names[payload.holder or 0] or "?")
+	elseif kind == "nunchi" then
+		title.Text = TEXT.NUNCHI_START
+		if payload.endsAt ~= state.nunchiEndsAt then -- (a new game; the same one shown again keeps its count)
+			state.nunchiEndsAt = payload.endsAt
+			state.rings = 0
+		end
+		note.Text = string.format(TEXT.NUNCHI_NEXT, state.rings + 1)
+	elseif kind == "nunchiResult" then
+		title.Text = TEXT.NUNCHI_TITLE
+		local losers = payload.losers or {}
+		local ids = payload.ids or {}
+		local order = {}
+		for i, name in names do
+			local mark = if table.find(losers, ids[i]) then "💥" else ""
+			table.insert(order, if i <= (payload.rang or 0) then string.format(TEXT.NUNCHI_ORDER, i, name .. mark)
+				else string.format(TEXT.NUNCHI_NONE, name .. mark))
+		end
+		note.Text = table.concat(order, " · ")
 	elseif kind == "oneWordBell" then
 		title.Text = TEXT.ONE_WORD_BELL
 	elseif kind == "bellQuiz" then
@@ -7982,6 +8707,14 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end
 
+-- A seat bell rang (nunchi counts them: the next number on the card).
+function MissionPanel.bellRang()
+	if state.kind == "nunchi" then
+		state.rings += 1
+		note.Text = string.format(TEXT.NUNCHI_NEXT, state.rings + 1)
+	end
+end
+
 -- Every frame (server time): the quiz countdown, the spinning pointer or the flipping coin, and the card's size.
 function MissionPanel.tick(now: number)
 	if card.Visible then
@@ -7999,7 +8732,7 @@ function MissionPanel.tick(now: number)
 		timer.Text = ""
 		title.Text = string.format("%s · %d", state.topicLine, math.max(0, math.ceil(state.endsAt - now)))
 	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" or state.kind == "oneWordBell"
-		or state.kind == "bellQuiz" then
+		or state.kind == "bellQuiz" or state.kind == "croc" or state.kind == "bomb" or state.kind == "nunchi" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""

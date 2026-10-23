@@ -72,6 +72,27 @@ return {
 	BELL_ANSWER_SECONDS = 5,
 	BELL_ANSWER_CHAT_SECONDS = 10,
 	BELL_VERDICT_SECONDS = 5,
+	-- System minigames (bundle 6c, docs/DESIGN_V3.md §5.2). Each result stays on screen MINIGAME_RESULT_SECONDS.
+	MINIGAME_RESULT_SECONDS = 3,
+	-- Crocodile teeth: in a random order everyone presses one of CROC_TEETH teeth in turn (CROC_TURN_SECONDS each,
+	-- too late is bitten too); one tooth, hidden on the server, bites.
+	CROC_TEETH = 10,
+	CROC_TURN_SECONDS = 5,
+	CROC_MIN_PLAYERS = 2,
+	-- The bomb: whoever holds it answers a two-choice question in BOMB_ANSWER_SECONDS; right passes it on (a ring in
+	-- an order drawn at the start), wrong or too late keeps it with a new question; it goes off after a hidden time
+	-- between BOMB_MIN_SECONDS and BOMB_MAX_SECONDS, and whoever holds it then flies.
+	BOMB_MIN_SECONDS = 20,
+	BOMB_MAX_SECONDS = 35,
+	BOMB_ANSWER_SECONDS = 4,
+	BOMB_MIN_PLAYERS = 2,
+	-- Nunchi: everyone rings once to take the next number; two rings within NUNCHI_WINDOW of each other clash (both fly,
+	-- it ends there); with no clash the one who never rang flies; NUNCHI_IDLE_SECONDS without a ring (or
+	-- NUNCHI_MAX_SECONDS in all) and everyone who has not rung flies.
+	NUNCHI_WINDOW = 0.5,
+	NUNCHI_IDLE_SECONDS = 8,
+	NUNCHI_MAX_SECONDS = 30,
+	NUNCHI_MIN_PLAYERS = 3,
 	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
 	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
 	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
@@ -253,6 +274,23 @@ return {
 		BELL_QUIZ_WRONG = "❌ 땡! %s",
 		BELL_QUIZ_NOBODY = "아무도 안 눌러서 모두 답해요",
 		VERDICT_PICK = "맞았나요? 정답: %s",
+		CROC_TITLE = "악어 이빨",
+		CROC_START = "악어 이빨 · 차례대로 이빨을 하나 눌러요 · 물리면 날아가요",
+		CROC_TURN = "%s 차례",
+		CROC_BITE = "😱 덥석! %s",
+		CROC_LATE = "⏰ 시간 초과! %s",
+		BOMB_TITLE = "폭탄 돌리기",
+		BOMB_START = "폭탄 돌리기 · 맞히면 다음 사람에게 넘어가요",
+		BOMB_HOLDER = "💣 %s",
+		BOMB_BOOM = "💥 펑! %s",
+		NUNCHI_TITLE = "눈치 게임",
+		NUNCHI_START = "눈치 게임 · 1부터 한 명씩 벨! 겹치거나 꼴찌면 날아가요",
+		NUNCHI_CLASH = "💥 겹쳤다! %s",
+		NUNCHI_LAST = "🐢 꼴찌! %s",
+		NUNCHI_IDLE = "벨을 안 눌러서 날아가요: %s",
+		NUNCHI_NEXT = "다음 숫자: %d",
+		NUNCHI_ORDER = "%d %s",
+		NUNCHI_NONE = "✕ %s",
 		VERDICT_RIGHT = "⭕ 맞음",
 		VERDICT_WRONG = "❌ 틀림",
 		WORDS_TITLE = "금칙어 명단",

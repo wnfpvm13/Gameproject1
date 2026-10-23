@@ -10,7 +10,10 @@
 --   - the banned-word talk (bundle 6a): one slim line under the status board, "topic · seconds left" (the middle of the
 --     screen stays free: the players read each other's words over their heads there);
 --   - the bells (bundle 6b): "ring to speak first" before "say what you like", and the bell quiz: the question, then
---     who is answering (the right answer comes as a quiz result).
+--     who is answering (the right answer comes as a quiz result);
+--   - bundle 6c: crocodile teeth (whose turn and ten teeth, pressable on my turn, pressed ones shut; the biting one at
+--     the end), the bomb (who holds it, the question, two answers for the holder), nunchi (the rule and the seconds
+--     left; at the end the order the bells came in).
 -- It only shows what it is told and reports the button pressed; the server checks every answer.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -28,6 +31,7 @@ local COIN_SIZE = 170
 local MAX_BUTTONS = Config.ONE_WORD_MAX_PERFORMERS + 2 -- a vote: the performers, "nobody", "could not hear"
 local TEXT = Config.TEXT
 local SLICE_COLORS = { Color3.fromRGB(40, 92, 170), Color3.fromRGB(62, 66, 92) } -- name pills, alternating
+local GUM = Color3.fromRGB(226, 110, 132) -- behind a crocodile tooth (a white tooth on white was hard to see)
 
 local card: Frame
 local cardScale: UIScale
@@ -37,6 +41,8 @@ local note: TextLabel
 local swapButton: TextButton
 local answerGrid: Frame
 local buttons: { TextButton } = {}
+local teethGrid: Frame
+local teeth: { TextButton } = {}
 local wheel: Frame
 local pointer: Frame
 local disc: Frame
@@ -55,6 +61,10 @@ local state = {
 	myPick = nil :: number?,
 	myId = 0,
 	voteIds = {} :: { number }, -- a vote's candidates (my own name cannot be picked)
+	myTurn = false, -- crocodile teeth: my turn now
+	rings = 0, -- nunchi: bells rung so far (the next number is one more)
+	nunchiEndsAt = 0, -- nunchi: which game `rings` counts
+	down = {} :: { boolean }, -- crocodile teeth: the teeth already pressed
 	-- roulette
 	names = {} :: { string },
 	pick = 1,
@@ -90,7 +100,8 @@ local function answerButton(index: number): TextButton
 	b.Activated:Connect(function()
 		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt -- (not while the question shows first)
 		local mine = state.kind == "vote" and state.voteIds[index] == state.myId
-		if (state.kind == "quiz" or state.kind == "vote") and state.canAnswer and open and not state.myPick and not mine then
+		local answering = state.kind == "quiz" or state.kind == "vote" or state.kind == "bomb"
+		if answering and state.canAnswer and open and not state.myPick and not mine then
 			state.myPick = index
 			onAnswer(state.id, index)
 			for i, other in buttons do
@@ -152,6 +163,40 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	grid.Parent = answerGrid
 	for i = 1, MAX_BUTTONS do
 		buttons[i] = answerButton(i)
+	end
+
+	-- Crocodile teeth: two rows of five.
+	teethGrid = Instance.new("Frame")
+	teethGrid.BackgroundTransparency = 1
+	teethGrid.Size = UDim2.fromScale(1, 0)
+	teethGrid.AutomaticSize = Enum.AutomaticSize.Y
+	teethGrid.LayoutOrder = 3
+	teethGrid.Visible = false
+	teethGrid.Parent = card
+	local teethLayout = Instance.new("UIGridLayout")
+	teethLayout.CellSize = UDim2.new(0.2, -6, 0, 56)
+	teethLayout.CellPadding = UDim2.fromOffset(6, 6)
+	teethLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	teethLayout.Parent = teethGrid
+	for i = 1, Config.CROC_TEETH do
+		local tooth = Instance.new("TextButton")
+		tooth.BackgroundColor3 = GUM
+		tooth.FontFace = Style.BOLD
+		tooth.TextScaled = true
+		tooth.LayoutOrder = i
+		local toothCorner = Instance.new("UICorner")
+		toothCorner.CornerRadius = UDim.new(0, 12)
+		toothCorner.Parent = tooth
+		tooth.Activated:Connect(function()
+			local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt
+			if state.kind == "croc" and state.myTurn and open and not state.down[i] and not state.myPick then
+				state.myPick = i
+				onAnswer(state.id, i)
+				tooth.BackgroundColor3 = Style.AMBER
+			end
+		end)
+		tooth.Parent = teethGrid
+		teeth[i] = tooth
 	end
 
 	swapButton = Instance.new("TextButton")
@@ -280,16 +325,21 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	state.question = if quizLike then payload.question else ""
 	state.id = payload.id or 0
 	state.kind = kind
-	state.endsAt = payload.endsAt or 0
+	state.endsAt = payload.shownEndsAt or payload.endsAt or 0 -- (the bomb shows a full question time, never the bang)
 	state.canAnswer = canAnswer
 	state.myId = myId
 	local bells = kind == "oneWordBell" or kind == "bellQuiz"
+	local games = kind == "croc" or kind == "crocResult" or kind == "bomb" or kind == "bombResult" or kind == "nunchi"
+		or kind == "nunchiResult"
 	card.Visible = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
-		or kind == "talk" or bells
-	answerGrid.Visible = quizLike or kind == "vote"
+		or kind == "talk" or bells or games
+	answerGrid.Visible = quizLike or kind == "vote" or kind == "bomb"
+	teethGrid.Visible = kind == "croc" or kind == "crocResult"
 	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
-	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells
-	note.Visible = kind == "oneWord" or kind == "bellQuiz"
+		or games
+	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc" or kind == "bomb"
+		or kind == "nunchi"
+	note.Visible = kind == "oneWord" or kind == "bellQuiz" or kind == "bomb" or kind == "nunchi" or kind == "nunchiResult"
 	local slim = kind == "talk"
 	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 0.5)
 	card.Position = if slim then TALK_POSITION else CARD_POSITION
@@ -334,6 +384,55 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		swapButton.Visible = payload.phase == "prep" and not payload.swapped and payload.id ~= nil and ids[current] == myId
 	elseif kind == "oneWordJudge" then
 		title.Text = TEXT.JUDGE_WAIT
+	elseif kind == "croc" or kind == "crocResult" then
+		local ids = payload.ids or {}
+		state.down = payload.down or {}
+		state.myTurn = kind == "croc" and canAnswer and ids[payload.current or 0] == myId
+		title.Text = if kind == "croc" then string.format(TEXT.CROC_TURN, names[payload.current or 0] or "?")
+			else string.format(if payload.late then TEXT.CROC_LATE else TEXT.CROC_BITE, names[payload.loser or 0] or "?")
+		for i, tooth in teeth do
+			local bitten = kind == "crocResult" and i == payload.bad
+			local shut = state.down[i] == true
+			tooth.Text = if bitten then "😱" elseif shut then "✕" else "🦷"
+			tooth.BackgroundColor3 = if bitten then Style.RED elseif shut then Style.GREY else GUM
+			tooth.AutoButtonColor = state.myTurn and not shut
+		end
+	elseif kind == "bomb" then
+		local ids = payload.ids or {}
+		local holding = ids[payload.holder or 0] == myId
+		state.canAnswer = canAnswer and holding
+		title.Text = payload.question or ""
+		local ring = {} -- the passing order, the holder marked
+		for i, name in names do
+			table.insert(ring, if i == payload.holder then string.format(TEXT.BOMB_HOLDER, name) else name)
+		end
+		note.Text = table.concat(ring, " → ")
+		local choices = payload.choices or {}
+		for i, b in buttons do
+			b.Visible = choices[i] ~= nil
+			b.Text = choices[i] or ""
+			paint(b, state.canAnswer and not state.myPick, i == state.myPick)
+		end
+	elseif kind == "bombResult" then
+		title.Text = string.format(TEXT.BOMB_BOOM, names[payload.holder or 0] or "?")
+	elseif kind == "nunchi" then
+		title.Text = TEXT.NUNCHI_START
+		if payload.endsAt ~= state.nunchiEndsAt then -- (a new game; the same one shown again keeps its count)
+			state.nunchiEndsAt = payload.endsAt
+			state.rings = 0
+		end
+		note.Text = string.format(TEXT.NUNCHI_NEXT, state.rings + 1)
+	elseif kind == "nunchiResult" then
+		title.Text = TEXT.NUNCHI_TITLE
+		local losers = payload.losers or {}
+		local ids = payload.ids or {}
+		local order = {}
+		for i, name in names do
+			local mark = if table.find(losers, ids[i]) then "💥" else ""
+			table.insert(order, if i <= (payload.rang or 0) then string.format(TEXT.NUNCHI_ORDER, i, name .. mark)
+				else string.format(TEXT.NUNCHI_NONE, name .. mark))
+		end
+		note.Text = table.concat(order, " · ")
 	elseif kind == "oneWordBell" then
 		title.Text = TEXT.ONE_WORD_BELL
 	elseif kind == "bellQuiz" then
@@ -357,6 +456,14 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end
 
+-- A seat bell rang (nunchi counts them: the next number on the card).
+function MissionPanel.bellRang()
+	if state.kind == "nunchi" then
+		state.rings += 1
+		note.Text = string.format(TEXT.NUNCHI_NEXT, state.rings + 1)
+	end
+end
+
 -- Every frame (server time): the quiz countdown, the spinning pointer or the flipping coin, and the card's size.
 function MissionPanel.tick(now: number)
 	if card.Visible then
@@ -374,7 +481,7 @@ function MissionPanel.tick(now: number)
 		timer.Text = ""
 		title.Text = string.format("%s · %d", state.topicLine, math.max(0, math.ceil(state.endsAt - now)))
 	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" or state.kind == "oneWordBell"
-		or state.kind == "bellQuiz" then
+		or state.kind == "bellQuiz" or state.kind == "croc" or state.kind == "bomb" or state.kind == "nunchi" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""

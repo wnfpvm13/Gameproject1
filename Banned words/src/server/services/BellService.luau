@@ -16,7 +16,8 @@ local BellService = {}
 
 local POLL = 0.05 -- seconds between "done yet?" checks while the bells are open
 
-type Window = { id: number, from: { [Player]: boolean }, rung: { Player }, endsAt: number, firstOnly: boolean }
+type Window = { id: number, from: { [Player]: boolean }, rung: { Player }, times: { [Player]: number }, endsAt: number,
+	firstOnly: boolean }
 
 local window: Window? = nil
 local windows = 0
@@ -63,6 +64,7 @@ function BellService.start(isBusy: (Player) -> boolean)
 		end
 		lastRing[player] = now
 		table.insert(open.rung, player)
+		open.times[player] = Match.now()
 		Net.toAll("BellRang", { userId = player.UserId })
 		if open.firstOnly then
 			window = nil -- (closed at once: nobody else rings in the moment before collect looks again)
@@ -71,25 +73,28 @@ function BellService.start(isBusy: (Player) -> boolean)
 	end)
 end
 
--- Opens the bells of `from` for `seconds` and waits. Returns who rang, first to last. `firstOnly`: closes at the first
--- ring. Ends early when `stop()` (the mission was cancelled).
-function BellService.collect(from: { Player }, seconds: number, firstOnly: boolean, stop: () -> boolean): { Player }
+-- Opens the bells of `from` for `seconds` and waits. Returns who rang, first to last, and when each ring arrived
+-- (Match.now()). `firstOnly`: closes at the first ring. Ends early when `enough(rung, times)` says so (a game that
+-- knows its outcome) or `stop()` (the mission was cancelled).
+function BellService.collect(from: { Player }, seconds: number, firstOnly: boolean, stop: () -> boolean,
+	enough: (({ Player }, { [Player]: number }) -> boolean)?): ({ Player }, { [Player]: number })
 	windows += 1
-	local open: Window = { id = windows, from = {}, rung = {}, endsAt = Match.now() + seconds, firstOnly = firstOnly }
+	local open: Window = { id = windows, from = {}, rung = {}, times = {}, endsAt = Match.now() + seconds,
+		firstOnly = firstOnly }
 	for _, player in from do
 		open.from[player] = true
 	end
 	window = open
 	tell(nil)
 	local untilAt = os.clock() + seconds
-	while os.clock() < untilAt and not stop() and window == open do
+	while os.clock() < untilAt and not stop() and window == open and not (enough and enough(open.rung, open.times)) do
 		task.wait(math.min(POLL, math.max(0, untilAt - os.clock())))
 	end
 	if window == open then
 		window = nil
 		tell(nil)
 	end
-	return open.rung
+	return open.rung, open.times
 end
 
 -- A mission ended (or the round): the bells close.

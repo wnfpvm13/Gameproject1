@@ -9,6 +9,10 @@ local Roulette = require(node("Roulette"))
 local VoteRules = require(node("VoteRules"))
 local OneWord = require(node("OneWord"))
 local OneWordTopics = require(node("OneWordTopics"))
+local Crocodile = require(node("Crocodile"))
+local BombPass = require(node("BombPass"))
+local BombBank = require(node("BombBank"))
+local Nunchi = require(node("Nunchi"))
 
 local fails = 0
 local function check(name, ok, detail)
@@ -70,10 +74,16 @@ local function fakeCtx(alive, final, flyingSet)
 			return if record.pick then record.pick(options) else nil
 		end,
 		-- Bundle 6b: the bells answer at once with the next list of record.rings; floors, verdicts and points recorded.
-		bell = function(from, seconds, firstOnly)
-			table.insert(record.bellCalls, { from = from, seconds = seconds, firstOnly = firstOnly })
-			local rung = if record.rings then table.remove(record.rings, 1) else nil
-			return rung or {}
+		bell = function(from, seconds, firstOnly, enough)
+			table.insert(record.bellCalls, { from = from, seconds = seconds, firstOnly = firstOnly, enough = enough })
+			local rung = (if record.rings then table.remove(record.rings, 1) else nil) or {}
+			local times = record.ringTimes or {}
+			if not record.ringTimes then
+				for i, player in rung do
+					times[player] = i -- (a second apart unless a test says otherwise)
+				end
+			end
+			return rung, times
 		end,
 		floor = function(player)
 			table.insert(record.floors, player or false)
@@ -300,27 +310,31 @@ do
 	check("3c fewer than ROULETTE_MIN_PLAYERS on the ground: nobody is picked (and no error)", #alone.fails == 0
 		and aloneRun.done and aloneRun.ok == true)
 
-	-- The menu order (the presenter's recommendations) from a fresh round: the quiz, the roulette (once), then quizzes.
+	-- The menu order (the presenter's recommendations) from a fresh round: the games not played yet in list order (no
+	-- presenter here: no bell quiz; too few for a vote: no "say what you like"; no speech judging: no talk), then the
+	-- ones played; the roulette once a round.
 	QuizBank.main = realMain
 	QuizBank.final = realFinal
 	MissionRunner.beginRound()
-	local order = {}
-	for _ = 1, 4 do
-		local pickNow = nil
+	local function menuIds()
+		local list = {}
 		for _, m in MissionRunner.candidates(300, 4, false) do
 			if m.id ~= "test" then -- (the Studio test mission is listed too; leave it out)
-				pickNow = m
-				break
+				table.insert(list, m.id)
 			end
 		end
-		table.insert(order, if pickNow then pickNow.id else "none")
-		if pickNow then
-			start(pickNow, fakeCtx(newPlayers(4), false, nil))
-			at(now + 30)
-		end
+		return table.concat(list, ",")
 	end
-	check("3d the menu order (recommended first): quiz, roulette, then quizzes (the roulette once a round)", order[1] == "quiz"
-		and order[2] == "roulette" and order[3] == "quiz" and order[4] == "quiz", table.concat(order, ","))
+	local fresh = menuIds()
+	start(Quiz, fakeCtx(newPlayers(4), false, nil))
+	at(now + 30)
+	local afterQuiz = menuIds()
+	start(Roulette, fakeCtx(newPlayers(4), false, nil))
+	at(now + 30)
+	local afterRoulette = menuIds()
+	check("3d the menu order: games not played yet first (list order), played ones after; the roulette once a round",
+		fresh == "quiz,roulette,croc,bomb,nunchi" and afterQuiz == "roulette,croc,bomb,nunchi,quiz"
+		and afterRoulette == "croc,bomb,nunchi,quiz", fresh .. " | " .. afterQuiz .. " | " .. afterRoulette)
 	MissionRunner.beginRound()
 	local small = MissionRunner.candidates(300, 1, false)
 	local rouletteListed = false
@@ -351,9 +365,11 @@ do
 			quizzes += 1
 		end
 	end
-	-- quiz played twice: weight 1/3 against 1 each for the roulette and the test mission -> about 1/7 of the draws
-	check("3g games played more this round are picked less often", quizzes > draws * 0.07 and quizzes < draws * 0.25,
-		string.format("%d of %d", quizzes, draws))
+	-- quiz played twice: weight 1/3 against 1 for each game not played yet
+	local others = #MissionRunner.candidates(300, 4, false) - 1
+	local expected = draws * (1 / 3) / (others + 1 / 3)
+	check("3g games played more this round are picked less often", quizzes > expected * 0.5 and quizzes < expected * 1.5,
+		string.format("%d of %d (about %.0f expected)", quizzes, draws, expected))
 	check("3h nothing fits the time left -> no game", MissionRunner.choose(5, 4, false, nil, rng, nil) == nil)
 	local function listed(id)
 		for _, m in MissionRunner.candidates(300, 4, false) do
@@ -761,6 +777,232 @@ do
 			+ Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS) + Config.QUIZ_REVEAL_SECONDS) and run4.done)
 	Match.presenter = nil
 	QuizBank.main = realMain
+end
+
+---------------------------------------------------------------- 8. crocodile teeth (bundle 6c)
+do
+	local ps = newPlayers(3)
+	local function byId(id)
+		for _, p in ps do
+			if p.UserId == id then
+				return p
+			end
+		end
+		return nil
+	end
+	local record = fakeCtx(ps, false, nil)
+	local since = now
+	local run = start(Crocodile, record)
+	local pressedBy = {}
+	local strangerIgnored = nil
+	local guard = 0
+	while not run.done and guard < 20 and not lastScreenOf(since, "crocResult") do
+		guard += 1
+		local shown = lastScreenOf(since, "croc")
+		local current = byId(shown.ids[shown.current])
+		local tooth = 1
+		while shown.down[tooth] do
+			tooth += 1
+		end
+		if strangerIgnored == nil then
+			answer(if current == ps[1] then ps[2] else ps[1], tooth) -- not their turn
+			at(now + 0.1)
+			strangerIgnored = lastScreenOf(since, "croc").current == shown.current and #record.fails == 0
+		end
+		answer(current, tooth)
+		table.insert(pressedBy, { player = current, tooth = tooth })
+		at(now + 0.3)
+	end
+	local result = lastScreenOf(since, "crocResult")
+	local lastPress = pressedBy[#pressedBy]
+	local f = record.fails[1]
+	check("8a crocodile teeth: turns in a drawn order, only the one whose turn it is presses; the hidden tooth bites them",
+		strangerIgnored == true and result ~= nil and lastPress ~= nil and result.bad == lastPress.tooth and f ~= nil
+		and #f.players == 1 and f.players[1] == lastPress.player and f.subjective == nil)
+	local unique = true
+	local seen = {}
+	for _, press in pressedBy do
+		unique = unique and not seen[press.tooth]
+		seen[press.tooth] = true
+	end
+	check("8b teeth stay down (never pressed twice); it always ends within CROC_TEETH presses", unique
+		and #pressedBy <= Config.CROC_TEETH)
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	local record2 = fakeCtx(ps, false, nil)
+	local since2 = now
+	local run2 = start(Crocodile, record2)
+	local first = lastScreenOf(since2, "croc")
+	at(now + Config.CROC_TURN_SECONDS + 0.5)
+	local late = record2.fails[1]
+	check("8c too late on your turn: you fly (and it counts as a missed answer)", late ~= nil
+		and late.players[1].UserId == first.ids[first.current] and record2.missed ~= nil and #record2.missed == 1)
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	check("8d (both runs end)", run.done and run2.done)
+	-- A press on a tooth already down is ignored (the turn goes on); someone flying when their turn comes is skipped.
+	local flying = {}
+	local record3 = fakeCtx(ps, false, flying)
+	local since3 = now
+	local run3 = start(Crocodile, record3)
+	local ignored, skipped = nil, nil
+	for _ = 1, 12 do
+		local shown = lastScreenOf(since3, "croc")
+		if lastScreenOf(since3, "crocResult") or not shown then
+			break
+		end
+		local current = byId(shown.ids[shown.current])
+		local downTooth = table.find(shown.down, true)
+		if downTooth and ignored == nil then
+			answer(current, downTooth)
+			at(now + 0.3)
+			local again = lastScreenOf(since3, "croc")
+			ignored = again.current == shown.current and #record3.fails == 0
+		end
+		if ignored ~= nil and skipped == nil then
+			flying[current] = true -- launched on their turn: skipped, no tooth goes down
+			at(now + 0.5)
+			local after = lastScreenOf(since3, "croc")
+			skipped = after.current ~= shown.current and #record3.fails == 0
+			flying[current] = nil
+			break
+		end
+		local tooth = 1
+		while shown.down[tooth] do
+			tooth += 1
+		end
+		answer(current, tooth)
+		at(now + 0.3)
+	end
+	check("8e a press on a tooth already down is ignored; a player flying on their turn is skipped",
+		(ignored == nil or ignored == true) and (skipped == nil or skipped == true) and (ignored ~= nil or run3.done))
+	record3.cancel = true
+	at(now + 1)
+end
+
+---------------------------------------------------------------- 9. the bomb (bundle 6c)
+do
+	local ps = newPlayers(3)
+	local function byId(id)
+		for _, p in ps do
+			if p.UserId == id then
+				return p
+			end
+		end
+		return nil
+	end
+	local function rightOf(shown) -- (the choices come in a random order: find the right one by its text)
+		for _, question in BombBank do
+			if question.q == shown.question then
+				return table.find(shown.choices, question.choices[question.answer]) or 1
+			end
+		end
+		return 1
+	end
+	local record = fakeCtx(ps, false, nil)
+	local since = now
+	local run = start(BombPass, record)
+	local first = lastScreenOf(since, "bomb")
+	local holder1 = byId(first.ids[first.holder])
+	answer(holder1, 3 - rightOf(first)) -- wrong
+	at(now + 0.3)
+	local locked = lastScreenOf(since, "bomb")
+	at(now + Config.BOMB_ANSWER_SECONDS)
+	local afterWrong = lastScreenOf(since, "bomb")
+	answer(byId(afterWrong.ids[afterWrong.holder]), rightOf(afterWrong)) -- right
+	at(now + 0.3)
+	local afterRight = lastScreenOf(since, "bomb")
+	check("9a wrong keeps the bomb: the rest of that question's time first, then a new question; right passes it on",
+		locked.id == first.id and afterWrong.ids[afterWrong.holder] == holder1.UserId and afterWrong.question ~= first.question
+		and afterRight.holder == first.holder % #first.ids + 1)
+	check("9f the question timer sent to clients is always BOMB_ANSWER_SECONDS (the bang stays on the server)",
+		first.shownEndsAt == nil and math.abs(first.endsAt - (since + Config.BOMB_ANSWER_SECONDS)) < 0.5)
+	local untilAt = now + Config.BOMB_MAX_SECONDS + 5
+	while not lastScreenOf(since, "bombResult") and now < untilAt do
+		at(now + 0.25)
+	end
+	local result = lastScreenOf(since, "bombResult")
+	local f = record.fails[1]
+	check("9b it goes off between BOMB_MIN_SECONDS and BOMB_MAX_SECONDS; whoever holds it flies", result ~= nil and f ~= nil
+		and f.players[1].UserId == result.ids[result.holder] and now - since >= Config.BOMB_MIN_SECONDS - 0.5
+		and now - since <= Config.BOMB_MAX_SECONDS + 1)
+	check("9c who held it and never answered missed an answer; who answered did not", record.missed ~= nil
+		and record.answered ~= nil and table.find(record.answered, holder1) ~= nil and table.find(record.missed, holder1) == nil)
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	check("9d (it ends)", run.done)
+	-- A holder who starts flying hands it on at once.
+	local flying = {}
+	local record2 = fakeCtx(ps, false, flying)
+	local since2 = now
+	local run2 = start(BombPass, record2)
+	local held = lastScreenOf(since2, "bomb")
+	flying[byId(held.ids[held.holder])] = true
+	at(now + 0.5)
+	local handed = lastScreenOf(since2, "bomb")
+	check("9g a holder who starts flying hands the bomb on at once", handed.holder ~= held.holder)
+	record2.cancel = true
+	at(now + 1)
+	local _ = run2
+	local bankOk = #BombBank >= 40
+	local seenQ = {}
+	for _, question in BombBank do
+		bankOk = bankOk and #question.choices == 2 and question.answer >= 1 and question.answer <= 2 and not seenQ[question.q]
+		seenQ[question.q] = true
+	end
+	check("9e the bomb bank: two choices each, the answer one of them, no question twice", bankOk)
+end
+
+---------------------------------------------------------------- 10. nunchi (bundle 6c)
+do
+	local ps = newPlayers(4)
+	local a, b, c, d = ps[1], ps[2], ps[3], ps[4]
+	local function play(rings, times)
+		local record = fakeCtx(ps, false, nil)
+		record.rings = { rings }
+		record.ringTimes = times
+		local run = start(Nunchi, record)
+		at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+		return record, run
+	end
+	-- (ring times are relative to now: the fake bells answer at once, as if the game had just been played)
+	local clash = play({ a, b, c }, { [a] = now - 3, [b] = now - 2.7, [c] = now - 1 })
+	local f = clash.fails[1]
+	check("10a two rings within NUNCHI_WINDOW clash: both fly", f ~= nil and #f.players == 2 and table.find(f.players, a) ~= nil
+		and table.find(f.players, b) ~= nil and clash.bellCalls[1].seconds == Config.NUNCHI_MAX_SECONDS
+		and clash.bellCalls[1].enough ~= nil and #clash.bellCalls[1].from == 4)
+	local last = play({ a, b, c }, { [a] = now - 2.6, [b] = now - 1.6, [c] = now - 0.6 })
+	local f2 = last.fails[1]
+	check("10b no clash: the one who never rang flies (not an AFK miss)", f2 ~= nil and #f2.players == 1 and f2.players[1] == d
+		and last.missed ~= nil and #last.missed == 0)
+	local idle = play({ a }, { [a] = now - Config.NUNCHI_IDLE_SECONDS - 1 })
+	local f3 = idle.fails[1]
+	check("10c too long without a ring: everyone who did not ring flies (and missed an answer)", f3 ~= nil and #f3.players == 3
+		and not table.find(f3.players, a) and idle.missed ~= nil and #idle.missed == 3)
+	local three = Nunchi.clash({ a, b, c, d }, { [a] = 0, [b] = 0.2, [c] = 0.45, [d] = 3 })
+	check("10d the window counts from the first ring of a number: three at once all clash", three ~= nil and #three == 3)
+	local tooFew = start(Nunchi, fakeCtx({ a, b }, false, nil))
+	at(now + 0.5)
+	check("10e fewer than NUNCHI_MIN_PLAYERS on the ground: it does not start", tooFew.done and tooFew.played == false)
+	-- Everyone rang (the last in the very last moment, no clash): the last to ring is the last.
+	local all = play({ a, b, c, d }, { [a] = now - 3.6, [b] = now - 2.6, [c] = now - 1.6, [d] = now - 1.05 })
+	local f4 = all.fails[1]
+	check("10f everyone rang with no clash (the last just in the final moment): the last to ring flies", f4 ~= nil
+		and #f4.players == 1 and f4.players[1] == d)
+	-- The game's own "settled" rule, asked at chosen moments: a clash closes only when its window is over (a third ring
+	-- inside it still clashes); all but one rang -> closes after the window; long quiet -> closes.
+	local probe = fakeCtx(ps, false, nil)
+	probe.rings = { {} }
+	start(Nunchi, probe)
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	local settle = probe.bellCalls[1].enough
+	local t0 = now
+	local inWindow = settle({ a, b }, { [a] = t0 - 0.2, [b] = t0 - 0.1 })
+	local afterWindow = settle({ a, b }, { [a] = t0 - 0.6, [b] = t0 - 0.5 })
+	local threeLeftOneOpen = settle({ a, b, c }, { [a] = t0 - 3, [b] = t0 - 2, [c] = t0 - 0.2 })
+	local threeLeftOneDone = settle({ a, b, c }, { [a] = t0 - 3, [b] = t0 - 2, [c] = t0 - 0.6 })
+	local quiet = settle({ a }, { [a] = t0 - Config.NUNCHI_IDLE_SECONDS - 0.1 })
+	local busy = settle({ a }, { [a] = t0 - 1 })
+	check("10g the bells close at the right moments: a clash after its window, all but one after the window, long quiet",
+		inWindow == false and afterWindow == true and threeLeftOneOpen == false and threeLeftOneDone == true
+		and quiet == true and busy == false)
 end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

@@ -256,8 +256,11 @@ remotes.Sound.OnClientEvent:Connect(function(info)
 	Fx.presenterSound(info.index)
 end)
 
--- The mission card (quiz, roulette, a word to everyone, votes). My buttons work while I am alive and not flying.
-remotes.Mission.OnClientEvent:Connect(function(payload)
+-- The mission card (quiz, roulette, a word to everyone, votes). My buttons work while I am alive and not flying (it
+-- is shown again when my flight starts and ends).
+local lastMission: { [string]: any } = { kind = "none" }
+local function showMission()
+	local payload = lastMission
 	local names = {}
 	for _, userId in payload.ids or {} do
 		table.insert(names, nameOf(userId))
@@ -267,6 +270,10 @@ remotes.Mission.OnClientEvent:Connect(function(payload)
 		payload = { kind = "none" } -- the presenter judges in their own menu ("the presenter is choosing" is for the others)
 	end
 	MissionPanel.show(payload, canAnswer, names, State.myId())
+end
+remotes.Mission.OnClientEvent:Connect(function(payload)
+	lastMission = payload
+	showMission()
 end)
 
 -- To the presenter: banned words caught in chat waiting for a rescue (bundle 5b).
@@ -291,6 +298,7 @@ end)
 remotes.BellRang.OnClientEvent:Connect(function(info)
 	local who = Players:GetPlayerByUserId(info.userId)
 	Fx.bellRang(if who then Bell.bellOf(who) else nil)
+	MissionPanel.bellRang()
 end)
 
 -- The presenter pulled the podium lever (their launch follows).
@@ -366,7 +374,11 @@ remotes.Fling.OnClientEvent:Connect(function(info)
 	if info.userId == State.myId() then
 		myFlightEndsAt = os.clock() + Config.FLING_RETURN_SECONDS + 0.5
 		refresh()
-		task.delay(Config.FLING_RETURN_SECONDS + 0.6, refresh)
+		showMission()
+		task.delay(Config.FLING_RETURN_SECONDS + 0.6, function()
+			refresh()
+			showMission()
+		end)
 	end
 end)
 

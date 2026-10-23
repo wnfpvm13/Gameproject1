@@ -287,6 +287,9 @@ loaders.Quiz = function()
 end
 loaders.Roulette = function() return never("roulette") end
 loaders.OneWord = function() return never("oneWord") end
+loaders.Crocodile = function() return never("croc") end
+loaders.BombPass = function() return never("bomb") end
+loaders.Nunchi = function() return never("nunchi") end
 
 local function advanceUntil(cond, limit)
 	local deadline = now + limit

@@ -241,6 +241,9 @@ remotes.Mission.OnClientEvent:Connect(function(payload)
 		table.insert(names, nameOf(userId))
 	end
 	local canAnswer = State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
+	if payload.kind == "oneWordJudge" and State.mePresenting() then
+		payload = { kind = "none" } -- the presenter judges in their own menu ("the presenter is choosing" is for the others)
+	end
 	MissionPanel.show(payload, canAnswer, names, State.myId())
 end)
 

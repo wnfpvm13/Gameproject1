@@ -5071,6 +5071,9 @@ remotes.Mission.OnClientEvent:Connect(function(payload)
 		table.insert(names, nameOf(userId))
 	end
 	local canAnswer = State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
+	if payload.kind == "oneWordJudge" and State.mePresenting() then
+		payload = { kind = "none" } -- the presenter judges in their own menu ("the presenter is choosing" is for the others)
+	end
 	MissionPanel.show(payload, canAnswer, names, State.myId())
 end)
 
@@ -7153,6 +7156,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	volunteerButton.Position = UDim2.new(0.5, 0, 0, Style.row(3) + 12) -- under the chat button (row 2, 34 px)
 	volunteerButton.TextColor3 = Style.AMBER
 	volunteerButton.Visible = false
+	volunteerButton.ZIndex = 5 -- (the presenter's step-down stays reachable over a tall mission card)
 	volunteerButton.Activated:Connect(function()
 		onVolunteer(not volunteered)
 	end)
@@ -7164,6 +7168,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	menuFrame.Size = UDim2.fromOffset(260, 0)
 	menuFrame.AutomaticSize = Enum.AutomaticSize.Y
 	menuFrame.Visible = false
+	menuFrame.ZIndex = 5 -- (over the mission card)
 	local pad = Instance.new("UIPadding")
 	pad.PaddingTop = UDim.new(0, 10)
 	pad.PaddingBottom = UDim.new(0, 10)
@@ -7226,6 +7231,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	wordFrame.Size = UDim2.fromOffset(300, 0)
 	wordFrame.AutomaticSize = Enum.AutomaticSize.Y
 	wordFrame.Visible = false
+	wordFrame.ZIndex = 5 -- over the mission card: the presenter must reach these buttons during a mission
 	local wordPad = Instance.new("UIPadding")
 	wordPad.PaddingTop = UDim.new(0, 8)
 	wordPad.PaddingBottom = UDim.new(0, 8)
@@ -7262,6 +7268,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	rescueFrame.Position = UDim2.new(0.5, 0, 0, Style.row(4) + 24) -- (under the volunteer / step-down button)
 	rescueFrame.Size = UDim2.fromOffset(360, 0)
 	rescueFrame.AutomaticSize = Enum.AutomaticSize.Y
+	rescueFrame.ZIndex = 6
 	rescueFrame.Parent = Style.gui()
 	local rescueLayout = Instance.new("UIListLayout")
 	rescueLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -7495,6 +7502,7 @@ function Style.gui(): ScreenGui
 		local g = Instance.new("ScreenGui")
 		g.Name = "BannedWordsHud"
 		g.ResetOnSpawn = false
+		g.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- a panel's ZIndex lifts its whole subtree (the presenter's panels)
 		g.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 		gui = g
 	end

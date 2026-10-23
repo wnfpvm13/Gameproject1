@@ -23,6 +23,7 @@ function Style.gui(): ScreenGui
 		local g = Instance.new("ScreenGui")
 		g.Name = "BannedWordsHud"
 		g.ResetOnSpawn = false
+		g.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- a panel's ZIndex lifts its whole subtree (the presenter's panels)
 		g.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 		gui = g
 	end

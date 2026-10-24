@@ -13,7 +13,8 @@
 -- Bundle 4: the quiz (also the final), the roulette, "say what you like" (4b, bells since 6b); bundle 6a: the
 -- banned-word talk (only while speech judging is on); bundle 6b: the bell quiz (only with a presenter); bundle 6c:
 -- crocodile teeth, the bomb, nunchi; bundle 6d: the balance game, red light, the liar; bundle 8b: 숫자 맞추기, 총잡이
--- 결투, 물병 세우기; and the Studio-only test mission.
+-- 결투, 물병 세우기; bundle 8c: the 초성 quiz (Quiz.chosung), the O/X quiz, the number quiz; and the Studio-only test
+-- mission.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -35,6 +36,8 @@ local TestMission = require(missionFolder:WaitForChild("TestMission"))
 local TimeGuess = require(missionFolder:WaitForChild("TimeGuess"))
 local Duel = require(missionFolder:WaitForChild("Duel"))
 local Bottle = require(missionFolder:WaitForChild("Bottle"))
+local OXQuiz = require(missionFolder:WaitForChild("OXQuiz"))
+local Estimate = require(missionFolder:WaitForChild("Estimate"))
 
 local MissionRunner = {}
 
@@ -133,7 +136,7 @@ export type Mission = {
 export type Option = { id: string, title: string, recommended: boolean }
 
 local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, Crocodile, BombPass, Nunchi, Balance,
-	RedLight, Liar, TimeGuess, Duel, Bottle, TestMission }
+	RedLight, Liar, TimeGuess, Duel, Bottle, Quiz.chosung, OXQuiz, Estimate, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)

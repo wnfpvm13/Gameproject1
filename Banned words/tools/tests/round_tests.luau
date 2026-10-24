@@ -308,6 +308,7 @@ end
 loaders.Quiz = function()
 	local quiz = never("quiz")
 	quiz.bell = never("bellQuiz")
+	quiz.chosung = never("chosung")
 	return quiz
 end
 -- (one test switches the roulette stand-in on, so a vote between two games happens)
@@ -324,6 +325,8 @@ loaders.Liar = function() return never("liar") end
 loaders.TimeGuess = function() return never("timeGuess") end
 loaders.Duel = function() return never("duel") end
 loaders.Bottle = function() return never("bottle") end
+loaders.OXQuiz = function() return never("oxQuiz") end
+loaders.Estimate = function() return never("estimate") end
 
 local function advanceUntil(cond, limit)
 	local deadline = now + limit

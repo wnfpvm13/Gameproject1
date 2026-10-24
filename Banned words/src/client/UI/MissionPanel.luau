@@ -19,6 +19,8 @@
 --     everyone's time), 총잡이 결투 ("ready…", then a red "fire!" when the server says so, my opponent; then the
 --     reactions), 물병 세우기 (a power bar with a green zone and a marker sweeping at the server's pace, stopping where
 --     I rang; who stood);
+--   - bundle 8c (owner 2026-10-24): the 초성 quiz and the O/X quiz on the quiz's own screen (O/X: then everyone's
+--     wrong count), the number quiz (a box for a whole number and "send"; then everyone's number and the answer);
 --   - between games (owner 2026-10-24): what the last game did with the vote for the next one (or "the presenter is
 --     picking"), then the next game's briefing: its name, its one-line rule, 3-2-1; at the end the round's result
 --     with its awards (the longest flight, the most games without losing a life);
@@ -42,6 +44,7 @@ local SPIN_TURNS = 4 -- whole turns before the pointer stops
 local COIN_SIZE = 170
 local MAX_BUTTONS = Config.MAX_PLAYERS + 2 -- a vote: everyone on the ground (the liar game), "nobody", "could not hear"
 local TEXT = Config.TEXT
+local ESTIMATE_DIGITS = #tostring(Config.ESTIMATE_MAX) -- (the number box takes no longer number)
 local SLICE_COLORS = { Color3.fromRGB(40, 92, 170), Color3.fromRGB(62, 66, 92) } -- name pills, alternating
 local GUM = Color3.fromRGB(226, 110, 132) -- behind a crocodile tooth (a white tooth on white was hard to see)
 local GREEN_LIGHT = Color3.fromRGB(34, 120, 64) -- the red light game's card
@@ -65,6 +68,9 @@ local needle: Frame
 local arrow: TextLabel
 local coin: TextLabel
 local ringPills: { Frame } = {}
+local numberRow: Frame -- 숫자 근사 퀴즈: the box for a whole number and its "send" button
+local numberBox: TextBox
+local sendButton: TextButton
 local bar: Frame -- 물병 세우기's power bar, its green zone and the marker
 local zone: Frame
 local marker: Frame
@@ -143,6 +149,13 @@ local function answerButton(index: number): TextButton
 end
 
 -- onPick(questionId, choice): I pressed an answer button.
+-- Lets go of the number box (a phone keyboard closes with it).
+local function dropFocus()
+	if numberBox and numberBox:IsFocused() then
+		numberBox:ReleaseFocus()
+	end
+end
+
 function MissionPanel.build(onPick: (number, number) -> ())
 	onAnswer = onPick
 	card = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 16)
@@ -292,6 +305,58 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	round.CornerRadius = UDim.new(1, 0)
 	round.Parent = coin
 
+	-- 숫자 근사 퀴즈 (bundle 8c): a box for digits only and a "send" button; the number goes as the answer.
+	numberRow = Instance.new("Frame")
+	numberRow.BackgroundTransparency = 1
+	numberRow.Size = UDim2.new(1, 0, 0, 44)
+	numberRow.LayoutOrder = 3
+	numberRow.Visible = false
+	numberRow.Parent = card
+	numberBox = Instance.new("TextBox")
+	numberBox.Size = UDim2.new(0.7, -8, 1, 0)
+	numberBox.BackgroundColor3 = Style.BUTTON
+	numberBox.BackgroundTransparency = 0.1
+	numberBox.FontFace = Style.BOLD
+	numberBox.TextSize = 22
+	numberBox.TextColor3 = Style.WHITE
+	numberBox.PlaceholderText = TEXT.ESTIMATE_HINT
+	numberBox.PlaceholderColor3 = Style.GREY
+	numberBox.ClearTextOnFocus = false
+	numberBox.Text = ""
+	Style.round(numberBox, 10)
+	numberBox.Parent = numberRow
+	numberBox:GetPropertyChangedSignal("Text"):Connect(function()
+		local digits = string.sub(string.gsub(numberBox.Text, "%D", ""), 1, ESTIMATE_DIGITS)
+		if digits ~= numberBox.Text then
+			numberBox.Text = digits
+		end
+	end)
+	sendButton = Style.button(Style.BOLD, 20)
+	sendButton.Size = UDim2.fromScale(0.3, 1)
+	sendButton.Position = UDim2.fromScale(0.7, 0)
+	sendButton.Text = TEXT.ESTIMATE_SEND
+	sendButton.Parent = numberRow
+	local function send()
+		local value = tonumber(numberBox.Text)
+		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt
+		if state.kind == "estimate" and state.canAnswer and open and not state.myPick and value and value >= 1
+			and value <= Config.ESTIMATE_MAX and value % 1 == 0 then
+			state.myPick = value
+			onAnswer(state.id, value)
+			numberBox.TextEditable = false
+			sendButton.AutoButtonColor = false
+			sendButton.TextColor3 = Style.GREY
+			note.Text = string.format(TEXT.ESTIMATE_SENT, value)
+			dropFocus()
+		end
+	end
+	sendButton.Activated:Connect(send)
+	numberBox.FocusLost:Connect(function(enter: boolean)
+		if enter then
+			send()
+		end
+	end)
+
 	-- 물병 세우기's power bar (bundle 8b): the track, the green zone, the marker the bell stops.
 	bar = Style.panel(card, Style.BUTTON, 0.1, 8)
 	bar.Size = UDim2.new(1, 0, 0, 26)
@@ -359,6 +424,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local newQuestion = if quizLike then payload.question ~= state.question
 		elseif kind == "vote" or kind == "balance" or kind == "liarGuess" or kind == "nextVote" then
 			payload.id ~= nil and payload.id ~= state.id
+		elseif kind == "estimate" then (payload.id or 0) ~= state.id or state.kind ~= "estimate"
 		else true
 	if newQuestion then
 		state.myPick = nil -- a new question (a quiz comes twice: before and once the buttons work), a new vote, or none
@@ -376,6 +442,11 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local between = kind == "nextVote" or kind == "nextPick" or kind == "brief" or kind == "roundResult"
 	local timing = kind == "timeGuess" or kind == "timeGuessResult" or kind == "duel" or kind == "duelResult"
 		or kind == "bottle" or kind == "bottleThrow" or kind == "bottleResult"
+	local quizKinds = kind == "estimate" or kind == "estimateResult" or kind == "oxResult"
+	numberRow.Visible = kind == "estimate"
+	if kind ~= "estimate" then
+		dropFocus() -- (the box is gone: no phone keyboard left over)
+	end
 	title.TextColor3 = Style.WHITE -- (the duel turns it red at "fire!")
 	bar.Visible = kind == "bottle"
 	local sameThrow = kind == "bottle" and state.timing.barStartAt == (tonumber(payload.barStartAt) or 0)
@@ -388,20 +459,20 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	}
 	-- (the awards and the timing games' results take two lines: many names)
 	note.Size = UDim2.new(1, 0, 0, if kind == "roundResult" or kind == "timeGuessResult" or kind == "duelResult"
-		or kind == "bottleThrow" or kind == "bottleResult" then 46 else 22)
+		or kind == "bottleThrow" or kind == "bottleResult" or kind == "oxResult" or kind == "estimateResult" then 46 else 22)
 	state.shown = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
-		or kind == "talk" or bells or games or between or timing
+		or kind == "talk" or bells or games or between or timing or quizKinds
 	card.Visible = state.shown and not state.hidden
 	answerGrid.Visible = quizLike or kind == "vote" or kind == "bomb" or (kind == "balance" and payload.stage == "pick")
 		or kind == "liarGuess" or kind == "nextVote"
 	teethGrid.Visible = kind == "croc" or kind == "crocResult"
 	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
-		or games or between or timing
+		or games or between or timing or quizKinds
 	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc" or kind == "bomb"
 		or kind == "nunchi" or kind == "balance" or kind == "redLight" or kind == "liar" or kind == "liarGuess"
-		or kind == "nextVote" or kind == "brief" or kind == "timeGuess" or kind == "bottle"
+		or kind == "nextVote" or kind == "brief" or kind == "timeGuess" or kind == "bottle" or kind == "estimate"
 	note.Visible = kind == "oneWord" or kind == "bellQuiz" or kind == "bomb" or kind == "nunchi" or kind == "nunchiResult"
-		or between or timing
+		or between or timing or quizKinds
 		or kind == "balance" or kind == "balanceResult" or kind == "redLight" or kind == "redLightResult" or kind == "liar"
 	card.BackgroundColor3 = if kind == "redLight" then (if payload.light == "red" then RED_LIGHT else GREEN_LIGHT)
 		else Style.PANEL
@@ -504,6 +575,38 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			zone.Size = UDim2.fromScale(width, 1)
 			zone.Position = UDim2.fromScale(tonumber(payload.center) or 0.5, 0)
 		end
+	elseif kind == "estimate" then
+		title.Text = payload.question or ""
+		if newQuestion then -- (a new number question: an empty box)
+			numberBox.Text = ""
+		end
+		-- (only while the question is open to me: before that, after sending, or flying, the box and the button rest)
+		local open = canAnswer and payload.id ~= nil and not state.myPick
+		numberBox.TextEditable = open
+		sendButton.AutoButtonColor = open
+		sendButton.TextColor3 = if open then Style.WHITE else Style.GREY
+		if not open then
+			dropFocus()
+		end
+		note.Text = if state.myPick then string.format(TEXT.ESTIMATE_SENT, state.myPick) else TEXT.ESTIMATE_START
+	elseif kind == "estimateResult" then
+		title.Text = payload.question or ""
+		local guesses, losers, ids, parts = payload.guesses or {}, payload.losers or {}, payload.ids or {}, {}
+		for i, name in names do
+			local value = tonumber(guesses[i]) or -1
+			local mark = if table.find(losers, ids[i]) then " 💥" else ""
+			table.insert(parts, (if value >= 1 then string.format(TEXT.ESTIMATE_GUESS, name, value)
+				else string.format(TEXT.ESTIMATE_NONE, name)) .. mark)
+		end
+		note.Text = string.format(TEXT.ESTIMATE_RIGHT, tonumber(payload.answer) or 0) .. "  |  " .. table.concat(parts, " · ")
+	elseif kind == "oxResult" then
+		title.Text = TEXT.OX_TITLE
+		local wrong, losers, ids, parts = payload.wrong or {}, payload.losers or {}, payload.ids or {}, {}
+		for i, name in names do
+			local mark = if table.find(losers, ids[i]) then " 💥" else ""
+			table.insert(parts, string.format(TEXT.OX_WRONG, name, tonumber(wrong[i]) or 0) .. mark)
+		end
+		note.Text = table.concat(parts, " · ")
 	elseif kind == "roundResult" then
 		title.Text = payload.title or ""
 		note.Text = table.concat(payload.lines or {}, "\n")
@@ -684,6 +787,9 @@ end
 function MissionPanel.setHidden(hidden: boolean)
 	state.hidden = hidden
 	card.Visible = state.shown and not hidden
+	if hidden then
+		dropFocus()
+	end
 end
 
 function MissionPanel.tick(now: number)
@@ -714,7 +820,7 @@ function MissionPanel.tick(now: number)
 	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" or state.kind == "oneWordBell"
 		or state.kind == "bellQuiz" or state.kind == "croc" or state.kind == "bomb" or state.kind == "nunchi"
 		or state.kind == "balance" or state.kind == "redLight" or state.kind == "liar" or state.kind == "liarGuess"
-		or state.kind == "nextVote" or state.kind == "brief" then
+		or state.kind == "nextVote" or state.kind == "brief" or state.kind == "estimate" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""

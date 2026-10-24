@@ -343,9 +343,9 @@ do
 	at(now + 30)
 	local afterRoulette = menuIds()
 	check("3d the menu order: games not played yet first (list order), played ones after; the roulette once a round",
-		fresh == "quiz,roulette,croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle"
-		and afterQuiz == "roulette,croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle,quiz"
-		and afterRoulette == "croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle,quiz",
+		fresh == "quiz,roulette,croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle,chosung,oxQuiz,estimate"
+		and afterQuiz == "roulette,croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle,chosung,oxQuiz,estimate,quiz"
+		and afterRoulette == "croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle,chosung,oxQuiz,estimate,quiz",
 		fresh .. " | " .. afterQuiz .. " | " .. afterRoulette)
 	MissionRunner.beginRound()
 	local small = MissionRunner.candidates(300, 1, false)
@@ -1692,6 +1692,333 @@ do
 		and throws[3].landed[1] == true and throws[3].landed[2] == false and result ~= nil
 		and result.stood[1] == 3 and result.stood[2] == 2 and result.stood[3] == 0
 		and f ~= nil and #f.players == 1 and f.players[1] == c and has(record.missed, c) and not has(record.missed, b))
+end
+
+---------------------------------------------------------------- 17. more quiz kinds (bundle 8c, owner 2026-10-24)
+local Hangul = require(node("Hangul"))
+local ChosungBank = require(node("ChosungBank"))
+local OXBank = require(node("OXBank"))
+local EstimateBank = require(node("EstimateBank"))
+local OXQuiz = require(node("OXQuiz"))
+local Estimate = require(node("Estimate"))
+check("17a 초성: a word's initial consonants (spaces and other characters kept)", Hangul.initials("바나나") == "ㅂㄴㄴ"
+	and Hangul.initials("택배 기사") == "ㅌㅂ ㄱㅅ" and Hangul.initials("까치") == "ㄲㅊ" and Hangul.initials("A1") == "A1")
+do
+	local rng = Random.new(12345)
+	local ok, seen = true, 0
+	for _ = 1, 40 do
+		local q = Quiz.chosung.question(rng, {})
+		if q then
+			seen += 1
+			local right = q.choices[q.answer]
+			local initials = Hangul.initials(right)
+			local distinct = {}
+			for _, c in q.choices do
+				distinct[c] = true
+			end
+			local count = 0
+			for _ in distinct do
+				count += 1
+			end
+			ok = ok and #q.choices == 4 and count == 4 and string.find(q.q, initials, 1, true) ~= nil
+			for i, c in q.choices do
+				ok = ok and (i == q.answer or Hangul.initials(c) ~= initials)
+			end
+		else
+			ok = false
+		end
+	end
+	local avoided = true
+	for _ = 1, 20 do
+		local q = Quiz.chosung.question(rng, { "바나나" })
+		for _, c in (q and q.choices or {}) do
+			avoided = avoided and c ~= "바나나"
+		end
+	end
+	check("17b 초성 questions: four different words of one category, only the right one has the initials shown; a word"
+		.. " in play is never on screen", ok and seen == 40 and avoided)
+	local banks = true
+	for _, entry in ChosungBank do
+		local initials = {}
+		for _, word in entry.words do
+			initials[Hangul.initials(word)] = true
+		end
+		local n = 0
+		for _ in initials do
+			n += 1
+		end
+		banks = banks and n >= 4 -- (every category can make a question)
+	end
+	check("17c every 초성 category has words of at least four different initials", banks and #ChosungBank > 0)
+end
+do
+	local a, b, c = table.unpack(newPlayers(3))
+	check("17d O/X: the most wrong fly (ties all), nobody when nobody got any wrong",
+		#OXQuiz.losers({ a, b, c }, { [a] = 2, [b] = 1, [c] = 2 }) == 2 and #OXQuiz.losers({ a, b }, {}) == 0
+		and OXQuiz.losers({ a, b, c }, { [b] = 1 })[1] == b)
+	local o, x = 0, 0
+	for _, s in OXBank do
+		if s.o then
+			o += 1
+		else
+			x += 1
+		end
+	end
+	check("17e the O/X bank: enough statements, both answers well represented", #OXBank >= 30 and o >= 10 and x >= 10)
+	do
+		local rng, seen, order = Random.new(99), {}, {}
+		for _ = 1, math.ceil(#OXBank / Config.OX_QUESTIONS) + 1 do
+			for _, s in OXQuiz.draw(Config.OX_QUESTIONS, rng) do
+				table.insert(order, s)
+			end
+		end
+		local distinct = true
+		for i = 1, #OXBank do
+			distinct = distinct and order[i] ~= nil and not seen[order[i]]
+			if order[i] then
+				seen[order[i]] = true
+			end
+		end
+		local each = true
+		for start = 1, #order, Config.OX_QUESTIONS do -- (and one draw never holds the same statement twice)
+			local inDraw = {}
+			for i = start, math.min(#order, start + Config.OX_QUESTIONS - 1) do
+				each = each and not inDraw[order[i]]
+				inDraw[order[i]] = true
+			end
+		end
+		check("17e2 the O/X draw asks every clean statement once before any comes back (the last few first, then the"
+			.. " rest), never one twice in a game", distinct and each)
+	end
+
+	local since = now
+	local record = fakeCtx({ a, b, c }, false, nil)
+	local run = start(OXQuiz, record)
+	-- a answers right every time, b wrong every time, c never
+	for _ = 1, Config.OX_QUESTIONS do
+		at(now + Config.OX_INTRO_SECONDS + 0.2)
+		local shown = nil
+		for i = #NetStub.sent, 1, -1 do
+			local m = NetStub.sent[i]
+			if m.name == "Mission" and m.payload.kind == "quiz" and m.payload.id then
+				shown = m.payload
+				break
+			end
+		end
+		local statement = nil
+		for _, s in OXBank do
+			if shown and string.find(shown.question, s.s, 1, true) then
+				statement = s
+			end
+		end
+		local right = if statement and statement.o then 1 else 2
+		answer(a, right)
+		answer(b, 3 - right)
+		at(now + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
+	end
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	local result = lastScreenOf(since, "oxResult")
+	local f = record.fails[1]
+	check("17f O/X runs: OX_QUESTIONS statements on the quiz screen; the most wrong (here two tied) fly; who never"
+		.. " answered missed", run.done and result ~= nil and result.wrong[1] == 0 and result.wrong[2] == Config.OX_QUESTIONS
+		and result.wrong[3] == Config.OX_QUESTIONS and f ~= nil and #f.players == 2 and has(record.missed, c)
+		and not has(record.missed, b))
+end
+do
+	local a, b, c = table.unpack(newPlayers(3))
+	check("17g 숫자 근사: the farthest from the answer flies (ties all; nobody when everyone hit it); who typed nothing"
+		.. " flies instead",
+		#Estimate.losers({ a, b, c }, { [a] = 150, [b] = 300, [c] = 250 }, 200) == 1
+		and Estimate.losers({ a, b, c }, { [a] = 150, [b] = 300, [c] = 250 }, 200)[1] == b
+		and #Estimate.losers({ a, b }, { [a] = 100, [b] = 300 }, 200) == 2
+		and Estimate.losers({ a, b, c }, { [a] = 100, [b] = 300 }, 200)[1] == c
+		and #Estimate.losers({ a, b }, { [a] = 200, [b] = 200 }, 200) == 0)
+	local whole = #EstimateBank >= 20
+	for _, q in EstimateBank do
+		whole = whole and q.answer >= 1 and q.answer % 1 == 0 and q.answer <= Config.ESTIMATE_MAX
+	end
+	check("17h the number bank: whole answers between 1 and ESTIMATE_MAX (short enough not to carry a phone number)",
+		whole and #tostring(Config.ESTIMATE_MAX) <= 6)
+
+	local since = now
+	local record = fakeCtx({ a, b, c }, false, nil)
+	local run = start(Estimate, record)
+	at(now + Config.ESTIMATE_INTRO_SECONDS + 0.2)
+	local shown = lastScreenOf(since, "estimate")
+	local q = nil
+	for _, item in EstimateBank do
+		if shown and item.q == shown.question then
+			q = item
+		end
+	end
+	local target = if q then q.answer else 1
+	answer(a, target)
+	answer(b, target + 1000)
+	answer(c, 0) -- (out of range: ignored, counts as none)
+	at(now + Config.ESTIMATE_SECONDS + Config.MINIGAME_RESULT_SECONDS + 1)
+	local result = lastScreenOf(since, "estimateResult")
+	local f = record.fails[1]
+	check("17i the number quiz runs: whole numbers only (0 is not taken); who typed nothing flies and missed an answer",
+		run.done and q ~= nil and result ~= nil and result.answer == target and result.guesses[1] == target
+		and result.guesses[3] == -1 and f ~= nil and #f.players == 1 and f.players[1] == c and has(record.missed, c))
+end
+do
+	-- The right O/X answer of the statement on screen now.
+	local function oxRight()
+		local shown = nil
+		for i = #NetStub.sent, 1, -1 do
+			local m = NetStub.sent[i]
+			if m.name == "Mission" and m.payload.kind == "quiz" and m.payload.id then
+				shown = m.payload
+				break
+			end
+		end
+		for _, s in OXBank do
+			if shown and string.find(shown.question, s.s, 1, true) then
+				return if s.o then 1 else 2
+			end
+		end
+		return 1
+	end
+	local a, b, c, d = table.unpack(newPlayers(4))
+	local alive, fly = { a, b, c, d }, {}
+	local since = now
+	local record = fakeCtx(alive, false, fly)
+	local run = start(OXQuiz, record)
+	-- 1st: a and c right, b wrong, d silent. Then d leaves and c is launched for the 2nd (a right, b silent; c's try
+	-- is ignored). Back for the 3rd: a and b wrong, c right. (Someone silent keeps a question open its full time.)
+	at(now + Config.OX_INTRO_SECONDS + 0.2)
+	local right = oxRight()
+	answer(a, right)
+	answer(b, 3 - right)
+	answer(c, right)
+	at(now + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
+	table.remove(alive, table.find(alive, d))
+	fly[c] = true
+	at(now + Config.OX_INTRO_SECONDS + 0.2)
+	right = oxRight()
+	answer(a, right)
+	answer(c, 3 - right)
+	at(now + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
+	fly[c] = nil
+	at(now + Config.OX_INTRO_SECONDS + 0.2)
+	right = oxRight()
+	answer(a, 3 - right)
+	answer(b, 3 - right)
+	answer(c, right)
+	at(now + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	local result = lastScreenOf(since, "oxResult")
+	local f = record.fails[1]
+	check("17k O/X: a statement asked while launched does not count for them, who left is not shown; the most wrong"
+		.. " still fly", run.done and result ~= nil and #result.ids == 3 and table.find(result.ids, d.UserId) == nil
+		and result.wrong[1] == 1 and result.wrong[2] == 3 and result.wrong[3] == 0 and f ~= nil and #f.players == 1
+		and f.players[1] == b)
+end
+do
+	-- The number on screen now and its answer.
+	local function target(since)
+		local shown = lastScreenOf(since, "estimate")
+		for _, item in EstimateBank do
+			if shown and item.q == shown.question then
+				return item.answer
+			end
+		end
+		return 1
+	end
+	local a, b, c = table.unpack(newPlayers(3))
+	local alive = { a, b, c }
+	local since = now
+	local record = fakeCtx(alive, false, nil)
+	local run = start(Estimate, record)
+	at(now + Config.ESTIMATE_INTRO_SECONDS + 0.2)
+	local answerNow = target(since)
+	answer(a, answerNow)
+	answer(b, answerNow)
+	table.remove(alive, table.find(alive, c)) -- (leaves without typing)
+	at(now + Config.ESTIMATE_SECONDS + Config.MINIGAME_RESULT_SECONDS + 1)
+	local result = lastScreenOf(since, "estimateResult")
+	local nobody = #record.fails == 0 or #record.fails[1].players == 0
+	check("17l 숫자 근사: everyone exact flies nobody; who left is neither judged nor shown",
+		run.done and result ~= nil and #result.ids == 2 and #result.losers == 0 and nobody
+		and table.find(record.shows, string.format(Config.TEXT.ESTIMATE_NOBODY, answerNow)) ~= nil)
+
+	local d, e = table.unpack(newPlayers(2))
+	local alive2 = { d, e }
+	local since2 = now
+	local record2 = fakeCtx(alive2, false, nil)
+	local run2 = start(Estimate, record2)
+	at(now + Config.ESTIMATE_INTRO_SECONDS + 0.2)
+	answer(d, target(since2) + 5)
+	table.remove(alive2, table.find(alive2, e)) -- (one left: too few to judge)
+	at(now + Config.ESTIMATE_SECONDS + Config.MINIGAME_RESULT_SECONDS + 1)
+	local solo = fakeCtx({ d }, false, nil)
+	check("17m 숫자 근사 needs ESTIMATE_MIN_PLAYERS on the ground, at the start and at the end (alone the farthest is"
+		.. " always you)", run2.done and #record2.fails == 0 and lastScreenOf(since2, "estimateResult") == nil
+		and table.find(record2.shows, Config.TEXT.MINIGAME_TOO_FEW) ~= nil and Estimate.run(solo.ctx) == false
+		and Estimate.minPlayers == Config.ESTIMATE_MIN_PLAYERS)
+end
+do
+	-- 초성: the wrong choices are the closest (as many syllables when the category has them); a banned category is
+	-- left out; with only a few words able to make a question, those keep coming.
+	local rng = Random.new(4242)
+	local closest = true
+	for _ = 1, 60 do
+		local q = Quiz.chosung.question(rng, {})
+		if q then
+			local category = string.match(q.q, "^(.-) · ")
+			local right = q.choices[q.answer]
+			local initials = Hangul.initials(right)
+			local same = 0
+			for _, entry in ChosungBank do
+				if entry.category == category then
+					for _, word in entry.words do
+						if utf8.len(word) == utf8.len(right) and Hangul.initials(word) ~= initials then
+							same += 1
+						end
+					end
+				end
+			end
+			local shownSame = 0
+			for i, choice in q.choices do
+				if i ~= q.answer and utf8.len(choice) == utf8.len(right) then
+					shownSame += 1
+				end
+			end
+			closest = closest and shownSame == math.min(3, same)
+		else
+			closest = false
+		end
+	end
+	local banned = { "동물", "음식", "나라", "직업", "운동", "탈것", "학교 물건" }
+	for _, entry in ChosungBank do
+		if entry.category == "과일" then
+			for _, word in entry.words do
+				if not table.find({ "사과", "포도", "딸기", "수박" }, word) then
+					table.insert(banned, word)
+				end
+			end
+		end
+	end
+	local few, asked = true, {}
+	for _ = 1, 12 do
+		local q = Quiz.chosung.question(rng, banned)
+		few = few and q ~= nil and string.match(q.q, "^(.-) · ") == "과일"
+		if q then
+			asked[q.choices[q.answer]] = true
+		end
+	end
+	check("17n 초성: the closest wrong choices (as many syllables first); banned words and categories left out; a few"
+		.. " usable words keep making questions", closest and few and asked["사과"] and asked["포도"] and asked["딸기"]
+		and asked["수박"])
+end
+do
+	local everyBrief = true
+	for _, mission in { Quiz.chosung, OXQuiz, Estimate } do
+		everyBrief = everyBrief and typeof(mission.brief) == "string" and mission.brief ~= ""
+			and string.find(mission.brief, "%%") == nil
+	end
+	check("17j the new quiz kinds have their one-line rules (formatted)", everyBrief)
 end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

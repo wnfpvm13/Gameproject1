@@ -169,6 +169,19 @@ return {
 	BOTTLE_SHOW_SECONDS = 2,
 	BOTTLE_EDGE = 0.05,
 	BOTTLE_MIN_PLAYERS = 2,
+	-- More quiz kinds (bundle 8c, owner 2026-10-24). O/X: OX_QUESTIONS statements in a row (each shown OX_INTRO_SECONDS,
+	-- OX_SECONDS to answer, the right answer OX_REVEAL_SECONDS); the most wrong fly. 숫자 근사: one question shown
+	-- ESTIMATE_INTRO_SECONDS, ESTIMATE_SECONDS to type a whole number from 1 to ESTIMATE_MAX; the farthest flies (with
+	-- ESTIMATE_MIN_PLAYERS on the ground: alone, "the farthest" is always you). ESTIMATE_MAX keeps a number short enough
+	-- that it cannot carry a phone number (the numbers show to everyone; its digits are the input box's limit).
+	OX_QUESTIONS = 3,
+	OX_INTRO_SECONDS = 1.5,
+	OX_SECONDS = 5,
+	OX_REVEAL_SECONDS = 1.5,
+	ESTIMATE_INTRO_SECONDS = 2,
+	ESTIMATE_SECONDS = 15,
+	ESTIMATE_MAX = 999999,
+	ESTIMATE_MIN_PLAYERS = 2,
 	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
 	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
 	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
@@ -481,6 +494,30 @@ return {
 		BOTTLE_STOOD = "%s %d개",
 		BOTTLE_RESULT = "가장 적게 세운 %s 날아가요",
 		BOTTLE_TIE = "모두 똑같이 세웠어요 · 아무도 안 날아가요",
+		-- Bundle 8c (owner 2026-10-24).
+		CHOSUNG_TITLE = "초성 퀴즈",
+		CHOSUNG_BRIEF = "초성을 보고 어떤 낱말인지 골라요 · 틀리거나 안 고르면 날아가요",
+		CHOSUNG_Q = "%s · %s",
+		OX_TITLE = "O/X 퀴즈",
+		OX_BRIEF = "문장 %d개 · 맞으면 O, 틀리면 X · 가장 많이 틀린 사람이 날아가요",
+		OX_START = "맞으면 O, 틀리면 X",
+		OX_QUESTION = "%d/%d · %s",
+		OX_O = "O",
+		OX_X = "X",
+		OX_WRONG = "%s %d개 틀림",
+		OX_RESULT = "가장 많이 틀린 %s 날아가요",
+		OX_ALL_RIGHT = "모두 다 맞혔어요 · 아무도 안 날아가요",
+		ESTIMATE_TITLE = "숫자 근사 퀴즈",
+		ESTIMATE_BRIEF = "정답에 가까운 숫자를 적어요 · 가장 먼 사람이 날아가요",
+		ESTIMATE_START = "숫자를 적고 확인을 눌러요",
+		ESTIMATE_HINT = "숫자만 (1 이상)",
+		ESTIMATE_SEND = "확인",
+		ESTIMATE_SENT = "%d 냈어요",
+		ESTIMATE_RIGHT = "정답 %d",
+		ESTIMATE_GUESS = "%s %d",
+		ESTIMATE_NONE = "%s 안 냄",
+		ESTIMATE_RESULT = "정답 %d · %s 날아가요",
+		ESTIMATE_NOBODY = "정답 %d · 모두 딱 맞혔어요 · 아무도 안 날아가요",
 		TALK_BRIEF = "남의 머리 위 금칙어를 말하게 해요 · 내 금칙어를 말하면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		TALK_SOON = "곧 시작",
 		TALK_PREP = "금칙어를 나눠 주는 중 · 내 머리 위 단어는 나만 몰라요",

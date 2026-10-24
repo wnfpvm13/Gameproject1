@@ -4,6 +4,7 @@
 -- harder questions and a wrong answer is out (RoundService decides that). Players flying when the question opens
 -- cannot answer and are neither failed nor counted as missing (§4). Questions never repeat until the bank runs out,
 -- and a question whose text or any choice contains a banned word in play is skipped.
+-- The 초성 quiz (`Quiz.chosung`, bundle 8c) lives here too and asks the same way (see it at the end).
 -- The bell quiz (`Quiz.bell`, bundle 6b, owner 2026-10-23: the first to ring answers by voice, the presenter judges)
 -- lives here too, so both draw from the same bank without repeats. BELL_QUIZ_QUESTIONS questions; for each the bells
 -- of everyone on the ground are open BELL_WAIT_SECONDS; the first ring gets the floor and the presenter presses right
@@ -16,6 +17,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local QuizBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("QuizBank"))
+local ChosungBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("ChosungBank"))
+local Hangul = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hangul"))
 
 -- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
 type Ctx = {
@@ -254,5 +257,129 @@ function BellQuiz.run(ctx: Ctx): boolean?
 end
 
 Quiz.bell = BellQuiz
+
+-- 초성 퀴즈 (`Quiz.chosung`, bundle 8c, owner 2026-10-24): a word's initial consonants with its category (ChosungBank,
+-- shared/Hangul), and four words of that category to choose from — the right one and three whose initials differ,
+-- the ones closest to the right initials (as many syllables, the most initials in the same places) so a glance is not
+-- enough. The rest is the quiz's (askEveryone: wrong or none is a fail). Words or categories containing a banned word
+-- in play are left out; a word is not asked again until every word that can make a question was.
+local ChosungQuiz = {
+	id = "chosung",
+	title = Config.TEXT.CHOSUNG_TITLE,
+	brief = Config.TEXT.CHOSUNG_BRIEF, -- (the briefing before it)
+	expectedSeconds = Quiz.expectedSeconds,
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
+	minPlayers = nil :: number?,
+	needsPresenter = nil :: boolean?,
+}
+
+local usedWords: { [string]: boolean } = {} -- by "category/word" (a word may sit in two categories)
+type Candidate = { key: string, category: string, word: string, initials: string, decoys: { string } }
+
+function ChosungQuiz.available(final: boolean): boolean
+	return not final and #ChosungBank > 0
+end
+
+-- A word's initials as a list of characters.
+local function letters(initials: string): { number }
+	local out = {}
+	for _, code in utf8.codes(initials) do
+		table.insert(out, code)
+	end
+	return out
+end
+
+-- How close a wrong choice's initials are to the right ones: as many syllables first, then initials in the same places.
+local function likeness(right: { number }, other: { number }): number
+	local score = if #other == #right then 100 else 0
+	for i = 1, math.min(#right, #other) do
+		if right[i] == other[i] then
+			score += 1
+		end
+	end
+	return score
+end
+
+-- A question (nil when no word can make one: a clean word with three clean words of other initials in its clean
+-- category); `words`: the banned words in play.
+function ChosungQuiz.question(rng: Random, words: { string }): QuizBank.Question?
+	local function clean(text: string): boolean
+		for _, banned in words do
+			if string.find(text, banned, 1, true) then
+				return false
+			end
+		end
+		return true
+	end
+	local usable: { Candidate } = {}
+	for _, entry in ChosungBank do
+		if clean(entry.category) then
+			local cleanWords = {}
+			for _, word in entry.words do
+				if clean(word) then
+					table.insert(cleanWords, { word = word, initials = Hangul.initials(word) })
+				end
+			end
+			for _, this in cleanWords do
+				local decoys = {}
+				for _, other in cleanWords do
+					if other.initials ~= this.initials then
+						table.insert(decoys, other.word)
+					end
+				end
+				if #decoys >= 3 then
+					table.insert(usable, { key = entry.category .. "/" .. this.word, category = entry.category,
+						word = this.word, initials = this.initials, decoys = decoys })
+				end
+			end
+		end
+	end
+	local fresh = {}
+	for _, candidate in usable do
+		if not usedWords[candidate.key] then
+			table.insert(fresh, candidate)
+		end
+	end
+	if #fresh == 0 then -- (every word that can make a question was asked: they come back)
+		table.clear(usedWords)
+		fresh = usable
+	end
+	if #fresh == 0 then
+		return nil
+	end
+	local candidate = fresh[rng:NextInteger(1, #fresh)]
+	usedWords[candidate.key] = true
+	-- The three closest wrong choices (a random pick among equally close ones).
+	local right = letters(candidate.initials)
+	local ranked = {}
+	for _, other in candidate.decoys do
+		table.insert(ranked, { word = other, score = likeness(right, letters(Hangul.initials(other))) + rng:NextNumber() * 0.5 })
+	end
+	table.sort(ranked, function(a, b)
+		return a.score > b.score
+	end)
+	local choices = { candidate.word }
+	for i = 1, 3 do
+		table.insert(choices, ranked[i].word)
+	end
+	for i = #choices, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		choices[i], choices[j] = choices[j], choices[i]
+	end
+	return { q = string.format(Config.TEXT.CHOSUNG_Q, candidate.category, candidate.initials), choices = choices,
+		answer = table.find(choices, candidate.word) :: number }
+end
+
+-- Returns false when no question could be made (nothing was asked).
+function ChosungQuiz.run(ctx: Ctx): boolean?
+	local question = ChosungQuiz.question(ctx.rng, Match.wordsInPlay())
+	if not question then
+		return false
+	end
+	askEveryone(ctx, question, "answer")
+	return nil
+end
+
+Quiz.chosung = ChosungQuiz
 
 return Quiz

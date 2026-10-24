@@ -182,6 +182,19 @@ return {
 	BOTTLE_SHOW_SECONDS = 2,
 	BOTTLE_EDGE = 0.05,
 	BOTTLE_MIN_PLAYERS = 2,
+	-- More quiz kinds (bundle 8c, owner 2026-10-24). O/X: OX_QUESTIONS statements in a row (each shown OX_INTRO_SECONDS,
+	-- OX_SECONDS to answer, the right answer OX_REVEAL_SECONDS); the most wrong fly. 숫자 근사: one question shown
+	-- ESTIMATE_INTRO_SECONDS, ESTIMATE_SECONDS to type a whole number from 1 to ESTIMATE_MAX; the farthest flies (with
+	-- ESTIMATE_MIN_PLAYERS on the ground: alone, "the farthest" is always you). ESTIMATE_MAX keeps a number short enough
+	-- that it cannot carry a phone number (the numbers show to everyone; its digits are the input box's limit).
+	OX_QUESTIONS = 3,
+	OX_INTRO_SECONDS = 1.5,
+	OX_SECONDS = 5,
+	OX_REVEAL_SECONDS = 1.5,
+	ESTIMATE_INTRO_SECONDS = 2,
+	ESTIMATE_SECONDS = 15,
+	ESTIMATE_MAX = 999999,
+	ESTIMATE_MIN_PLAYERS = 2,
 	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
 	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
 	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
@@ -494,6 +507,30 @@ return {
 		BOTTLE_STOOD = "%s %d개",
 		BOTTLE_RESULT = "가장 적게 세운 %s 날아가요",
 		BOTTLE_TIE = "모두 똑같이 세웠어요 · 아무도 안 날아가요",
+		-- Bundle 8c (owner 2026-10-24).
+		CHOSUNG_TITLE = "초성 퀴즈",
+		CHOSUNG_BRIEF = "초성을 보고 어떤 낱말인지 골라요 · 틀리거나 안 고르면 날아가요",
+		CHOSUNG_Q = "%s · %s",
+		OX_TITLE = "O/X 퀴즈",
+		OX_BRIEF = "문장 %d개 · 맞으면 O, 틀리면 X · 가장 많이 틀린 사람이 날아가요",
+		OX_START = "맞으면 O, 틀리면 X",
+		OX_QUESTION = "%d/%d · %s",
+		OX_O = "O",
+		OX_X = "X",
+		OX_WRONG = "%s %d개 틀림",
+		OX_RESULT = "가장 많이 틀린 %s 날아가요",
+		OX_ALL_RIGHT = "모두 다 맞혔어요 · 아무도 안 날아가요",
+		ESTIMATE_TITLE = "숫자 근사 퀴즈",
+		ESTIMATE_BRIEF = "정답에 가까운 숫자를 적어요 · 가장 먼 사람이 날아가요",
+		ESTIMATE_START = "숫자를 적고 확인을 눌러요",
+		ESTIMATE_HINT = "숫자만 (1 이상)",
+		ESTIMATE_SEND = "확인",
+		ESTIMATE_SENT = "%d 냈어요",
+		ESTIMATE_RIGHT = "정답 %d",
+		ESTIMATE_GUESS = "%s %d",
+		ESTIMATE_NONE = "%s 안 냄",
+		ESTIMATE_RESULT = "정답 %d · %s 날아가요",
+		ESTIMATE_NOBODY = "정답 %d · 모두 딱 맞혔어요 · 아무도 안 날아가요",
 		TALK_BRIEF = "남의 머리 위 금칙어를 말하게 해요 · 내 금칙어를 말하면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		TALK_SOON = "곧 시작",
 		TALK_PREP = "금칙어를 나눠 주는 중 · 내 머리 위 단어는 나만 몰라요",
@@ -533,6 +570,30 @@ return {
 	SOUND_BELL = "rbxassetid://1839997929", -- the seat bell's ding (APM game show toolkit, Correct Answer 2; replace
 	-- with a shorter desk-bell sound after the owner hears it)
 }
+]====]; s.Parent = n1 end
+do local s = Instance.new("ModuleScript"); s.Name = "Hangul"; s.Source = [====[--!strict
+-- Hangul helpers (bundle 8c, the 초성 quiz): the initial consonants of a word, e.g. "바나나" -> "ㅂㄴㄴ". Characters
+-- that are not complete Hangul syllables (spaces, letters, numbers) are kept as they are.
+local Hangul = {}
+
+local FIRST = 0xAC00 -- 가
+local LAST = 0xD7A3 -- 힣
+local PER_INITIAL = 588 -- 21 vowels x 28 finals
+local INITIALS = { "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ" }
+
+function Hangul.initials(word: string): string
+	local out = {}
+	for _, code in utf8.codes(word) do
+		if code >= FIRST and code <= LAST then
+			table.insert(out, INITIALS[(code - FIRST) // PER_INITIAL + 1])
+		else
+			table.insert(out, utf8.char(code))
+		end
+	end
+	return table.concat(out)
+end
+
+return Hangul
 ]====]; s.Parent = n1 end
 do local s = Instance.new("ModuleScript"); s.Name = "Hearts"; s.Source = [====[--!strict
 -- Lives as a row of hearts for RichText labels: the lives left in red, the lost ones in grey (the HUD and the head
@@ -2279,6 +2340,78 @@ local BombBank: { Question } = {
 
 return BombBank
 ]====]; s.Parent = n3 end
+do local s = Instance.new("ModuleScript"); s.Name = "ChosungBank"; s.Source = [====[--!strict
+-- 초성 quiz words (bundle 8c, owner 2026-10-24). Data only: words by category; the quiz shows a word's initial
+-- consonants (shared/Hangul) with its category, and three other words of the same category whose initials differ as
+-- the wrong choices. Everyday words anyone around 17 knows; no names of people or brands, nothing sensitive. Words
+-- that contain a banned word in play are skipped at run time.
+
+local ChosungBank = {
+	{ category = "과일", words = { "바나나", "사과", "포도", "딸기", "수박", "참외", "복숭아", "자두", "키위", "망고", "귤", "레몬", "체리", "파인애플", "블루베리", "멜론", "석류", "감", "배", "앵두" } },
+	{ category = "동물", words = { "강아지", "고양이", "호랑이", "사자", "코끼리", "기린", "토끼", "거북이", "다람쥐", "고슴도치", "펭귄", "하마", "얼룩말", "캥거루", "판다", "여우", "늑대", "원숭이", "부엉이", "돌고래" } },
+	{ category = "음식", words = { "떡볶이", "김밥", "비빔밥", "불고기", "라면", "짜장면", "짬뽕", "냉면", "삼겹살", "김치찌개", "된장찌개", "순두부", "잡채", "만두", "치킨", "피자", "햄버거", "돈가스", "칼국수", "갈비탕" } },
+	{ category = "나라", words = { "일본", "중국", "미국", "영국", "프랑스", "독일", "이탈리아", "스페인", "캐나다", "호주", "브라질", "멕시코", "인도", "태국", "베트남", "러시아", "이집트", "스위스", "튀르키예", "아르헨티나" } },
+	{ category = "직업", words = { "소방관", "경찰관", "의사", "간호사", "선생님", "요리사", "미용사", "택배 기사", "제빵사", "조종사", "변호사", "약사", "수의사", "기자", "화가", "가수", "배우", "농부", "어부", "건축가" } },
+	{ category = "운동", words = { "축구", "야구", "농구", "배구", "탁구", "테니스", "배드민턴", "수영", "태권도", "유도", "양궁", "펜싱", "골프", "볼링", "스키", "스케이트", "마라톤", "씨름", "복싱", "럭비" } },
+	{ category = "탈것", words = { "자전거", "자동차", "버스", "지하철", "기차", "비행기", "헬리콥터", "배", "오토바이", "트럭", "택시", "케이블카", "킥보드", "열기구", "잠수함", "구급차", "소방차", "유람선", "트랙터", "로켓" } },
+	{ category = "학교 물건", words = { "연필", "지우개", "공책", "필통", "가위", "풀", "자", "색연필", "크레파스", "물감", "칠판", "분필", "책상", "의자", "사물함", "교과서", "형광펜", "볼펜", "스테이플러", "계산기" } },
+}
+
+return ChosungBank
+]====]; s.Parent = n3 end
+do local s = Instance.new("ModuleScript"); s.Name = "EstimateBank"; s.Source = [====[--!strict
+-- 숫자 근사 quiz (bundle 8c, owner 2026-10-24): everyone types a whole number, the farthest from the answer flies.
+-- Data only: `q` asks for a number (the unit, and the standard or rounding when it matters, is in the question),
+-- `answer` is a whole number from 1 to Config.ESTIMATE_MAX. Facts that stay put (no counts a law can change, no values
+-- whose sources disagree, no ranges like a pulse), mostly ones to estimate or work out rather than recall; nothing
+-- sensitive. None repeats a fact of the quiz bank or the O/X bank (one game would give another's answer away).
+-- Questions containing a banned word in play are skipped.
+
+export type Question = { q: string, answer: number }
+
+local EstimateBank: { Question } = {
+	-- Time and numbers to work out
+	{ q = "하루는 몇 초?", answer = 86400 },
+	{ q = "1주일은 몇 분?", answer = 10080 },
+	{ q = "1년(평년)은 몇 시간?", answer = 8760 },
+	{ q = "1년(평년)은 약 몇만 초? (반올림)", answer = 3154 },
+	{ q = "하루 동안 시계의 분침은 몇 바퀴 돌까?", answer = 24 },
+	{ q = "3을 10번 곱하면?", answer = 59049 },
+	{ q = "99 × 99 = ?", answer = 9801 },
+	{ q = "11 × 11 × 11 = ?", answer = 1331 },
+	{ q = "1부터 9까지 모두 곱하면?", answer = 362880 },
+	{ q = "시속 100km로 1시간 30분 달리면 몇 km를 갈까?", answer = 150 },
+	{ q = "가로·세로·높이가 모두 1m인 통에 물을 가득 채우면 몇 리터?", answer = 1000 },
+	-- Earth and space
+	{ q = "지구에서 달까지의 평균 거리는 약 몇 km?", answer = 384400 },
+	{ q = "지구 적도의 둘레는 약 몇 km?", answer = 40075 },
+	{ q = "지구의 평균 반지름은 약 몇 km?", answer = 6371 },
+	{ q = "달의 평균 지름은 약 몇 km? (반올림)", answer = 3475 },
+	{ q = "태양의 지름은 지구 지름의 약 몇 배?", answer = 109 },
+	{ q = "지구에서 태양까지의 평균 거리는 약 몇만 km?", answer = 14960 },
+	{ q = "섭씨 20도 공기 속에서 소리는 1초에 약 몇 미터를 갈까?", answer = 343 },
+	-- Sizes by a standard
+	{ q = "1마일은 약 몇 미터?", answer = 1609 },
+	{ q = "에베레스트산의 높이는 약 몇 미터? (2020년 발표)", answer = 8849 },
+	{ q = "부르즈 할리파의 높이는 약 몇 미터?", answer = 828 },
+	{ q = "국제 규격 농구 골대 링의 높이는 몇 cm?", answer = 305 },
+	{ q = "국제 규격 축구 골대의 가로 폭은 몇 cm?", answer = 732 },
+	{ q = "국제 규격 탁구공의 지름은 몇 mm?", answer = 40 },
+	{ q = "야구에서 투수판부터 홈 플레이트까지는 약 몇 cm?", answer = 1844 },
+	{ q = "표준 피아노의 건반은 모두 몇 개?", answer = 88 },
+	{ q = "A4 용지의 긴 변은 몇 mm?", answer = 297 },
+	-- Years
+	{ q = "훈민정음이 반포된 해는?", answer = 1446 },
+	{ q = "임진왜란이 일어난 해는?", answer = 1592 },
+	{ q = "콜럼버스가 아메리카에 처음 도착한 해는?", answer = 1492 },
+	{ q = "첫 근대 올림픽(아테네)이 열린 해는?", answer = 1896 },
+	{ q = "타이타닉호가 침몰한 해는?", answer = 1912 },
+	{ q = "사람이 처음 달에 발을 디딘 해는?", answer = 1969 },
+	{ q = "서울 올림픽이 열린 해는?", answer = 1988 },
+}
+
+return EstimateBank
+]====]; s.Parent = n3 end
 do local s = Instance.new("ModuleScript"); s.Name = "LiarBank"; s.Source = [====[--!strict
 -- Categories and words for the liar game (docs/DESIGN_V3.md §5.2; bundle 6d). Data only. Everyday words anyone around
 -- age 17 can describe in one clue; no real people, brands or sensitive matters. Each category has at least four words
@@ -2300,6 +2433,73 @@ local LiarBank: { Category } = {
 }
 
 return LiarBank
+]====]; s.Parent = n3 end
+do local s = Instance.new("ModuleScript"); s.Name = "OXBank"; s.Source = [====[--!strict
+-- O/X quiz statements (bundle 8c, owner 2026-10-24). Data only: `s` is read out on screen, `o` is true when it is
+-- right (O) and false when it is wrong (X). Plain facts anyone around 17 can know or guess, stable over time, with the
+-- condition that makes them true spelled out (1기압, 하계, 같은 부피); nothing sensitive; about half O and half X.
+-- None repeats a fact of the quiz bank or the number bank (one game would give another's answer away). Statements
+-- containing a banned word in play are skipped at run time.
+
+export type Statement = { s: string, o: boolean }
+
+local OXBank: { Statement } = {
+	-- Animals and plants
+	{ s = "거미는 곤충이다", o = false },
+	{ s = "고래는 포유류다", o = true },
+	{ s = "펭귄은 날 수 없다", o = true },
+	{ s = "상어는 어류다", o = true },
+	{ s = "개구리는 파충류다", o = false },
+	{ s = "물고기는 모두 알을 낳는다", o = false },
+	{ s = "닭은 하늘을 오래 날 수 있다", o = false },
+	{ s = "남극에는 북극곰이 산다", o = false },
+	{ s = "북극에는 펭귄이 산다", o = false },
+	{ s = "오스트레일리아에는 캥거루가 산다", o = true },
+	{ s = "코끼리는 육지에서 가장 무거운 동물이다", o = true },
+	{ s = "카멜레온은 몸 색을 바꿀 수 있다", o = true },
+	{ s = "꿀벌은 춤으로 꽃이 있는 곳을 알린다", o = true },
+	{ s = "금붕어의 기억력은 3초뿐이다", o = false },
+	{ s = "타조는 위험하면 머리를 모래에 묻는다", o = false },
+	{ s = "황소는 빨간색을 보면 흥분한다", o = false },
+	{ s = "토마토는 식물학적으로 열매(과실)다", o = true },
+	{ s = "바나나는 나무가 아니라 풀에서 자란다", o = true },
+	{ s = "당근은 원래 모두 주황색이었다", o = false },
+	{ s = "식물도 호흡을 한다", o = true },
+	-- Science and the sky
+	{ s = "1기압에서 물은 섭씨 0도에 끓는다", o = false },
+	{ s = "빛은 소리보다 빠르다", o = true },
+	{ s = "북극은 남극보다 더 춥다", o = false },
+	{ s = "번개는 전기 현상이다", o = true },
+	{ s = "번개는 같은 곳에 두 번 치지 않는다", o = false },
+	{ s = "화산은 바닷속에도 있다", o = true },
+	{ s = "달은 스스로 빛을 낸다", o = false },
+	{ s = "달에는 공기가 거의 없다", o = true },
+	{ s = "해는 서쪽에서 뜬다", o = false },
+	{ s = "만리장성은 달에서 맨눈으로 보인다", o = false },
+	{ s = "얼음은 같은 부피의 물보다 가벼워서 물에 뜬다", o = true },
+	{ s = "사과는 물에 뜬다", o = true },
+	{ s = "1kg짜리 쇠가 1kg짜리 솜보다 무겁다", o = false },
+	{ s = "자석의 같은 극끼리는 서로 밀어낸다", o = true },
+	{ s = "다이아몬드는 탄소로 이루어져 있다", o = true },
+	{ s = "금은 자석에 잘 붙는다", o = false },
+	{ s = "사막에도 비가 내린다", o = true },
+	{ s = "피는 몸 밖으로 나오면 파랗게 변한다", o = false },
+	{ s = "사람은 뇌의 10%만 쓴다", o = false },
+	-- Places, culture and numbers
+	{ s = "한글을 만든 왕은 세종대왕이다", o = true },
+	{ s = "대한민국의 수도는 부산이다", o = false },
+	{ s = "대한민국의 나라꽃은 무궁화다", o = true },
+	{ s = "설날은 음력 1월 1일이다", o = true },
+	{ s = "백두산은 한반도에서 가장 높은 산이다", o = true },
+	{ s = "이집트에는 피라미드가 있다", o = true },
+	{ s = "에펠탑은 영국 런던에 있다", o = false },
+	{ s = "하계 올림픽은 4년마다 열린다", o = true },
+	{ s = "정사각형은 네 변의 길이가 모두 같다", o = true },
+	{ s = "모든 소수는 홀수다", o = false },
+	{ s = "0은 짝수다", o = true },
+}
+
+return OXBank
 ]====]; s.Parent = n3 end
 do local s = Instance.new("ModuleScript"); s.Name = "OneWordTopics"; s.Source = [====[--!strict
 -- One-word topics (docs/DESIGN_V3.md §5; bundle 4b, owner 2026-10-23: mostly about yourself — tastes, habits, small
@@ -3681,6 +3881,183 @@ end
 
 return Duel
 ]====]; s.Parent = n4 end
+do local s = Instance.new("ModuleScript"); s.Name = "Estimate"; s.Source = [====[--!strict
+-- 숫자 근사 퀴즈 (bundle 8c, owner 2026-10-24): one question with a whole-number answer (EstimateBank); the question
+-- shows ESTIMATE_INTRO_SECONDS, then everyone types a whole number (1 to ESTIMATE_MAX) within ESTIMATE_SECONDS. The
+-- one farthest from the answer flies (ties all; nobody when everyone hit it exactly); whoever typed nothing flies
+-- instead (and missed an answer). It needs ESTIMATE_MIN_PLAYERS on the ground, at the start and at the end; only those
+-- still here and on the ground at the end count. Only numbers travel and show, never free text. Questions never
+-- repeat until the bank runs out, and one containing a banned word in play is skipped.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local EstimateBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("EstimateBank"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	stopped: () -> boolean,
+	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number, kind: string?) -> string?,
+	lever: () -> (),
+	talk: (stage: string, topic: string?) -> (),
+	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?,
+		quiet: boolean?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
+}
+
+local Estimate = {
+	id = "estimate",
+	title = Config.TEXT.ESTIMATE_TITLE,
+	brief = Config.TEXT.ESTIMATE_BRIEF, -- (the briefing before it)
+	expectedSeconds = Config.ESTIMATE_INTRO_SECONDS + Config.ESTIMATE_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
+	minPlayers = Config.ESTIMATE_MIN_PLAYERS :: number?,
+	needsPresenter = nil :: boolean?,
+}
+
+local used: { [EstimateBank.Question]: boolean } = {}
+
+local function pick(rng: Random): EstimateBank.Question?
+	local words = Match.wordsInPlay()
+	local clean, fresh = {}, {}
+	for _, question in EstimateBank do
+		local hit = false
+		for _, word in words do
+			hit = hit or string.find(question.q, word, 1, true) ~= nil
+		end
+		if not hit then
+			table.insert(clean, question)
+			if not used[question] then
+				table.insert(fresh, question)
+			end
+		end
+	end
+	if #fresh == 0 then
+		for _, question in clean do
+			used[question] = nil
+		end
+		fresh = clean
+	end
+	if #fresh == 0 then
+		return nil
+	end
+	local question = fresh[rng:NextInteger(1, #fresh)]
+	used[question] = true
+	return question
+end
+
+function Estimate.available(final: boolean): boolean
+	return not final and #EstimateBank > 0
+end
+
+-- Who flies from the guesses (nil = none): who typed nothing, else the farthest from `answer` (ties all; nobody when
+-- every guess is exact). Pure, for the tests.
+function Estimate.losers(players: { Player }, guesses: { [Player]: number }, answer: number): { Player }
+	local none = {}
+	for _, player in players do
+		if guesses[player] == nil then
+			table.insert(none, player)
+		end
+	end
+	if #none > 0 then
+		return none
+	end
+	local worst = -1
+	for _, player in players do
+		worst = math.max(worst, math.abs(guesses[player] - answer))
+	end
+	local out = {}
+	if worst <= 0 then
+		return out
+	end
+	for _, player in players do
+		if math.abs(guesses[player] - answer) == worst then
+			table.insert(out, player)
+		end
+	end
+	return out
+end
+
+-- Returns false when no clean question is left or too few were on the ground.
+function Estimate.run(ctx: Ctx): boolean?
+	local question = pick(ctx.rng)
+	if not question then
+		return false
+	end
+	local asked = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(asked, player)
+		end
+	end
+	if #asked < Config.ESTIMATE_MIN_PLAYERS then
+		return false
+	end
+	ctx.show(Config.TEXT.ESTIMATE_START)
+	local shown = { kind = "estimate", question = question.q }
+	ctx.screen(shown)
+	if not ctx.wait(Config.ESTIMATE_INTRO_SECONDS) then
+		return nil
+	end
+	local answers = ctx.ask(shown, Config.ESTIMATE_MAX, Config.ESTIMATE_SECONDS, asked)
+	if ctx.cancelled() then
+		return nil
+	end
+	-- (still here, alive and on the ground: a player launched meanwhile is neither judged nor shown)
+	local present, guesses, typed, none = {}, {}, {}, {}
+	for _, player in asked do
+		if table.find(ctx.players(), player) and not ctx.flying(player) then
+			table.insert(present, player)
+			guesses[player] = answers[player]
+			table.insert(if answers[player] then typed else none, player)
+		end
+	end
+	if #present < Config.ESTIMATE_MIN_PLAYERS then
+		ctx.screen(nil)
+		ctx.show(Config.TEXT.MINIGAME_TOO_FEW)
+		return nil
+	end
+	local losers = Estimate.losers(present, guesses, question.answer)
+	local ids, shownGuesses, loserIds, names = {}, {}, {}, {}
+	for _, player in present do
+		table.insert(ids, player.UserId)
+		table.insert(shownGuesses, answers[player] or -1)
+	end
+	for _, player in losers do
+		table.insert(loserIds, player.UserId)
+		table.insert(names, player.DisplayName)
+	end
+	ctx.screen({ kind = "estimateResult", question = question.q, answer = question.answer, ids = ids,
+		guesses = shownGuesses, losers = loserIds })
+	ctx.show(if #losers > 0 then string.format(Config.TEXT.ESTIMATE_RESULT, question.answer, table.concat(names, ", "))
+		else string.format(Config.TEXT.ESTIMATE_NOBODY, question.answer))
+	ctx.answers(typed, none) -- (before the fail: a launched player's miss would not count)
+	ctx.fail(losers, "estimate")
+	ctx.reveal(Config.MINIGAME_RESULT_SECONDS)
+	return nil
+end
+
+return Estimate
+]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "Liar"; s.Source = [====[--!strict
 -- The liar game (docs/DESIGN_V3.md §5.2; bundle 6d, owner 2026-10-23: the objective rule). One player on the ground is
 -- the liar: everyone else on the ground and the presenter see the word, the liar (and anyone not playing) sees only
@@ -4150,6 +4527,211 @@ end
 
 return Nunchi
 ]====]; s.Parent = n4 end
+do local s = Instance.new("ModuleScript"); s.Name = "OXQuiz"; s.Source = [====[--!strict
+-- O/X 퀴즈 (bundle 8c, owner 2026-10-24): OX_QUESTIONS statements in a row, each shown OX_INTRO_SECONDS before the
+-- O / X buttons work for OX_SECONDS (on the quiz's own screen). After the last one, whoever got the most wrong flies
+-- (a statement not answered counts as wrong; ties all; nobody when everyone got every one right). A statement asked
+-- while someone was launched or gone does not count for them, and only those still here and on the ground at the end
+-- are judged and shown. Who answered none missed an answer (the AFK rule). Statements never repeat until every clean
+-- one was asked, and one containing a banned word in play is skipped.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local OXBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("OXBank"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	stopped: () -> boolean,
+	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number, kind: string?) -> string?,
+	lever: () -> (),
+	talk: (stage: string, topic: string?) -> (),
+	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?,
+		quiet: boolean?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
+}
+
+local OXQuiz = {
+	id = "oxQuiz",
+	title = Config.TEXT.OX_TITLE,
+	brief = string.format(Config.TEXT.OX_BRIEF, Config.OX_QUESTIONS), -- (the briefing before it)
+	expectedSeconds = Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
+		+ Config.MINIGAME_RESULT_SECONDS,
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
+	minPlayers = nil :: number?,
+	needsPresenter = nil :: boolean?,
+}
+
+local used: { [OXBank.Statement]: boolean } = {}
+
+-- `count` different statements free of the words in play: the ones not asked yet first; once those run out, the asked
+-- ones come back for the rest. Fewer if the bank has fewer clean ones. Exposed for the tests.
+function OXQuiz.draw(count: number, rng: Random): { OXBank.Statement }
+	local words = Match.wordsInPlay()
+	local clean, fresh = {}, {}
+	for _, statement in OXBank do
+		local hit = false
+		for _, word in words do
+			hit = hit or string.find(statement.s, word, 1, true) ~= nil
+		end
+		if not hit then
+			table.insert(clean, statement)
+			if not used[statement] then
+				table.insert(fresh, statement)
+			end
+		end
+	end
+	local out: { OXBank.Statement } = {}
+	local function take(from: { OXBank.Statement })
+		while #out < count and #from > 0 do
+			local statement = table.remove(from, rng:NextInteger(1, #from)) :: OXBank.Statement
+			used[statement] = true
+			table.insert(out, statement)
+		end
+	end
+	take(fresh)
+	if #out < count then -- (every clean one was asked: they come back, except the ones just taken)
+		local again = {}
+		for _, statement in clean do
+			if not table.find(out, statement) then
+				used[statement] = nil
+				table.insert(again, statement)
+			end
+		end
+		take(again)
+	end
+	return out
+end
+
+function OXQuiz.available(final: boolean): boolean
+	return not final and #OXBank > 0
+end
+
+-- Who flies from the wrong counts: the most wrong (ties all), nobody when nobody got any wrong. Pure, for the tests.
+function OXQuiz.losers(players: { Player }, wrong: { [Player]: number }): { Player }
+	local most = 0
+	for _, player in players do
+		most = math.max(most, wrong[player] or 0)
+	end
+	local out = {}
+	if most > 0 then
+		for _, player in players do
+			if (wrong[player] or 0) == most then
+				table.insert(out, player)
+			end
+		end
+	end
+	return out
+end
+
+-- Returns false when nothing could be asked (no clean statement).
+function OXQuiz.run(ctx: Ctx): boolean?
+	local statements = OXQuiz.draw(Config.OX_QUESTIONS, ctx.rng)
+	if #statements == 0 then
+		return false
+	end
+	local players = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(players, player)
+		end
+	end
+	-- (still here, alive and on the ground)
+	local function present(): { Player }
+		local list = {}
+		for _, player in players do
+			if table.find(ctx.players(), player) and not ctx.flying(player) then
+				table.insert(list, player)
+			end
+		end
+		return list
+	end
+	local wrong: { [Player]: number } = {}
+	local touched: { [Player]: boolean } = {}
+	local asked: { [Player]: boolean } = {}
+	local choices = { Config.TEXT.OX_O, Config.TEXT.OX_X }
+	ctx.show(Config.TEXT.OX_START)
+	for i, statement in statements do
+		local question = string.format(Config.TEXT.OX_QUESTION, i, #statements, statement.s)
+		local shown = { kind = "quiz", final = false, question = question, choices = choices }
+		ctx.screen(shown)
+		if not ctx.wait(Config.OX_INTRO_SECONDS) then
+			return nil
+		end
+		local from = present()
+		local answers = ctx.ask(shown, #choices, Config.OX_SECONDS, from)
+		if ctx.cancelled() then
+			return nil
+		end
+		local right = if statement.o then 1 else 2
+		local still = present()
+		for _, player in from do
+			if not table.find(still, player) then
+				continue -- (launched or gone meanwhile: this one does not count for them)
+			end
+			asked[player] = true
+			local choice = answers[player]
+			if choice then
+				touched[player] = true
+			end
+			if choice ~= right then
+				wrong[player] = (wrong[player] or 0) + 1
+			end
+		end
+		ctx.screen({ kind = "quizResult", final = false, question = question, choices = choices, answer = right })
+		if not ctx.wait(Config.OX_REVEAL_SECONDS) then
+			return nil
+		end
+	end
+	local judged, pressed, never = {}, {}, {}
+	for _, player in present() do
+		if asked[player] then
+			table.insert(judged, player)
+			table.insert(if touched[player] then pressed else never, player)
+		end
+	end
+	local losers = OXQuiz.losers(judged, wrong)
+	local ids, counts, loserIds = {}, {}, {}
+	for _, player in judged do
+		table.insert(ids, player.UserId)
+		table.insert(counts, wrong[player] or 0)
+	end
+	for _, player in losers do
+		table.insert(loserIds, player.UserId)
+	end
+	ctx.screen({ kind = "oxResult", ids = ids, wrong = counts, losers = loserIds, total = #statements })
+	local names = {}
+	for _, player in losers do
+		table.insert(names, player.DisplayName)
+	end
+	ctx.show(if #losers > 0 then string.format(Config.TEXT.OX_RESULT, table.concat(names, ", ")) else Config.TEXT.OX_ALL_RIGHT)
+	ctx.answers(pressed, never) -- (before the fail: a launched player's miss would not count)
+	ctx.fail(losers, "ox")
+	ctx.reveal(Config.MINIGAME_RESULT_SECONDS)
+	return nil
+end
+
+return OXQuiz
+]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "OneWord"; s.Source = [====[--!strict
 -- "Say what you like" (docs/DESIGN_V3.md §5: bundle 4b's "a word to everyone", owner 2026-10-23: topics mostly about
 -- yourself, the presenter picks on screen and the podium lever is pulled; bells and the floor since bundle 6b). First
@@ -4502,6 +5084,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "Quiz"; s.Source = [====[--!
 -- harder questions and a wrong answer is out (RoundService decides that). Players flying when the question opens
 -- cannot answer and are neither failed nor counted as missing (§4). Questions never repeat until the bank runs out,
 -- and a question whose text or any choice contains a banned word in play is skipped.
+-- The 초성 quiz (`Quiz.chosung`, bundle 8c) lives here too and asks the same way (see it at the end).
 -- The bell quiz (`Quiz.bell`, bundle 6b, owner 2026-10-23: the first to ring answers by voice, the presenter judges)
 -- lives here too, so both draw from the same bank without repeats. BELL_QUIZ_QUESTIONS questions; for each the bells
 -- of everyone on the ground are open BELL_WAIT_SECONDS; the first ring gets the floor and the presenter presses right
@@ -4514,6 +5097,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local QuizBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("QuizBank"))
+local ChosungBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("ChosungBank"))
+local Hangul = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hangul"))
 
 -- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
 type Ctx = {
@@ -4752,6 +5337,130 @@ function BellQuiz.run(ctx: Ctx): boolean?
 end
 
 Quiz.bell = BellQuiz
+
+-- 초성 퀴즈 (`Quiz.chosung`, bundle 8c, owner 2026-10-24): a word's initial consonants with its category (ChosungBank,
+-- shared/Hangul), and four words of that category to choose from — the right one and three whose initials differ,
+-- the ones closest to the right initials (as many syllables, the most initials in the same places) so a glance is not
+-- enough. The rest is the quiz's (askEveryone: wrong or none is a fail). Words or categories containing a banned word
+-- in play are left out; a word is not asked again until every word that can make a question was.
+local ChosungQuiz = {
+	id = "chosung",
+	title = Config.TEXT.CHOSUNG_TITLE,
+	brief = Config.TEXT.CHOSUNG_BRIEF, -- (the briefing before it)
+	expectedSeconds = Quiz.expectedSeconds,
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
+	minPlayers = nil :: number?,
+	needsPresenter = nil :: boolean?,
+}
+
+local usedWords: { [string]: boolean } = {} -- by "category/word" (a word may sit in two categories)
+type Candidate = { key: string, category: string, word: string, initials: string, decoys: { string } }
+
+function ChosungQuiz.available(final: boolean): boolean
+	return not final and #ChosungBank > 0
+end
+
+-- A word's initials as a list of characters.
+local function letters(initials: string): { number }
+	local out = {}
+	for _, code in utf8.codes(initials) do
+		table.insert(out, code)
+	end
+	return out
+end
+
+-- How close a wrong choice's initials are to the right ones: as many syllables first, then initials in the same places.
+local function likeness(right: { number }, other: { number }): number
+	local score = if #other == #right then 100 else 0
+	for i = 1, math.min(#right, #other) do
+		if right[i] == other[i] then
+			score += 1
+		end
+	end
+	return score
+end
+
+-- A question (nil when no word can make one: a clean word with three clean words of other initials in its clean
+-- category); `words`: the banned words in play.
+function ChosungQuiz.question(rng: Random, words: { string }): QuizBank.Question?
+	local function clean(text: string): boolean
+		for _, banned in words do
+			if string.find(text, banned, 1, true) then
+				return false
+			end
+		end
+		return true
+	end
+	local usable: { Candidate } = {}
+	for _, entry in ChosungBank do
+		if clean(entry.category) then
+			local cleanWords = {}
+			for _, word in entry.words do
+				if clean(word) then
+					table.insert(cleanWords, { word = word, initials = Hangul.initials(word) })
+				end
+			end
+			for _, this in cleanWords do
+				local decoys = {}
+				for _, other in cleanWords do
+					if other.initials ~= this.initials then
+						table.insert(decoys, other.word)
+					end
+				end
+				if #decoys >= 3 then
+					table.insert(usable, { key = entry.category .. "/" .. this.word, category = entry.category,
+						word = this.word, initials = this.initials, decoys = decoys })
+				end
+			end
+		end
+	end
+	local fresh = {}
+	for _, candidate in usable do
+		if not usedWords[candidate.key] then
+			table.insert(fresh, candidate)
+		end
+	end
+	if #fresh == 0 then -- (every word that can make a question was asked: they come back)
+		table.clear(usedWords)
+		fresh = usable
+	end
+	if #fresh == 0 then
+		return nil
+	end
+	local candidate = fresh[rng:NextInteger(1, #fresh)]
+	usedWords[candidate.key] = true
+	-- The three closest wrong choices (a random pick among equally close ones).
+	local right = letters(candidate.initials)
+	local ranked = {}
+	for _, other in candidate.decoys do
+		table.insert(ranked, { word = other, score = likeness(right, letters(Hangul.initials(other))) + rng:NextNumber() * 0.5 })
+	end
+	table.sort(ranked, function(a, b)
+		return a.score > b.score
+	end)
+	local choices = { candidate.word }
+	for i = 1, 3 do
+		table.insert(choices, ranked[i].word)
+	end
+	for i = #choices, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		choices[i], choices[j] = choices[j], choices[i]
+	end
+	return { q = string.format(Config.TEXT.CHOSUNG_Q, candidate.category, candidate.initials), choices = choices,
+		answer = table.find(choices, candidate.word) :: number }
+end
+
+-- Returns false when no question could be made (nothing was asked).
+function ChosungQuiz.run(ctx: Ctx): boolean?
+	local question = ChosungQuiz.question(ctx.rng, Match.wordsInPlay())
+	if not question then
+		return false
+	end
+	askEveryone(ctx, question, "answer")
+	return nil
+end
+
+Quiz.chosung = ChosungQuiz
 
 return Quiz
 ]====]; s.Parent = n4 end
@@ -6146,7 +6855,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionRunner"; s.Source = 
 -- Bundle 4: the quiz (also the final), the roulette, "say what you like" (4b, bells since 6b); bundle 6a: the
 -- banned-word talk (only while speech judging is on); bundle 6b: the bell quiz (only with a presenter); bundle 6c:
 -- crocodile teeth, the bomb, nunchi; bundle 6d: the balance game, red light, the liar; bundle 8b: 숫자 맞추기, 총잡이
--- 결투, 물병 세우기; and the Studio-only test mission.
+-- 결투, 물병 세우기; bundle 8c: the 초성 quiz (Quiz.chosung), the O/X quiz, the number quiz; and the Studio-only test
+-- mission.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -6168,6 +6878,8 @@ local TestMission = require(missionFolder:WaitForChild("TestMission"))
 local TimeGuess = require(missionFolder:WaitForChild("TimeGuess"))
 local Duel = require(missionFolder:WaitForChild("Duel"))
 local Bottle = require(missionFolder:WaitForChild("Bottle"))
+local OXQuiz = require(missionFolder:WaitForChild("OXQuiz"))
+local Estimate = require(missionFolder:WaitForChild("Estimate"))
 
 local MissionRunner = {}
 
@@ -6266,7 +6978,7 @@ export type Mission = {
 export type Option = { id: string, title: string, recommended: boolean }
 
 local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, Crocodile, BombPass, Nunchi, Balance,
-	RedLight, Liar, TimeGuess, Duel, Bottle, TestMission }
+	RedLight, Liar, TimeGuess, Duel, Bottle, Quiz.chosung, OXQuiz, Estimate, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
@@ -10842,6 +11554,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [
 --     everyone's time), 총잡이 결투 ("ready…", then a red "fire!" when the server says so, my opponent; then the
 --     reactions), 물병 세우기 (a power bar with a green zone and a marker sweeping at the server's pace, stopping where
 --     I rang; who stood);
+--   - bundle 8c (owner 2026-10-24): the 초성 quiz and the O/X quiz on the quiz's own screen (O/X: then everyone's
+--     wrong count), the number quiz (a box for a whole number and "send"; then everyone's number and the answer);
 --   - between games (owner 2026-10-24): what the last game did with the vote for the next one (or "the presenter is
 --     picking"), then the next game's briefing: its name, its one-line rule, 3-2-1; at the end the round's result
 --     with its awards (the longest flight, the most games without losing a life);
@@ -10865,6 +11579,7 @@ local SPIN_TURNS = 4 -- whole turns before the pointer stops
 local COIN_SIZE = 170
 local MAX_BUTTONS = Config.MAX_PLAYERS + 2 -- a vote: everyone on the ground (the liar game), "nobody", "could not hear"
 local TEXT = Config.TEXT
+local ESTIMATE_DIGITS = #tostring(Config.ESTIMATE_MAX) -- (the number box takes no longer number)
 local SLICE_COLORS = { Color3.fromRGB(40, 92, 170), Color3.fromRGB(62, 66, 92) } -- name pills, alternating
 local GUM = Color3.fromRGB(226, 110, 132) -- behind a crocodile tooth (a white tooth on white was hard to see)
 local GREEN_LIGHT = Color3.fromRGB(34, 120, 64) -- the red light game's card
@@ -10888,6 +11603,9 @@ local needle: Frame
 local arrow: TextLabel
 local coin: TextLabel
 local ringPills: { Frame } = {}
+local numberRow: Frame -- 숫자 근사 퀴즈: the box for a whole number and its "send" button
+local numberBox: TextBox
+local sendButton: TextButton
 local bar: Frame -- 물병 세우기's power bar, its green zone and the marker
 local zone: Frame
 local marker: Frame
@@ -10966,6 +11684,13 @@ local function answerButton(index: number): TextButton
 end
 
 -- onPick(questionId, choice): I pressed an answer button.
+-- Lets go of the number box (a phone keyboard closes with it).
+local function dropFocus()
+	if numberBox and numberBox:IsFocused() then
+		numberBox:ReleaseFocus()
+	end
+end
+
 function MissionPanel.build(onPick: (number, number) -> ())
 	onAnswer = onPick
 	card = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 16)
@@ -11115,6 +11840,58 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	round.CornerRadius = UDim.new(1, 0)
 	round.Parent = coin
 
+	-- 숫자 근사 퀴즈 (bundle 8c): a box for digits only and a "send" button; the number goes as the answer.
+	numberRow = Instance.new("Frame")
+	numberRow.BackgroundTransparency = 1
+	numberRow.Size = UDim2.new(1, 0, 0, 44)
+	numberRow.LayoutOrder = 3
+	numberRow.Visible = false
+	numberRow.Parent = card
+	numberBox = Instance.new("TextBox")
+	numberBox.Size = UDim2.new(0.7, -8, 1, 0)
+	numberBox.BackgroundColor3 = Style.BUTTON
+	numberBox.BackgroundTransparency = 0.1
+	numberBox.FontFace = Style.BOLD
+	numberBox.TextSize = 22
+	numberBox.TextColor3 = Style.WHITE
+	numberBox.PlaceholderText = TEXT.ESTIMATE_HINT
+	numberBox.PlaceholderColor3 = Style.GREY
+	numberBox.ClearTextOnFocus = false
+	numberBox.Text = ""
+	Style.round(numberBox, 10)
+	numberBox.Parent = numberRow
+	numberBox:GetPropertyChangedSignal("Text"):Connect(function()
+		local digits = string.sub(string.gsub(numberBox.Text, "%D", ""), 1, ESTIMATE_DIGITS)
+		if digits ~= numberBox.Text then
+			numberBox.Text = digits
+		end
+	end)
+	sendButton = Style.button(Style.BOLD, 20)
+	sendButton.Size = UDim2.fromScale(0.3, 1)
+	sendButton.Position = UDim2.fromScale(0.7, 0)
+	sendButton.Text = TEXT.ESTIMATE_SEND
+	sendButton.Parent = numberRow
+	local function send()
+		local value = tonumber(numberBox.Text)
+		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt
+		if state.kind == "estimate" and state.canAnswer and open and not state.myPick and value and value >= 1
+			and value <= Config.ESTIMATE_MAX and value % 1 == 0 then
+			state.myPick = value
+			onAnswer(state.id, value)
+			numberBox.TextEditable = false
+			sendButton.AutoButtonColor = false
+			sendButton.TextColor3 = Style.GREY
+			note.Text = string.format(TEXT.ESTIMATE_SENT, value)
+			dropFocus()
+		end
+	end
+	sendButton.Activated:Connect(send)
+	numberBox.FocusLost:Connect(function(enter: boolean)
+		if enter then
+			send()
+		end
+	end)
+
 	-- 물병 세우기's power bar (bundle 8b): the track, the green zone, the marker the bell stops.
 	bar = Style.panel(card, Style.BUTTON, 0.1, 8)
 	bar.Size = UDim2.new(1, 0, 0, 26)
@@ -11182,6 +11959,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local newQuestion = if quizLike then payload.question ~= state.question
 		elseif kind == "vote" or kind == "balance" or kind == "liarGuess" or kind == "nextVote" then
 			payload.id ~= nil and payload.id ~= state.id
+		elseif kind == "estimate" then (payload.id or 0) ~= state.id or state.kind ~= "estimate"
 		else true
 	if newQuestion then
 		state.myPick = nil -- a new question (a quiz comes twice: before and once the buttons work), a new vote, or none
@@ -11199,6 +11977,11 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local between = kind == "nextVote" or kind == "nextPick" or kind == "brief" or kind == "roundResult"
 	local timing = kind == "timeGuess" or kind == "timeGuessResult" or kind == "duel" or kind == "duelResult"
 		or kind == "bottle" or kind == "bottleThrow" or kind == "bottleResult"
+	local quizKinds = kind == "estimate" or kind == "estimateResult" or kind == "oxResult"
+	numberRow.Visible = kind == "estimate"
+	if kind ~= "estimate" then
+		dropFocus() -- (the box is gone: no phone keyboard left over)
+	end
 	title.TextColor3 = Style.WHITE -- (the duel turns it red at "fire!")
 	bar.Visible = kind == "bottle"
 	local sameThrow = kind == "bottle" and state.timing.barStartAt == (tonumber(payload.barStartAt) or 0)
@@ -11211,20 +11994,20 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	}
 	-- (the awards and the timing games' results take two lines: many names)
 	note.Size = UDim2.new(1, 0, 0, if kind == "roundResult" or kind == "timeGuessResult" or kind == "duelResult"
-		or kind == "bottleThrow" or kind == "bottleResult" then 46 else 22)
+		or kind == "bottleThrow" or kind == "bottleResult" or kind == "oxResult" or kind == "estimateResult" then 46 else 22)
 	state.shown = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
-		or kind == "talk" or bells or games or between or timing
+		or kind == "talk" or bells or games or between or timing or quizKinds
 	card.Visible = state.shown and not state.hidden
 	answerGrid.Visible = quizLike or kind == "vote" or kind == "bomb" or (kind == "balance" and payload.stage == "pick")
 		or kind == "liarGuess" or kind == "nextVote"
 	teethGrid.Visible = kind == "croc" or kind == "crocResult"
 	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
-		or games or between or timing
+		or games or between or timing or quizKinds
 	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc" or kind == "bomb"
 		or kind == "nunchi" or kind == "balance" or kind == "redLight" or kind == "liar" or kind == "liarGuess"
-		or kind == "nextVote" or kind == "brief" or kind == "timeGuess" or kind == "bottle"
+		or kind == "nextVote" or kind == "brief" or kind == "timeGuess" or kind == "bottle" or kind == "estimate"
 	note.Visible = kind == "oneWord" or kind == "bellQuiz" or kind == "bomb" or kind == "nunchi" or kind == "nunchiResult"
-		or between or timing
+		or between or timing or quizKinds
 		or kind == "balance" or kind == "balanceResult" or kind == "redLight" or kind == "redLightResult" or kind == "liar"
 	card.BackgroundColor3 = if kind == "redLight" then (if payload.light == "red" then RED_LIGHT else GREEN_LIGHT)
 		else Style.PANEL
@@ -11327,6 +12110,38 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			zone.Size = UDim2.fromScale(width, 1)
 			zone.Position = UDim2.fromScale(tonumber(payload.center) or 0.5, 0)
 		end
+	elseif kind == "estimate" then
+		title.Text = payload.question or ""
+		if newQuestion then -- (a new number question: an empty box)
+			numberBox.Text = ""
+		end
+		-- (only while the question is open to me: before that, after sending, or flying, the box and the button rest)
+		local open = canAnswer and payload.id ~= nil and not state.myPick
+		numberBox.TextEditable = open
+		sendButton.AutoButtonColor = open
+		sendButton.TextColor3 = if open then Style.WHITE else Style.GREY
+		if not open then
+			dropFocus()
+		end
+		note.Text = if state.myPick then string.format(TEXT.ESTIMATE_SENT, state.myPick) else TEXT.ESTIMATE_START
+	elseif kind == "estimateResult" then
+		title.Text = payload.question or ""
+		local guesses, losers, ids, parts = payload.guesses or {}, payload.losers or {}, payload.ids or {}, {}
+		for i, name in names do
+			local value = tonumber(guesses[i]) or -1
+			local mark = if table.find(losers, ids[i]) then " 💥" else ""
+			table.insert(parts, (if value >= 1 then string.format(TEXT.ESTIMATE_GUESS, name, value)
+				else string.format(TEXT.ESTIMATE_NONE, name)) .. mark)
+		end
+		note.Text = string.format(TEXT.ESTIMATE_RIGHT, tonumber(payload.answer) or 0) .. "  |  " .. table.concat(parts, " · ")
+	elseif kind == "oxResult" then
+		title.Text = TEXT.OX_TITLE
+		local wrong, losers, ids, parts = payload.wrong or {}, payload.losers or {}, payload.ids or {}, {}
+		for i, name in names do
+			local mark = if table.find(losers, ids[i]) then " 💥" else ""
+			table.insert(parts, string.format(TEXT.OX_WRONG, name, tonumber(wrong[i]) or 0) .. mark)
+		end
+		note.Text = table.concat(parts, " · ")
 	elseif kind == "roundResult" then
 		title.Text = payload.title or ""
 		note.Text = table.concat(payload.lines or {}, "\n")
@@ -11507,6 +12322,9 @@ end
 function MissionPanel.setHidden(hidden: boolean)
 	state.hidden = hidden
 	card.Visible = state.shown and not hidden
+	if hidden then
+		dropFocus()
+	end
 end
 
 function MissionPanel.tick(now: number)
@@ -11537,7 +12355,7 @@ function MissionPanel.tick(now: number)
 	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" or state.kind == "oneWordBell"
 		or state.kind == "bellQuiz" or state.kind == "croc" or state.kind == "bomb" or state.kind == "nunchi"
 		or state.kind == "balance" or state.kind == "redLight" or state.kind == "liar" or state.kind == "liarGuess"
-		or state.kind == "nextVote" or state.kind == "brief" then
+		or state.kind == "nextVote" or state.kind == "brief" or state.kind == "estimate" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""

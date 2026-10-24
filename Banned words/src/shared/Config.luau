@@ -90,12 +90,15 @@ return {
 	CROC_TEETH = 10,
 	CROC_TURN_SECONDS = 5,
 	CROC_MIN_PLAYERS = 2,
-	-- The bomb: whoever holds it answers a two-choice question in BOMB_ANSWER_SECONDS; right passes it on (a ring in
-	-- an order drawn at the start), wrong or too late keeps it with a new question; it goes off after a hidden time
-	-- between BOMB_MIN_SECONDS and BOMB_MAX_SECONDS, and whoever holds it then flies.
-	BOMB_MIN_SECONDS = 20,
-	BOMB_MAX_SECONDS = 35,
-	BOMB_ANSWER_SECONDS = 4,
+	-- The bomb (a pass button, owner 2026-10-25): whoever gets it holds it a random BOMB_HOLD_MIN-MAX seconds, then
+	-- "넘기기" lights up and passes it on (a ring in an order drawn at the start); it goes off after a hidden time
+	-- between BOMB_MIN_SECONDS and BOMB_MAX_SECONDS, and whoever holds it then flies. The button lit BOMB_IDLE_SECONDS
+	-- without a press is a missed answer.
+	BOMB_MIN_SECONDS = 12,
+	BOMB_MAX_SECONDS = 25,
+	BOMB_HOLD_MIN = 0.6,
+	BOMB_HOLD_MAX = 1.5,
+	BOMB_IDLE_SECONDS = 5,
 	BOMB_MIN_PLAYERS = 2,
 	-- Nunchi: everyone rings once to take the next number; two rings within NUNCHI_WINDOW of each other clash (both fly,
 	-- it ends there); with no clash the one who never rang flies; NUNCHI_IDLE_SECONDS without a ring (or
@@ -162,8 +165,8 @@ return {
 	-- 물병 세우기: one throw per zone width (fractions of the bar, narrower each time); the bar starts
 	-- BOTTLE_LEAD_SECONDS after the throw shows and sweeps there and back every BOTTLE_PERIOD; BOTTLE_THROW_SECONDS to
 	-- ring; the throw's result shows BOTTLE_SHOW_SECONDS. A zone keeps BOTTLE_EDGE from the bar's ends.
-	BOTTLE_ZONES = { 0.3, 0.2, 0.12 },
-	BOTTLE_PERIOD = 1.6,
+	BOTTLE_ZONES = { 0.2, 0.13, 0.08 }, -- (harder, owner 2026-10-25: was 0.3, 0.2, 0.12 at 1.6 s)
+	BOTTLE_PERIOD = 1.15,
 	BOTTLE_LEAD_SECONDS = 1,
 	BOTTLE_THROW_SECONDS = 5,
 	BOTTLE_SHOW_SECONDS = 2,
@@ -219,18 +222,20 @@ return {
 	RESPAWN_TIME = 3,
 
 	-- V3 flying chair (docs/DESIGN_V3.md §10; owner 2026-10-24: an explosion, no flight path): a blast in front of the
-	-- chair throws the player off as a ragdoll, backward over the pool, and they are back on the seat
-	-- FLING_RETURN_SECONDS after the launch.
+	-- chair throws the player off as a ragdoll, and they are back on the seat FLING_RETURN_SECONDS after the launch.
+	-- Owner 2026-10-25: faster, harder and anywhere behind or to the sides (it may bounce off the walls and the ceiling
+	-- and come down outside the pool).
 	FLING_RETURN_SECONDS = 5,
 	BLAST_FORWARD = 1.5, -- studs in front of the seated body where the blast goes off (drawn by the clients)
 	BLAST_BELOW = 1, -- and this far below its root
-	BLAST_SPEED_MIN = 90, -- studs/s the blast gives the body (a random speed in this range)
-	BLAST_SPEED_MAX = 125,
-	BLAST_PITCH_MIN = 28, -- degrees above the ground (a random angle; 125 studs/s at 40 degrees tops out ~16 studs up,
-	BLAST_PITCH_MAX = 40, -- under PoolHall CeilingY)
-	BLAST_SPREAD = 15, -- degrees left or right of straight back at most (SeatService narrows it so even the farthest
-	-- throw stays over the landing zone: the end chairs fly only straight or inward)
-	BLAST_SPIN = 12, -- rad/s tumble about a random axis
+	BLAST_SPEED_MIN = 150, -- studs/s the blast gives the body (a random speed in this range; was 90-125)
+	BLAST_SPEED_MAX = 205,
+	BLAST_PITCH_MIN = 22, -- degrees above the ground (a random angle; a steep fast one hits the ceiling and bounces)
+	BLAST_PITCH_MAX = 62,
+	BLAST_SPREAD = 75, -- degrees left or right of straight back at most (a random direction; was 15, kept over the pool)
+	BLAST_SPIN = 26, -- rad/s tumble about a random axis (was 12)
+	FLIGHT_LOST_DEPTH = 30, -- a flying body this far under the water is out of the hall: it is put back over the pool
+	FLIGHT_LOST_DROP = 6, -- (this far above the landing zone)
 	BLAST_RADIUS = 12, -- size of the drawn explosion (studs; it pushes nothing itself)
 	-- Owner 2026-10-24: the fewer lives left, the bigger the blast (drawn only; the throw keeps its speed until the
 	-- pool's length is checked): size = 1 + BLAST_GROWTH x the lives lost before this one, so with three lives 1, 1.5,
@@ -265,13 +270,14 @@ return {
 	CHAT_BUBBLE_MAX_DISTANCE = 200, -- farther bubbles are hidden (default 100)
 	CHAT_BUBBLE_TEXT_SIZE = 22, -- chat participants' bubbles (other bubbles keep the default 16)
 	-- Chat bubbles go up by this many studs so they sit above the name + hearts tag (client Billboards: 1.6 + 1.7
-	-- studs over the head). The banned words of bundle 5 add 1 stud per word row to that tag: raise this then.
+	-- studs over the head). While words show over heads the tag is taller: ChatLook adds their rows (owner 2026-10-25:
+	-- a chat bubble was hidden behind the words).
 	CHAT_BUBBLE_VERTICAL_OFFSET = 2.5,
 
 	-- Presenter (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23): a volunteer runs the round from the podium.
 	PRESENTER_PICK_SECONDS = 10, -- the presenter picks the next game between games (then a random one)
 	PRESENTER_MISSES = 2, -- picks missed in a row -> another presenter (or the system runs the round)
-	PRESENTER_RECOMMENDED = 3, -- the mission menu marks this many at the top as recommended
+	PRESENTER_RECOMMENDED = 3, -- the mission menu lists this many suited ones first (no mark, owner 2026-10-25)
 	VOLUNTEER_COOLDOWN = 1, -- seconds between two "volunteer / stop" requests from one player
 	PRESENTER_SOUND_COOLDOWN = 3, -- seconds before the same sound button works again
 	PRESENTER_WALK_SPEED = 0, -- the presenter stays at the podium during a round (back to the defaults after)
@@ -324,7 +330,7 @@ return {
 		SETTLING = "마지막 말을 확인하고 있어요…",
 		RECOGNITION_UNSTABLE = "음성 인식이 불안정해요 · 마이크 연결을 확인해 주세요",
 		-- Getting ready (MicPanel, docs/DESIGN_V3.md §2, §7): voice, or chat for players who cannot use voice.
-		VOICE_NONE = "음성 채팅을 쓸 수 없는 계정이에요 (만 13세 이상 + 연령 인증 필요)",
+		VOICE_NONE = "음성 채팅이 켜진 계정만 참가할 수 있어요 (만 13세 이상 + 연령 인증 필요)",
 		VOICE_CONNECT = "음성 채팅 연결 필요 · 왼쪽 위 ≡ 메뉴(또는 ESC) → 설정 → 음성 채팅 연결",
 		VOICE_MUTED = "마이크가 꺼져 있어요",
 		CONNECT_TO_PLAY = "음성을 연결하면 다음 판부터 참가할 수 있어요",
@@ -334,13 +340,11 @@ return {
 		READY = "준비 완료!",
 		READY_COUNT = "준비 완료! (준비된 사람 %d명)",
 		HEADSET_TIP = "헤드셋을 쓰면 억울한 탈락을 막을 수 있어요", -- speakers feed others' voices back into the mic
-		OR_CHAT = "음성 대신 채팅으로 참가할 수 있어요",
-		NO_VOICE_NO_CHAT = "음성도 채팅도 쓸 수 없는 계정이라 관전만 할 수 있어요",
-		CHAT_CHECKING = "채팅으로 참가할 수 있는지 확인하고 있어요",
-		CHAT_CHECK_FAILED = "채팅 권한을 확인하지 못해서 지금은 관전만 할 수 있어요",
-		CHAT_JOIN = "⌨ 채팅으로 참가",
+		NO_VOICE_WATCH = "지금은 관전만 할 수 있어요",
+		CHAT_CHECKING = "계정을 확인하고 있어요",
+		CHAT_JOIN = "⌨ 말 대신 채팅으로 참가",
 		CHAT_CANCEL = "채팅 참가 취소",
-		CHAT_JOINED = "채팅으로 참가해요 · 판 중에는 음성이 꺼져요",
+		CHAT_JOINED = "채팅으로 참가해요 · 다른 사람 음성은 들리고, 판 중 내 마이크는 꺼져요",
 		CHAT_TAG = "[채팅]", -- before a chat participant's name in the chat window
 		-- Presenter (docs/DESIGN_V3.md §8).
 		VOLUNTEER = "🎤 진행자 지원",
@@ -354,7 +358,6 @@ return {
 		ME_PRESENTER = "🎤 내가 진행자",
 		PRESENTER_CREDIT = "진행 %s",
 		PICK_MISSION = "다음 미션을 골라 주세요",
-		PICK_RECOMMENDED = "추천",
 		PICK_AUTO = "시간이 지나서 무작위로 골랐어요",
 		TEST_MISSION_TITLE = "연습 미션",
 		TEST_MISSION_BRIEF = "운에 맡겨요 · 가끔 날아가요", -- (the briefing before it, owner 2026-10-24)
@@ -407,8 +410,10 @@ return {
 		CROC_BITE = "😱 덥석! %s",
 		CROC_LATE = "⏰ 시간 초과! %s",
 		BOMB_TITLE = "폭탄 돌리기",
-		BOMB_BRIEF = "폭탄을 들면 문제를 맞혀 넘겨요 · 터질 때 들고 있으면 날아가요", -- (the briefing before it, owner 2026-10-24)
-		BOMB_START = "폭탄 돌리기 · 맞히면 다음 사람에게 넘어가요",
+		BOMB_BRIEF = "폭탄을 받으면 버튼이 켜질 때 넘겨요 · 터질 때 들고 있으면 날아가요", -- (the briefing before it)
+		BOMB_START = "폭탄 돌리기 · 버튼이 켜지면 바로 넘겨요",
+		BOMB_PASS = "넘기기 💣",
+		BOMB_MINE = "💣 폭탄이 나한테! 버튼이 켜지면 넘겨요",
 		BOMB_HOLDER = "💣 %s",
 		BOMB_BOOM = "💥 펑! %s",
 		NUNCHI_TITLE = "눈치 게임",

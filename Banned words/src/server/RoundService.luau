@@ -658,12 +658,6 @@ local function cleanup()
 	table.clear(gameLost)
 	table.clear(gameOut)
 	MissionRunner.clearScreen() -- (a between-games screen left by a round that broke)
-	-- Chat participants whose voice got ready during the round join by voice from now on.
-	for player in Match.chatJoin do
-		if Match.ready[player] then
-			ChatService.voiceReady(player, false)
-		end
-	end
 end
 
 local function runRound()
@@ -1008,13 +1002,13 @@ function RoundService.start()
 	-- "Ready" changes take effect at once; the state broadcast they cause is gathered (at most one per
 	-- READY_BROADCAST_DELAY), so a client flipping it fast cannot make the server message everyone each time.
 	local readyBroadcastQueued = false
-	Net.listen("Ready", function(player, isReady)
+	-- (`linked`: voice connected, muted or not — a chat player needs it to hear everyone, owner 2026-10-25)
+	Net.listen("Ready", function(player, isReady, linked)
 		local value = isReady == true
-		if (Match.ready[player] == true) ~= value then -- repeats change nothing and send nothing
+		local link = linked == true or value
+		if (Match.ready[player] == true) ~= value or (Match.voiceLinked[player] == true) ~= link then -- (repeats: nothing)
 			Match.ready[player] = value
-			if value then
-				ChatService.voiceReady(player, lockedIn(player)) -- voice players join by voice
-			end
+			Match.voiceLinked[player] = link
 			if not readyBroadcastQueued then
 				readyBroadcastQueued = true
 				task.delay(Config.READY_BROADCAST_DELAY, function()
@@ -1078,6 +1072,7 @@ function RoundService.start()
 		local outcomes = if Match.inRound() then LifeService.eliminate({ player }) else {}
 		Match.participants[player] = nil
 		Match.ready[player] = nil
+		Match.voiceLinked[player] = nil
 		Match.chatJoin[player] = nil -- (before the broadcast below, so the ready count is right)
 		if #outcomes > 0 then
 			tell(outcomes, "left", false)

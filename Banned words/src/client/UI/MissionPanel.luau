@@ -13,7 +13,8 @@
 --   - the bells (bundle 6b): "ring to speak first" before "say what you like", and the bell quiz: the question, then
 --     who is answering (the right answer comes as a quiz result);
 --   - bundle 6c: crocodile teeth (whose turn and ten teeth, pressable on my turn, pressed ones shut; the biting one at
---     the end), the bomb (who holds it, the question, two answers for the holder), nunchi (the rule and the seconds
+--     the end), the bomb (who holds it, a pass button for the holder: off at first, then lit — owner 2026-10-25),
+--     nunchi (the rule and the seconds
 --     left; at the end the order the bells came in);
 --   - bundle 8b (owner 2026-10-24): 숫자 맞추기 (the target, a clock counting up that hides after a few seconds, then
 --     everyone's time), 총잡이 결투 ("ready…", then a red "fire!" when the server says so, my opponent; then the
@@ -437,7 +438,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	state.question = if quizLike then payload.question else ""
 	state.id = payload.id or 0
 	state.kind = kind
-	state.endsAt = payload.shownEndsAt or payload.endsAt or 0 -- (the bomb shows a full question time, never the bang)
+	state.endsAt = payload.shownEndsAt or payload.endsAt or 0 -- (the bomb's time is always far off, never the bang)
 	state.canAnswer = canAnswer
 	state.myId = myId
 	local bells = kind == "oneWordBell" or kind == "bellQuiz"
@@ -479,7 +480,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	teethGrid.Visible = kind == "croc" or kind == "crocResult"
 	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
 		or games or between or timing or quizKinds
-	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc" or kind == "bomb"
+	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc"
 		or kind == "nunchi" or kind == "balance" or kind == "redLight" or kind == "liar" or kind == "liarGuess"
 		or kind == "nextVote" or kind == "brief" or kind == "timeGuess" or kind == "bottle" or kind == "estimate"
 	note.Visible = kind == "oneWord" or kind == "bellQuiz" or kind == "bomb" or kind == "nunchi" or kind == "nunchiResult"
@@ -668,8 +669,8 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	elseif kind == "bomb" then
 		local ids = payload.ids or {}
 		local holding = ids[payload.holder or 0] == myId
-		state.canAnswer = canAnswer and holding
-		title.Text = payload.question or ""
+		state.canAnswer = canAnswer and holding and payload.id ~= nil -- (lit only once the server opens the pass)
+		title.Text = if holding then TEXT.BOMB_MINE else string.format(TEXT.BOMB_HOLDER, names[payload.holder or 0] or "?")
 		local ring = {} -- the passing order, the holder marked
 		for i, name in names do
 			table.insert(ring, if i == payload.holder then string.format(TEXT.BOMB_HOLDER, name) else name)

@@ -32,6 +32,7 @@ local BellButton = require(UI:WaitForChild("BellButton"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
+local linkedSent: boolean? = nil -- (voice connected, muted or not: a chat player needs it to hear everyone)
 local myFlightEndsAt = 0 -- os.clock(): while my own launch lasts I keep the show camera (I watch myself fly off)
 local bellOpen = false -- the server has my seat bell open (bundle 6b)
 local bellWindow = 0 -- the open window's number (sent back with my ring)
@@ -54,8 +55,9 @@ end
 
 -- Ready = voice connected + said something once. The recognizer runs for that mic test and, while I play by voice,
 -- during the banned-word talk (speech judging, bundle 6e: requests are limited experience-wide, so not otherwise).
--- Accounts without voice may join by chat instead (§7; the server decides, tells me alone what I may do
--- ("ChatAccess") and everyone who joins by chat (attribute BW_ChatMode)).
+-- A voice account may play by chat instead and still hear everyone (§7, owner 2026-10-25; the server decides, tells
+-- me alone what I may do ("ChatAccess") and everyone who plays by chat (attribute BW_ChatMode)); an account without
+-- voice watches.
 local function talkingByVoice(): boolean
 	local talk = State.round.talk
 	return (talk == "talk" or talk == "settle") and State.meAlive() and player:GetAttribute("BW_ChatMode") ~= true
@@ -63,9 +65,11 @@ end
 local function refreshVoice()
 	local status = Speech.status()
 	local isReady = State.micTested and (status == "Listening" or status == "Speaking")
-	if isReady ~= readySent then
+	local linked = status == "Muted" or status == "Listening" or status == "Speaking"
+	if isReady ~= readySent or linked ~= linkedSent then
 		readySent = isReady
-		remotes.Ready:FireServer(isReady)
+		linkedSent = linked
+		remotes.Ready:FireServer(isReady, linked)
 	end
 	Speech.setEnabled(not State.micTested or talkingByVoice())
 	MicPanel.set({
@@ -106,13 +110,13 @@ local function refresh()
 	Hud.setAlive(#round.alive, round.total)
 	Hud.setMyLives(if State.inRound() and State.isParticipant(me) then State.livesOf(me) else nil, round.maxLives,
 		if presenting then Config.TEXT.ME_PRESENTER else nil)
-	Billboards.render({
+	ChatLook.setRaise(Billboards.render({
 		show = bubbleTargets(),
 		words = State.words,
 		lives = round.lives,
 		maxLives = round.maxLives,
 		presenter = if State.inRound() then round.presenter else nil,
-	})
+	}))
 	local seated = (State.inRound() and State.meAlive()) or os.clock() < myFlightEndsAt
 	ShowCamera.set(if presenting then "presenter" elseif seated then "show" else nil)
 	ReactionBar.setVisible(not (State.inRound() and State.meAlive()) and not presenting)

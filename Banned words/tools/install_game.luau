@@ -103,12 +103,15 @@ return {
 	CROC_TEETH = 10,
 	CROC_TURN_SECONDS = 5,
 	CROC_MIN_PLAYERS = 2,
-	-- The bomb: whoever holds it answers a two-choice question in BOMB_ANSWER_SECONDS; right passes it on (a ring in
-	-- an order drawn at the start), wrong or too late keeps it with a new question; it goes off after a hidden time
-	-- between BOMB_MIN_SECONDS and BOMB_MAX_SECONDS, and whoever holds it then flies.
-	BOMB_MIN_SECONDS = 20,
-	BOMB_MAX_SECONDS = 35,
-	BOMB_ANSWER_SECONDS = 4,
+	-- The bomb (a pass button, owner 2026-10-25): whoever gets it holds it a random BOMB_HOLD_MIN-MAX seconds, then
+	-- "넘기기" lights up and passes it on (a ring in an order drawn at the start); it goes off after a hidden time
+	-- between BOMB_MIN_SECONDS and BOMB_MAX_SECONDS, and whoever holds it then flies. The button lit BOMB_IDLE_SECONDS
+	-- without a press is a missed answer.
+	BOMB_MIN_SECONDS = 12,
+	BOMB_MAX_SECONDS = 25,
+	BOMB_HOLD_MIN = 0.6,
+	BOMB_HOLD_MAX = 1.5,
+	BOMB_IDLE_SECONDS = 5,
 	BOMB_MIN_PLAYERS = 2,
 	-- Nunchi: everyone rings once to take the next number; two rings within NUNCHI_WINDOW of each other clash (both fly,
 	-- it ends there); with no clash the one who never rang flies; NUNCHI_IDLE_SECONDS without a ring (or
@@ -175,8 +178,8 @@ return {
 	-- 물병 세우기: one throw per zone width (fractions of the bar, narrower each time); the bar starts
 	-- BOTTLE_LEAD_SECONDS after the throw shows and sweeps there and back every BOTTLE_PERIOD; BOTTLE_THROW_SECONDS to
 	-- ring; the throw's result shows BOTTLE_SHOW_SECONDS. A zone keeps BOTTLE_EDGE from the bar's ends.
-	BOTTLE_ZONES = { 0.3, 0.2, 0.12 },
-	BOTTLE_PERIOD = 1.6,
+	BOTTLE_ZONES = { 0.2, 0.13, 0.08 }, -- (harder, owner 2026-10-25: was 0.3, 0.2, 0.12 at 1.6 s)
+	BOTTLE_PERIOD = 1.15,
 	BOTTLE_LEAD_SECONDS = 1,
 	BOTTLE_THROW_SECONDS = 5,
 	BOTTLE_SHOW_SECONDS = 2,
@@ -232,18 +235,20 @@ return {
 	RESPAWN_TIME = 3,
 
 	-- V3 flying chair (docs/DESIGN_V3.md §10; owner 2026-10-24: an explosion, no flight path): a blast in front of the
-	-- chair throws the player off as a ragdoll, backward over the pool, and they are back on the seat
-	-- FLING_RETURN_SECONDS after the launch.
+	-- chair throws the player off as a ragdoll, and they are back on the seat FLING_RETURN_SECONDS after the launch.
+	-- Owner 2026-10-25: faster, harder and anywhere behind or to the sides (it may bounce off the walls and the ceiling
+	-- and come down outside the pool).
 	FLING_RETURN_SECONDS = 5,
 	BLAST_FORWARD = 1.5, -- studs in front of the seated body where the blast goes off (drawn by the clients)
 	BLAST_BELOW = 1, -- and this far below its root
-	BLAST_SPEED_MIN = 90, -- studs/s the blast gives the body (a random speed in this range)
-	BLAST_SPEED_MAX = 125,
-	BLAST_PITCH_MIN = 28, -- degrees above the ground (a random angle; 125 studs/s at 40 degrees tops out ~16 studs up,
-	BLAST_PITCH_MAX = 40, -- under PoolHall CeilingY)
-	BLAST_SPREAD = 15, -- degrees left or right of straight back at most (SeatService narrows it so even the farthest
-	-- throw stays over the landing zone: the end chairs fly only straight or inward)
-	BLAST_SPIN = 12, -- rad/s tumble about a random axis
+	BLAST_SPEED_MIN = 150, -- studs/s the blast gives the body (a random speed in this range; was 90-125)
+	BLAST_SPEED_MAX = 205,
+	BLAST_PITCH_MIN = 22, -- degrees above the ground (a random angle; a steep fast one hits the ceiling and bounces)
+	BLAST_PITCH_MAX = 62,
+	BLAST_SPREAD = 75, -- degrees left or right of straight back at most (a random direction; was 15, kept over the pool)
+	BLAST_SPIN = 26, -- rad/s tumble about a random axis (was 12)
+	FLIGHT_LOST_DEPTH = 30, -- a flying body this far under the water is out of the hall: it is put back over the pool
+	FLIGHT_LOST_DROP = 6, -- (this far above the landing zone)
 	BLAST_RADIUS = 12, -- size of the drawn explosion (studs; it pushes nothing itself)
 	-- Owner 2026-10-24: the fewer lives left, the bigger the blast (drawn only; the throw keeps its speed until the
 	-- pool's length is checked): size = 1 + BLAST_GROWTH x the lives lost before this one, so with three lives 1, 1.5,
@@ -278,13 +283,14 @@ return {
 	CHAT_BUBBLE_MAX_DISTANCE = 200, -- farther bubbles are hidden (default 100)
 	CHAT_BUBBLE_TEXT_SIZE = 22, -- chat participants' bubbles (other bubbles keep the default 16)
 	-- Chat bubbles go up by this many studs so they sit above the name + hearts tag (client Billboards: 1.6 + 1.7
-	-- studs over the head). The banned words of bundle 5 add 1 stud per word row to that tag: raise this then.
+	-- studs over the head). While words show over heads the tag is taller: ChatLook adds their rows (owner 2026-10-25:
+	-- a chat bubble was hidden behind the words).
 	CHAT_BUBBLE_VERTICAL_OFFSET = 2.5,
 
 	-- Presenter (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23): a volunteer runs the round from the podium.
 	PRESENTER_PICK_SECONDS = 10, -- the presenter picks the next game between games (then a random one)
 	PRESENTER_MISSES = 2, -- picks missed in a row -> another presenter (or the system runs the round)
-	PRESENTER_RECOMMENDED = 3, -- the mission menu marks this many at the top as recommended
+	PRESENTER_RECOMMENDED = 3, -- the mission menu lists this many suited ones first (no mark, owner 2026-10-25)
 	VOLUNTEER_COOLDOWN = 1, -- seconds between two "volunteer / stop" requests from one player
 	PRESENTER_SOUND_COOLDOWN = 3, -- seconds before the same sound button works again
 	PRESENTER_WALK_SPEED = 0, -- the presenter stays at the podium during a round (back to the defaults after)
@@ -337,7 +343,7 @@ return {
 		SETTLING = "마지막 말을 확인하고 있어요…",
 		RECOGNITION_UNSTABLE = "음성 인식이 불안정해요 · 마이크 연결을 확인해 주세요",
 		-- Getting ready (MicPanel, docs/DESIGN_V3.md §2, §7): voice, or chat for players who cannot use voice.
-		VOICE_NONE = "음성 채팅을 쓸 수 없는 계정이에요 (만 13세 이상 + 연령 인증 필요)",
+		VOICE_NONE = "음성 채팅이 켜진 계정만 참가할 수 있어요 (만 13세 이상 + 연령 인증 필요)",
 		VOICE_CONNECT = "음성 채팅 연결 필요 · 왼쪽 위 ≡ 메뉴(또는 ESC) → 설정 → 음성 채팅 연결",
 		VOICE_MUTED = "마이크가 꺼져 있어요",
 		CONNECT_TO_PLAY = "음성을 연결하면 다음 판부터 참가할 수 있어요",
@@ -347,13 +353,11 @@ return {
 		READY = "준비 완료!",
 		READY_COUNT = "준비 완료! (준비된 사람 %d명)",
 		HEADSET_TIP = "헤드셋을 쓰면 억울한 탈락을 막을 수 있어요", -- speakers feed others' voices back into the mic
-		OR_CHAT = "음성 대신 채팅으로 참가할 수 있어요",
-		NO_VOICE_NO_CHAT = "음성도 채팅도 쓸 수 없는 계정이라 관전만 할 수 있어요",
-		CHAT_CHECKING = "채팅으로 참가할 수 있는지 확인하고 있어요",
-		CHAT_CHECK_FAILED = "채팅 권한을 확인하지 못해서 지금은 관전만 할 수 있어요",
-		CHAT_JOIN = "⌨ 채팅으로 참가",
+		NO_VOICE_WATCH = "지금은 관전만 할 수 있어요",
+		CHAT_CHECKING = "계정을 확인하고 있어요",
+		CHAT_JOIN = "⌨ 말 대신 채팅으로 참가",
 		CHAT_CANCEL = "채팅 참가 취소",
-		CHAT_JOINED = "채팅으로 참가해요 · 판 중에는 음성이 꺼져요",
+		CHAT_JOINED = "채팅으로 참가해요 · 다른 사람 음성은 들리고, 판 중 내 마이크는 꺼져요",
 		CHAT_TAG = "[채팅]", -- before a chat participant's name in the chat window
 		-- Presenter (docs/DESIGN_V3.md §8).
 		VOLUNTEER = "🎤 진행자 지원",
@@ -367,7 +371,6 @@ return {
 		ME_PRESENTER = "🎤 내가 진행자",
 		PRESENTER_CREDIT = "진행 %s",
 		PICK_MISSION = "다음 미션을 골라 주세요",
-		PICK_RECOMMENDED = "추천",
 		PICK_AUTO = "시간이 지나서 무작위로 골랐어요",
 		TEST_MISSION_TITLE = "연습 미션",
 		TEST_MISSION_BRIEF = "운에 맡겨요 · 가끔 날아가요", -- (the briefing before it, owner 2026-10-24)
@@ -420,8 +423,10 @@ return {
 		CROC_BITE = "😱 덥석! %s",
 		CROC_LATE = "⏰ 시간 초과! %s",
 		BOMB_TITLE = "폭탄 돌리기",
-		BOMB_BRIEF = "폭탄을 들면 문제를 맞혀 넘겨요 · 터질 때 들고 있으면 날아가요", -- (the briefing before it, owner 2026-10-24)
-		BOMB_START = "폭탄 돌리기 · 맞히면 다음 사람에게 넘어가요",
+		BOMB_BRIEF = "폭탄을 받으면 버튼이 켜질 때 넘겨요 · 터질 때 들고 있으면 날아가요", -- (the briefing before it)
+		BOMB_START = "폭탄 돌리기 · 버튼이 켜지면 바로 넘겨요",
+		BOMB_PASS = "넘기기 💣",
+		BOMB_MINE = "💣 폭탄이 나한테! 버튼이 켜지면 넘겨요",
 		BOMB_HOLDER = "💣 %s",
 		BOMB_BOOM = "💥 펑! %s",
 		NUNCHI_TITLE = "눈치 게임",
@@ -969,7 +974,9 @@ local Match = {
 	startedWith = 0,
 	game = 0, -- the main game's mission being briefed or played, 1..Config.ROUND_GAMES (0 before the first)
 	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
-	chatJoin = {} :: { [Player]: boolean }, -- joins by text chat instead (ChatService decides who may)
+	voiceLinked = {} :: { [Player]: boolean }, -- voice connected, muted or not (the client says so, with "Ready")
+	voiceAccount = {} :: { [Player]: boolean }, -- the server found voice on the account (ChatService, owner 2026-10-25)
+	chatJoin = {} :: { [Player]: boolean }, -- plays by text chat instead (ChatService decides who may)
 	-- Speech judging (JudgeService, bundle 6e; the talk stage sets them, the settle stage ends them):
 	talkStartedAt = math.huge, -- Match.now() when the talk began; speech from before it is ignored
 	cutoffAt = math.huge, -- Match.now() when the round is decided; later speech is ignored
@@ -1010,13 +1017,24 @@ function Match.wordsInPlay(): { string }
 	return list
 end
 
+-- Plays by voice: a voice account (the server's check) whose client says voice is connected and the mic was heard.
+-- A client cannot make an account without voice ready (owner 2026-10-25: voice is a must; Codex 9a P1).
+function Match.readyByVoice(player: Player): boolean
+	return Match.ready[player] == true and Match.voiceAccount[player] == true
+end
+
+-- Plays by chat: chose it, and its voice is connected (to hear everyone, owner 2026-10-25).
+function Match.readyByChat(player: Player): boolean
+	return Match.chatJoin[player] == true and Match.voiceLinked[player] == true and Match.voiceAccount[player] == true
+end
+
 function Match.eligiblePlayers(): { Player }
 	local list = {}
 	for _, player in Players:GetPlayers() do
 		local character = player.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 		local placed = character ~= nil and character.Parent == workspace and character:FindFirstChild("HumanoidRootPart") ~= nil
-		local joined = Match.ready[player] or Match.chatJoin[player] or not Config.REQUIRE_VOICE_READY
+		local joined = Match.readyByVoice(player) or Match.readyByChat(player) or not Config.REQUIRE_VOICE_READY
 		if humanoid and humanoid.Health > 0 and placed and joined then
 			table.insert(list, player)
 		end
@@ -1837,12 +1855,6 @@ local function cleanup()
 	table.clear(gameLost)
 	table.clear(gameOut)
 	MissionRunner.clearScreen() -- (a between-games screen left by a round that broke)
-	-- Chat participants whose voice got ready during the round join by voice from now on.
-	for player in Match.chatJoin do
-		if Match.ready[player] then
-			ChatService.voiceReady(player, false)
-		end
-	end
 end
 
 local function runRound()
@@ -2187,13 +2199,13 @@ function RoundService.start()
 	-- "Ready" changes take effect at once; the state broadcast they cause is gathered (at most one per
 	-- READY_BROADCAST_DELAY), so a client flipping it fast cannot make the server message everyone each time.
 	local readyBroadcastQueued = false
-	Net.listen("Ready", function(player, isReady)
+	-- (`linked`: voice connected, muted or not — a chat player needs it to hear everyone, owner 2026-10-25)
+	Net.listen("Ready", function(player, isReady, linked)
 		local value = isReady == true
-		if (Match.ready[player] == true) ~= value then -- repeats change nothing and send nothing
+		local link = linked == true or value
+		if (Match.ready[player] == true) ~= value or (Match.voiceLinked[player] == true) ~= link then -- (repeats: nothing)
 			Match.ready[player] = value
-			if value then
-				ChatService.voiceReady(player, lockedIn(player)) -- voice players join by voice
-			end
+			Match.voiceLinked[player] = link
 			if not readyBroadcastQueued then
 				readyBroadcastQueued = true
 				task.delay(Config.READY_BROADCAST_DELAY, function()
@@ -2257,6 +2269,7 @@ function RoundService.start()
 		local outcomes = if Match.inRound() then LifeService.eliminate({ player }) else {}
 		Match.participants[player] = nil
 		Match.ready[player] = nil
+		Match.voiceLinked[player] = nil
 		Match.chatJoin[player] = nil -- (before the broadcast below, so the ready count is right)
 		if #outcomes > 0 then
 			tell(outcomes, "left", false)
@@ -2342,67 +2355,6 @@ local BalanceBank: { Question } = {
 }
 
 return BalanceBank
-]====]; s.Parent = n3 end
-do local s = Instance.new("ModuleScript"); s.Name = "BombBank"; s.Source = [====[--!strict
--- Two-choice questions for the bomb (docs/DESIGN_V3.md §5.2; bundle 6c). Data only. Quick to read and answer in a few
--- seconds, general knowledge and everyday things around age 17; like the quiz bank, nothing about real people,
--- politics, religion, accidents or other sensitive matters. `answer` is the index of the right choice (1 or 2).
-
-export type Question = { q: string, choices: { string }, answer: number }
-
-local BombBank: { Question } = {
-	{ q = "바다 물은 짜다", choices = { "O", "X" }, answer = 1 },
-	{ q = "거미의 다리는 6개다", choices = { "O", "X" }, answer = 2 },
-	{ q = "태양은 동쪽에서 뜬다", choices = { "O", "X" }, answer = 1 },
-	{ q = "펭귄은 날 수 있다", choices = { "O", "X" }, answer = 2 },
-	{ q = "1년은 12달이다", choices = { "O", "X" }, answer = 1 },
-	{ q = "물은 1기압에서 100도에 끓는다", choices = { "O", "X" }, answer = 1 },
-	{ q = "고래는 물고기다", choices = { "O", "X" }, answer = 2 },
-	{ q = "무지개 색은 7가지로 센다", choices = { "O", "X" }, answer = 1 },
-	{ q = "달은 스스로 빛을 낸다", choices = { "O", "X" }, answer = 2 },
-	{ q = "삼각형의 각을 모두 더하면 180도", choices = { "O", "X" }, answer = 1 },
-	{ q = "박쥐는 새다", choices = { "O", "X" }, answer = 2 },
-	{ q = "얼음은 물에 뜬다", choices = { "O", "X" }, answer = 1 },
-	{ q = "일주일은 8일이다", choices = { "O", "X" }, answer = 2 },
-	{ q = "오이는 보통 초록색이다", choices = { "O", "X" }, answer = 1 },
-	{ q = "문어의 다리는 10개다", choices = { "O", "X" }, answer = 2 },
-	{ q = "축구는 한 팀 11명이 뛴다", choices = { "O", "X" }, answer = 1 },
-	{ q = "지구는 태양 주위를 돈다", choices = { "O", "X" }, answer = 1 },
-	{ q = "소리는 빛보다 빠르다", choices = { "O", "X" }, answer = 2 },
-	{ q = "하루는 24시간이다", choices = { "O", "X" }, answer = 1 },
-	{ q = "식물은 햇빛으로 양분을 만든다", choices = { "O", "X" }, answer = 1 },
-	{ q = "개구리는 포유류다", choices = { "O", "X" }, answer = 2 },
-	{ q = "윤년의 2월은 29일까지 있다", choices = { "O", "X" }, answer = 1 },
-	{ q = "농구공보다 탁구공이 무겁다", choices = { "O", "X" }, answer = 2 },
-	{ q = "사계절 중 가장 더운 것은 여름", choices = { "O", "X" }, answer = 1 },
-	{ q = "꿀벌은 꿀을 만든다", choices = { "O", "X" }, answer = 1 },
-	{ q = "남극에는 북극곰이 산다", choices = { "O", "X" }, answer = 2 },
-	{ q = "7 곱하기 8은 56", choices = { "O", "X" }, answer = 1 },
-	{ q = "9 곱하기 6은 56", choices = { "O", "X" }, answer = 2 },
-	{ q = "한글 자음 ㄱ의 이름은 기역", choices = { "O", "X" }, answer = 1 },
-	{ q = "피아노 건반은 모두 흰색이다", choices = { "O", "X" }, answer = 2 },
-	{ q = "더 큰 쪽은?", choices = { "코끼리", "고양이" }, answer = 1 },
-	{ q = "더 빠른 쪽은?", choices = { "달팽이", "치타" }, answer = 2 },
-	{ q = "물이 어는 온도는?", choices = { "0도", "50도" }, answer = 1 },
-	{ q = "하늘이 맑을 때의 색은?", choices = { "파랑", "초록" }, answer = 1 },
-	{ q = "더 긴 쪽은?", choices = { "1미터", "1센티미터" }, answer = 1 },
-	{ q = "알을 낳는 쪽은?", choices = { "닭", "강아지" }, answer = 1 },
-	{ q = "바나나 껍질 색은 보통?", choices = { "보라", "노랑" }, answer = 2 },
-	{ q = "더 많은 쪽은?", choices = { "100", "99" }, answer = 1 },
-	{ q = "겨울에 내리는 하얀 것은?", choices = { "눈", "모래" }, answer = 1 },
-	{ q = "시계 분침이 한 바퀴 돌면 몇 분?", choices = { "60분", "100분" }, answer = 1 },
-	{ q = "다리가 없는 쪽은?", choices = { "뱀", "도마뱀" }, answer = 1 },
-	{ q = "더 작은 수는?", choices = { "0.5", "0.05" }, answer = 2 },
-	{ q = "주사위에서 1의 맞은편 눈은?", choices = { "6", "2" }, answer = 1 },
-	{ q = "빨강과 파랑 물감을 섞으면?", choices = { "보라", "노랑" }, answer = 1 },
-	{ q = "축구공의 모양은?", choices = { "공 모양", "정육면체" }, answer = 1 },
-	{ q = "사람의 뼈가 더 많은 때는?", choices = { "아기", "어른" }, answer = 1 },
-	{ q = "더 추운 곳은?", choices = { "북극", "사막의 한낮" }, answer = 1 },
-	{ q = "반대말: 위", choices = { "아래", "옆" }, answer = 1 },
-	{ q = "반대말: 빠르다", choices = { "느리다", "가볍다" }, answer = 1 },
-}
-
-return BombBank
 ]====]; s.Parent = n3 end
 do local s = Instance.new("ModuleScript"); s.Name = "ChosungBank"; s.Source = [====[--!strict
 -- 초성 quiz words (bundle 8c, owner 2026-10-24). Data only: words by category; the quiz shows a word's initial
@@ -3204,20 +3156,18 @@ end
 return BannedTalk
 ]====]; s.Parent = n4 end
 do local s = Instance.new("ModuleScript"); s.Name = "BombPass"; s.Source = [====[--!strict
--- The bomb (docs/DESIGN_V3.md §5.2; bundle 6c, owner 2026-10-23). Everyone on the ground stands in a ring drawn at the
--- start (shown on screen; missions do not know the seats). Whoever holds the bomb answers a two-choice question within
--- BOMB_ANSWER_SECONDS: right passes it to the next in the ring (skipping anyone who left or flies), wrong or too late
--- keeps it: the rest of that question's time passes (no guessing at speed), then a new question. Each question's two
--- choices come in a random order. It goes off after a hidden time between BOMB_MIN_SECONDS and BOMB_MAX_SECONDS (the
--- question timer on screen always shows BOMB_ANSWER_SECONDS, so it gives nothing away); only an answer the server got
--- before that counts (answers are taken until the bomb goes off at the latest); whoever holds it then flies. A holder
--- who leaves or flies hands it on at once. Who held it for a whole question and never answered missed an answer (the
--- AFK rule).
+-- The bomb (docs/DESIGN_V3.md §5.2; bundle 6c, owner 2026-10-23; a pass button instead of a question, owner
+-- 2026-10-25). Everyone on the ground stands in a ring drawn at the start (shown on screen; missions do not know the
+-- seats). Whoever gets the bomb holds it a random BOMB_HOLD_MIN-MAX seconds with the button off, then "넘기기" lights
+-- up and a press hands it to the next in the ring (skipping anyone who left or flies). It goes off after a hidden time
+-- between BOMB_MIN_SECONDS and BOMB_MAX_SECONDS (no timer on screen: the time sent with the button is always
+-- BOMB_MAX_SECONDS ahead, so it gives nothing away); only a press the server got before that counts; whoever holds it
+-- then flies. A holder who leaves or flies hands it on at once. Who had the button lit for BOMB_IDLE_SECONDS and never
+-- pressed missed an answer (the AFK rule).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
-local BombBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("BombBank"))
 
 -- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
 type Ctx = {
@@ -3267,7 +3217,7 @@ local function ids(list: { Player }): { number }
 end
 
 function BombPass.available(final: boolean): boolean
-	return not final and #BombBank > 0
+	return not final
 end
 
 -- Returns false when too few were on the ground to start.
@@ -3304,45 +3254,36 @@ function BombPass.run(ctx: Ctx): boolean?
 	local holder: number? = 1
 	local held: { [Player]: boolean } = {}
 	local answered: { [Player]: boolean } = {}
-	local last = 0
 	while os.clock() < deadline do
 		holder = nextFrom(holder or 1, true)
 		if not holder then
 			return nil -- (nobody left to hold it)
 		end
 		local player = ring[holder]
-		local pick = ctx.rng:NextInteger(1, #BombBank)
-		if pick == last and #BombBank > 1 then
-			pick = pick % #BombBank + 1 -- (never the same question twice in a row)
-		end
-		last = pick
-		local question = BombBank[pick]
-		local order = if ctx.rng:NextNumber() < 0.5 then { 1, 2 } else { 2, 1 }
-		local choices = { question.choices[order[1]], question.choices[order[2]] }
-		local right = table.find(order, question.answer)
 		ctx.show(string.format(Config.TEXT.BOMB_HOLDER, player.DisplayName))
-		local seconds = math.min(Config.BOMB_ANSWER_SECONDS, deadline - os.clock())
-		local questionEnds = os.clock() + seconds
-		-- (answers are taken until the bomb goes off at the latest, so an answer that came in counts even if this
-		-- loop looks again a moment after the bang)
-		local answers = ctx.ask({ kind = "bomb", ids = ids(ring), holder = holder, question = question.q, choices = choices,
-			shownEndsAt = Match.now() + Config.BOMB_ANSWER_SECONDS }, #choices, seconds, { player })
+		local shown = { kind = "bomb", ids = ids(ring), holder = holder, choices = { Config.TEXT.BOMB_PASS },
+			shownEndsAt = Match.now() + Config.BOMB_MAX_SECONDS }
+		ctx.screen(shown) -- (the button is off while the bomb is fresh)
+		local lockEnds = math.min(deadline, os.clock() + ctx.rng:NextNumber(Config.BOMB_HOLD_MIN, Config.BOMB_HOLD_MAX))
+		while os.clock() < lockEnds and not ctx.cancelled() and holding(holder) do
+			ctx.wait(math.min(0.1, lockEnds - os.clock()))
+		end
 		if ctx.cancelled() then
 			return nil
 		end
-		local choice = answers[player]
-		if choice then
-			answered[player] = true
-			held[player] = true
-		elseif seconds >= Config.BOMB_ANSWER_SECONDS and os.clock() >= questionEnds - 0.05 and holding(holder) then
-			held[player] = true -- (a whole question to answer and no answer: it counts; cut short by a flight it does not)
-		end
-		if choice and choice == right then
-			holder = nextFrom(holder, false) or holder
-		elseif choice then
-			local lockEnds = math.min(questionEnds, deadline) -- (wrong: the rest of the question's time first)
-			while os.clock() < lockEnds and not ctx.cancelled() and holding(holder) do
-				ctx.wait(math.min(0.1, lockEnds - os.clock()))
+		if holding(holder) and os.clock() < deadline then
+			-- (presses are taken until the bomb goes off at the latest)
+			local opened = os.clock()
+			local answers = ctx.ask(shown, 1, deadline - opened, { player })
+			if ctx.cancelled() then
+				return nil
+			end
+			if answers[player] then
+				answered[player] = true
+				held[player] = true
+				holder = nextFrom(holder, false) or holder
+			elseif os.clock() - opened >= Config.BOMB_IDLE_SECONDS - 0.05 and holding(holder) then
+				held[player] = true -- (the button lit long enough and no press: it counts; cut short by a flight it does not)
 			end
 		end
 	end
@@ -6431,14 +6372,14 @@ end
 return ChatGate
 ]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "ChatService"; s.Source = [====[--!strict
--- Joining by text chat (docs/DESIGN_V3.md §7; owner decision 2026-10-23: voice accounts join by voice only). Each
--- player is checked once on the server when they join: does the account have voice
--- (VoiceChatService:IsVoiceEnabledForUserIdAsync) and may it chat (TextChatService:CanUserChatAsync)? Only accounts
--- without voice that may chat can choose chat, and not while their voice is ready or while they play in the round
--- being played. The choice is Match.chatJoin, public as the BW_ChatMode player attribute (ChatLook makes those
--- messages stand out). What a player may do is told to that player only ("ChatAccess"): whether an account may chat
--- says something about its restrictions, so other clients never get it.
--- Bundle 5 adds the rest of §7 here (delivery rules, the whisper block, judging chat).
+-- Joining by text chat (docs/DESIGN_V3.md §7). Owner 2026-10-25: voice chat is a must to play; whoever cannot or
+-- will not speak may play by chat and still hears everyone ("말을 못하면 듣기라도"). So: each player is checked once on
+-- the server when they join: does the account have voice (VoiceChatService:IsVoiceEnabledForUserIdAsync), and if so,
+-- may it chat (TextChatService:CanUserChatAsync)? A voice account that may chat can choose chat ("말 대신 채팅":
+-- its mic is off to the room in its round, VoiceService), at any time except while it plays in the round being played;
+-- an account without voice only watches. The choice is Match.chatJoin, public as the BW_ChatMode player attribute
+-- (ChatLook makes those messages stand out). What a player may do is told to that player only ("ChatAccess"): it says
+-- something about the account's restrictions, so other clients never get it.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -6451,9 +6392,9 @@ local Net = require(script.Parent.Parent:WaitForChild("Net"))
 
 local ChatService = {}
 
--- checking: not known yet; yes: may join by chat; no: may not chat; voice: a voice account (joins by voice);
--- error: the chat permission check kept failing (no chat for now).
-export type Access = "checking" | "yes" | "no" | "voice" | "error"
+-- checking: not known yet; voice: a voice account that may also play by chat; voiceOnly: a voice account that may not
+-- chat (or whose chat check kept failing): it plays by voice; noVoice: no voice (or the voice check failed): it watches.
+export type Access = "checking" | "voice" | "voiceOnly" | "noVoice"
 
 local access: { [Player]: Access } = {}
 
@@ -6461,9 +6402,27 @@ local function tell(player: Player)
 	Net.to(player, "ChatAccess", { state = access[player] or "checking" })
 end
 
+local function setMode(player: Player, on: boolean)
+	if on then
+		Match.chatJoin[player] = true
+	else
+		Match.chatJoin[player] = nil
+	end
+	player:SetAttribute("BW_ChatMode", on)
+end
+
 local function setAccess(player: Player, state: Access)
 	if player.Parent then -- not for a player who left meanwhile
 		access[player] = state
+		-- (only a voice account counts as ready or plays by chat, Match.readyByVoice / readyByChat)
+		if state == "voice" or state == "voiceOnly" then
+			Match.voiceAccount[player] = true
+		else
+			Match.voiceAccount[player] = nil
+		end
+		if state == "noVoice" and Match.chatJoin[player] then
+			setMode(player, false)
+		end
 		tell(player)
 	end
 end
@@ -6480,21 +6439,41 @@ end
 
 local function check(player: Player)
 	setAccess(player, "checking")
-	-- Studio: workspace attribute BW_ChatAccess forces the result (yes / no / voice / error), e.g. to try chat mode with
-	-- a voice account (live servers ignore it).
-	local forced = if RunService:IsStudio() then workspace:GetAttribute("BW_ChatAccess") else nil
-	if forced == "yes" or forced == "no" or forced == "voice" or forced == "error" then
+	-- Studio: workspace attribute BW_ChatAccess forces the result (voice / voiceOnly / noVoice), e.g. to see the
+	-- watcher's screen (live servers ignore it).
+	local studio = RunService:IsStudio()
+	local forced = if studio then workspace:GetAttribute("BW_ChatAccess") else nil
+	if forced == "voice" or forced == "voiceOnly" or forced == "noVoice" then
 		setAccess(player, forced)
 		return
 	end
-	-- A failed voice check counts as "no voice" (owner 2026-10-23); a chat participant's voice is off in rounds anyway.
-	local _, hasVoice = ask("voice", player, function()
-		return VoiceChatService:IsVoiceEnabledForUserIdAsync(player.UserId)
-	end)
+	-- The voice check is retried like the chat check; still failing counts as no voice (owner 2026-10-23). Studio has
+	-- no voice at all (its test players play anyway, Config.REQUIRE_VOICE_READY), so there it goes on as a voice
+	-- account and chat mode can be tried.
+	local hasVoice = false
+	local voiceTries = 0
+	while true do
+		local ok, answer = ask("voice", player, function()
+			return VoiceChatService:IsVoiceEnabledForUserIdAsync(player.UserId)
+		end)
+		if not player.Parent then
+			return -- left meanwhile
+		end
+		if ok then
+			hasVoice = answer
+			break
+		end
+		voiceTries += 1
+		local delay = Config.CHAT_CHECK_RETRIES[voiceTries]
+		if not delay then
+			break
+		end
+		task.wait(delay)
+	end
 	if not player.Parent then
-		return -- left meanwhile
-	elseif hasVoice then
-		setAccess(player, "voice")
+		return
+	elseif not hasVoice and not studio then
+		setAccess(player, "noVoice")
 		return
 	end
 	local retries = 0
@@ -6503,7 +6482,7 @@ local function check(player: Player)
 			return TextChatService:CanUserChatAsync(player.UserId)
 		end)
 		if ok then
-			setAccess(player, if allowed then "yes" else "no")
+			setAccess(player, if allowed then "voice" else "voiceOnly")
 			return
 		end
 		retries += 1
@@ -6516,17 +6495,8 @@ local function check(player: Player)
 			return
 		end
 	end
-	-- Still failing: no chat on live servers; Studio test accounts may try chat mode anyway.
-	setAccess(player, if RunService:IsStudio() then "yes" else "error")
-end
-
-local function setMode(player: Player, on: boolean)
-	if on then
-		Match.chatJoin[player] = true
-	else
-		Match.chatJoin[player] = nil
-	end
-	player:SetAttribute("BW_ChatMode", on)
+	-- Still failing: voice only on live servers; Studio test accounts may try chat mode anyway.
+	setAccess(player, if studio then "voice" else "voiceOnly")
 end
 
 function ChatService.start()
@@ -6536,6 +6506,7 @@ function ChatService.start()
 	Players.PlayerAdded:Connect(check)
 	Players.PlayerRemoving:Connect(function(player)
 		access[player] = nil
+		Match.voiceAccount[player] = nil
 	end)
 end
 
@@ -6544,27 +6515,17 @@ function ChatService.sendAccess(player: Player)
 	tell(player)
 end
 
--- The player asks to join by chat (`on`) or to stop. `locked`: they play in the round being played, so their choice
--- holds until it is over. Joining needs an account without voice that may chat, and no voice ready. Returns whether
--- anything changed.
+-- The player asks to play by chat (`on`) or to stop. `locked`: they play in the round being played, so their choice
+-- holds until it is over. Playing by chat needs a voice account that may chat and its voice connected (to hear
+-- everyone; its mic may be on and tested too). The choice stays until they change it. Returns whether anything changed.
 function ChatService.request(player: Player, on: boolean, locked: boolean): boolean
 	if locked or (Match.chatJoin[player] == true) == on then
 		return false
 	end
-	if on and (access[player] ~= "yes" or Match.ready[player]) then
+	if on and (access[player] ~= "voice" or not (Match.voiceLinked[player] or not Config.REQUIRE_VOICE_READY)) then
 		return false
 	end
 	setMode(player, on)
-	return true
-end
-
--- The player's voice is ready: they join by voice from now on (unless locked in the round being played). Returns
--- whether anything changed.
-function ChatService.voiceReady(player: Player, locked: boolean): boolean
-	if locked or not Match.chatJoin[player] then
-		return false
-	end
-	setMode(player, false)
 	return true
 end
 
@@ -7595,13 +7556,15 @@ end
 
 -- Whether `candidate` may present a round played by `participants`. Yields.
 local function qualifies(candidate: Player, participants: { Player }): boolean
-	local voice: { Player } = {}
+	-- (everyone hears the presenter: chat players too, since 2026-10-25 they are voice accounts that listen)
 	local chat: { Player } = {}
 	for _, player in participants do
-		table.insert(if Match.chatJoin[player] then chat else voice, player)
+		if Match.chatJoin[player] then
+			table.insert(chat, player)
+		end
 	end
-	if #voice > 0 then
-		local shares = sharesVoiceGroup(candidate, voice)
+	if #participants > 0 then
+		local shares = sharesVoiceGroup(candidate, participants)
 		if shares == false or (shares == nil and not failedCheck()) then
 			return false
 		end
@@ -7630,7 +7593,7 @@ end
 -- A volunteer who could present now: still here, voice ready, not joining by chat. Looked at again after the checks,
 -- which yield.
 local function canPresent(player: Player): boolean
-	local voiceReady = Match.ready[player] or not Config.REQUIRE_VOICE_READY
+	local voiceReady = Match.readyByVoice(player) or not Config.REQUIRE_VOICE_READY
 	return volunteers[player] == true and voiceReady and not Match.chatJoin[player] and player.Parent ~= nil
 end
 
@@ -8117,7 +8080,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "SeatService"; s.Source = [=
 -- Flying chairs in a row at the near edge of the pool (docs/DESIGN_V3.md §9-10): seat the players of a round in the
 -- middle chairs, keep them seated, and launch a failed player. A launch is an explosion in front of the chair (owner
 -- 2026-10-24: no flight path, the blast's force): the character turns into a ragdoll and the blast throws it backward
--- over the pool, a little differently each time, and physics does the rest. The clients draw the explosion, the seat
+-- and up, anywhere behind or beside the chair (owner 2026-10-25: faster, harder, unpredictable), and physics does the
+-- rest. The clients draw the explosion, the seat
 -- flap snapping back and the splash from the "Fling" / "Splash" signals. SeatService only says when the player is due
 -- back (FLING_RETURN_SECONDS after the launch, with the character that flew); RoundService then calls endFling() and
 -- picks reseat() or the stands. Since 2026-10-24 a launch may wait its turn in a chain (fling's `delay`) and reports
@@ -8135,6 +8099,9 @@ local SeatService = {}
 local DEFAULT_JUMP_HEIGHT = 7.2
 local FLYING_GROUP = "BW_Flying" -- flying bodies: no chairs, no other flying bodies, no own limbs
 local CHAIR_GROUP = "BW_Chairs"
+-- Every character's parts (2026-10-25): a flying body passes through people — seated players and spectators in the
+-- stands are not pushed by a 200 studs/s throw (Codex 9a) — but still hits the walls, the floor and the water.
+local CHARACTER_GROUP = "BW_Characters"
 
 type Flight = {
 	character: Model,
@@ -8178,8 +8145,12 @@ function SeatService.getSeats(): { Seat }
 	return seats
 end
 
+-- (Not for a body that died or left the world meanwhile: Seat:Sit errors on it, seen in the owner's test 2026-10-25.)
 local function sit(seat: Seat, humanoid: Humanoid)
-	local character = humanoid.Parent :: Model
+	local character = humanoid.Parent
+	if humanoid.Health <= 0 or not character or not character:IsA("Model") or not character:IsDescendantOf(workspace) then
+		return
+	end
 	character:PivotTo(seat.CFrame * CFrame.new(0, 3, 0))
 	seat:Sit(humanoid)
 end
@@ -8211,6 +8182,30 @@ function SeatService.init(onReturnDue: (Player, any, Model) -> (), onLanded: ((P
 	PhysicsService:RegisterCollisionGroup(CHAIR_GROUP)
 	PhysicsService:CollisionGroupSetCollidable(FLYING_GROUP, FLYING_GROUP, false)
 	PhysicsService:CollisionGroupSetCollidable(FLYING_GROUP, CHAIR_GROUP, false)
+	PhysicsService:RegisterCollisionGroup(CHARACTER_GROUP)
+	PhysicsService:CollisionGroupSetCollidable(FLYING_GROUP, CHARACTER_GROUP, false)
+	local function grouped(character: Model)
+		for _, d in character:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.CollisionGroup = CHARACTER_GROUP
+			end
+		end
+		character.DescendantAdded:Connect(function(d)
+			if d:IsA("BasePart") and d.CollisionGroup ~= FLYING_GROUP then
+				d.CollisionGroup = CHARACTER_GROUP
+			end
+		end)
+	end
+	local function watchCharacters(player: Player)
+		if player.Character then
+			grouped(player.Character)
+		end
+		player.CharacterAdded:Connect(grouped)
+	end
+	for _, player in Players:GetPlayers() do
+		watchCharacters(player)
+	end
+	Players.PlayerAdded:Connect(watchCharacters)
 	for _, chair in hall():WaitForChild("Chairs"):GetChildren() do
 		for _, d in chair:GetDescendants() do
 			if d:IsA("BasePart") then
@@ -8333,40 +8328,15 @@ local function waterY(): number
 	return if landing then (landing:GetAttribute("WaterY") or landing.Position.Y) :: number else 0
 end
 
--- The farthest a blast carries a body over flat ground (the fastest speed at the pitch, within the range, that goes
--- farthest); a little more from the seat's height.
-local function farthest(): number
-	local best = 0
-	for _, degrees in { Config.BLAST_PITCH_MIN, Config.BLAST_PITCH_MAX } do
-		best = math.max(best, math.sin(2 * math.rad(degrees)))
-	end
-	return Config.BLAST_SPEED_MAX ^ 2 / workspace.Gravity * best
-end
-
--- The blast's push: backward from the chair (the chairs face away from the pool) and up, turned a little at random so
--- no two launches look alike. A speed, not an aim: where the body comes down is up to physics. Sideways it is kept
--- so that even the farthest throw stays above the landing zone's width (the end chairs only fly straight or inward;
--- 15 degrees either way took their players onto the deck beside the pool).
+-- The blast's push: backward from the chair (the chairs face away from the pool) and up, turned at random up to
+-- BLAST_SPREAD to either side, so no two launches look alike. A speed, not an aim: where the body comes down is up to
+-- physics (owner 2026-10-25: faster and anywhere; it may bounce off the walls and the ceiling and land outside the
+-- pool; it is back on the chair FLING_RETURN_SECONDS after the launch anyway).
 local function blastVelocity(seat: Seat): Vector3
 	local back = -seat.CFrame.LookVector
 	back = Vector3.new(back.X, 0, back.Z).Unit
-	local side = Vector3.new(back.Z, 0, -back.X) -- (up x back: positive yaw turns `back` toward this)
-	local spread = math.sin(math.rad(Config.BLAST_SPREAD))
-	local low, high = -spread, spread
-	local landing = landingZone()
-	if landing then
-		local offset = (seat.Position - landing.Position):Dot(side) -- the seat's distance from the zone's middle line
-		local half = math.abs(landing.CFrame.RightVector:Dot(side)) * landing.Size.X / 2
-			+ math.abs(landing.CFrame.LookVector:Dot(side)) * landing.Size.Z / 2
-		local reach = farthest()
-		low = math.max(low, math.clamp((-half - offset) / reach, -1, 1))
-		high = math.min(high, math.clamp((half - offset) / reach, -1, 1))
-		if low > high then
-			low, high = 0, 0
-		end
-	end
 	local pitch = math.rad(rng:NextNumber(Config.BLAST_PITCH_MIN, Config.BLAST_PITCH_MAX))
-	local yaw = math.asin(rng:NextNumber(low, high))
+	local yaw = math.rad(rng:NextNumber(-Config.BLAST_SPREAD, Config.BLAST_SPREAD))
 	local direction = CFrame.fromAxisAngle(Vector3.yAxis, yaw):VectorToWorldSpace(back) * math.cos(pitch)
 		+ Vector3.yAxis * math.sin(pitch)
 	return direction * rng:NextNumber(Config.BLAST_SPEED_MIN, Config.BLAST_SPEED_MAX)
@@ -8506,11 +8476,26 @@ function SeatService.fling(player: Player, tag: any, delay: number?, size: numbe
 		end)
 		task.spawn(function()
 			-- Where it first comes down: the water over the pool (a splash), or anywhere it stops falling after
-			-- FLIGHT_SETTLE_SECONDS (the deck) — the flight record.
+			-- FLIGHT_SETTLE_SECONDS (the deck) — the flight record, once. The depth watch goes on until the flight
+			-- ends (a body may still roll through a wall after it came down, Codex 9a re-check).
 			local water = waterY()
 			local started = os.clock()
+			local recorded = false
 			while flights[player] == flight and os.clock() - started < Config.FLING_RETURN_SECONDS do
-				if root.Parent then
+				if root.Parent and root.Position.Y < water - Config.FLIGHT_LOST_DEPTH then
+					-- (out of the hall after all — through a thin wall or the floor: back over the pool, not into the
+					-- void, where the body would be destroyed and the player respawn)
+					local landing = landingZone()
+					local body = root.Parent
+					if landing and body and body:IsA("Model") then
+						for part in flight.parts do
+							part.AssemblyLinearVelocity = Vector3.zero
+							part.AssemblyAngularVelocity = Vector3.zero
+						end
+						body:PivotTo(CFrame.new(landing.Position + Vector3.new(0, Config.FLIGHT_LOST_DROP, 0)))
+					end
+				end
+				if root.Parent and not recorded then
 					local inWater = root.Position.Y < water + 1.5 and overPool(root.Position)
 					local stopped = os.clock() - started > Config.FLIGHT_SETTLE_SECONDS
 						and root.AssemblyLinearVelocity.Magnitude < Config.FLIGHT_STOPPED_SPEED
@@ -8522,7 +8507,7 @@ function SeatService.fling(player: Player, tag: any, delay: number?, size: numbe
 							local flat = Vector3.new(root.Position.X - from.X, 0, root.Position.Z - from.Z)
 							landed(player, flat.Magnitude, os.clock() - started)
 						end
-						break
+						recorded = true
 					end
 				end
 				RunService.Heartbeat:Wait()
@@ -9262,6 +9247,7 @@ local BellButton = require(UI:WaitForChild("BellButton"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
+local linkedSent: boolean? = nil -- (voice connected, muted or not: a chat player needs it to hear everyone)
 local myFlightEndsAt = 0 -- os.clock(): while my own launch lasts I keep the show camera (I watch myself fly off)
 local bellOpen = false -- the server has my seat bell open (bundle 6b)
 local bellWindow = 0 -- the open window's number (sent back with my ring)
@@ -9284,8 +9270,9 @@ end
 
 -- Ready = voice connected + said something once. The recognizer runs for that mic test and, while I play by voice,
 -- during the banned-word talk (speech judging, bundle 6e: requests are limited experience-wide, so not otherwise).
--- Accounts without voice may join by chat instead (§7; the server decides, tells me alone what I may do
--- ("ChatAccess") and everyone who joins by chat (attribute BW_ChatMode)).
+-- A voice account may play by chat instead and still hear everyone (§7, owner 2026-10-25; the server decides, tells
+-- me alone what I may do ("ChatAccess") and everyone who plays by chat (attribute BW_ChatMode)); an account without
+-- voice watches.
 local function talkingByVoice(): boolean
 	local talk = State.round.talk
 	return (talk == "talk" or talk == "settle") and State.meAlive() and player:GetAttribute("BW_ChatMode") ~= true
@@ -9293,9 +9280,11 @@ end
 local function refreshVoice()
 	local status = Speech.status()
 	local isReady = State.micTested and (status == "Listening" or status == "Speaking")
-	if isReady ~= readySent then
+	local linked = status == "Muted" or status == "Listening" or status == "Speaking"
+	if isReady ~= readySent or linked ~= linkedSent then
 		readySent = isReady
-		remotes.Ready:FireServer(isReady)
+		linkedSent = linked
+		remotes.Ready:FireServer(isReady, linked)
 	end
 	Speech.setEnabled(not State.micTested or talkingByVoice())
 	MicPanel.set({
@@ -9336,13 +9325,13 @@ local function refresh()
 	Hud.setAlive(#round.alive, round.total)
 	Hud.setMyLives(if State.inRound() and State.isParticipant(me) then State.livesOf(me) else nil, round.maxLives,
 		if presenting then Config.TEXT.ME_PRESENTER else nil)
-	Billboards.render({
+	ChatLook.setRaise(Billboards.render({
 		show = bubbleTargets(),
 		words = State.words,
 		lives = round.lives,
 		maxLives = round.maxLives,
 		presenter = if State.inRound() then round.presenter else nil,
-	})
+	}))
 	local seated = (State.inRound() and State.meAlive()) or os.clock() < myFlightEndsAt
 	ShowCamera.set(if presenting then "presenter" elseif seated then "show" else nil)
 	ReactionBar.setVisible(not (State.inRound() and State.meAlive()) and not presenting)
@@ -10012,8 +10001,10 @@ end
 
 -- Draws exactly the bubbles in view.show (plus the ones of players just out, until their pop is over). A bubble is
 -- rebuilt only when its words or name changed; new lives just change its hearts (so a running pop goes on).
-function Billboards.render(view: View)
+-- Returns how many studs the tallest tag's word rows add (the chat bubbles go up by as much, ChatLook).
+function Billboards.render(view: View): number
 	lastView = view
+	local tallest = 0
 	local keep: { [number]: boolean } = {}
 	for userId in dying do
 		keep[userId] = true
@@ -10026,6 +10017,7 @@ function Billboards.render(view: View)
 			local key = tostring(userId)
 			local entry = view.words[key]
 			local words = if not entry then {} elseif entry.words then entry.words else { HIDDEN }
+			tallest = math.max(tallest, #words * ROW)
 			local caption = player.DisplayName
 			local layout = table.concat(words, "|") .. "#" .. caption
 			local bubble: Bubble? = bubbles[userId]
@@ -10050,6 +10042,7 @@ function Billboards.render(view: View)
 			removeBubble(userId)
 		end
 	end
+	return tallest
 end
 
 -- Lost a life: the hearts show the lives left and the bubble pops. The bubble of a player who is out stays until the
@@ -10239,6 +10232,9 @@ local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChil
 
 local ChatLook = {}
 
+local bubbleConfig: BubbleChatConfiguration? = nil
+local raise = 0 -- studs the word rows over heads add to the tag (set before the configuration may be found)
+
 local BUBBLE_COLOR = Color3.fromRGB(255, 214, 64)
 local BUBBLE_TEXT_COLOR = Color3.fromRGB(30, 30, 36)
 local BUBBLE_FONT = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Heavy)
@@ -10251,6 +10247,15 @@ local function fromChatter(message: TextChatMessage): boolean
 	return player ~= nil and player:GetAttribute("BW_ChatMode") == true
 end
 
+-- The tags over heads got taller (word rows, client Billboards): the bubbles go up as much, so a chat bubble is never
+-- hidden behind someone's words (owner 2026-10-25).
+function ChatLook.setRaise(studs: number)
+	raise = studs
+	if bubbleConfig then
+		bubbleConfig.VerticalStudsOffset = Config.CHAT_BUBBLE_VERTICAL_OFFSET + studs
+	end
+end
+
 function ChatLook.start()
 	task.spawn(function()
 		-- (Studio adds the default configuration to a place when it opens it; a Rojo-built place file may lack it.)
@@ -10258,7 +10263,8 @@ function ChatLook.start()
 		if bubbles and bubbles:IsA("BubbleChatConfiguration") then
 			bubbles.MinimizeDistance = Config.CHAT_BUBBLE_MINIMIZE_DISTANCE
 			bubbles.MaxDistance = Config.CHAT_BUBBLE_MAX_DISTANCE
-			bubbles.VerticalStudsOffset = Config.CHAT_BUBBLE_VERTICAL_OFFSET -- clear of our name + hearts tag
+			bubbleConfig = bubbles
+			bubbles.VerticalStudsOffset = Config.CHAT_BUBBLE_VERTICAL_OFFSET + raise -- clear of our name + hearts tag
 		else
 			warn("[BannedWords] no BubbleChatConfiguration: chat bubbles keep Roblox's default distances")
 		end
@@ -11496,9 +11502,9 @@ return Hud
 ]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "MicPanel"; s.Source = [====[--!strict
 -- Getting ready (docs/DESIGN_V3.md §2, §7): the voice connection and mic test lines (rows 0 and 1 under the status
--- board), and a "join by chat" button (row 2) for accounts without voice that may chat (owner 2026-10-23: voice
--- accounts join by voice only). All of it is empty while I play, so nothing covers the chair row (a voice player
--- still sees a muted mic warning).
+-- board), and a "play by chat instead" button (row 2) for voice accounts that may chat (owner 2026-10-25: voice is a
+-- must to play; whoever cannot speak plays by chat and still hears everyone; an account without voice watches). All
+-- of it is empty while I play, so nothing covers the chair row (a voice player still sees a muted mic warning).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -11511,7 +11517,7 @@ export type Ready = {
 	micTested: boolean,
 	inMyRound: boolean, -- I play in the round being played
 	readyCount: number?, -- players ready to play (voice or chat)
-	chatAccess: string, -- from the server, to me only: checking / yes / no / voice / error
+	chatAccess: string, -- from the server, to me only: checking / voice / voiceOnly / noVoice
 	chatMode: boolean, -- I join by chat (server attribute BW_ChatMode)
 }
 
@@ -11537,50 +11543,43 @@ function MicPanel.build(onChat: (boolean) -> ())
 	end)
 end
 
--- The server found no voice on this account (chat checked instead): "connect voice" would ask for the impossible.
+-- The server found no voice on this account: it can only watch.
 local function noVoiceAccount(r: Ready): boolean
-	return r.chatAccess == "yes" or r.chatAccess == "no" or r.chatAccess == "error"
+	return r.chatAccess == "noVoice"
+end
+
+-- My voice is connected (muted or not): I can hear everyone, so I may play by chat.
+local function voiceLinked(r: Ready): boolean
+	return r.status == "Muted" or r.status == "Listening" or r.status == "Speaking"
 end
 
 local function voiceLine(r: Ready): string
-	if r.chatMode then
-		return "" -- playing by chat: no voice nagging
-	elseif r.status == "NoVoice" or (r.status == "Disconnected" and noVoiceAccount(r)) then
-		return TEXT.VOICE_NONE
+	if r.status == "NoVoice" or noVoiceAccount(r) then
+		return if r.chatMode then "" else TEXT.VOICE_NONE
 	elseif r.status == "Disconnected" then
-		return TEXT.VOICE_CONNECT
-	elseif r.status == "Muted" then
+		return TEXT.VOICE_CONNECT -- (also when playing by chat: without voice I would hear nobody)
+	elseif r.status == "Muted" and not r.chatMode then
 		return TEXT.VOICE_MUTED
 	end
 	return ""
-end
-
--- Without a connected voice: what the chat check says I can do.
-local function withoutVoice(r: Ready): string
-	if r.chatAccess == "yes" then
-		return TEXT.OR_CHAT
-	elseif r.chatAccess == "checking" then
-		return TEXT.CHAT_CHECKING
-	elseif r.chatAccess == "error" then
-		return TEXT.CHAT_CHECK_FAILED
-	elseif r.chatAccess == "no" then
-		return TEXT.NO_VOICE_NO_CHAT
-	end
-	return TEXT.CONNECT_TO_PLAY -- a voice account: connect voice
 end
 
 -- What the player should do next to take a seat (and whether that is done).
 local function nextStep(r: Ready): (string, boolean)
 	if r.inMyRound then
 		return "", false
+	elseif noVoiceAccount(r) then
+		return TEXT.NO_VOICE_WATCH, false
+	elseif r.status == "NoVoice" or r.status == "Disconnected" then
+		return TEXT.CONNECT_TO_PLAY, false
 	elseif r.chatMode then
 		return TEXT.CHAT_JOINED, true
-	elseif r.status == "NoVoice" or r.status == "Disconnected" then
-		return withoutVoice(r), false
 	elseif r.status == "Muted" then
 		return TEXT.MIC_ON, false
 	elseif not r.micTested then
 		return TEXT.MIC_TEST, false
+	elseif r.chatAccess == "checking" then
+		return TEXT.CHAT_CHECKING, false -- (ready by voice once the server knows the account has voice)
 	end
 	local ready = if r.readyCount then string.format(TEXT.READY_COUNT, r.readyCount) else TEXT.READY
 	return ready .. " · " .. TEXT.HEADSET_TIP, true
@@ -11592,8 +11591,11 @@ function MicPanel.set(r: Ready)
 	local text, done = nextStep(r)
 	testL.Text = text
 	testL.TextColor3 = if done then Style.GREEN else Style.AMBER
-	local noVoice = r.status == "NoVoice" or r.status == "Disconnected"
-	chatButton.Visible = not r.inMyRound and (r.chatMode or (r.chatAccess == "yes" and noVoice))
+	-- (offered to a voice account that may chat once its voice is connected — to hear everyone; while playing by chat,
+	-- to stop)
+	-- (Studio has no voice: there the server does not ask for it either, Config.REQUIRE_VOICE_READY)
+	chatButton.Visible = not r.inMyRound and (r.chatMode or (r.chatAccess == "voice"
+		and (voiceLinked(r) or not Config.REQUIRE_VOICE_READY)))
 	chatButton.Text = if r.chatMode then TEXT.CHAT_CANCEL else TEXT.CHAT_JOIN
 end
 
@@ -11614,7 +11616,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [
 --   - the bells (bundle 6b): "ring to speak first" before "say what you like", and the bell quiz: the question, then
 --     who is answering (the right answer comes as a quiz result);
 --   - bundle 6c: crocodile teeth (whose turn and ten teeth, pressable on my turn, pressed ones shut; the biting one at
---     the end), the bomb (who holds it, the question, two answers for the holder), nunchi (the rule and the seconds
+--     the end), the bomb (who holds it, a pass button for the holder: off at first, then lit — owner 2026-10-25),
+--     nunchi (the rule and the seconds
 --     left; at the end the order the bells came in);
 --   - bundle 8b (owner 2026-10-24): 숫자 맞추기 (the target, a clock counting up that hides after a few seconds, then
 --     everyone's time), 총잡이 결투 ("ready…", then a red "fire!" when the server says so, my opponent; then the
@@ -12038,7 +12041,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	state.question = if quizLike then payload.question else ""
 	state.id = payload.id or 0
 	state.kind = kind
-	state.endsAt = payload.shownEndsAt or payload.endsAt or 0 -- (the bomb shows a full question time, never the bang)
+	state.endsAt = payload.shownEndsAt or payload.endsAt or 0 -- (the bomb's time is always far off, never the bang)
 	state.canAnswer = canAnswer
 	state.myId = myId
 	local bells = kind == "oneWordBell" or kind == "bellQuiz"
@@ -12080,7 +12083,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	teethGrid.Visible = kind == "croc" or kind == "crocResult"
 	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
 		or games or between or timing or quizKinds
-	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc" or kind == "bomb"
+	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc"
 		or kind == "nunchi" or kind == "balance" or kind == "redLight" or kind == "liar" or kind == "liarGuess"
 		or kind == "nextVote" or kind == "brief" or kind == "timeGuess" or kind == "bottle" or kind == "estimate"
 	note.Visible = kind == "oneWord" or kind == "bellQuiz" or kind == "bomb" or kind == "nunchi" or kind == "nunchiResult"
@@ -12269,8 +12272,8 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	elseif kind == "bomb" then
 		local ids = payload.ids or {}
 		local holding = ids[payload.holder or 0] == myId
-		state.canAnswer = canAnswer and holding
-		title.Text = payload.question or ""
+		state.canAnswer = canAnswer and holding and payload.id ~= nil -- (lit only once the server opens the pass)
+		title.Text = if holding then TEXT.BOMB_MINE else string.format(TEXT.BOMB_HOLDER, names[payload.holder or 0] or "?")
 		local ring = {} -- the passing order, the holder marked
 		for i, name in names do
 			table.insert(ring, if i == payload.holder then string.format(TEXT.BOMB_HOLDER, name) else name)
@@ -12798,7 +12801,7 @@ function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: stri
 	local judging = menuKind == "judge" or menuKind == "accuse" -- (tap a name, then the big button)
 	local nameButtons: { [string]: TextButton } = {}
 	for i, option in options do
-		local label = if option.recommended then "★ " .. option.title .. " · " .. TEXT.PICK_RECOMMENDED else option.title
+		local label = option.title -- (the suited ones come first; no mark, owner 2026-10-25)
 		local b = button(menuList, label, 240, 40)
 		b.Size = UDim2.new(1, -8, 0, 40) -- (room for the scroll bar)
 		b.LayoutOrder = i

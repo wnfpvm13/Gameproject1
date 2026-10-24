@@ -40,7 +40,9 @@ local Match = {
 	startedWith = 0,
 	game = 0, -- the main game's mission being briefed or played, 1..Config.ROUND_GAMES (0 before the first)
 	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
-	chatJoin = {} :: { [Player]: boolean }, -- joins by text chat instead (ChatService decides who may)
+	voiceLinked = {} :: { [Player]: boolean }, -- voice connected, muted or not (the client says so, with "Ready")
+	voiceAccount = {} :: { [Player]: boolean }, -- the server found voice on the account (ChatService, owner 2026-10-25)
+	chatJoin = {} :: { [Player]: boolean }, -- plays by text chat instead (ChatService decides who may)
 	-- Speech judging (JudgeService, bundle 6e; the talk stage sets them, the settle stage ends them):
 	talkStartedAt = math.huge, -- Match.now() when the talk began; speech from before it is ignored
 	cutoffAt = math.huge, -- Match.now() when the round is decided; later speech is ignored
@@ -81,13 +83,24 @@ function Match.wordsInPlay(): { string }
 	return list
 end
 
+-- Plays by voice: a voice account (the server's check) whose client says voice is connected and the mic was heard.
+-- A client cannot make an account without voice ready (owner 2026-10-25: voice is a must; Codex 9a P1).
+function Match.readyByVoice(player: Player): boolean
+	return Match.ready[player] == true and Match.voiceAccount[player] == true
+end
+
+-- Plays by chat: chose it, and its voice is connected (to hear everyone, owner 2026-10-25).
+function Match.readyByChat(player: Player): boolean
+	return Match.chatJoin[player] == true and Match.voiceLinked[player] == true and Match.voiceAccount[player] == true
+end
+
 function Match.eligiblePlayers(): { Player }
 	local list = {}
 	for _, player in Players:GetPlayers() do
 		local character = player.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 		local placed = character ~= nil and character.Parent == workspace and character:FindFirstChild("HumanoidRootPart") ~= nil
-		local joined = Match.ready[player] or Match.chatJoin[player] or not Config.REQUIRE_VOICE_READY
+		local joined = Match.readyByVoice(player) or Match.readyByChat(player) or not Config.REQUIRE_VOICE_READY
 		if humanoid and humanoid.Health > 0 and placed and joined then
 			table.insert(list, player)
 		end

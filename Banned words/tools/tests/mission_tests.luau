@@ -11,7 +11,6 @@ local OneWord = require(node("OneWord"))
 local OneWordTopics = require(node("OneWordTopics"))
 local Crocodile = require(node("Crocodile"))
 local BombPass = require(node("BombPass"))
-local BombBank = require(node("BombBank"))
 local Nunchi = require(node("Nunchi"))
 local Balance = require(node("Balance"))
 local RedLight = require(node("RedLight"))
@@ -890,7 +889,7 @@ do
 	at(now + 1)
 end
 
----------------------------------------------------------------- 9. the bomb (bundle 6c)
+---------------------------------------------------------------- 9. the bomb (bundle 6c; a pass button, owner 2026-10-25)
 do
 	local ps = newPlayers(3)
 	local function byId(id)
@@ -901,43 +900,38 @@ do
 		end
 		return nil
 	end
-	local function rightOf(shown) -- (the choices come in a random order: find the right one by its text)
-		for _, question in BombBank do
-			if question.q == shown.question then
-				return table.find(shown.choices, question.choices[question.answer]) or 1
-			end
-		end
-		return 1
-	end
 	local record = fakeCtx(ps, false, nil)
 	local since = now
 	local run = start(BombPass, record)
 	local first = lastScreenOf(since, "bomb")
 	local holder1 = byId(first.ids[first.holder])
-	answer(holder1, 3 - rightOf(first)) -- wrong
+	answer(holder1, 1) -- (too early: no pass is open yet)
 	at(now + 0.3)
-	local locked = lastScreenOf(since, "bomb")
-	at(now + Config.BOMB_ANSWER_SECONDS)
-	local afterWrong = lastScreenOf(since, "bomb")
-	answer(byId(afterWrong.ids[afterWrong.holder]), rightOf(afterWrong)) -- right
+	local still = lastScreenOf(since, "bomb")
+	at(now + Config.BOMB_HOLD_MAX)
+	local lit = lastScreenOf(since, "bomb")
+	answer(holder1, 1)
 	at(now + 0.3)
-	local afterRight = lastScreenOf(since, "bomb")
-	check("9a wrong keeps the bomb: the rest of that question's time first, then a new question; right passes it on",
-		locked.id == first.id and afterWrong.ids[afterWrong.holder] == holder1.UserId and afterWrong.question ~= first.question
-		and afterRight.holder == first.holder % #first.ids + 1)
-	check("9f the question timer sent to clients is always BOMB_ANSWER_SECONDS (the bang stays on the server)",
-		first.shownEndsAt == nil and math.abs(first.endsAt - (since + Config.BOMB_ANSWER_SECONDS)) < 0.5)
+	local passed = lastScreenOf(since, "bomb")
+	check("9a the bomb comes with the button off; it lights within BOMB_HOLD_MIN-MAX and a press passes it to the next",
+		first.id == nil and still.id == nil and still.holder == first.holder and lit.id ~= nil
+		and lit.holder == first.holder and passed.holder == first.holder % #first.ids + 1
+		and #first.choices == 1 and first.choices[1] == Config.TEXT.BOMB_PASS)
+	check("9f the time sent with the button is BOMB_MAX_SECONDS ahead (the bang stays on the server)",
+		lit.shownEndsAt == nil and math.abs(lit.endsAt - (since + Config.BOMB_MAX_SECONDS)) < 0.5)
 	local untilAt = now + Config.BOMB_MAX_SECONDS + 5
 	while not lastScreenOf(since, "bombResult") and now < untilAt do
 		at(now + 0.25)
 	end
 	local result = lastScreenOf(since, "bombResult")
 	local f = record.fails[1]
+	local loser = if result then byId(result.ids[result.holder]) else nil
 	check("9b it goes off between BOMB_MIN_SECONDS and BOMB_MAX_SECONDS; whoever holds it flies", result ~= nil and f ~= nil
-		and f.players[1].UserId == result.ids[result.holder] and now - since >= Config.BOMB_MIN_SECONDS - 0.5
+		and f.players[1] == loser and now - since >= Config.BOMB_MIN_SECONDS - 0.5
 		and now - since <= Config.BOMB_MAX_SECONDS + 1)
-	check("9c who held it and never answered missed an answer; who answered did not", record.missed ~= nil
-		and record.answered ~= nil and table.find(record.answered, holder1) ~= nil and table.find(record.missed, holder1) == nil)
+	check("9c who pressed did not miss an answer; who held the lit button BOMB_IDLE_SECONDS and never pressed did",
+		record.answered ~= nil and table.find(record.answered, holder1) ~= nil and table.find(record.missed or {}, holder1) == nil
+		and loser ~= holder1 and table.find(record.missed or {}, loser) ~= nil)
 	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
 	check("9d (it ends)", run.done)
 	-- A holder who starts flying hands it on at once.
@@ -953,13 +947,6 @@ do
 	record2.cancel = true
 	at(now + 1)
 	local _ = run2
-	local bankOk = #BombBank >= 40
-	local seenQ = {}
-	for _, question in BombBank do
-		bankOk = bankOk and #question.choices == 2 and question.answer >= 1 and question.answer <= 2 and not seenQ[question.q]
-		seenQ[question.q] = true
-	end
-	check("9e the bomb bank: two choices each, the answer one of them, no question twice", bankOk)
 end
 
 ---------------------------------------------------------------- 10. nunchi (bundle 6c)

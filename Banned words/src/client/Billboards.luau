@@ -173,8 +173,10 @@ end
 
 -- Draws exactly the bubbles in view.show (plus the ones of players just out, until their pop is over). A bubble is
 -- rebuilt only when its words or name changed; new lives just change its hearts (so a running pop goes on).
-function Billboards.render(view: View)
+-- Returns how many studs the tallest tag's word rows add (the chat bubbles go up by as much, ChatLook).
+function Billboards.render(view: View): number
 	lastView = view
+	local tallest = 0
 	local keep: { [number]: boolean } = {}
 	for userId in dying do
 		keep[userId] = true
@@ -187,6 +189,7 @@ function Billboards.render(view: View)
 			local key = tostring(userId)
 			local entry = view.words[key]
 			local words = if not entry then {} elseif entry.words then entry.words else { HIDDEN }
+			tallest = math.max(tallest, #words * ROW)
 			local caption = player.DisplayName
 			local layout = table.concat(words, "|") .. "#" .. caption
 			local bubble: Bubble? = bubbles[userId]
@@ -211,6 +214,7 @@ function Billboards.render(view: View)
 			removeBubble(userId)
 		end
 	end
+	return tallest
 end
 
 -- Lost a life: the hearts show the lives left and the bubble pops. The bubble of a player who is out stays until the

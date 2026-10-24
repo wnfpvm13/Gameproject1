@@ -12,6 +12,9 @@ local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChil
 
 local ChatLook = {}
 
+local bubbleConfig: BubbleChatConfiguration? = nil
+local raise = 0 -- studs the word rows over heads add to the tag (set before the configuration may be found)
+
 local BUBBLE_COLOR = Color3.fromRGB(255, 214, 64)
 local BUBBLE_TEXT_COLOR = Color3.fromRGB(30, 30, 36)
 local BUBBLE_FONT = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Heavy)
@@ -24,6 +27,15 @@ local function fromChatter(message: TextChatMessage): boolean
 	return player ~= nil and player:GetAttribute("BW_ChatMode") == true
 end
 
+-- The tags over heads got taller (word rows, client Billboards): the bubbles go up as much, so a chat bubble is never
+-- hidden behind someone's words (owner 2026-10-25).
+function ChatLook.setRaise(studs: number)
+	raise = studs
+	if bubbleConfig then
+		bubbleConfig.VerticalStudsOffset = Config.CHAT_BUBBLE_VERTICAL_OFFSET + studs
+	end
+end
+
 function ChatLook.start()
 	task.spawn(function()
 		-- (Studio adds the default configuration to a place when it opens it; a Rojo-built place file may lack it.)
@@ -31,7 +43,8 @@ function ChatLook.start()
 		if bubbles and bubbles:IsA("BubbleChatConfiguration") then
 			bubbles.MinimizeDistance = Config.CHAT_BUBBLE_MINIMIZE_DISTANCE
 			bubbles.MaxDistance = Config.CHAT_BUBBLE_MAX_DISTANCE
-			bubbles.VerticalStudsOffset = Config.CHAT_BUBBLE_VERTICAL_OFFSET -- clear of our name + hearts tag
+			bubbleConfig = bubbles
+			bubbles.VerticalStudsOffset = Config.CHAT_BUBBLE_VERTICAL_OFFSET + raise -- clear of our name + hearts tag
 		else
 			warn("[BannedWords] no BubbleChatConfiguration: chat bubbles keep Roblox's default distances")
 		end

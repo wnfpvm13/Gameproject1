@@ -914,48 +914,61 @@ do
 		return nil
 	end
 
-	local p1, p2, p3, pv = fakePlayer(3001), fakePlayer(3002), fakePlayer(3003), fakePlayer(3005)
+	-- (Owner 2026-10-25: voice is a must; a voice account may play by chat and still hears everyone; no voice: watch.)
+	local p1, p2, p3, pn = fakePlayer(3001), fakePlayer(3002), fakePlayer(3003), fakePlayer(3005)
+	for _, id in { 3001, 3002, 3003 } do
+		voiceEnabled[id] = true
+	end
 	chatAllowed[3002] = false
-	voiceEnabled[3005] = true
+	RunService.IsStudio = function() return false end
 	arrive(p1)
 	arrive(p2)
 	arrive(p3)
-	arrive(pv)
+	arrive(pn)
+	RunService.IsStudio = function() return true end
 	local private = true
 	for _, m in NetStub.sent do
 		if m.name == "ChatAccess" and m.to == nil then
 			private = false
 		end
 	end
-	check("8a each account is checked once and told privately: may chat / may not / a voice account", accessOf(p1) == "yes"
-		and accessOf(p2) == "no" and accessOf(pv) == "voice" and chatCalls[3001] == 1 and chatCalls[3005] == nil and private
-		and p1:GetAttribute("BW_CanChat") == nil)
+	check("8a each account is checked once and told privately: voice (chat too) / voice only / no voice (watch)",
+		accessOf(p1) == "voice" and accessOf(p2) == "voiceOnly" and accessOf(pn) == "noVoice" and chatCalls[3001] == 1
+		and chatCalls[3005] == nil and private and p1:GetAttribute("BW_CanChat") == nil)
 
 	local warned = #warnings
 	chatBroken = true
 	local p4 = fakePlayer(3004)
+	voiceEnabled[3004] = true
 	RunService.IsStudio = function() return false end
 	arrive(p4)
 	local during = accessOf(p4)
 	at(now + Config.CHAT_CHECK_RETRIES[1] + Config.CHAT_CHECK_RETRIES[2] + 1)
 	RunService.IsStudio = function() return true end
-	check("8b a chat check that keeps failing is retried, then no chat on a live server (each failure reported)",
-		during == "checking" and accessOf(p4) == "error" and chatCalls[3004] == 1 + #Config.CHAT_CHECK_RETRIES
+	check("8b a chat check that keeps failing is retried, then voice only on a live server (each failure reported)",
+		during == "checking" and accessOf(p4) == "voiceOnly" and chatCalls[3004] == 1 + #Config.CHAT_CHECK_RETRIES
 		and #warnings == warned + chatCalls[3004])
 	local p6 = fakePlayer(3006)
+	voiceEnabled[3006] = true
 	arrive(p6)
 	chatBroken = false
 	at(now + Config.CHAT_CHECK_RETRIES[1] + 0.5)
-	check("8c a retry that works gives the answer", accessOf(p6) == "yes" and chatCalls[3006] == 2)
+	check("8c a retry that works gives the answer", accessOf(p6) == "voice" and chatCalls[3006] == 2)
 	voiceBroken = true
 	local p7 = fakePlayer(3007)
 	voiceEnabled[3007] = true
+	RunService.IsStudio = function() return false end
 	arrive(p7)
+	at(now + Config.CHAT_CHECK_RETRIES[1] + Config.CHAT_CHECK_RETRIES[2] + 1)
+	RunService.IsStudio = function() return true end
 	voiceBroken = false
-	check("8d a failing voice check counts as no voice (owner 2026-10-23)", accessOf(p7) == "yes")
+	check("8d a voice check that keeps failing (retried) counts as no voice on a live server (owner 2026-10-23)",
+		accessOf(p7) == "noVoice")
 
 	chatDelay = 3
 	local p8, p9 = fakePlayer(3008), fakePlayer(3009)
+	voiceEnabled[3008] = true
+	voiceEnabled[3009] = true
 	arrive(p8)
 	arrive(p9)
 	join(p8, true) -- 1 s in: the 3 s check is still running
@@ -964,13 +977,14 @@ do
 	task.spawn(Players.PlayerRemoving.fire, p9)
 	at(now + 3)
 	chatDelay = 0
-	check("8e a request while the check runs is refused", refused and accessOf(p8) == "yes")
+	check("8e a request while the check runs is refused", refused and accessOf(p8) == "voice")
 	check("8f a player who leaves during the check is told nothing afterwards", accessOf(p9) == "checking")
 	join(p8, true)
-	check("8g once checked, that player can join by chat", Match.chatJoin[p8] == true and p8:GetAttribute("BW_ChatMode") == true)
+	check("8g once checked, that player can play by chat", Match.chatJoin[p8] == true and p8:GetAttribute("BW_ChatMode") == true)
 
 	join(p1, true)
-	check("8h a player who may chat joins by chat", Match.chatJoin[p1] == true and p1:GetAttribute("BW_ChatMode") == true)
+	check("8h a voice account plays by chat if it wants (it still hears everyone)", Match.chatJoin[p1] == true
+		and p1:GetAttribute("BW_ChatMode") == true)
 	chatJoin(p1, false)
 	check("8i requests closer than CHAT_JOIN_COOLDOWN are ignored (each one broadcasts)", Match.chatJoin[p1] == true)
 	at(now + Config.CHAT_JOIN_COOLDOWN)
@@ -978,29 +992,39 @@ do
 	chatJoin(p1, nil)
 	check("8j a request that is not true/false is ignored (it does not cancel)", Match.chatJoin[p1] == true)
 	join(p2, true)
-	join(pv, true)
-	check("8k no chat for an account that may not chat, nor for a voice account", Match.chatJoin[p2] == nil and Match.chatJoin[pv] == nil)
+	join(pn, true)
+	check("8k no chat mode for a voice account that may not chat, nor for an account without voice (it watches)",
+		Match.chatJoin[p2] == nil and Match.chatJoin[pn] == nil)
 	ready(p3, true)
 	join(p3, true)
-	check("8l a player whose voice is ready cannot join by chat", Match.chatJoin[p3] == nil)
+	check("8l a player whose voice is ready may still choose chat", Match.chatJoin[p3] == true)
+	join(p3, false)
 	ready(p1, true)
-	check("8m voice ready -> joins by voice from now on", Match.chatJoin[p1] == nil and p1:GetAttribute("BW_ChatMode") == false)
+	check("8m a voice that gets ready does not undo the choice of chat", Match.chatJoin[p1] == true
+		and p1:GetAttribute("BW_ChatMode") == true)
 	ready(p1, false)
-	join(p1, true)
-	local joined = Match.chatJoin[p1] == true
 	join(p1, false)
-	check("8n leaving chat mode", joined and Match.chatJoin[p1] == nil and p1:GetAttribute("BW_ChatMode") == false)
-
+	local left = Match.chatJoin[p1] == nil and p1:GetAttribute("BW_ChatMode") == false
 	join(p1, true)
+	check("8n leaving chat mode (and coming back)", left and Match.chatJoin[p1] == true)
+
 	Config.REQUIRE_VOICE_READY = true
-	playerList = { p1, p2, p3 }
+	playerList = { p1, p2, p3, pn }
+	ready(pn, true, true) -- (a client says ready for an account without voice: it is not believed)
+	local unlinked = Match.eligiblePlayers() -- p1 plays by chat, but its voice is not connected yet
+	ready(p1, false, true)
+	local refusedOff = Match.chatJoin[p2] == nil
 	local eligible = Match.eligiblePlayers()
 	Players.PlayerRemoving.fire(p1) -- (still listed while it runs, as in Roblox)
 	local state = lastState()
 	playerList = {}
 	Config.REQUIRE_VOICE_READY = false
-	check("8o live servers seat voice-ready and chat players only", #eligible == 2 and table.find(eligible, p1) ~= nil
-		and table.find(eligible, p3) ~= nil and table.find(eligible, p2) == nil)
+	check("8o live servers seat voice-ready and chat players only (no voice: nobody seats them)", #eligible == 2
+		and table.find(eligible, p1) ~= nil and table.find(eligible, p3) ~= nil and table.find(eligible, p2) == nil
+		and table.find(eligible, pn) == nil and refusedOff)
+	check("8o2 a client cannot make an account without voice ready, and a chat player needs its voice connected to sit",
+		table.find(unlinked, pn) == nil and table.find(unlinked, p1) == nil and table.find(unlinked, p3) ~= nil)
+	ready(pn, false, false)
 	check("8p a chat player who leaves is no longer counted in the state sent then", state ~= nil and state.readyCount == 1
 		and Match.chatJoin[p1] == nil)
 	ready(p3, false)
@@ -1010,7 +1034,7 @@ do
 	local resent = false
 	for i = sentBefore + 1, #NetStub.sent do
 		local m = NetStub.sent[i]
-		resent = resent or (m.name == "ChatAccess" and m.to == p2 and m.payload.state == "no")
+		resent = resent or (m.name == "ChatAccess" and m.to == p2 and m.payload.state == "voiceOnly")
 	end
 	check("8v Sync sends the player's chat access again (a late client missed it)", resent)
 	voiceDelay = 2
@@ -1024,11 +1048,35 @@ do
 		and accessOf(p10) == "checking")
 	chatBroken = true
 	local p11 = fakePlayer(3011)
-	arrive(p11)
+	arrive(p11) -- (no voice: Studio has none, it goes on as a voice account)
 	at(now + Config.CHAT_CHECK_RETRIES[1] + Config.CHAT_CHECK_RETRIES[2] + 1)
 	chatBroken = false
-	check("8x in Studio a chat check that keeps failing still lets the tester try chat mode", accessOf(p11) == "yes")
-	workspaceAttributes.BW_ChatAccess = "yes"
+	check("8x in Studio an account without voice and a chat check that keeps failing still let the tester try chat mode",
+		accessOf(p11) == "voice")
+	Config.REQUIRE_VOICE_READY = true
+	local p14 = fakePlayer(3014)
+	voiceEnabled[3014] = true
+	arrive(p14)
+	join(p14, true)
+	local withoutLink = Match.chatJoin[p14] == nil
+	ready(p14, false, true)
+	join(p14, true)
+	Config.REQUIRE_VOICE_READY = false
+	check("8z on live servers playing by chat needs the voice connected first (to hear everyone)", withoutLink
+		and Match.chatJoin[p14] == true)
+	join(p14, false)
+	voiceBroken = true
+	local p15 = fakePlayer(3015)
+	voiceEnabled[3015] = true
+	RunService.IsStudio = function() return false end
+	arrive(p15)
+	local during15 = accessOf(p15)
+	voiceBroken = false
+	at(now + Config.CHAT_CHECK_RETRIES[1] + 0.5)
+	RunService.IsStudio = function() return true end
+	check("8z2 a failing voice check is retried before it counts as no voice", during15 == "checking"
+		and accessOf(p15) == "voice")
+	workspaceAttributes.BW_ChatAccess = "noVoice"
 	local p12, p13 = fakePlayer(3012), fakePlayer(3013)
 	voiceEnabled[3012] = true
 	voiceEnabled[3013] = true
@@ -1037,7 +1085,7 @@ do
 	arrive(p13)
 	RunService.IsStudio = function() return true end
 	workspaceAttributes.BW_ChatAccess = nil
-	check("8y the Studio setting BW_ChatAccess forces the result (live servers ignore it)", accessOf(p12) == "yes"
+	check("8y the Studio setting BW_ChatAccess forces the result (live servers ignore it)", accessOf(p12) == "noVoice"
 		and accessOf(p13) == "voice")
 
 	-- A round with two chat participants (one connects voice mid-round) and a voice player.
@@ -1064,8 +1112,9 @@ do
 	join(ps[2], false)
 	check("8t at the result the choice can change again", Match.chatJoin[ps[2]] == nil)
 	finish(since)
-	check("8u after the round, a chat player whose voice got ready joins by voice", Match.chatJoin[ps[1]] == nil
-		and ps[1]:GetAttribute("BW_ChatMode") == false)
+	check("8u after the round the choice of chat stays until they change it (their voice got ready meanwhile)",
+		Match.chatJoin[ps[1]] == true and ps[1]:GetAttribute("BW_ChatMode") == true)
+	join(ps[1], false)
 end
 
 ---------------------------------------------------------------- 9. VoiceService (the real module): who hears whom
@@ -1357,6 +1406,12 @@ do
 	local apart = choose(b)
 	voiceGroups[b[1].UserId] = nil
 	check("10p the presenter must share a voice chat group with every voice participant", apart == nil)
+	Match.chatJoin[b[2]] = true
+	voiceGroups[b[2].UserId] = { "y" }
+	local apartChat = choose(b)
+	voiceGroups[b[2].UserId] = nil
+	Match.chatJoin[b[2]] = nil
+	check("10p2 and with every chat participant too (they hear the presenter, owner 2026-10-25)", apartChat == nil)
 	Match.chatJoin[b[2]] = true
 	chatBlocked[b[2].UserId .. ">" .. b[1].UserId] = true
 	local blocked = choose(b)

@@ -2,7 +2,8 @@
 -- Flying chairs in a row at the near edge of the pool (docs/DESIGN_V3.md §9-10): seat the players of a round in the
 -- middle chairs, keep them seated, and launch a failed player. A launch is an explosion in front of the chair (owner
 -- 2026-10-24: no flight path, the blast's force): the character turns into a ragdoll and the blast throws it backward
--- over the pool, a little differently each time, and physics does the rest. The clients draw the explosion, the seat
+-- and up, anywhere behind or beside the chair (owner 2026-10-25: faster, harder, unpredictable), and physics does the
+-- rest. The clients draw the explosion, the seat
 -- flap snapping back and the splash from the "Fling" / "Splash" signals. SeatService only says when the player is due
 -- back (FLING_RETURN_SECONDS after the launch, with the character that flew); RoundService then calls endFling() and
 -- picks reseat() or the stands. Since 2026-10-24 a launch may wait its turn in a chain (fling's `delay`) and reports
@@ -20,6 +21,9 @@ local SeatService = {}
 local DEFAULT_JUMP_HEIGHT = 7.2
 local FLYING_GROUP = "BW_Flying" -- flying bodies: no chairs, no other flying bodies, no own limbs
 local CHAIR_GROUP = "BW_Chairs"
+-- Every character's parts (2026-10-25): a flying body passes through people — seated players and spectators in the
+-- stands are not pushed by a 200 studs/s throw (Codex 9a) — but still hits the walls, the floor and the water.
+local CHARACTER_GROUP = "BW_Characters"
 
 type Flight = {
 	character: Model,
@@ -63,8 +67,12 @@ function SeatService.getSeats(): { Seat }
 	return seats
 end
 
+-- (Not for a body that died or left the world meanwhile: Seat:Sit errors on it, seen in the owner's test 2026-10-25.)
 local function sit(seat: Seat, humanoid: Humanoid)
-	local character = humanoid.Parent :: Model
+	local character = humanoid.Parent
+	if humanoid.Health <= 0 or not character or not character:IsA("Model") or not character:IsDescendantOf(workspace) then
+		return
+	end
 	character:PivotTo(seat.CFrame * CFrame.new(0, 3, 0))
 	seat:Sit(humanoid)
 end
@@ -96,6 +104,30 @@ function SeatService.init(onReturnDue: (Player, any, Model) -> (), onLanded: ((P
 	PhysicsService:RegisterCollisionGroup(CHAIR_GROUP)
 	PhysicsService:CollisionGroupSetCollidable(FLYING_GROUP, FLYING_GROUP, false)
 	PhysicsService:CollisionGroupSetCollidable(FLYING_GROUP, CHAIR_GROUP, false)
+	PhysicsService:RegisterCollisionGroup(CHARACTER_GROUP)
+	PhysicsService:CollisionGroupSetCollidable(FLYING_GROUP, CHARACTER_GROUP, false)
+	local function grouped(character: Model)
+		for _, d in character:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.CollisionGroup = CHARACTER_GROUP
+			end
+		end
+		character.DescendantAdded:Connect(function(d)
+			if d:IsA("BasePart") and d.CollisionGroup ~= FLYING_GROUP then
+				d.CollisionGroup = CHARACTER_GROUP
+			end
+		end)
+	end
+	local function watchCharacters(player: Player)
+		if player.Character then
+			grouped(player.Character)
+		end
+		player.CharacterAdded:Connect(grouped)
+	end
+	for _, player in Players:GetPlayers() do
+		watchCharacters(player)
+	end
+	Players.PlayerAdded:Connect(watchCharacters)
 	for _, chair in hall():WaitForChild("Chairs"):GetChildren() do
 		for _, d in chair:GetDescendants() do
 			if d:IsA("BasePart") then
@@ -218,40 +250,15 @@ local function waterY(): number
 	return if landing then (landing:GetAttribute("WaterY") or landing.Position.Y) :: number else 0
 end
 
--- The farthest a blast carries a body over flat ground (the fastest speed at the pitch, within the range, that goes
--- farthest); a little more from the seat's height.
-local function farthest(): number
-	local best = 0
-	for _, degrees in { Config.BLAST_PITCH_MIN, Config.BLAST_PITCH_MAX } do
-		best = math.max(best, math.sin(2 * math.rad(degrees)))
-	end
-	return Config.BLAST_SPEED_MAX ^ 2 / workspace.Gravity * best
-end
-
--- The blast's push: backward from the chair (the chairs face away from the pool) and up, turned a little at random so
--- no two launches look alike. A speed, not an aim: where the body comes down is up to physics. Sideways it is kept
--- so that even the farthest throw stays above the landing zone's width (the end chairs only fly straight or inward;
--- 15 degrees either way took their players onto the deck beside the pool).
+-- The blast's push: backward from the chair (the chairs face away from the pool) and up, turned at random up to
+-- BLAST_SPREAD to either side, so no two launches look alike. A speed, not an aim: where the body comes down is up to
+-- physics (owner 2026-10-25: faster and anywhere; it may bounce off the walls and the ceiling and land outside the
+-- pool; it is back on the chair FLING_RETURN_SECONDS after the launch anyway).
 local function blastVelocity(seat: Seat): Vector3
 	local back = -seat.CFrame.LookVector
 	back = Vector3.new(back.X, 0, back.Z).Unit
-	local side = Vector3.new(back.Z, 0, -back.X) -- (up x back: positive yaw turns `back` toward this)
-	local spread = math.sin(math.rad(Config.BLAST_SPREAD))
-	local low, high = -spread, spread
-	local landing = landingZone()
-	if landing then
-		local offset = (seat.Position - landing.Position):Dot(side) -- the seat's distance from the zone's middle line
-		local half = math.abs(landing.CFrame.RightVector:Dot(side)) * landing.Size.X / 2
-			+ math.abs(landing.CFrame.LookVector:Dot(side)) * landing.Size.Z / 2
-		local reach = farthest()
-		low = math.max(low, math.clamp((-half - offset) / reach, -1, 1))
-		high = math.min(high, math.clamp((half - offset) / reach, -1, 1))
-		if low > high then
-			low, high = 0, 0
-		end
-	end
 	local pitch = math.rad(rng:NextNumber(Config.BLAST_PITCH_MIN, Config.BLAST_PITCH_MAX))
-	local yaw = math.asin(rng:NextNumber(low, high))
+	local yaw = math.rad(rng:NextNumber(-Config.BLAST_SPREAD, Config.BLAST_SPREAD))
 	local direction = CFrame.fromAxisAngle(Vector3.yAxis, yaw):VectorToWorldSpace(back) * math.cos(pitch)
 		+ Vector3.yAxis * math.sin(pitch)
 	return direction * rng:NextNumber(Config.BLAST_SPEED_MIN, Config.BLAST_SPEED_MAX)
@@ -391,11 +398,26 @@ function SeatService.fling(player: Player, tag: any, delay: number?, size: numbe
 		end)
 		task.spawn(function()
 			-- Where it first comes down: the water over the pool (a splash), or anywhere it stops falling after
-			-- FLIGHT_SETTLE_SECONDS (the deck) — the flight record.
+			-- FLIGHT_SETTLE_SECONDS (the deck) — the flight record, once. The depth watch goes on until the flight
+			-- ends (a body may still roll through a wall after it came down, Codex 9a re-check).
 			local water = waterY()
 			local started = os.clock()
+			local recorded = false
 			while flights[player] == flight and os.clock() - started < Config.FLING_RETURN_SECONDS do
-				if root.Parent then
+				if root.Parent and root.Position.Y < water - Config.FLIGHT_LOST_DEPTH then
+					-- (out of the hall after all — through a thin wall or the floor: back over the pool, not into the
+					-- void, where the body would be destroyed and the player respawn)
+					local landing = landingZone()
+					local body = root.Parent
+					if landing and body and body:IsA("Model") then
+						for part in flight.parts do
+							part.AssemblyLinearVelocity = Vector3.zero
+							part.AssemblyAngularVelocity = Vector3.zero
+						end
+						body:PivotTo(CFrame.new(landing.Position + Vector3.new(0, Config.FLIGHT_LOST_DROP, 0)))
+					end
+				end
+				if root.Parent and not recorded then
 					local inWater = root.Position.Y < water + 1.5 and overPool(root.Position)
 					local stopped = os.clock() - started > Config.FLIGHT_SETTLE_SECONDS
 						and root.AssemblyLinearVelocity.Magnitude < Config.FLIGHT_STOPPED_SPEED
@@ -407,7 +429,7 @@ function SeatService.fling(player: Player, tag: any, delay: number?, size: numbe
 							local flat = Vector3.new(root.Position.X - from.X, 0, root.Position.Z - from.Z)
 							landed(player, flat.Magnitude, os.clock() - started)
 						end
-						break
+						recorded = true
 					end
 				end
 				RunService.Heartbeat:Wait()

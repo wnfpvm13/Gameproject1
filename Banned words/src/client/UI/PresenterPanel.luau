@@ -324,7 +324,7 @@ function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: stri
 	local judging = menuKind == "judge" or menuKind == "accuse" -- (tap a name, then the big button)
 	local nameButtons: { [string]: TextButton } = {}
 	for i, option in options do
-		local label = if option.recommended then "★ " .. option.title .. " · " .. TEXT.PICK_RECOMMENDED else option.title
+		local label = option.title -- (the suited ones come first; no mark, owner 2026-10-25)
 		local b = button(menuList, label, 240, 40)
 		b.Size = UDim2.new(1, -8, 0, 40) -- (room for the scroll bar)
 		b.LayoutOrder = i

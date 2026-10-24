@@ -1,18 +1,16 @@
 --!strict
--- The bomb (docs/DESIGN_V3.md §5.2; bundle 6c, owner 2026-10-23). Everyone on the ground stands in a ring drawn at the
--- start (shown on screen; missions do not know the seats). Whoever holds the bomb answers a two-choice question within
--- BOMB_ANSWER_SECONDS: right passes it to the next in the ring (skipping anyone who left or flies), wrong or too late
--- keeps it: the rest of that question's time passes (no guessing at speed), then a new question. Each question's two
--- choices come in a random order. It goes off after a hidden time between BOMB_MIN_SECONDS and BOMB_MAX_SECONDS (the
--- question timer on screen always shows BOMB_ANSWER_SECONDS, so it gives nothing away); only an answer the server got
--- before that counts (answers are taken until the bomb goes off at the latest); whoever holds it then flies. A holder
--- who leaves or flies hands it on at once. Who held it for a whole question and never answered missed an answer (the
--- AFK rule).
+-- The bomb (docs/DESIGN_V3.md §5.2; bundle 6c, owner 2026-10-23; a pass button instead of a question, owner
+-- 2026-10-25). Everyone on the ground stands in a ring drawn at the start (shown on screen; missions do not know the
+-- seats). Whoever gets the bomb holds it a random BOMB_HOLD_MIN-MAX seconds with the button off, then "넘기기" lights
+-- up and a press hands it to the next in the ring (skipping anyone who left or flies). It goes off after a hidden time
+-- between BOMB_MIN_SECONDS and BOMB_MAX_SECONDS (no timer on screen: the time sent with the button is always
+-- BOMB_MAX_SECONDS ahead, so it gives nothing away); only a press the server got before that counts; whoever holds it
+-- then flies. A holder who leaves or flies hands it on at once. Who had the button lit for BOMB_IDLE_SECONDS and never
+-- pressed missed an answer (the AFK rule).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
-local BombBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("BombBank"))
 
 -- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
 type Ctx = {
@@ -62,7 +60,7 @@ local function ids(list: { Player }): { number }
 end
 
 function BombPass.available(final: boolean): boolean
-	return not final and #BombBank > 0
+	return not final
 end
 
 -- Returns false when too few were on the ground to start.
@@ -99,45 +97,36 @@ function BombPass.run(ctx: Ctx): boolean?
 	local holder: number? = 1
 	local held: { [Player]: boolean } = {}
 	local answered: { [Player]: boolean } = {}
-	local last = 0
 	while os.clock() < deadline do
 		holder = nextFrom(holder or 1, true)
 		if not holder then
 			return nil -- (nobody left to hold it)
 		end
 		local player = ring[holder]
-		local pick = ctx.rng:NextInteger(1, #BombBank)
-		if pick == last and #BombBank > 1 then
-			pick = pick % #BombBank + 1 -- (never the same question twice in a row)
-		end
-		last = pick
-		local question = BombBank[pick]
-		local order = if ctx.rng:NextNumber() < 0.5 then { 1, 2 } else { 2, 1 }
-		local choices = { question.choices[order[1]], question.choices[order[2]] }
-		local right = table.find(order, question.answer)
 		ctx.show(string.format(Config.TEXT.BOMB_HOLDER, player.DisplayName))
-		local seconds = math.min(Config.BOMB_ANSWER_SECONDS, deadline - os.clock())
-		local questionEnds = os.clock() + seconds
-		-- (answers are taken until the bomb goes off at the latest, so an answer that came in counts even if this
-		-- loop looks again a moment after the bang)
-		local answers = ctx.ask({ kind = "bomb", ids = ids(ring), holder = holder, question = question.q, choices = choices,
-			shownEndsAt = Match.now() + Config.BOMB_ANSWER_SECONDS }, #choices, seconds, { player })
+		local shown = { kind = "bomb", ids = ids(ring), holder = holder, choices = { Config.TEXT.BOMB_PASS },
+			shownEndsAt = Match.now() + Config.BOMB_MAX_SECONDS }
+		ctx.screen(shown) -- (the button is off while the bomb is fresh)
+		local lockEnds = math.min(deadline, os.clock() + ctx.rng:NextNumber(Config.BOMB_HOLD_MIN, Config.BOMB_HOLD_MAX))
+		while os.clock() < lockEnds and not ctx.cancelled() and holding(holder) do
+			ctx.wait(math.min(0.1, lockEnds - os.clock()))
+		end
 		if ctx.cancelled() then
 			return nil
 		end
-		local choice = answers[player]
-		if choice then
-			answered[player] = true
-			held[player] = true
-		elseif seconds >= Config.BOMB_ANSWER_SECONDS and os.clock() >= questionEnds - 0.05 and holding(holder) then
-			held[player] = true -- (a whole question to answer and no answer: it counts; cut short by a flight it does not)
-		end
-		if choice and choice == right then
-			holder = nextFrom(holder, false) or holder
-		elseif choice then
-			local lockEnds = math.min(questionEnds, deadline) -- (wrong: the rest of the question's time first)
-			while os.clock() < lockEnds and not ctx.cancelled() and holding(holder) do
-				ctx.wait(math.min(0.1, lockEnds - os.clock()))
+		if holding(holder) and os.clock() < deadline then
+			-- (presses are taken until the bomb goes off at the latest)
+			local opened = os.clock()
+			local answers = ctx.ask(shown, 1, deadline - opened, { player })
+			if ctx.cancelled() then
+				return nil
+			end
+			if answers[player] then
+				answered[player] = true
+				held[player] = true
+				holder = nextFrom(holder, false) or holder
+			elseif os.clock() - opened >= Config.BOMB_IDLE_SECONDS - 0.05 and holding(holder) then
+				held[player] = true -- (the button lit long enough and no press: it counts; cut short by a flight it does not)
 			end
 		end
 	end

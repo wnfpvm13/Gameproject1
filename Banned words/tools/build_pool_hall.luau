@@ -9,12 +9,13 @@
 --   row on a red carpet at the near end (z = 7, 5 studs apart), backs to the pool, facing the show camera (z = -36).
 --   The presenter's podium stands off to the camera's right (x = -24), angled at the row, so nothing sits between the
 --   camera and the faces. A failed player is blown off the chair as a ragdoll by an explosion (owner 2026-10-24) and
---   comes down far out over the pool (Landing, z 58-94, keeps the throws within its width) while the chair's seat flap
---   snaps back and eases down again. Spectator stands along the +X side (the
---   camera's left), windows along -X and the far end, a white roof (y 56) with skylights and white trusses over the
---   water (y 44) that stay above the flight arc.
--- Code reads (map contract, DESIGN_V3 §9): PoolHall (attribute CeilingY: the highest a flying player should reach; the
--- Config.BLAST_* values keep under it, no code reads it now), PoolHall.Chairs (Chair01..10, each a Model
+--   comes down anywhere behind or beside the chairs (owner 2026-10-25: faster and in any direction; Landing, z 58-94,
+--   is where the splash and a lost body go) while the chair's seat flap snaps back and eases down again. Spectator
+--   stands along the +X side (the camera's left), windows along -X and the far end, a white roof (y 56) with
+--   skylights and white trusses over the water (y 44). FlightGuard: thick invisible walls and a lid just outside the
+--   shell, so a body thrown at ~200 studs/s cannot pass the thin glass.
+-- Code reads (map contract, DESIGN_V3 §9): PoolHall (attribute CeilingY: kept for reference, no code reads it now;
+-- since 2026-10-25 a fast throw may reach the roof), PoolHall.Chairs (Chair01..10, each a Model
 -- with Base, an invisible Seat carrying SeatIndex 1..10 from the show camera's left (+X) to its right, Flap: the
 -- visible cushion and backrest, welded to the anchored invisible Hinge on the box's back top edge; clients turn the
 -- Hinge about its own X axis for a launch, the server never moves any of it; and Bell (bundle 6b): a desk bell on a
@@ -268,11 +269,12 @@ for lane = 1, LANES - 1 do
 	rope.Parent = pool
 end
 
--- Water: terrain water fills the basin up to just under the deck, clear and bright in daylight.
+-- Water: terrain water fills the basin up to just under the deck, clear and bright in daylight. Owner 2026-10-25: too
+-- glaring, keep it bright but see through it more (was colour 56,168,200, transparency 0.7, reflectance 0.35).
 local terrain = workspace.Terrain
-terrain.WaterColor = Color3.fromRGB(56, 168, 200)
-terrain.WaterTransparency = 0.7
-terrain.WaterReflectance = 0.35
+terrain.WaterColor = Color3.fromRGB(120, 200, 214) -- (a lighter tint: clearer water alone looked dark over the floor)
+terrain.WaterTransparency = 0.85
+terrain.WaterReflectance = 0.2
 terrain.WaterWaveSize = 0.08
 terrain.WaterWaveSpeed = 6
 local waterSize = Vector3.new(POOL_HALF_X * 2, WATER_TOP_Y - POOL_FLOOR_Y, POOL_FAR_Z - POOL_NEAR_Z)
@@ -498,7 +500,31 @@ decal(screen, IMAGES.screenLogo, Enum.NormalId.Front)
 screenFrame.CastShadow = false
 
 ---------------------------------------------------------------- trusses and lights
--- White trusses across the hall over the water (y 44-46), above the highest point a flying player reaches (CeilingY 40).
+-- Flight guard (2026-10-25): one physics step at 205 studs/s moves ~0.9 studs, more than the 0.3-stud glass and the
+-- skylights. Invisible walls GUARD studs thick just outside the shell, a lid over the roof and a slab under the pool
+-- keep a thrown body in the hall (SeatService also puts a body that still gets out back over the pool).
+do
+	local GUARD = 6
+	local guard = Instance.new("Folder")
+	guard.Name = "FlightGuard"
+	guard.Parent = hall
+	local function guardBox(name: string, a: Vector3, b: Vector3)
+		local p = box(guard, name, a, b, WHITE, nil, { transparency = 1, shadow = false })
+		p.CanQuery = false
+		p.CanTouch = false
+	end
+	local low, high = POOL_FLOOR_Y - 1 - GUARD, ROOF_Y + 2 + GUARD
+	local x0, x1 = -HALL_HALF_X - 1.5, HALL_HALF_X + 1.5
+	local z0, z1 = HALL_NEAR_Z - 1.5, HALL_FAR_Z + 1.5
+	guardBox("Left", Vector3.new(x0 - GUARD, low, z0 - GUARD), Vector3.new(x0, high, z1 + GUARD))
+	guardBox("Right", Vector3.new(x1, low, z0 - GUARD), Vector3.new(x1 + GUARD, high, z1 + GUARD))
+	guardBox("Near", Vector3.new(x0, low, z0 - GUARD), Vector3.new(x1, high, z0))
+	guardBox("Far", Vector3.new(x0, low, z1), Vector3.new(x1, high, z1 + GUARD))
+	guardBox("Lid", Vector3.new(x0, ROOF_Y + 2, z0), Vector3.new(x1, high, z1))
+	guardBox("UnderPool", Vector3.new(-POOL_HALF_X - 1, low, POOL_NEAR_Z - 1), Vector3.new(POOL_HALF_X + 1, POOL_FLOOR_Y - 1, POOL_FAR_Z + 1))
+end
+
+-- White trusses across the hall over the water (y 44-46).
 local truss = Instance.new("Folder")
 truss.Name = "Truss"
 truss.Parent = hall

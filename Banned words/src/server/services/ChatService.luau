@@ -1,12 +1,12 @@
 --!strict
--- Joining by text chat (docs/DESIGN_V3.md §7; owner decision 2026-10-23: voice accounts join by voice only). Each
--- player is checked once on the server when they join: does the account have voice
--- (VoiceChatService:IsVoiceEnabledForUserIdAsync) and may it chat (TextChatService:CanUserChatAsync)? Only accounts
--- without voice that may chat can choose chat, and not while their voice is ready or while they play in the round
--- being played. The choice is Match.chatJoin, public as the BW_ChatMode player attribute (ChatLook makes those
--- messages stand out). What a player may do is told to that player only ("ChatAccess"): whether an account may chat
--- says something about its restrictions, so other clients never get it.
--- Bundle 5 adds the rest of §7 here (delivery rules, the whisper block, judging chat).
+-- Joining by text chat (docs/DESIGN_V3.md §7). Owner 2026-10-25: voice chat is a must to play; whoever cannot or
+-- will not speak may play by chat and still hears everyone ("말을 못하면 듣기라도"). So: each player is checked once on
+-- the server when they join: does the account have voice (VoiceChatService:IsVoiceEnabledForUserIdAsync), and if so,
+-- may it chat (TextChatService:CanUserChatAsync)? A voice account that may chat can choose chat ("말 대신 채팅":
+-- its mic is off to the room in its round, VoiceService), at any time except while it plays in the round being played;
+-- an account without voice only watches. The choice is Match.chatJoin, public as the BW_ChatMode player attribute
+-- (ChatLook makes those messages stand out). What a player may do is told to that player only ("ChatAccess"): it says
+-- something about the account's restrictions, so other clients never get it.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -19,9 +19,9 @@ local Net = require(script.Parent.Parent:WaitForChild("Net"))
 
 local ChatService = {}
 
--- checking: not known yet; yes: may join by chat; no: may not chat; voice: a voice account (joins by voice);
--- error: the chat permission check kept failing (no chat for now).
-export type Access = "checking" | "yes" | "no" | "voice" | "error"
+-- checking: not known yet; voice: a voice account that may also play by chat; voiceOnly: a voice account that may not
+-- chat (or whose chat check kept failing): it plays by voice; noVoice: no voice (or the voice check failed): it watches.
+export type Access = "checking" | "voice" | "voiceOnly" | "noVoice"
 
 local access: { [Player]: Access } = {}
 
@@ -29,9 +29,27 @@ local function tell(player: Player)
 	Net.to(player, "ChatAccess", { state = access[player] or "checking" })
 end
 
+local function setMode(player: Player, on: boolean)
+	if on then
+		Match.chatJoin[player] = true
+	else
+		Match.chatJoin[player] = nil
+	end
+	player:SetAttribute("BW_ChatMode", on)
+end
+
 local function setAccess(player: Player, state: Access)
 	if player.Parent then -- not for a player who left meanwhile
 		access[player] = state
+		-- (only a voice account counts as ready or plays by chat, Match.readyByVoice / readyByChat)
+		if state == "voice" or state == "voiceOnly" then
+			Match.voiceAccount[player] = true
+		else
+			Match.voiceAccount[player] = nil
+		end
+		if state == "noVoice" and Match.chatJoin[player] then
+			setMode(player, false)
+		end
 		tell(player)
 	end
 end
@@ -48,21 +66,41 @@ end
 
 local function check(player: Player)
 	setAccess(player, "checking")
-	-- Studio: workspace attribute BW_ChatAccess forces the result (yes / no / voice / error), e.g. to try chat mode with
-	-- a voice account (live servers ignore it).
-	local forced = if RunService:IsStudio() then workspace:GetAttribute("BW_ChatAccess") else nil
-	if forced == "yes" or forced == "no" or forced == "voice" or forced == "error" then
+	-- Studio: workspace attribute BW_ChatAccess forces the result (voice / voiceOnly / noVoice), e.g. to see the
+	-- watcher's screen (live servers ignore it).
+	local studio = RunService:IsStudio()
+	local forced = if studio then workspace:GetAttribute("BW_ChatAccess") else nil
+	if forced == "voice" or forced == "voiceOnly" or forced == "noVoice" then
 		setAccess(player, forced)
 		return
 	end
-	-- A failed voice check counts as "no voice" (owner 2026-10-23); a chat participant's voice is off in rounds anyway.
-	local _, hasVoice = ask("voice", player, function()
-		return VoiceChatService:IsVoiceEnabledForUserIdAsync(player.UserId)
-	end)
+	-- The voice check is retried like the chat check; still failing counts as no voice (owner 2026-10-23). Studio has
+	-- no voice at all (its test players play anyway, Config.REQUIRE_VOICE_READY), so there it goes on as a voice
+	-- account and chat mode can be tried.
+	local hasVoice = false
+	local voiceTries = 0
+	while true do
+		local ok, answer = ask("voice", player, function()
+			return VoiceChatService:IsVoiceEnabledForUserIdAsync(player.UserId)
+		end)
+		if not player.Parent then
+			return -- left meanwhile
+		end
+		if ok then
+			hasVoice = answer
+			break
+		end
+		voiceTries += 1
+		local delay = Config.CHAT_CHECK_RETRIES[voiceTries]
+		if not delay then
+			break
+		end
+		task.wait(delay)
+	end
 	if not player.Parent then
-		return -- left meanwhile
-	elseif hasVoice then
-		setAccess(player, "voice")
+		return
+	elseif not hasVoice and not studio then
+		setAccess(player, "noVoice")
 		return
 	end
 	local retries = 0
@@ -71,7 +109,7 @@ local function check(player: Player)
 			return TextChatService:CanUserChatAsync(player.UserId)
 		end)
 		if ok then
-			setAccess(player, if allowed then "yes" else "no")
+			setAccess(player, if allowed then "voice" else "voiceOnly")
 			return
 		end
 		retries += 1
@@ -84,17 +122,8 @@ local function check(player: Player)
 			return
 		end
 	end
-	-- Still failing: no chat on live servers; Studio test accounts may try chat mode anyway.
-	setAccess(player, if RunService:IsStudio() then "yes" else "error")
-end
-
-local function setMode(player: Player, on: boolean)
-	if on then
-		Match.chatJoin[player] = true
-	else
-		Match.chatJoin[player] = nil
-	end
-	player:SetAttribute("BW_ChatMode", on)
+	-- Still failing: voice only on live servers; Studio test accounts may try chat mode anyway.
+	setAccess(player, if studio then "voice" else "voiceOnly")
 end
 
 function ChatService.start()
@@ -104,6 +133,7 @@ function ChatService.start()
 	Players.PlayerAdded:Connect(check)
 	Players.PlayerRemoving:Connect(function(player)
 		access[player] = nil
+		Match.voiceAccount[player] = nil
 	end)
 end
 
@@ -112,27 +142,17 @@ function ChatService.sendAccess(player: Player)
 	tell(player)
 end
 
--- The player asks to join by chat (`on`) or to stop. `locked`: they play in the round being played, so their choice
--- holds until it is over. Joining needs an account without voice that may chat, and no voice ready. Returns whether
--- anything changed.
+-- The player asks to play by chat (`on`) or to stop. `locked`: they play in the round being played, so their choice
+-- holds until it is over. Playing by chat needs a voice account that may chat and its voice connected (to hear
+-- everyone; its mic may be on and tested too). The choice stays until they change it. Returns whether anything changed.
 function ChatService.request(player: Player, on: boolean, locked: boolean): boolean
 	if locked or (Match.chatJoin[player] == true) == on then
 		return false
 	end
-	if on and (access[player] ~= "yes" or Match.ready[player]) then
+	if on and (access[player] ~= "voice" or not (Match.voiceLinked[player] or not Config.REQUIRE_VOICE_READY)) then
 		return false
 	end
 	setMode(player, on)
-	return true
-end
-
--- The player's voice is ready: they join by voice from now on (unless locked in the round being played). Returns
--- whether anything changed.
-function ChatService.voiceReady(player: Player, locked: boolean): boolean
-	if locked or not Match.chatJoin[player] then
-		return false
-	end
-	setMode(player, false)
 	return true
 end
 

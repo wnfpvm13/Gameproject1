@@ -113,13 +113,15 @@ end
 
 -- Whether `candidate` may present a round played by `participants`. Yields.
 local function qualifies(candidate: Player, participants: { Player }): boolean
-	local voice: { Player } = {}
+	-- (everyone hears the presenter: chat players too, since 2026-10-25 they are voice accounts that listen)
 	local chat: { Player } = {}
 	for _, player in participants do
-		table.insert(if Match.chatJoin[player] then chat else voice, player)
+		if Match.chatJoin[player] then
+			table.insert(chat, player)
+		end
 	end
-	if #voice > 0 then
-		local shares = sharesVoiceGroup(candidate, voice)
+	if #participants > 0 then
+		local shares = sharesVoiceGroup(candidate, participants)
 		if shares == false or (shares == nil and not failedCheck()) then
 			return false
 		end
@@ -148,7 +150,7 @@ end
 -- A volunteer who could present now: still here, voice ready, not joining by chat. Looked at again after the checks,
 -- which yield.
 local function canPresent(player: Player): boolean
-	local voiceReady = Match.ready[player] or not Config.REQUIRE_VOICE_READY
+	local voiceReady = Match.readyByVoice(player) or not Config.REQUIRE_VOICE_READY
 	return volunteers[player] == true and voiceReady and not Match.chatJoin[player] and player.Parent ~= nil
 end
 

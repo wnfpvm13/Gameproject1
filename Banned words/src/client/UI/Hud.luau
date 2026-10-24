@@ -24,24 +24,24 @@ local aliveL: TextLabel
 local livesL: TextLabel
 
 function Hud.build()
-	local top = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 14)
+	local top = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 14)
 	top.AnchorPoint = Vector2.new(0.5, 0)
 	top.Position = UDim2.new(0.5, 0, 0, 8)
 	top.Size = UDim2.new(0.5, 0, 0, 64)
 	Style.limit(top, Vector2.new(320, 0), Vector2.new(580, 200))
 
-	statusL = Style.label(top, Style.BOLD, 22, Style.WHITE)
+	statusL = Style.label(top, Style.BOLD, 22, Style.INK)
 	statusL.Position = UDim2.fromScale(0.04, 0.06)
 	statusL.Size = UDim2.fromScale(0.92, 0.46)
-	timerL = Style.label(top, Style.BOLD, 22, Style.WHITE)
+	timerL = Style.label(top, Style.BOLD, 22, Style.INK)
 	timerL.Position = UDim2.fromScale(0.04, 0.55)
 	timerL.Size = UDim2.fromScale(0.28, 0.38)
 	timerL.TextXAlignment = Enum.TextXAlignment.Left
-	livesL = Style.label(top, Style.BOLD, 22, Style.WHITE)
+	livesL = Style.label(top, Style.BOLD, 22, Style.INK)
 	livesL.Position = UDim2.fromScale(0.32, 0.55)
 	livesL.Size = UDim2.fromScale(0.36, 0.38)
 	livesL.RichText = true
-	aliveL = Style.label(top, Style.REGULAR, 20, Style.GREY)
+	aliveL = Style.label(top, Style.REGULAR, 20, Style.FAINT)
 	aliveL.Position = UDim2.fromScale(0.68, 0.55)
 	aliveL.Size = UDim2.fromScale(0.28, 0.38)
 	aliveL.TextXAlignment = Enum.TextXAlignment.Right
@@ -58,13 +58,13 @@ function Hud.setTimer(seconds: number?)
 	end
 	local s = math.max(0, math.ceil(seconds))
 	timerL.Text = string.format("%d:%02d", s // 60, s % 60)
-	timerL.TextColor3 = if s <= 30 then Style.RED else Style.WHITE
+	timerL.TextColor3 = if s <= 30 then Style.RED_TEXT else Style.INK
 end
 
 -- The main game's count instead of a clock ("미션 3/6", owner 2026-10-24).
 function Hud.setCount(game: number, games: number)
 	timerL.Text = string.format(Config.TEXT.GAME_COUNT, math.max(1, game), games)
-	timerL.TextColor3 = Style.WHITE
+	timerL.TextColor3 = Style.INK
 end
 
 function Hud.setAlive(alive: number, total: number)

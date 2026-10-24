@@ -5,7 +5,7 @@ local Hearts = {}
 
 local GLYPH = "♥"
 local FULL = "#FF4D6D"
-local LOST = "#B4BAC8"
+local LOST = "#7E8490" -- (dark enough on the HUD's paper, owner 2026-10-25 sticker look)
 
 function Hearts.text(lives: number, max: number): string
 	local full = math.clamp(lives, 0, max)

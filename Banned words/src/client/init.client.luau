@@ -144,7 +144,8 @@ local function refresh()
 	PresenterPanel.setWords(rows, wordMode, round.serverKind == "public")
 	local canRing = bellOpen and not bellRung and State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
 	Bell.set(canRing)
-	BellButton.setVisible(canRing)
+	BellButton.set(State.inRound() and State.meAlive() and not State.mePresenting() and os.clock() >= myFlightEndsAt,
+		canRing)
 	refreshVoice()
 	applySeatLock()
 end
@@ -342,6 +343,7 @@ local function bottlesFor(payload: { [string]: any })
 end
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	lastMission = payload
+	BellButton.setIcon(if payload.kind == "duel" then "gun" else "bell")
 	othersLaunchHideUntil = 0
 	bottlesFor(payload)
 	showMission()

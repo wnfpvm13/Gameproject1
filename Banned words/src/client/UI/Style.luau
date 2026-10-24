@@ -1,23 +1,29 @@
 --!strict
--- Shared look for every HUD panel: fonts, colours, the one ScreenGui, and small constructors. Owner 2026-10-24: clean,
--- black panels only a little see-through, white text, a thin light edge; colour only where it means something (right
--- / wrong, the timer running out, my pick).
+-- Shared look for every HUD panel: fonts, colours, the one ScreenGui, and small constructors. Owner 2026-10-25: the
+-- whole UI in the sticker look of the owner's bell picture — light paper panels and bright yellow keys, each with a
+-- thick dark outline, dark text; colour where it means something (my pick, right / wrong, a warning). (2026-10-24 it
+-- was black panels, white text.)
 local Players = game:GetService("Players")
 
 local Style = {}
 
-Style.BOLD = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold)
-Style.REGULAR = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Regular)
+Style.BOLD = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.ExtraBold)
+Style.REGULAR = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.SemiBold)
 
-Style.WHITE = Color3.fromRGB(245, 245, 247)
-Style.GREY = Color3.fromRGB(160, 163, 170)
-Style.RED = Color3.fromRGB(255, 96, 96)
-Style.AMBER = Color3.fromRGB(255, 208, 92)
-Style.GREEN = Color3.fromRGB(96, 208, 128)
-Style.PANEL = Color3.fromRGB(0, 0, 0)
-Style.PANEL_ALPHA = 0.3 -- panel background transparency
-Style.BUTTON = Color3.fromRGB(44, 44, 48) -- a button on a panel (my pick turns it AMBER, right GREEN, wrong RED)
-Style.EDGE_ALPHA = 0.85 -- the thin white edge of panels and buttons
+Style.INK = Color3.fromRGB(34, 35, 38) -- text and every outline
+Style.PAPER = Color3.fromRGB(255, 251, 240) -- panels
+Style.PAPER_ALPHA = 0 -- panel background transparency
+Style.KEY = Color3.fromRGB(255, 212, 59) -- a button that can be pressed (the bell's yellow)
+Style.KEY_OFF = Color3.fromRGB(232, 228, 218) -- a button that cannot be pressed now
+Style.PICK = Color3.fromRGB(255, 152, 31) -- my pick, a lit marker (orange)
+Style.RIGHT = Color3.fromRGB(94, 209, 122) -- right / go (green)
+Style.WRONG = Color3.fromRGB(255, 107, 107) -- wrong / out / danger (red)
+-- (text colours are at least about 4.5:1 against the paper)
+Style.FAINT = Color3.fromRGB(110, 104, 95) -- secondary text, the other choices once I picked one
+Style.RED_TEXT = Color3.fromRGB(200, 40, 42) -- warnings on paper
+Style.GREEN_TEXT = Color3.fromRGB(24, 120, 56) -- done / good news on paper
+Style.ACCENT_TEXT = Color3.fromRGB(170, 85, 0) -- headings and next steps on paper (orange)
+Style.OUTLINE = 3 -- pixels of the dark outline
 
 local gui: ScreenGui? = nil
 local stack: Frame? = nil
@@ -35,8 +41,8 @@ function Style.gui(): ScreenGui
 	return gui :: ScreenGui
 end
 
--- Bottom-centre stack (the reaction bar now; the mission and vote panels of bundle 4 go above it). Panels are
--- stacked top to bottom.
+-- Bottom-centre stack (the reaction bar, the presenter's sounds; the mission card sits above it). Panels are stacked
+-- top to bottom.
 function Style.bottomStack(): Frame
 	if not stack then
 		local f = Instance.new("Frame")
@@ -77,16 +83,17 @@ function Style.label(parent: Instance, font: Font, maxSize: number, color: Color
 	return l
 end
 
--- Rounded corners and the thin light edge (panels and buttons).
+-- Rounded corners and the thick dark outline (panels and buttons).
 function Style.round(object: GuiObject, radius: number)
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, radius)
 	corner.Parent = object
 	local edge = Instance.new("UIStroke")
 	edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	edge.Color = Color3.new(1, 1, 1)
-	edge.Transparency = Style.EDGE_ALPHA
-	edge.Thickness = 1
+	edge.Color = Style.INK
+	edge.Transparency = 0
+	edge.Thickness = Style.OUTLINE
+	edge.LineJoinMode = Enum.LineJoinMode.Round
 	edge.Parent = object
 end
 
@@ -103,12 +110,12 @@ end
 -- A button in the shared look (the caller sets its size, text and parent).
 function Style.button(font: Font, textSize: number, color: Color3?): TextButton
 	local b = Instance.new("TextButton")
-	b.BackgroundColor3 = Style.BUTTON
-	b.BackgroundTransparency = 0.1
+	b.BackgroundColor3 = Style.KEY
+	b.BackgroundTransparency = 0
 	b.BorderSizePixel = 0
 	b.FontFace = font
 	b.TextSize = textSize
-	b.TextColor3 = color or Style.WHITE
+	b.TextColor3 = color or Style.INK
 	b.AutoButtonColor = true
 	Style.round(b, 10)
 	return b
@@ -123,7 +130,7 @@ end
 
 -- The top (pixels) of row 0, 1, 2 ... under the status board.
 function Style.row(row: number): number
-	return 78 + row * 26
+	return 80 + row * 30 -- (room for the outlines)
 end
 
 -- Keeps `object` at most `fraction` of the screen wide (and `maxWidth` pixels), following the screen size.
@@ -147,7 +154,7 @@ function Style.fitWidth(object: GuiObject, fraction: number, maxWidth: number, m
 	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watch)
 end
 
--- A line of text centred under the status board (row 0, 1, 2 ...): a black pill as wide as its text (at most 92% of
+-- A line of text centred under the status board (row 0, 1, 2 ...): a paper pill as wide as its text (at most 92% of
 -- the screen: a longer text gets smaller), gone while the text is empty.
 local LINE_TEXT = 16
 local LINE_MIN_TEXT = 11
@@ -157,8 +164,8 @@ function Style.line(row: number, color: Color3): TextLabel
 	l.Position = UDim2.new(0.5, 0, 0, Style.row(row))
 	l.Size = UDim2.fromOffset(0, 22)
 	l.AutomaticSize = Enum.AutomaticSize.X
-	l.BackgroundColor3 = Style.PANEL
-	l.BackgroundTransparency = Style.PANEL_ALPHA
+	l.BackgroundColor3 = Style.PAPER
+	l.BackgroundTransparency = Style.PAPER_ALPHA
 	l.BorderSizePixel = 0
 	l.FontFace = Style.BOLD
 	l.TextSize = LINE_TEXT

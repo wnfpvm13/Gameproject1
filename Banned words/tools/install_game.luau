@@ -406,7 +406,7 @@ return {
 		RESCUED = "🛟 구제! %s 무사해요",
 		RESCUE_BUTTON = "🛟 구제",
 		MY_WORD_WAS = "내 금칙어: '%s'", -- (no particle: it would depend on the word's last syllable)
-		BELL_BUTTON = "🔔 벨",
+		BELL_BUTTON = "🔔 벨", -- (the seat bell's E prompt)
 		BELL_QUIZ_TITLE = "벨 퀴즈",
 		BELL_QUIZ_BRIEF = "먼저 벨을 누르고 말로 답해요 · 진행자가 판정해요", -- (the briefing before it, owner 2026-10-24)
 		BELL_QUIZ_START = "벨 퀴즈 · 먼저 벨을 누른 사람이 말로 답해요",
@@ -425,7 +425,7 @@ return {
 		BOMB_TITLE = "폭탄 돌리기",
 		BOMB_BRIEF = "폭탄을 받으면 버튼이 켜질 때 넘겨요 · 터질 때 들고 있으면 날아가요", -- (the briefing before it)
 		BOMB_START = "폭탄 돌리기 · 버튼이 켜지면 바로 넘겨요",
-		BOMB_PASS = "넘기기 💣",
+		BOMB_PASS = "넘기기", -- (with the bomb picture, Config.IMAGES.BOMB)
 		BOMB_MINE = "💣 폭탄이 나한테! 버튼이 켜지면 넘겨요",
 		BOMB_HOLDER = "💣 %s",
 		BOMB_BOOM = "💥 펑! %s",
@@ -560,6 +560,14 @@ return {
 
 	-- Spectators (V3): players who are out and late joiners watch from the stands, with reactions.
 	REACTIONS = { "👏", "😂", "😱", "😮", "❤️" },
+	-- Sticker pictures (owner 2026-10-25: the whole UI in the look of the owner's bell picture). Drawn for this game as
+	-- SVG (assets/icons, rendered to PNG) and uploaded to Roblox by the author on 2026-10-25.
+	IMAGES = {
+		BELL = "rbxassetid://137288878466546", -- the big bell button
+		GUN = "rbxassetid://122610104192708", -- the same button in 총잡이 결투
+		BOMB = "rbxassetid://82548273745326", -- the bomb's pass button
+		CROC = "rbxassetid://133525735327902", -- 악어 이빨: the open jaws seen from the front (640 x 300)
+	},
 	STAGE_GUARD_CHECK = 1, -- seconds between "is a spectator on the stage?" checks
 	STAGE_BEHIND_ROW = 8, -- studs behind the chair row that still count as the stage
 	STAND_SPOTS_PER_ROW = 10, -- spectator spots along the stands marker, per tier row
@@ -671,7 +679,7 @@ local Hearts = {}
 
 local GLYPH = "♥"
 local FULL = "#FF4D6D"
-local LOST = "#B4BAC8"
+local LOST = "#7E8490" -- (dark enough on the HUD's paper, owner 2026-10-25 sticker look)
 
 function Hearts.text(lives: number, max: number): string
 	local full = math.clamp(lives, 0, max)
@@ -9359,7 +9367,8 @@ local function refresh()
 	PresenterPanel.setWords(rows, wordMode, round.serverKind == "public")
 	local canRing = bellOpen and not bellRung and State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
 	Bell.set(canRing)
-	BellButton.setVisible(canRing)
+	BellButton.set(State.inRound() and State.meAlive() and not State.mePresenting() and os.clock() >= myFlightEndsAt,
+		canRing)
 	refreshVoice()
 	applySeatLock()
 end
@@ -9557,6 +9566,7 @@ local function bottlesFor(payload: { [string]: any })
 end
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	lastMission = payload
+	BellButton.setIcon(if payload.kind == "duel" then "gun" else "bell")
 	othersLaunchHideUntil = 0
 	bottlesFor(payload)
 	showMission()
@@ -9847,10 +9857,13 @@ local WIDTH = 4.6 -- studs; the flying chairs are 5 studs apart
 local ROW = 1.0 -- studs per word row
 local NAME_ROW = 0.9
 local HEART_ROW = 0.8
+-- (the HUD's sticker look, owner 2026-10-25: paper and dark outlines; 2026-10-24 the name pill was black)
+-- (the same values as UI/Style's KEY, INK and PAPER: a world tag may not require the HUD's Style, deps rule)
 local CARD_COLOR = Color3.fromRGB(255, 255, 255)
-local NEW_COLOR = Color3.fromRGB(255, 225, 90)
-local OUTLINE = Color3.fromRGB(22, 34, 64)
-local NAME_PILL = Color3.fromRGB(0, 0, 0) -- (the HUD's black, owner 2026-10-24)
+local NEW_COLOR = Color3.fromRGB(255, 212, 59)
+local OUTLINE = Color3.fromRGB(34, 35, 38)
+local NAME_PILL = Color3.fromRGB(255, 251, 240)
+local NAME_INK = Color3.fromRGB(34, 35, 38)
 local HIDDEN = "???" -- my own words while I play
 
 local GROW_SECONDS = 0.15 -- hit(): the pop grows, then settles back
@@ -9960,17 +9973,22 @@ local function build(player: Player, words: { string }, caption: string, previou
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "Caption"
 	nameLabel.BackgroundColor3 = NAME_PILL
-	nameLabel.BackgroundTransparency = 0.3
+	nameLabel.BackgroundTransparency = 0
 	nameLabel.Position = UDim2.fromScale(0.1, wordsHeight / total + 0.02)
 	nameLabel.Size = UDim2.fromScale(0.8, NAME_ROW / total - 0.02)
 	nameLabel.FontFace = NAME_FONT
 	nameLabel.TextScaled = true
-	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	nameLabel.TextColor3 = NAME_INK
 	nameLabel.Text = caption
 	nameLabel.Parent = gui
 	local pillCorner = Instance.new("UICorner")
 	pillCorner.CornerRadius = UDim.new(0.5, 0)
 	pillCorner.Parent = nameLabel
+	local pillEdge = Instance.new("UIStroke")
+	pillEdge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	pillEdge.Thickness = 2
+	pillEdge.Color = OUTLINE
+	pillEdge.Parent = nameLabel
 	local namePad = Instance.new("UIPadding")
 	namePad.PaddingTop = UDim.new(0.12, 0)
 	namePad.PaddingBottom = UDim.new(0.12, 0)
@@ -11368,54 +11386,111 @@ return State
 ]====]; s.Parent = n6 end
 local n7 = Instance.new("Folder"); n7.Name = "UI"
 do local s = Instance.new("ModuleScript"); s.Name = "BellButton"; s.Source = [====[--!strict
--- The big bell button on screen (docs/DESIGN_V3.md §5.1; bundle 6b): shown while my seat bell is open, for every input
--- (on a phone the E prompt is small; a fast game wants a big target). A press asks the server to ring my bell — at
--- the touch or click itself (bundle 8b: Activated fires on release, a phone would always be a tap late against the
--- E key in the timing games); Activated is kept for gamepads, but not for the same press.
+-- The big bell button on screen (docs/DESIGN_V3.md §5.1; bundle 6b). Owner 2026-10-25: always on the right side of
+-- the screen while I play, drawn as the sticker bell (Config.IMAGES.BELL); in 총잡이 결투 it is the gun
+-- (Config.IMAGES.GUN) and a press fires. While my seat bell is open the picture is bright and breathes, and a press
+-- asks the server to ring it — at the touch or click itself (bundle 8b: Activated fires on release, a phone would
+-- always be a tap late against the E key in the timing games; Activated is kept for gamepads, but not for the same
+-- press). While it is not open the picture rests a little faded and a press only wiggles it (no ding: it must not
+-- sound like a real ring). Until the picture has loaded, a "🔔" stands in for it.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Style = require(script.Parent:WaitForChild("Style"))
 
 local BellButton = {}
 
-local button: TextButton
+local SIZE = 116 -- pixels
+local RESTING = 0.35 -- the picture's transparency while the bell is not open
+local BREATH = 1.08 -- how big it grows while it waits for a press
 
+local button: ImageButton
+local breath: UIScale
+local breathing: Tween? = nil
+local live = false
+
+local function wiggle()
+	button.Rotation = -16
+	TweenService:Create(button, TweenInfo.new(0.4, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out), { Rotation = 0 })
+		:Play()
+end
+
+-- onRing(): my bell is open, ring it (the server decides).
 function BellButton.build(onRing: () -> ())
-	button = Instance.new("TextButton")
+	button = Instance.new("ImageButton")
 	button.Name = "BellButton"
-	button.LayoutOrder = 1 -- above the presenter's sounds and the reactions
-	button.Size = UDim2.fromOffset(150, 64)
-	button.BackgroundColor3 = Style.AMBER
-	button.FontFace = Style.BOLD
-	button.TextSize = 28
-	button.TextColor3 = Style.PANEL
-	button.Text = Config.TEXT.BELL_BUTTON
+	button.AnchorPoint = Vector2.new(1, 0.5)
+	button.Position = UDim2.new(1, -18, 0.6, 0)
+	button.Size = UDim2.fromOffset(SIZE, SIZE)
+	button.BackgroundTransparency = 1
+	button.Image = Config.IMAGES.BELL
+	button.ScaleType = Enum.ScaleType.Fit
+	button.ImageTransparency = RESTING -- (closed until the first window opens)
 	button.Visible = false
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 18)
-	corner.Parent = button
-	local pointerDown = false -- a click or touch rang on its way down; its Activated (on the way up) is the same press
+	button.ZIndex = 4
+	breath = Instance.new("UIScale")
+	breath.Parent = button
+	local standIn = Instance.new("TextLabel")
+	standIn.Name = "StandIn"
+	standIn.BackgroundTransparency = 1
+	standIn.Size = UDim2.fromScale(1, 1)
+	standIn.Text = "🔔"
+	standIn.TextScaled = true
+	standIn.Visible = not button.IsLoaded
+	standIn.Parent = button
+	button:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+		standIn.Visible = not button.IsLoaded
+	end)
+	local function press()
+		wiggle()
+		if live then
+			onRing()
+		end
+	end
+	local pointerDown = false -- a click or touch pressed on its way down; its Activated (on the way up) is the same press
 	button.InputBegan:Connect(function(input: InputObject)
 		local kind = input.UserInputType
 		if (kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch)
 			and input.UserInputState == Enum.UserInputState.Begin then
 			pointerDown = true
-			onRing()
+			press()
 		end
 	end)
 	button.Activated:Connect(function()
 		if pointerDown then
 			pointerDown = false
 		else
-			onRing() -- (a gamepad's press)
+			press() -- (a gamepad's press)
 		end
 	end)
-	button.Parent = Style.bottomStack()
+	button.Parent = Style.gui()
 end
 
-function BellButton.setVisible(visible: boolean)
+-- `visible`: I play (seated, on the ground); `canRing`: my seat bell is open and I have not rung it yet.
+function BellButton.set(visible: boolean, canRing: boolean)
 	button.Visible = visible
+	if canRing == live then
+		return
+	end
+	live = canRing
+	button.ImageTransparency = if canRing then 0 else RESTING
+	if breathing then
+		breathing:Cancel()
+		breathing = nil
+	end
+	breath.Scale = 1
+	if canRing then
+		local tween = TweenService:Create(breath, TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+			{ Scale = BREATH })
+		tween:Play()
+		breathing = tween
+	end
+end
+
+-- The picture: the bell, or the gun in 총잡이 결투 (a press fires).
+function BellButton.setIcon(icon: "bell" | "gun")
+	button.Image = if icon == "gun" then Config.IMAGES.GUN else Config.IMAGES.BELL
 end
 
 return BellButton
@@ -11446,24 +11521,24 @@ local aliveL: TextLabel
 local livesL: TextLabel
 
 function Hud.build()
-	local top = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 14)
+	local top = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 14)
 	top.AnchorPoint = Vector2.new(0.5, 0)
 	top.Position = UDim2.new(0.5, 0, 0, 8)
 	top.Size = UDim2.new(0.5, 0, 0, 64)
 	Style.limit(top, Vector2.new(320, 0), Vector2.new(580, 200))
 
-	statusL = Style.label(top, Style.BOLD, 22, Style.WHITE)
+	statusL = Style.label(top, Style.BOLD, 22, Style.INK)
 	statusL.Position = UDim2.fromScale(0.04, 0.06)
 	statusL.Size = UDim2.fromScale(0.92, 0.46)
-	timerL = Style.label(top, Style.BOLD, 22, Style.WHITE)
+	timerL = Style.label(top, Style.BOLD, 22, Style.INK)
 	timerL.Position = UDim2.fromScale(0.04, 0.55)
 	timerL.Size = UDim2.fromScale(0.28, 0.38)
 	timerL.TextXAlignment = Enum.TextXAlignment.Left
-	livesL = Style.label(top, Style.BOLD, 22, Style.WHITE)
+	livesL = Style.label(top, Style.BOLD, 22, Style.INK)
 	livesL.Position = UDim2.fromScale(0.32, 0.55)
 	livesL.Size = UDim2.fromScale(0.36, 0.38)
 	livesL.RichText = true
-	aliveL = Style.label(top, Style.REGULAR, 20, Style.GREY)
+	aliveL = Style.label(top, Style.REGULAR, 20, Style.FAINT)
 	aliveL.Position = UDim2.fromScale(0.68, 0.55)
 	aliveL.Size = UDim2.fromScale(0.28, 0.38)
 	aliveL.TextXAlignment = Enum.TextXAlignment.Right
@@ -11480,13 +11555,13 @@ function Hud.setTimer(seconds: number?)
 	end
 	local s = math.max(0, math.ceil(seconds))
 	timerL.Text = string.format("%d:%02d", s // 60, s % 60)
-	timerL.TextColor3 = if s <= 30 then Style.RED else Style.WHITE
+	timerL.TextColor3 = if s <= 30 then Style.RED_TEXT else Style.INK
 end
 
 -- The main game's count instead of a clock ("미션 3/6", owner 2026-10-24).
 function Hud.setCount(game: number, games: number)
 	timerL.Text = string.format(Config.TEXT.GAME_COUNT, math.max(1, game), games)
-	timerL.TextColor3 = Style.WHITE
+	timerL.TextColor3 = Style.INK
 end
 
 function Hud.setAlive(alive: number, total: number)
@@ -11529,9 +11604,9 @@ local chatMode = false
 
 -- onChat(on): the player pressed the chat button (join by chat, or stop).
 function MicPanel.build(onChat: (boolean) -> ())
-	voiceL = Style.line(0, Style.RED)
-	testL = Style.line(1, Style.AMBER)
-	chatButton = Style.button(Style.BOLD, 18, Style.AMBER)
+	voiceL = Style.line(0, Style.RED_TEXT)
+	testL = Style.line(1, Style.ACCENT_TEXT)
+	chatButton = Style.button(Style.BOLD, 18)
 	chatButton.Name = "ChatJoin"
 	chatButton.AnchorPoint = Vector2.new(0.5, 0)
 	chatButton.Position = UDim2.new(0.5, 0, 0, Style.row(2) + 2)
@@ -11590,7 +11665,7 @@ function MicPanel.set(r: Ready)
 	voiceL.Text = voiceLine(r)
 	local text, done = nextStep(r)
 	testL.Text = text
-	testL.TextColor3 = if done then Style.GREEN else Style.AMBER
+	testL.TextColor3 = if done then Style.GREEN_TEXT else Style.ACCENT_TEXT
 	-- (offered to a voice account that may chat once its voice is connected — to hear everyone; while playing by chat,
 	-- to stop)
 	-- (Studio has no voice: there the server does not ask for it either, Config.REQUIRE_VOICE_READY)
@@ -11652,10 +11727,20 @@ local TEXT = Config.TEXT
 local ESTIMATE_DIGITS = #tostring(Config.ESTIMATE_MAX) -- (the number box takes no longer number)
 local TITLE_SIZE = 26 -- the title's largest text size (it scales down to fit)
 local INITIALS_SIZE = 40 -- the 초성 quiz's consonants in the title (drawn at about half height, see shared/Hangul)
-local SLICE_COLORS = { Color3.fromRGB(40, 92, 170), Color3.fromRGB(62, 66, 92) } -- name pills, alternating
-local GUM = Color3.fromRGB(226, 110, 132) -- behind a crocodile tooth (a white tooth on white was hard to see)
-local GREEN_LIGHT = Color3.fromRGB(34, 120, 64) -- the red light game's card
-local RED_LIGHT = Color3.fromRGB(160, 36, 44)
+local SLICE_COLORS = { Color3.fromRGB(140, 200, 255), Color3.fromRGB(255, 182, 210) } -- name pills, alternating
+-- 악어 이빨 (owner 2026-10-25: redrawn): the crocodile seen from the front with its jaws open (Config.IMAGES.CROC,
+-- CROC_W x CROC_H pixels, assets/icons/croc.svg). The teeth stand on the inner rim of the U-shaped lower jaw — an
+-- ellipse (RIM_*) from RIM_FROM to RIM_TO degrees — at equal gaps, each leaning toward the middle of the mouth, each
+-- in an invisible square touch area as wide as the gap (a fingertip on a phone is wider than a drawn tooth; along the
+-- U the gaps are about 1.5 times what a straight row fits in the same height). Sizes in picture pixels.
+local CROC_W, CROC_H = 640, 300
+local CROC_MAX_HEIGHT = 220 -- screen pixels before the card scales
+local RIM_X, RIM_Y, RIM_A, RIM_B = 320, 126, 240, 136
+local RIM_FROM, RIM_TO = 197, 343
+local TOOTH_W, TOOTH_H = 34, 44
+local TOOTH_WHITE = Color3.new(1, 1, 1)
+local GREEN_LIGHT = Color3.fromRGB(128, 222, 148) -- the red light game's card (bright: dark text on it)
+local RED_LIGHT = Color3.fromRGB(255, 122, 122)
 
 local card: Frame
 local cardScale: UIScale
@@ -11667,8 +11752,11 @@ local swapButton: TextButton
 local answerGrid: Frame
 local answerLayout: UIGridLayout
 local buttons: { TextButton } = {}
-local teethGrid: Frame
-local teeth: { TextButton } = {}
+local teethGrid: ImageLabel -- the crocodile's jaws (the teeth stand on its lower jaw)
+local teeth: { TextButton } = {} -- the touch areas
+local drawnTeeth: { TextLabel } = {} -- the white teeth in them
+local toothInward: { Vector2 } = {} -- each tooth's direction into the mouth (picture pixels)
+local reachSize = 1 -- a touch area's side (picture pixels)
 local wheel: Frame
 local pointer: Frame
 local disc: Frame
@@ -11709,12 +11797,12 @@ local state = {
 	hidden = false, -- stepped aside for a launch (setHidden)
 	shown = false, -- what the screen asks for, before `hidden`
 }
-local CARD_GAP = 8 -- pixels between the card and the bottom row (the bell button, the reactions), which it sits on
+local CARD_GAP = 8 -- pixels between the card and the bottom row (the reactions, the presenter's sounds)
 local TALK_POSITION = UDim2.new(0.5, 0, 0, Style.row(4)) -- the talk's slim line: under the status board and the
 -- getting-ready lines (rows 1-3), above the chair row
 
 -- Where the card goes: the talk's slim line under the status board, else on top of the bottom row (its height changes
--- with the bell button and the reactions).
+-- with the reactions; the bell button sits on the right side since 2026-10-25).
 local function place()
 	if state.slim then
 		card.Position = TALK_POSITION
@@ -11746,8 +11834,8 @@ local function answerButton(index: number): TextButton
 			state.myPick = index
 			onAnswer(state.id, index)
 			for i, other in buttons do
-				other.BackgroundColor3 = if i == index then Style.AMBER else Style.BUTTON
-				other.TextColor3 = if i == index then Style.PANEL elseif repick then Style.WHITE else Style.GREY
+				other.BackgroundColor3 = if i == index then Style.PICK elseif repick then Style.KEY else Style.KEY_OFF
+				other.TextColor3 = if i == index or repick then Style.INK else Style.FAINT
 				other.AutoButtonColor = repick -- (answered: nothing else can be pressed, except a balance pick)
 			end
 		end
@@ -11757,6 +11845,38 @@ local function answerButton(index: number): TextButton
 end
 
 -- onPick(questionId, choice): I pressed an answer button.
+-- The teeth's places on the jaw's rim: `count` of them at equal gaps along it — each one's centre (picture pixels) and
+-- direction into the mouth — and the gap between neighbours.
+local function rimSpots(count: number): ({ { centre: Vector2, inward: Vector2 } }, number)
+	local samples: { { t: number, along: number, at: Vector2 } } = {}
+	local along = 0
+	local last: Vector2? = nil
+	for k = 0, 200 do
+		local t = math.rad(RIM_FROM + (RIM_TO - RIM_FROM) * k / 200)
+		local at = Vector2.new(RIM_X + RIM_A * math.cos(t), RIM_Y - RIM_B * math.sin(t))
+		if last then
+			along += (at - last).Magnitude
+		end
+		table.insert(samples, { t = t, along = along, at = at })
+		last = at
+	end
+	local gap = along / math.max(1, count - 1)
+	local spots = {}
+	for i = 1, count do
+		local want = gap * (i - 1)
+		local pick = samples[#samples]
+		for _, sample in samples do
+			if sample.along >= want - 1e-6 then
+				pick = sample
+				break
+			end
+		end
+		local inward = Vector2.new(-math.cos(pick.t) / RIM_A, math.sin(pick.t) / RIM_B).Unit
+		table.insert(spots, { centre = pick.at + inward * (TOOTH_H / 2 - 4), inward = inward })
+	end
+	return spots, gap
+end
+
 -- Lets go of the number box (a phone keyboard closes with it).
 local function dropFocus()
 	if numberBox and numberBox:IsFocused() then
@@ -11766,7 +11886,7 @@ end
 
 function MissionPanel.build(onPick: (number, number) -> ())
 	onAnswer = onPick
-	card = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 16)
+	card = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 16)
 	card.Name = "MissionCard"
 	card.AnchorPoint = Vector2.new(0.5, 0.5)
 	card.Size = UDim2.fromScale(0.5, 0)
@@ -11787,14 +11907,14 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	layout.Padding = UDim.new(0, 10)
 	layout.Parent = card
 
-	timer = Style.label(card, Style.BOLD, 20, Style.WHITE)
+	timer = Style.label(card, Style.BOLD, 20, Style.ACCENT_TEXT)
 	timer.Size = UDim2.new(1, 0, 0, 22)
 	timer.LayoutOrder = 0
-	title = Style.label(card, Style.BOLD, TITLE_SIZE, Style.WHITE)
+	title = Style.label(card, Style.BOLD, TITLE_SIZE, Style.INK)
 	titleLimit = title:FindFirstChildOfClass("UITextSizeConstraint") :: UITextSizeConstraint
 	title.Size = UDim2.new(1, 0, 0, 64)
 	title.LayoutOrder = 1
-	note = Style.label(card, Style.REGULAR, 18, Style.GREY)
+	note = Style.label(card, Style.REGULAR, 18, Style.FAINT)
 	note.Size = UDim2.new(1, 0, 0, 22)
 	note.LayoutOrder = 2
 
@@ -11813,52 +11933,76 @@ function MissionPanel.build(onPick: (number, number) -> ())
 		buttons[i] = answerButton(i)
 	end
 
-	-- Crocodile teeth: two rows of five.
-	teethGrid = Instance.new("Frame")
+	-- Crocodile teeth: the open jaws, the teeth in a row on the lower jaw (owner 2026-10-25: the old grid of pink tiles
+	-- looked odd).
+	teethGrid = Instance.new("ImageLabel")
 	teethGrid.BackgroundTransparency = 1
+	teethGrid.Image = Config.IMAGES.CROC
+	teethGrid.ScaleType = Enum.ScaleType.Stretch
 	teethGrid.Size = UDim2.fromScale(1, 0)
-	teethGrid.AutomaticSize = Enum.AutomaticSize.Y
 	teethGrid.LayoutOrder = 3
 	teethGrid.Visible = false
 	teethGrid.Parent = card
-	local teethLayout = Instance.new("UIGridLayout")
-	teethLayout.CellSize = UDim2.new(0.2, -6, 0, 56)
-	teethLayout.CellPadding = UDim2.fromOffset(6, 6)
-	teethLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	teethLayout.Parent = teethGrid
-	for i = 1, Config.CROC_TEETH do
-		local tooth = Instance.new("TextButton")
-		tooth.BackgroundColor3 = GUM
+	-- (the picture's shape at the card's width, at most CROC_MAX_HEIGHT tall so the card does not cover the status
+	-- board: an aspect constraint fights the card's automatic height)
+	local function fitJaws()
+		local width = card.AbsoluteSize.X / math.max(cardScale.Scale, 0.01) - 28
+		local height = math.floor(math.min(width * CROC_H / CROC_W, CROC_MAX_HEIGHT))
+		local size = UDim2.fromOffset(math.floor(height * CROC_W / CROC_H), height)
+		if teethGrid.Size ~= size then
+			teethGrid.Size = size
+		end
+	end
+	card:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitJaws)
+	fitJaws()
+	-- Each tooth: its touch area (a square, as wide as the gap between teeth; a press counts at once) with the drawn
+	-- tooth in the middle, leaning into the mouth.
+	local spots, gap = rimSpots(Config.CROC_TEETH)
+	reachSize = gap * 0.95
+	for i, spot in spots do
+		local reach = Instance.new("TextButton")
+		reach.AnchorPoint = Vector2.new(0.5, 0.5)
+		reach.Position = UDim2.fromScale(spot.centre.X / CROC_W, spot.centre.Y / CROC_H)
+		reach.Size = UDim2.fromScale(reachSize / CROC_W, reachSize / CROC_H)
+		reach.BackgroundTransparency = 1
+		reach.Text = ""
+		local tooth = Instance.new("TextLabel")
+		tooth.Name = "Tooth"
+		tooth.AnchorPoint = Vector2.new(0.5, 0.5)
+		tooth.Position = UDim2.fromScale(0.5, 0.5)
+		tooth.Size = UDim2.fromScale(TOOTH_W / reachSize, TOOTH_H / reachSize)
+		tooth.Rotation = math.deg(math.atan2(spot.inward.X, -spot.inward.Y))
+		tooth.BackgroundColor3 = TOOTH_WHITE
 		tooth.FontFace = Style.BOLD
 		tooth.TextScaled = true
-		tooth.LayoutOrder = i
-		local toothCorner = Instance.new("UICorner")
-		toothCorner.CornerRadius = UDim.new(0, 12)
-		toothCorner.Parent = tooth
-		tooth.Activated:Connect(function()
+		tooth.TextColor3 = Style.INK
+		tooth.Text = ""
+		Style.round(tooth, 8)
+		tooth.Parent = reach
+		reach.Activated:Connect(function()
 			local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt
 			if state.kind == "croc" and state.myTurn and open and not state.down[i] and not state.myPick then
 				state.myPick = i
 				onAnswer(state.id, i)
-				tooth.BackgroundColor3 = Style.AMBER
+				tooth.BackgroundColor3 = Style.PICK
 			end
 		end)
-		tooth.Parent = teethGrid
-		teeth[i] = tooth
+		reach.Parent = teethGrid
+		teeth[i] = reach
+		drawnTeeth[i] = tooth
+		toothInward[i] = spot.inward
 	end
 
 	swapButton = Instance.new("TextButton")
 	swapButton.Size = UDim2.fromOffset(200, 40)
-	swapButton.BackgroundColor3 = Style.AMBER
+	swapButton.BackgroundColor3 = Style.KEY
 	swapButton.FontFace = Style.BOLD
 	swapButton.TextSize = 20
-	swapButton.TextColor3 = Style.PANEL
+	swapButton.TextColor3 = Style.INK
 	swapButton.Text = TEXT.ONE_WORD_SWAP
 	swapButton.LayoutOrder = 4
 	swapButton.Visible = false
-	local swapCorner = Instance.new("UICorner")
-	swapCorner.CornerRadius = UDim.new(0, 10)
-	swapCorner.Parent = swapButton
+	Style.round(swapButton, 10)
 	swapButton.Parent = card
 	swapButton.Activated:Connect(function()
 		if state.kind == "oneWord" and state.id > 0 and workspace:GetServerTimeNow() < state.endsAt then
@@ -11867,18 +12011,18 @@ function MissionPanel.build(onPick: (number, number) -> ())
 		end
 	end)
 
-	-- The wheel: a round disc with an amber rim, the names as pills on a ring, a needle from the hub.
+	-- The wheel: a round paper disc with a dark rim, the names as pills on a ring, a red needle from the hub.
 	wheel = Instance.new("Frame")
 	wheel.BackgroundTransparency = 1
 	wheel.Size = UDim2.fromOffset(2 * RING_RADIUS + 120, 2 * RING_RADIUS + 50)
 	wheel.LayoutOrder = 5
 	wheel.Parent = card
-	disc = Style.panel(wheel, Color3.fromRGB(26, 32, 46), 0, 1000)
+	disc = Style.panel(wheel, Style.PAPER, 0, 1000)
 	disc.AnchorPoint = Vector2.new(0.5, 0.5)
 	disc.Position = UDim2.fromScale(0.5, 0.5)
 	disc.Size = UDim2.fromOffset(2 * RING_RADIUS + 44, 2 * RING_RADIUS + 44)
-	local rim = disc:FindFirstChildOfClass("UIStroke") :: UIStroke -- (Style.panel's edge, made the amber rim)
-	rim.Color = Style.AMBER
+	local rim = disc:FindFirstChildOfClass("UIStroke") :: UIStroke -- (Style.panel's edge, made the thick rim)
+	rim.Color = Style.INK
 	rim.Transparency = 0
 	rim.Thickness = 4
 	pointer = Instance.new("Frame")
@@ -11888,31 +12032,29 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	pointer.Size = UDim2.fromOffset(2 * RING_RADIUS, 2 * RING_RADIUS)
 	pointer.ZIndex = 3
 	pointer.Parent = wheel
-	needle = Style.panel(pointer, Style.AMBER, 0, 3)
+	needle = Style.panel(pointer, Style.WRONG, 0, 3)
 	needle.AnchorPoint = Vector2.new(0.5, 1)
 	needle.Position = UDim2.fromScale(0.5, 0.5)
 	needle.Size = UDim2.fromOffset(6, RING_RADIUS - 40)
 	needle.ZIndex = 3
-	arrow = Style.label(pointer, Style.BOLD, 30, Style.AMBER)
+	arrow = Style.label(pointer, Style.BOLD, 30, Style.WRONG)
 	arrow.Text = "▲"
 	arrow.AnchorPoint = Vector2.new(0.5, 1)
 	arrow.Position = UDim2.new(0.5, 0, 0.5, -(RING_RADIUS - 40) + 6)
 	arrow.Size = UDim2.fromOffset(30, 26)
 	arrow.ZIndex = 3
-	local hub = Style.panel(wheel, Style.AMBER, 0, 100)
+	local hub = Style.panel(wheel, Style.KEY, 0, 100)
 	hub.AnchorPoint = Vector2.new(0.5, 0.5)
 	hub.Position = UDim2.fromScale(0.5, 0.5)
 	hub.Size = UDim2.fromOffset(26, 26)
 	hub.ZIndex = 4
 
-	coin = Style.label(card, Style.BOLD, 30, Style.PANEL)
-	coin.BackgroundColor3 = Style.AMBER
+	coin = Style.label(card, Style.BOLD, 30, Style.INK)
+	coin.BackgroundColor3 = Style.KEY
 	coin.BackgroundTransparency = 0
 	coin.Size = UDim2.fromOffset(COIN_SIZE, COIN_SIZE)
 	coin.LayoutOrder = 6
-	local round = Instance.new("UICorner")
-	round.CornerRadius = UDim.new(1, 0)
-	round.Parent = coin
+	Style.round(coin, COIN_SIZE)
 
 	-- 숫자 근사 퀴즈 (bundle 8c): a box for digits only and a "send" button; the number goes as the answer.
 	numberRow = Instance.new("Frame")
@@ -11923,13 +12065,13 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	numberRow.Parent = card
 	numberBox = Instance.new("TextBox")
 	numberBox.Size = UDim2.new(0.7, -8, 1, 0)
-	numberBox.BackgroundColor3 = Style.BUTTON
+	numberBox.BackgroundColor3 = Color3.new(1, 1, 1)
 	numberBox.BackgroundTransparency = 0.1
 	numberBox.FontFace = Style.BOLD
 	numberBox.TextSize = 22
-	numberBox.TextColor3 = Style.WHITE
+	numberBox.TextColor3 = Style.INK
 	numberBox.PlaceholderText = TEXT.ESTIMATE_HINT
-	numberBox.PlaceholderColor3 = Style.GREY
+	numberBox.PlaceholderColor3 = Style.FAINT
 	numberBox.ClearTextOnFocus = false
 	numberBox.Text = ""
 	Style.round(numberBox, 10)
@@ -11954,7 +12096,8 @@ function MissionPanel.build(onPick: (number, number) -> ())
 			onAnswer(state.id, value)
 			numberBox.TextEditable = false
 			sendButton.AutoButtonColor = false
-			sendButton.TextColor3 = Style.GREY
+			sendButton.TextColor3 = Style.FAINT
+			sendButton.BackgroundColor3 = Style.KEY_OFF
 			note.Text = string.format(TEXT.ESTIMATE_SENT, value)
 			dropFocus()
 		end
@@ -11967,14 +12110,14 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	end)
 
 	-- 물병 세우기's power bar (bundle 8b): the track, the green zone, the marker the bell stops.
-	bar = Style.panel(card, Style.BUTTON, 0.1, 8)
+	bar = Style.panel(card, Style.KEY_OFF, 0, 8)
 	bar.Size = UDim2.new(1, 0, 0, 26)
 	bar.LayoutOrder = 7
 	bar.Visible = false
-	zone = Style.panel(bar, Style.GREEN, 0.15, 6)
+	zone = Style.panel(bar, Style.RIGHT, 0, 6)
 	zone.AnchorPoint = Vector2.new(0.5, 0)
 	zone.Size = UDim2.fromScale(0.3, 1)
-	marker = Style.panel(bar, Style.WHITE, 0, 3)
+	marker = Style.panel(bar, Style.INK, 0, 3)
 	marker.AnchorPoint = Vector2.new(0.5, 0.5)
 	marker.Size = UDim2.new(0, 6, 1, 10)
 	marker.Position = UDim2.fromScale(0, 0.5)
@@ -12005,7 +12148,7 @@ local function setRing(names: { string })
 		pill.Position = UDim2.new(0.5, math.sin(angle) * radius, 0.5, -math.cos(angle) * radius)
 		pill.Size = UDim2.fromOffset(PILL_WIDTH, 30)
 		pill.ZIndex = 2
-		local label = Style.label(pill, Style.BOLD, 18, Style.WHITE)
+		local label = Style.label(pill, Style.BOLD, 18, Style.INK)
 		label.Size = UDim2.new(1, -8, 1, -4)
 		label.Position = UDim2.fromOffset(4, 2)
 		label.Text = name
@@ -12018,11 +12161,34 @@ local function easeOut(t: number): number
 	return 1 - (1 - t) ^ 3
 end
 
+-- A picture on the left of an answer button (the bomb's pass button, owner 2026-10-25), or none.
+local function buttonIcon(b: TextButton, image: string?)
+	local icon = b:FindFirstChild("Icon") :: ImageLabel?
+	if image and not icon then
+		local made = Instance.new("ImageLabel")
+		made.Name = "Icon"
+		made.BackgroundTransparency = 1
+		made.AnchorPoint = Vector2.new(0, 0.5)
+		made.Position = UDim2.new(0, 2, 0.5, 0)
+		made.Size = UDim2.fromScale(0.9, 0.9)
+		made.ScaleType = Enum.ScaleType.Fit
+		local square = Instance.new("UIAspectRatioConstraint")
+		square.Parent = made
+		made.Parent = b
+		icon = made
+	end
+	if icon then
+		icon.Visible = image ~= nil
+		icon.Image = image or ""
+	end
+end
+
 -- Colours one answer button: open (can be pressed), mine (my pick), or neither.
 local function paint(b: TextButton, open: boolean, picked: boolean)
 	b.AutoButtonColor = open
-	b.BackgroundColor3 = if picked then Style.AMBER else Style.BUTTON
-	b.TextColor3 = if picked then Style.PANEL elseif open then Style.WHITE else Style.GREY
+	b.BackgroundColor3 = if picked then Style.PICK elseif open then Style.KEY else Style.KEY_OFF
+	-- (faint only beside my pick: a question shown first, or one I watch, stays readable)
+	b.TextColor3 = if picked or open or not state.myPick then Style.INK else Style.FAINT
 end
 
 -- What the server says the mission shows now. `canAnswer`: I am alive and on the ground (my buttons work);
@@ -12056,7 +12222,10 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	if kind ~= "estimate" then
 		dropFocus() -- (the box is gone: no phone keyboard left over)
 	end
-	title.TextColor3 = Style.WHITE -- (the duel turns it red at "fire!")
+	title.TextColor3 = Style.INK -- (the duel turns it red at "fire!")
+	for _, b in buttons do
+		buttonIcon(b, nil) -- (only the bomb's pass button has a picture)
+	end
 	-- (only the 초성 quiz's consonants are drawn as RichText, at a fixed size and without the size limit: a bigger
 	-- RichText size inside scaled or limited text is cut off)
 	title.RichText = false
@@ -12090,9 +12259,12 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		or between or timing or quizKinds
 		or kind == "balance" or kind == "balanceResult" or kind == "redLight" or kind == "redLightResult" or kind == "liar"
 	card.BackgroundColor3 = if kind == "redLight" then (if payload.light == "red" then RED_LIGHT else GREEN_LIGHT)
-		else Style.PANEL
+		else Style.PAPER
+	-- (on the bright red / green card the small lines are dark too; on paper they keep their colours)
+	timer.TextColor3 = if kind == "redLight" then Style.INK else Style.ACCENT_TEXT
+	note.TextColor3 = if kind == "redLight" then Style.INK else Style.FAINT
 	local slim = kind == "talk"
-	card.BackgroundTransparency = if kind == "redLight" then 0.15 else Style.PANEL_ALPHA
+	card.BackgroundTransparency = Style.PAPER_ALPHA
 	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 1)
 	state.slim = slim
 	place()
@@ -12116,8 +12288,8 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			if kind == "quizResult" then
 				local right = i == payload.answer
 				b.AutoButtonColor = false
-				b.BackgroundColor3 = if right then Style.GREEN elseif i == state.myPick then Style.RED else Style.BUTTON
-				b.TextColor3 = if right or i == state.myPick then Style.PANEL else Style.GREY
+				b.BackgroundColor3 = if right then Style.RIGHT elseif i == state.myPick then Style.WRONG else Style.KEY_OFF
+				b.TextColor3 = if right or i == state.myPick then Style.INK else Style.FAINT
 			else
 				paint(b, open, i == state.myPick)
 			end
@@ -12152,7 +12324,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		local fighters = if payload.hasBye then #ids - 1 else #ids
 		local fire = kind == "duel" and payload.stage == "fire"
 		title.Text = if kind == "duelResult" then TEXT.DUEL_TITLE elseif fire then TEXT.DUEL_FIRE else TEXT.DUEL_WAIT
-		title.TextColor3 = if fire then Style.RED else Style.WHITE
+		title.TextColor3 = if fire then Style.RED_TEXT else Style.INK
 		local mine = table.find(ids, myId)
 		if kind == "duel" and mine and mine > fighters then
 			note.Text = TEXT.DUEL_BYE
@@ -12204,7 +12376,8 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		local open = canAnswer and payload.id ~= nil and not state.myPick
 		numberBox.TextEditable = open
 		sendButton.AutoButtonColor = open
-		sendButton.TextColor3 = if open then Style.WHITE else Style.GREY
+		sendButton.TextColor3 = if open then Style.INK else Style.FAINT
+		sendButton.BackgroundColor3 = if open then Style.KEY else Style.KEY_OFF
 		if not open then
 			dropFocus()
 		end
@@ -12262,12 +12435,17 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		state.myTurn = kind == "croc" and canAnswer and ids[payload.current or 0] == myId
 		title.Text = if kind == "croc" then string.format(TEXT.CROC_TURN, names[payload.current or 0] or "?")
 			else string.format(if payload.late then TEXT.CROC_LATE else TEXT.CROC_BITE, names[payload.loser or 0] or "?")
-		for i, tooth in teeth do
+		for i, tooth in drawnTeeth do
 			local bitten = kind == "crocResult" and i == payload.bad
 			local shut = state.down[i] == true
-			tooth.Text = if bitten then "😱" elseif shut then "✕" else "🦷"
-			tooth.BackgroundColor3 = if bitten then Style.RED elseif shut then Style.GREY else GUM
-			tooth.AutoButtonColor = state.myTurn and not shut
+			tooth.Text = if bitten then "!" else ""
+			tooth.BackgroundColor3 = if bitten then Style.WRONG elseif shut then Style.KEY_OFF else TOOTH_WHITE
+			-- (a pressed tooth sinks into the jaw: shorter, its base where it was)
+			local height = if shut and not bitten then TOOTH_H * 0.45 else TOOTH_H
+			local sink = -toothInward[i] * (TOOTH_H - height) / 2 / reachSize
+			tooth.Size = UDim2.fromScale(TOOTH_W / reachSize, height / reachSize)
+			tooth.Position = UDim2.fromScale(0.5 + sink.X, 0.5 + sink.Y)
+			teeth[i].Active = state.myTurn and not shut
 		end
 	elseif kind == "bomb" then
 		local ids = payload.ids or {}
@@ -12285,6 +12463,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			b.Text = choices[i] or ""
 			paint(b, state.canAnswer and not state.myPick, i == state.myPick)
 		end
+		buttonIcon(buttons[1], Config.IMAGES.BOMB)
 	elseif kind == "bombResult" then
 		title.Text = string.format(TEXT.BOMB_BOOM, names[payload.holder or 0] or "?")
 	elseif kind == "nunchi" then
@@ -12415,14 +12594,19 @@ end
 function MissionPanel.tick(now: number)
 	if card.Visible then
 		place()
-		-- Keep the card within 80% of the screen height and 90% of its width (a big wheel on a small phone screen).
+		-- Keep the card within 80% of the screen height and 90% of its width (a big wheel on a small phone screen), and
+		-- a card standing on the bottom row below the status board (the crocodile's jaws on a low phone screen).
 		local camera = workspace.CurrentCamera
 		local scale = math.max(cardScale.Scale, 0.01)
 		local height = card.AbsoluteSize.Y / scale
 		local width = math.max(card.AbsoluteSize.X, if wheel.Visible then wheel.AbsoluteSize.X + 28 else 0) / scale
 		if camera and height > 0 and width > 0 then
 			local view = camera.ViewportSize
-			cardScale.Scale = math.min(1, view.Y * 0.8 / height, view.X * 0.9 / width)
+			local room = view.Y * 0.8
+			if not state.slim then
+				room = math.min(room, card.AbsolutePosition.Y + card.AbsoluteSize.Y - Style.row(0))
+			end
+			cardScale.Scale = math.clamp(math.min(1, room / height, view.X * 0.9 / width), 0.3, 1)
 		end
 	end
 	if state.kind == "talk" then
@@ -12453,10 +12637,10 @@ function MissionPanel.tick(now: number)
 			local nearest = math.round((angle % 360) / 360 * count) % count + 1
 			for i, pill in ringPills do
 				local lit = i == nearest
-				pill.BackgroundColor3 = if lit then Style.AMBER else SLICE_COLORS[(i - 1) % 2 + 1]
+				pill.BackgroundColor3 = if lit then Style.PICK else SLICE_COLORS[(i - 1) % 2 + 1]
 				local label = pill:FindFirstChildOfClass("TextLabel")
 				if label then
-					label.TextColor3 = if lit then Style.PANEL else Style.WHITE
+					label.TextColor3 = Style.INK
 				end
 			end
 		elseif count > 0 then
@@ -12538,14 +12722,14 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	volunteerButton.Name = "Volunteer"
 	volunteerButton.AnchorPoint = Vector2.new(0.5, 0)
 	volunteerButton.Position = UDim2.new(0.5, 0, 0, Style.row(3) + 12) -- under the chat button (row 2, 34 px)
-	volunteerButton.TextColor3 = Style.AMBER
+	volunteerButton.TextColor3 = Style.INK
 	volunteerButton.Visible = false
 	volunteerButton.ZIndex = 5 -- (the presenter's step-down stays reachable over a tall mission card)
 	volunteerButton.Activated:Connect(function()
 		onVolunteer(not volunteered)
 	end)
 
-	menuFrame = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 14)
+	menuFrame = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 14)
 	menuFrame.Name = "MissionMenu"
 	menuFrame.AnchorPoint = Vector2.new(1, 0.5)
 	menuFrame.Position = UDim2.new(1, -16, 0.5, 0)
@@ -12563,7 +12747,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Padding = UDim.new(0, 8)
 	layout.Parent = menuFrame
-	menuTitle = Style.label(menuFrame, Style.BOLD, 20, Style.AMBER)
+	menuTitle = Style.label(menuFrame, Style.BOLD, 20, Style.ACCENT_TEXT)
 	menuTitle.Size = UDim2.new(1, 0, 0, 26)
 	menuTitle.LayoutOrder = 0
 	-- Scrolls when the options do not fit a short screen (the list's height is set in openMenu).
@@ -12583,7 +12767,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	flingButton = button(menuFrame, TEXT.FLING_BUTTON, 240, 48)
 	flingButton.Name = "Fling"
 	flingButton.LayoutOrder = 2
-	flingButton.BackgroundColor3 = Style.RED
+	flingButton.BackgroundColor3 = Style.WRONG
 	flingButton.TextSize = 24
 	flingButton.Visible = false
 	flingButton.Activated:Connect(function()
@@ -12612,7 +12796,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 		end)
 	end
 
-	wordFrame = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 14)
+	wordFrame = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 14)
 	wordFrame.Name = "WordList"
 	wordFrame.AnchorPoint = Vector2.new(0, 0.5)
 	wordFrame.Position = UDim2.new(0, 16, 0.55, 0)
@@ -12630,7 +12814,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	wordLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	wordLayout.Padding = UDim.new(0, 6)
 	wordLayout.Parent = wordFrame
-	local wordTitle = Style.label(wordFrame, Style.BOLD, 18, Style.AMBER)
+	local wordTitle = Style.label(wordFrame, Style.BOLD, 18, Style.ACCENT_TEXT)
 	wordTitle.Size = UDim2.new(1, 0, 0, 22)
 	wordTitle.Text = TEXT.WORDS_TITLE
 	wordTitle.LayoutOrder = 0
@@ -12666,7 +12850,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	end)
 	local startButton = button(wordActions, TEXT.TALK_START_NOW, 136, 32)
 	startButton.TextSize = 16
-	startButton.BackgroundColor3 = Style.GREEN
+	startButton.BackgroundColor3 = Style.RIGHT
 	startButton.Activated:Connect(function()
 		onWordAction("start", 0)
 	end)
@@ -12697,10 +12881,10 @@ function PresenterPanel.setRescues(rows: { RescueRow })
 	end
 	table.clear(rescueRows)
 	for i, row in rows do
-		local line = Style.panel(rescueFrame, Style.RED, 0.1, 10)
+		local line = Style.panel(rescueFrame, Style.WRONG, 0, 10)
 		line.Size = UDim2.new(1, 0, 0, 40)
 		line.LayoutOrder = i
-		local label = Style.label(line, Style.BOLD, 18, Style.WHITE)
+		local label = Style.label(line, Style.BOLD, 18, Style.INK)
 		label.Size = UDim2.new(1, -124, 1, 0)
 		label.Position = UDim2.fromOffset(10, 0)
 		label.TextXAlignment = Enum.TextXAlignment.Left
@@ -12750,7 +12934,7 @@ function PresenterPanel.setWords(rows: { WordRow }, mode: string?, everyone: boo
 		line.Size = UDim2.new(1, 0, 0, 36)
 		line.LayoutOrder = i
 		line.Parent = wordList
-		local label = Style.label(line, Style.BOLD, 18, Style.WHITE)
+		local label = Style.label(line, Style.BOLD, 18, Style.INK)
 		label.Size = UDim2.new(1, if perPlayer then -112 else 0, 1, 0)
 		label.TextXAlignment = Enum.TextXAlignment.Left
 		label.Text = row.name .. " · " .. row.word
@@ -12761,7 +12945,7 @@ function PresenterPanel.setWords(rows: { WordRow }, mode: string?, everyone: boo
 		action.AnchorPoint = Vector2.new(1, 0.5)
 		action.Position = UDim2.fromScale(1, 0.5)
 		action.TextSize = 16
-		action.BackgroundColor3 = if mode == "reroll" then Style.BUTTON else Style.RED
+		action.BackgroundColor3 = if mode == "reroll" then Style.KEY else Style.WRONG
 		action.Activated:Connect(function()
 			onWordAction(mode, row.userId)
 		end)
@@ -12805,7 +12989,7 @@ function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: stri
 		local b = button(menuList, label, 240, 40)
 		b.Size = UDim2.new(1, -8, 0, 40) -- (room for the scroll bar)
 		b.LayoutOrder = i
-		b.TextColor3 = if option.recommended then Style.AMBER else Style.WHITE
+		b.TextColor3 = Style.INK -- (no mark for the suited ones, owner 2026-10-25)
 		nameButtons[option.id] = b
 		b.Activated:Connect(function()
 			if not judging then
@@ -12815,8 +12999,8 @@ function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: stri
 			end
 			selected = option.id
 			for id, other in nameButtons do
-				other.BackgroundColor3 = if id == option.id then Style.AMBER else Style.BUTTON
-				other.TextColor3 = if id == option.id then Style.PANEL else Style.WHITE
+				other.BackgroundColor3 = if id == option.id then Style.PICK else Style.KEY
+				other.TextColor3 = Style.INK
 			end
 			flingButton.AutoButtonColor = true
 			flingButton.BackgroundTransparency = 0
@@ -12881,12 +13065,12 @@ function ReactionBar.build(onPick: (number) -> ())
 	for index, emoji in Config.REACTIONS do
 		local b = Instance.new("TextButton")
 		b.Size = UDim2.new(0, 44, 0, 44)
-		b.BackgroundColor3 = Style.PANEL
-		b.BackgroundTransparency = Style.PANEL_ALPHA
+		b.BackgroundColor3 = Style.PAPER
+		b.BackgroundTransparency = Style.PAPER_ALPHA
 		b.Text = emoji
 		b.TextScaled = true
 		b.FontFace = Style.BOLD
-		b.TextColor3 = Style.WHITE
+		b.TextColor3 = Style.INK
 		Style.round(b, 22)
 		b.Activated:Connect(function()
 			onPick(index)
@@ -12902,25 +13086,31 @@ end
 return ReactionBar
 ]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "Style"; s.Source = [====[--!strict
--- Shared look for every HUD panel: fonts, colours, the one ScreenGui, and small constructors. Owner 2026-10-24: clean,
--- black panels only a little see-through, white text, a thin light edge; colour only where it means something (right
--- / wrong, the timer running out, my pick).
+-- Shared look for every HUD panel: fonts, colours, the one ScreenGui, and small constructors. Owner 2026-10-25: the
+-- whole UI in the sticker look of the owner's bell picture — light paper panels and bright yellow keys, each with a
+-- thick dark outline, dark text; colour where it means something (my pick, right / wrong, a warning). (2026-10-24 it
+-- was black panels, white text.)
 local Players = game:GetService("Players")
 
 local Style = {}
 
-Style.BOLD = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold)
-Style.REGULAR = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Regular)
+Style.BOLD = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.ExtraBold)
+Style.REGULAR = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.SemiBold)
 
-Style.WHITE = Color3.fromRGB(245, 245, 247)
-Style.GREY = Color3.fromRGB(160, 163, 170)
-Style.RED = Color3.fromRGB(255, 96, 96)
-Style.AMBER = Color3.fromRGB(255, 208, 92)
-Style.GREEN = Color3.fromRGB(96, 208, 128)
-Style.PANEL = Color3.fromRGB(0, 0, 0)
-Style.PANEL_ALPHA = 0.3 -- panel background transparency
-Style.BUTTON = Color3.fromRGB(44, 44, 48) -- a button on a panel (my pick turns it AMBER, right GREEN, wrong RED)
-Style.EDGE_ALPHA = 0.85 -- the thin white edge of panels and buttons
+Style.INK = Color3.fromRGB(34, 35, 38) -- text and every outline
+Style.PAPER = Color3.fromRGB(255, 251, 240) -- panels
+Style.PAPER_ALPHA = 0 -- panel background transparency
+Style.KEY = Color3.fromRGB(255, 212, 59) -- a button that can be pressed (the bell's yellow)
+Style.KEY_OFF = Color3.fromRGB(232, 228, 218) -- a button that cannot be pressed now
+Style.PICK = Color3.fromRGB(255, 152, 31) -- my pick, a lit marker (orange)
+Style.RIGHT = Color3.fromRGB(94, 209, 122) -- right / go (green)
+Style.WRONG = Color3.fromRGB(255, 107, 107) -- wrong / out / danger (red)
+-- (text colours are at least about 4.5:1 against the paper)
+Style.FAINT = Color3.fromRGB(110, 104, 95) -- secondary text, the other choices once I picked one
+Style.RED_TEXT = Color3.fromRGB(200, 40, 42) -- warnings on paper
+Style.GREEN_TEXT = Color3.fromRGB(24, 120, 56) -- done / good news on paper
+Style.ACCENT_TEXT = Color3.fromRGB(170, 85, 0) -- headings and next steps on paper (orange)
+Style.OUTLINE = 3 -- pixels of the dark outline
 
 local gui: ScreenGui? = nil
 local stack: Frame? = nil
@@ -12938,8 +13128,8 @@ function Style.gui(): ScreenGui
 	return gui :: ScreenGui
 end
 
--- Bottom-centre stack (the reaction bar now; the mission and vote panels of bundle 4 go above it). Panels are
--- stacked top to bottom.
+-- Bottom-centre stack (the reaction bar, the presenter's sounds; the mission card sits above it). Panels are stacked
+-- top to bottom.
 function Style.bottomStack(): Frame
 	if not stack then
 		local f = Instance.new("Frame")
@@ -12980,16 +13170,17 @@ function Style.label(parent: Instance, font: Font, maxSize: number, color: Color
 	return l
 end
 
--- Rounded corners and the thin light edge (panels and buttons).
+-- Rounded corners and the thick dark outline (panels and buttons).
 function Style.round(object: GuiObject, radius: number)
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, radius)
 	corner.Parent = object
 	local edge = Instance.new("UIStroke")
 	edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	edge.Color = Color3.new(1, 1, 1)
-	edge.Transparency = Style.EDGE_ALPHA
-	edge.Thickness = 1
+	edge.Color = Style.INK
+	edge.Transparency = 0
+	edge.Thickness = Style.OUTLINE
+	edge.LineJoinMode = Enum.LineJoinMode.Round
 	edge.Parent = object
 end
 
@@ -13006,12 +13197,12 @@ end
 -- A button in the shared look (the caller sets its size, text and parent).
 function Style.button(font: Font, textSize: number, color: Color3?): TextButton
 	local b = Instance.new("TextButton")
-	b.BackgroundColor3 = Style.BUTTON
-	b.BackgroundTransparency = 0.1
+	b.BackgroundColor3 = Style.KEY
+	b.BackgroundTransparency = 0
 	b.BorderSizePixel = 0
 	b.FontFace = font
 	b.TextSize = textSize
-	b.TextColor3 = color or Style.WHITE
+	b.TextColor3 = color or Style.INK
 	b.AutoButtonColor = true
 	Style.round(b, 10)
 	return b
@@ -13026,7 +13217,7 @@ end
 
 -- The top (pixels) of row 0, 1, 2 ... under the status board.
 function Style.row(row: number): number
-	return 78 + row * 26
+	return 80 + row * 30 -- (room for the outlines)
 end
 
 -- Keeps `object` at most `fraction` of the screen wide (and `maxWidth` pixels), following the screen size.
@@ -13050,7 +13241,7 @@ function Style.fitWidth(object: GuiObject, fraction: number, maxWidth: number, m
 	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watch)
 end
 
--- A line of text centred under the status board (row 0, 1, 2 ...): a black pill as wide as its text (at most 92% of
+-- A line of text centred under the status board (row 0, 1, 2 ...): a paper pill as wide as its text (at most 92% of
 -- the screen: a longer text gets smaller), gone while the text is empty.
 local LINE_TEXT = 16
 local LINE_MIN_TEXT = 11
@@ -13060,8 +13251,8 @@ function Style.line(row: number, color: Color3): TextLabel
 	l.Position = UDim2.new(0.5, 0, 0, Style.row(row))
 	l.Size = UDim2.fromOffset(0, 22)
 	l.AutomaticSize = Enum.AutomaticSize.X
-	l.BackgroundColor3 = Style.PANEL
-	l.BackgroundTransparency = Style.PANEL_ALPHA
+	l.BackgroundColor3 = Style.PAPER
+	l.BackgroundTransparency = Style.PAPER_ALPHA
 	l.BorderSizePixel = 0
 	l.FontFace = Style.BOLD
 	l.TextSize = LINE_TEXT
@@ -13102,7 +13293,7 @@ end
 return Style
 ]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "Toast"; s.Source = [====[--!strict
--- Centre toast (elimination, warnings, info) on a black pill that fades out by itself; the kind colours the text.
+-- Centre toast (elimination, warnings, info) on a paper pill that fades out by itself; the kind colours the text.
 local TweenService = game:GetService("TweenService")
 
 local Style = require(script.Parent:WaitForChild("Style"))
@@ -13119,7 +13310,7 @@ function Toast.build()
 	toastL.Position = UDim2.fromScale(0.5, 0.36)
 	toastL.Size = UDim2.fromOffset(0, 0)
 	toastL.AutomaticSize = Enum.AutomaticSize.XY
-	toastL.BackgroundColor3 = Style.PANEL
+	toastL.BackgroundColor3 = Style.PAPER
 	toastL.BorderSizePixel = 0
 	toastL.FontFace = Style.BOLD
 	toastL.TextSize = 24
@@ -13145,10 +13336,10 @@ function Toast.show(text: string, kind: "elim" | "near" | "info")
 		tween:Cancel()
 	end
 	toastL.Text = text
-	toastL.TextColor3 = if kind == "elim" then Style.RED elseif kind == "near" then Style.WHITE else Style.GREEN
+	toastL.TextColor3 = if kind == "elim" then Style.RED_TEXT elseif kind == "near" then Style.INK else Style.GREEN_TEXT
 	toastL.TextTransparency = 0
-	toastL.BackgroundTransparency = Style.PANEL_ALPHA
-	edge.Transparency = Style.EDGE_ALPHA
+	toastL.BackgroundTransparency = Style.PAPER_ALPHA
+	edge.Transparency = 0
 	local info = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 2.4)
 	fading = {
 		TweenService:Create(toastL, info, { TextTransparency = 1, BackgroundTransparency = 1 }),

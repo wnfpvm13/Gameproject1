@@ -19,10 +19,13 @@ local WIDTH = 4.6 -- studs; the flying chairs are 5 studs apart
 local ROW = 1.0 -- studs per word row
 local NAME_ROW = 0.9
 local HEART_ROW = 0.8
+-- (the HUD's sticker look, owner 2026-10-25: paper and dark outlines; 2026-10-24 the name pill was black)
+-- (the same values as UI/Style's KEY, INK and PAPER: a world tag may not require the HUD's Style, deps rule)
 local CARD_COLOR = Color3.fromRGB(255, 255, 255)
-local NEW_COLOR = Color3.fromRGB(255, 225, 90)
-local OUTLINE = Color3.fromRGB(22, 34, 64)
-local NAME_PILL = Color3.fromRGB(0, 0, 0) -- (the HUD's black, owner 2026-10-24)
+local NEW_COLOR = Color3.fromRGB(255, 212, 59)
+local OUTLINE = Color3.fromRGB(34, 35, 38)
+local NAME_PILL = Color3.fromRGB(255, 251, 240)
+local NAME_INK = Color3.fromRGB(34, 35, 38)
 local HIDDEN = "???" -- my own words while I play
 
 local GROW_SECONDS = 0.15 -- hit(): the pop grows, then settles back
@@ -132,17 +135,22 @@ local function build(player: Player, words: { string }, caption: string, previou
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "Caption"
 	nameLabel.BackgroundColor3 = NAME_PILL
-	nameLabel.BackgroundTransparency = 0.3
+	nameLabel.BackgroundTransparency = 0
 	nameLabel.Position = UDim2.fromScale(0.1, wordsHeight / total + 0.02)
 	nameLabel.Size = UDim2.fromScale(0.8, NAME_ROW / total - 0.02)
 	nameLabel.FontFace = NAME_FONT
 	nameLabel.TextScaled = true
-	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	nameLabel.TextColor3 = NAME_INK
 	nameLabel.Text = caption
 	nameLabel.Parent = gui
 	local pillCorner = Instance.new("UICorner")
 	pillCorner.CornerRadius = UDim.new(0.5, 0)
 	pillCorner.Parent = nameLabel
+	local pillEdge = Instance.new("UIStroke")
+	pillEdge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	pillEdge.Thickness = 2
+	pillEdge.Color = OUTLINE
+	pillEdge.Parent = nameLabel
 	local namePad = Instance.new("UIPadding")
 	namePad.PaddingTop = UDim.new(0.12, 0)
 	namePad.PaddingBottom = UDim.new(0.12, 0)

@@ -61,14 +61,14 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	volunteerButton.Name = "Volunteer"
 	volunteerButton.AnchorPoint = Vector2.new(0.5, 0)
 	volunteerButton.Position = UDim2.new(0.5, 0, 0, Style.row(3) + 12) -- under the chat button (row 2, 34 px)
-	volunteerButton.TextColor3 = Style.AMBER
+	volunteerButton.TextColor3 = Style.INK
 	volunteerButton.Visible = false
 	volunteerButton.ZIndex = 5 -- (the presenter's step-down stays reachable over a tall mission card)
 	volunteerButton.Activated:Connect(function()
 		onVolunteer(not volunteered)
 	end)
 
-	menuFrame = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 14)
+	menuFrame = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 14)
 	menuFrame.Name = "MissionMenu"
 	menuFrame.AnchorPoint = Vector2.new(1, 0.5)
 	menuFrame.Position = UDim2.new(1, -16, 0.5, 0)
@@ -86,7 +86,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Padding = UDim.new(0, 8)
 	layout.Parent = menuFrame
-	menuTitle = Style.label(menuFrame, Style.BOLD, 20, Style.AMBER)
+	menuTitle = Style.label(menuFrame, Style.BOLD, 20, Style.ACCENT_TEXT)
 	menuTitle.Size = UDim2.new(1, 0, 0, 26)
 	menuTitle.LayoutOrder = 0
 	-- Scrolls when the options do not fit a short screen (the list's height is set in openMenu).
@@ -106,7 +106,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	flingButton = button(menuFrame, TEXT.FLING_BUTTON, 240, 48)
 	flingButton.Name = "Fling"
 	flingButton.LayoutOrder = 2
-	flingButton.BackgroundColor3 = Style.RED
+	flingButton.BackgroundColor3 = Style.WRONG
 	flingButton.TextSize = 24
 	flingButton.Visible = false
 	flingButton.Activated:Connect(function()
@@ -135,7 +135,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 		end)
 	end
 
-	wordFrame = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 14)
+	wordFrame = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 14)
 	wordFrame.Name = "WordList"
 	wordFrame.AnchorPoint = Vector2.new(0, 0.5)
 	wordFrame.Position = UDim2.new(0, 16, 0.55, 0)
@@ -153,7 +153,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	wordLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	wordLayout.Padding = UDim.new(0, 6)
 	wordLayout.Parent = wordFrame
-	local wordTitle = Style.label(wordFrame, Style.BOLD, 18, Style.AMBER)
+	local wordTitle = Style.label(wordFrame, Style.BOLD, 18, Style.ACCENT_TEXT)
 	wordTitle.Size = UDim2.new(1, 0, 0, 22)
 	wordTitle.Text = TEXT.WORDS_TITLE
 	wordTitle.LayoutOrder = 0
@@ -189,7 +189,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 	end)
 	local startButton = button(wordActions, TEXT.TALK_START_NOW, 136, 32)
 	startButton.TextSize = 16
-	startButton.BackgroundColor3 = Style.GREEN
+	startButton.BackgroundColor3 = Style.RIGHT
 	startButton.Activated:Connect(function()
 		onWordAction("start", 0)
 	end)
@@ -220,10 +220,10 @@ function PresenterPanel.setRescues(rows: { RescueRow })
 	end
 	table.clear(rescueRows)
 	for i, row in rows do
-		local line = Style.panel(rescueFrame, Style.RED, 0.1, 10)
+		local line = Style.panel(rescueFrame, Style.WRONG, 0, 10)
 		line.Size = UDim2.new(1, 0, 0, 40)
 		line.LayoutOrder = i
-		local label = Style.label(line, Style.BOLD, 18, Style.WHITE)
+		local label = Style.label(line, Style.BOLD, 18, Style.INK)
 		label.Size = UDim2.new(1, -124, 1, 0)
 		label.Position = UDim2.fromOffset(10, 0)
 		label.TextXAlignment = Enum.TextXAlignment.Left
@@ -273,7 +273,7 @@ function PresenterPanel.setWords(rows: { WordRow }, mode: string?, everyone: boo
 		line.Size = UDim2.new(1, 0, 0, 36)
 		line.LayoutOrder = i
 		line.Parent = wordList
-		local label = Style.label(line, Style.BOLD, 18, Style.WHITE)
+		local label = Style.label(line, Style.BOLD, 18, Style.INK)
 		label.Size = UDim2.new(1, if perPlayer then -112 else 0, 1, 0)
 		label.TextXAlignment = Enum.TextXAlignment.Left
 		label.Text = row.name .. " · " .. row.word
@@ -284,7 +284,7 @@ function PresenterPanel.setWords(rows: { WordRow }, mode: string?, everyone: boo
 		action.AnchorPoint = Vector2.new(1, 0.5)
 		action.Position = UDim2.fromScale(1, 0.5)
 		action.TextSize = 16
-		action.BackgroundColor3 = if mode == "reroll" then Style.BUTTON else Style.RED
+		action.BackgroundColor3 = if mode == "reroll" then Style.KEY else Style.WRONG
 		action.Activated:Connect(function()
 			onWordAction(mode, row.userId)
 		end)
@@ -328,7 +328,7 @@ function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: stri
 		local b = button(menuList, label, 240, 40)
 		b.Size = UDim2.new(1, -8, 0, 40) -- (room for the scroll bar)
 		b.LayoutOrder = i
-		b.TextColor3 = if option.recommended then Style.AMBER else Style.WHITE
+		b.TextColor3 = Style.INK -- (no mark for the suited ones, owner 2026-10-25)
 		nameButtons[option.id] = b
 		b.Activated:Connect(function()
 			if not judging then
@@ -338,8 +338,8 @@ function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: stri
 			end
 			selected = option.id
 			for id, other in nameButtons do
-				other.BackgroundColor3 = if id == option.id then Style.AMBER else Style.BUTTON
-				other.TextColor3 = if id == option.id then Style.PANEL else Style.WHITE
+				other.BackgroundColor3 = if id == option.id then Style.PICK else Style.KEY
+				other.TextColor3 = Style.INK
 			end
 			flingButton.AutoButtonColor = true
 			flingButton.BackgroundTransparency = 0

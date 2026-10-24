@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="300" viewBox="0 0 640 300">
+  <g stroke="#222326" stroke-width="10" stroke-linejoin="round" stroke-linecap="round">
+    <!-- lower jaw: a wide U, the mouth inside -->
+    <path d="M40 124 C40 262 170 292 320 292 C470 292 600 262 600 124 Z" fill="#5CC46A"/>
+    <path d="M80 126 C80 232 190 262 320 262 C450 262 560 232 560 126 Z" fill="#FF8FA3"/>
+    <path d="M206 206 C236 178 404 178 434 206 C434 238 382 250 320 250 C258 250 206 238 206 206 Z" fill="#F0607E"/>
+    <!-- ridges on the back of the head -->
+    <path d="M236 40 L250 16 L264 40 Z" fill="#3E9E4E" stroke-width="6"/>
+    <path d="M271 40 L285 16 L299 40 Z" fill="#3E9E4E" stroke-width="6"/>
+    <path d="M306 40 L320 16 L334 40 Z" fill="#3E9E4E" stroke-width="6"/>
+    <path d="M341 40 L355 16 L369 40 Z" fill="#3E9E4E" stroke-width="6"/>
+    <path d="M376 40 L390 16 L404 40 Z" fill="#3E9E4E" stroke-width="6"/>
+    <!-- upper jaw, lifted: green top, a row of teeth along its edge -->
+    <path d="M36 130 C26 74 120 38 320 38 C520 38 614 74 604 130 C604 142 594 148 582 146 C500 124 140 124 58 146 C46 148 36 142 36 130 Z" fill="#5CC46A"/>
+    <path d="M117 132 L139 132 L128 156 Z" fill="#FFFFFF" stroke-width="5"/>
+    <path d="M149 132 L171 132 L160 156 Z" fill="#FFFFFF" stroke-width="5"/>
+    <path d="M181 132 L203 132 L192 156 Z" fill="#FFFFFF" stroke-width="5"/>
+    <path d="M213 132 L235 132 L224 156 Z" fill="#FFFFFF" stroke-width="5"/>
+    <path d="M245 132 L267 132 L256 156 Z" fill="#FFFFFF" stroke-width="5"/>
+    <path d="M277 132 L299 132 L288 156 Z" fill="#FFFFFF" stroke-width="5"/>
+    <path d="M309 132 L331 132 L320 156 Z" fill="#FFFFFF" stroke-width="5"/>
+    <path d="M341 132 L363 132 L352 156 Z" fill="#FFFFFF" stroke-width="5"/>
+    <path d="M373 132 L395 132 L384 156 Z" fill="#FFFFFF" stroke-width="5"/>
+    <path d="M405 132 L427 132 L416 156 Z" fill="#FFFFFF" stroke-width="5"/>
+    <path d="M437 132 L459 132 L448 156 Z" fill="#FFFFFF" stroke-width="5"/>
+    <path d="M469 132 L491 132 L480 156 Z" fill="#FFFFFF" stroke-width="5"/>
+    <path d="M501 132 L523 132 L512 156 Z" fill="#FFFFFF" stroke-width="5"/>
+    <!-- eyes: brow ridges, yellow with slit pupils -->
+    <path d="M150 46 C150 6 250 6 250 46 Z" fill="#4DB05B"/>
+    <path d="M390 46 C390 6 490 6 490 46 Z" fill="#4DB05B"/>
+    <ellipse cx="200" cy="46" rx="30" ry="24" fill="#FFD43B"/>
+    <ellipse cx="440" cy="46" rx="30" ry="24" fill="#FFD43B"/>
+    <ellipse cx="200" cy="46" rx="6" ry="19" fill="#222326" stroke="none"/>
+    <ellipse cx="440" cy="46" rx="6" ry="19" fill="#222326" stroke="none"/>
+    <ellipse cx="296" cy="86" rx="9" ry="6" fill="#222326" stroke="none"/>
+    <ellipse cx="344" cy="86" rx="9" ry="6" fill="#222326" stroke="none"/>
+    <circle cx="112" cy="100" r="8" fill="#3E9E4E" stroke="none"/>
+    <circle cx="528" cy="100" r="8" fill="#3E9E4E" stroke="none"/>
+    <circle cx="146" cy="86" r="6" fill="#3E9E4E" stroke="none"/>
+    <circle cx="494" cy="86" r="6" fill="#3E9E4E" stroke="none"/>
+  </g>
+</svg>

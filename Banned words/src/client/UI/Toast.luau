@@ -1,5 +1,5 @@
 --!strict
--- Centre toast (elimination, warnings, info) on a black pill that fades out by itself; the kind colours the text.
+-- Centre toast (elimination, warnings, info) on a paper pill that fades out by itself; the kind colours the text.
 local TweenService = game:GetService("TweenService")
 
 local Style = require(script.Parent:WaitForChild("Style"))
@@ -16,7 +16,7 @@ function Toast.build()
 	toastL.Position = UDim2.fromScale(0.5, 0.36)
 	toastL.Size = UDim2.fromOffset(0, 0)
 	toastL.AutomaticSize = Enum.AutomaticSize.XY
-	toastL.BackgroundColor3 = Style.PANEL
+	toastL.BackgroundColor3 = Style.PAPER
 	toastL.BorderSizePixel = 0
 	toastL.FontFace = Style.BOLD
 	toastL.TextSize = 24
@@ -42,10 +42,10 @@ function Toast.show(text: string, kind: "elim" | "near" | "info")
 		tween:Cancel()
 	end
 	toastL.Text = text
-	toastL.TextColor3 = if kind == "elim" then Style.RED elseif kind == "near" then Style.WHITE else Style.GREEN
+	toastL.TextColor3 = if kind == "elim" then Style.RED_TEXT elseif kind == "near" then Style.INK else Style.GREEN_TEXT
 	toastL.TextTransparency = 0
-	toastL.BackgroundTransparency = Style.PANEL_ALPHA
-	edge.Transparency = Style.EDGE_ALPHA
+	toastL.BackgroundTransparency = Style.PAPER_ALPHA
+	edge.Transparency = 0
 	local info = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 2.4)
 	fading = {
 		TweenService:Create(toastL, info, { TextTransparency = 1, BackgroundTransparency = 1 }),

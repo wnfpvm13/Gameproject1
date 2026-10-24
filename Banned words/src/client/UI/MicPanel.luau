@@ -27,9 +27,9 @@ local chatMode = false
 
 -- onChat(on): the player pressed the chat button (join by chat, or stop).
 function MicPanel.build(onChat: (boolean) -> ())
-	voiceL = Style.line(0, Style.RED)
-	testL = Style.line(1, Style.AMBER)
-	chatButton = Style.button(Style.BOLD, 18, Style.AMBER)
+	voiceL = Style.line(0, Style.RED_TEXT)
+	testL = Style.line(1, Style.ACCENT_TEXT)
+	chatButton = Style.button(Style.BOLD, 18)
 	chatButton.Name = "ChatJoin"
 	chatButton.AnchorPoint = Vector2.new(0.5, 0)
 	chatButton.Position = UDim2.new(0.5, 0, 0, Style.row(2) + 2)
@@ -88,7 +88,7 @@ function MicPanel.set(r: Ready)
 	voiceL.Text = voiceLine(r)
 	local text, done = nextStep(r)
 	testL.Text = text
-	testL.TextColor3 = if done then Style.GREEN else Style.AMBER
+	testL.TextColor3 = if done then Style.GREEN_TEXT else Style.ACCENT_TEXT
 	-- (offered to a voice account that may chat once its voice is connected — to hear everyone; while playing by chat,
 	-- to stop)
 	-- (Studio has no voice: there the server does not ask for it either, Config.REQUIRE_VOICE_READY)

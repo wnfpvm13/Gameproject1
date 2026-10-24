@@ -393,7 +393,7 @@ return {
 		RESCUED = "🛟 구제! %s 무사해요",
 		RESCUE_BUTTON = "🛟 구제",
 		MY_WORD_WAS = "내 금칙어: '%s'", -- (no particle: it would depend on the word's last syllable)
-		BELL_BUTTON = "🔔 벨",
+		BELL_BUTTON = "🔔 벨", -- (the seat bell's E prompt)
 		BELL_QUIZ_TITLE = "벨 퀴즈",
 		BELL_QUIZ_BRIEF = "먼저 벨을 누르고 말로 답해요 · 진행자가 판정해요", -- (the briefing before it, owner 2026-10-24)
 		BELL_QUIZ_START = "벨 퀴즈 · 먼저 벨을 누른 사람이 말로 답해요",
@@ -412,7 +412,7 @@ return {
 		BOMB_TITLE = "폭탄 돌리기",
 		BOMB_BRIEF = "폭탄을 받으면 버튼이 켜질 때 넘겨요 · 터질 때 들고 있으면 날아가요", -- (the briefing before it)
 		BOMB_START = "폭탄 돌리기 · 버튼이 켜지면 바로 넘겨요",
-		BOMB_PASS = "넘기기 💣",
+		BOMB_PASS = "넘기기", -- (with the bomb picture, Config.IMAGES.BOMB)
 		BOMB_MINE = "💣 폭탄이 나한테! 버튼이 켜지면 넘겨요",
 		BOMB_HOLDER = "💣 %s",
 		BOMB_BOOM = "💥 펑! %s",
@@ -547,6 +547,14 @@ return {
 
 	-- Spectators (V3): players who are out and late joiners watch from the stands, with reactions.
 	REACTIONS = { "👏", "😂", "😱", "😮", "❤️" },
+	-- Sticker pictures (owner 2026-10-25: the whole UI in the look of the owner's bell picture). Drawn for this game as
+	-- SVG (assets/icons, rendered to PNG) and uploaded to Roblox by the author on 2026-10-25.
+	IMAGES = {
+		BELL = "rbxassetid://137288878466546", -- the big bell button
+		GUN = "rbxassetid://122610104192708", -- the same button in 총잡이 결투
+		BOMB = "rbxassetid://82548273745326", -- the bomb's pass button
+		CROC = "rbxassetid://133525735327902", -- 악어 이빨: the open jaws seen from the front (640 x 300)
+	},
 	STAGE_GUARD_CHECK = 1, -- seconds between "is a spectator on the stage?" checks
 	STAGE_BEHIND_ROW = 8, -- studs behind the chair row that still count as the stage
 	STAND_SPOTS_PER_ROW = 10, -- spectator spots along the stands marker, per tier row

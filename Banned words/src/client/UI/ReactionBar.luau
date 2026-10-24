@@ -24,12 +24,12 @@ function ReactionBar.build(onPick: (number) -> ())
 	for index, emoji in Config.REACTIONS do
 		local b = Instance.new("TextButton")
 		b.Size = UDim2.new(0, 44, 0, 44)
-		b.BackgroundColor3 = Style.PANEL
-		b.BackgroundTransparency = Style.PANEL_ALPHA
+		b.BackgroundColor3 = Style.PAPER
+		b.BackgroundTransparency = Style.PAPER_ALPHA
 		b.Text = emoji
 		b.TextScaled = true
 		b.FontFace = Style.BOLD
-		b.TextColor3 = Style.WHITE
+		b.TextColor3 = Style.INK
 		Style.round(b, 22)
 		b.Activated:Connect(function()
 			onPick(index)

@@ -1,0 +1,40 @@
+{
+  "name": "TrainBrawl",
+  "tree": {
+    "$className": "DataModel",
+    "$ignoreUnknownInstances": true,
+    "ReplicatedStorage": {
+      "$ignoreUnknownInstances": true,
+      "TrainBrawl": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "$ignoreUnknownInstances": true,
+      "TrainBrawl": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "GameSettingsAvatar": "R15",
+        "CharacterUseJumpPower": false
+      },
+      "StarterPlayerScripts": {
+        "$ignoreUnknownInstances": true,
+        "TrainBrawlClient": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "StarterGui": {
+      "$ignoreUnknownInstances": true,
+      "$properties": {
+        "ScreenOrientation": "LandscapeSensor"
+      }
+    },
+    "Workspace": {
+      "$ignoreUnknownInstances": true
+    }
+  }
+}

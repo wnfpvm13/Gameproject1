@@ -1,0 +1,6 @@
+# QA places and scripts (rojo builds, Studio probes)
+.qa/
+# tools/lint/run_lint.py cache (Roblox type definitions)
+.lint/
+# Python bytecode from the test and lint scripts
+__pycache__/

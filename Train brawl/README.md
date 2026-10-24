@@ -1,0 +1,57 @@
+# Train brawl (기차 난투, 가제)
+
+MonCook, 금칙어 게임, Western train(지붕 위 오비)과 별개인 로블록스 게임. 나란히 달리는 큰 기차들 지붕 위에서 방망이로
+서로를 때려 떨어뜨린다. 기차 아래로 떨어지면 기차를 놓쳐 탈락, 마지막 1명이 이긴다. 설계와 결정 기록:
+[docs/DESIGN.md](docs/DESIGN.md)
+
+**지금 코드: 시제품 A — 재미의 기본만** ([docs/PROTOTYPE_A_2026-10-24.md](docs/PROTOTYPE_A_2026-10-24.md))
+- 큰 기차 2대가 틈 12스터드를 두고 나란히 선다(기관차 + 화물칸 2량씩). 기차는 제자리이고 침목·선인장·바위가 뒤로 흐른다.
+  두 번째·세 번째 칸 가운데에 기차 사이를 잇는 판자가 하나씩 있다. 틈은 점프(약 8.7스터드)로 못 건넌다.
+- 모두 오른손에 방망이를 들고 있다. 클릭(모바일 "때리기" 버튼, 게임패드 R2)하면 팔을 옆으로 들어 오른쪽 뒤에서 앞을 지나
+  왼쪽으로 크게 휘두른다. 다른 사람의 휘두르기도 모두의 화면에 보인다.
+- 앞쪽 부채꼴(거리 5.5, 좌우 70도)에 있는 사람이 맞는다(서버는 통신 지연을 봐서 7까지 봐준다). 맞으면 0.06초 멈칫하고
+  하얗게 번쩍인 뒤 휘두른 사람 반대쪽으로 날아가 모두 약 6스터드 밀려난다(Studio 실측). 지붕 가운데에서 옆으로 맞으면
+  떨어지고, 가운데에서 1.5 넘게 가장자리 쪽에 서 있다가 반대쪽으로 맞거나 기차 앞뒤 방향으로 맞으면(기차 맨 앞·맨 뒤 끝
+  근처가 아니면) 지붕에 남는다.
+- 떨어지면 모래에 떨어져 누운 채 기차 뒤로 멀어지고, 1.6초 뒤 공중의 대기실(관전석)로 올라가 남은 사람을 관전한다. 떨어뜨린
+  사람에게 "떨어뜨린 수"가 올라간다(맞힌 지 6초 안).
+- 한 판: 대기 → 3초 카운트다운(지붕 위에 흩어져 정지) → 난투(최대 3분) → "X 승리!"(시간이 다 되면 무승부) → 대기 → 다음 판.
+- 혼자 시험(Studio 전용): Workspace 속성 `TrainBrawlSolo`를 켜면 샌드백 3개가 난투 중에 지붕을 돌아다니며 참가자로 센다
+  (때리지는 않음).
+- 아직 없는 것: 기차 앞뒤 이동, 봇(때리는 AI), 칸 떨어져 나가기, 모아 치기·압력 게이지, 배경음과 효과 다듬기, 꾸미기.
+
+## 폴더
+
+- `src/shared` — 서버·클라이언트 공용: `Config`(조정할 숫자), `Names`(이름), `ArenaLayout`(기차·칸·판자·시작 자리·탈락선 위치,
+  순수 수학), `BatMath`(휘두르기 부채꼴 판정과 날려 보내는 속도, 순수 수학), `PartUtil`(부품 도우미), `CharacterParts`(캐릭터의
+  루트·휴머노이드·손·어깨·발 높이), `BodyMotion`(맞았을 때 멈칫·날아감, 착지 확인·일어나기, 떨어진 뒤 눕혀서 뒤로 —
+  플레이어 기기와 서버(샌드백)가 같은 규칙을 씀), `SwingTargets`(휘두르기에 맞는 사람 찾기: 서버 판정과 내 화면의
+  먼저 보여 주기가 같은 함수를 씀)
+- `src/server` — `Main`(연결만), `Net`(리모트), `ArenaBuilder`(기차·판자·모래 땅·대기실), `BatGear`(손에 방망이), `BatService`
+  (휘두르기 판정: 쿨다운·살아 있음·맞고 날아가는 중 아님·부채꼴), `RoundService`(한 판의 흐름·탈락·떨어뜨린 수), `FallWatch`(탈락선 아래로 떨어짐 감지), `Sandbags`(혼자 시험용
+  샌드백)
+- `src/client` — `init`(연결만), `Scenery`(흐르는 선로·침목·소품), `SwingInput`(클릭·버튼), `OwnSwing`(내 휘두르기: 시작 조건·
+  쿨다운·바로 그리기·맞힘 먼저 보여 주기·서버에 알림), `SwingPose`(어깨를 돌려 휘두르기 그림), `KnockFlight`(맞은 내 캐릭터 멈칫·날아감·일어남), `HitFeedback`(소리·번쩍임·화면 흔들림), `FallDrift`(떨어진 내 캐릭터를
+  눕혀 뒤로), `RoundHud`(화면 위 글자), `SpectateCam`(관전 카메라)
+- `tools/tests` — Studio 없이 도는 테스트, `tools/lint` — 정적 검사
+
+## 코드 규칙 (전역 규칙 `~/.claude/CLAUDE.md` 3번의 이 게임 구체 사항)
+
+- 서버 부품끼리, 클라이언트 부품끼리는 require하지 않는다. 연결은 `Main.server`와 `init.client`가 콜백으로 한다.
+  공용 코드(`src/shared`)는 공용 코드만 require한다. 기준은 `tools/tests/check_deps.py`의 `ALLOWED` 표.
+- require는 `require(<경로>:WaitForChild("이름"))` 꼴로만 쓴다(의존 검사가 읽을 수 있게).
+- 조정할 숫자는 `src/shared/Config.luau`, 이름은 `src/shared/Names.luau`에 둔다.
+- 서버가 판정하고(휘두르기 쿨다운·거리·각도·한 번에 한 번, 떨어짐, 탈락), 플레이어 캐릭터를 움직이는 일(날아가기, 떨어진 뒤
+  밀려나기)은 그 플레이어의 기기가 한다(캐릭터 물리는 그 기기 담당). 샌드백은 서버가 물리를 맡는다.
+
+## 검사 명령
+
+- `python -I tools/tests/run_tests.py` — 기차 배치·판자·시작 자리·탈락선·휘두르기 판정·날려 보내기·조정값 약속 테스트(luau CLI,
+  실제 Config 수치) + 의존 방향 검사
+- `python -I tools/lint/run_lint.py` — luau-lsp(Roblox API 타입) + selene. luau-lsp·selene·rojo가 PATH에 있어야 한다
+  (이 PC: `~/.local/bin`). Roblox 타입 정의는 `.lint/`에 캐시된다(내려받기가 막히면 `Western train/.lint/`의 파일을 복사).
+- Studio 확인: `rojo build default.project.json -o .qa/<이름>.rbxlx`로 만든 장소를 새 Studio 창에서 열고, 혼자면 Edit에서
+  Workspace 속성 `TrainBrawlSolo`를 켠 뒤 Play(다시 빌드하면 속성이 빠지므로 다시 켠다).
+
+`tools/lint/run_lint.py`와 `tools/tests/check_deps.py`는 `Western train/tools/`(원래 `Banned words/tools/`)에서 복사한 것이다
+(세 번째 복사본 — 공용 도구 폴더로 합칠지는 오너와 시점을 정한다).

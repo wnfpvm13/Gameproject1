@@ -186,22 +186,27 @@ check("6f ROUND_GAMES games: numbered 1.., the final is due once the last one st
 	and numbers[1] == 1 and numbers[#numbers] == Config.ROUND_GAMES)
 
 ---------------------------------------------------------------- 7. whole rounds (RoundService + stubs)
-local Seat = { flying = {}, flings = {}, reseats = {}, noChair = {} }
+local Seat = { flying = {}, flings = {}, reseats = {}, noChair = {}, index = {}, onLanded = nil }
 local returnDue = nil
-function Seat.init(callback) returnDue = callback end
+function Seat.init(callback, onLanded)
+	returnDue = callback
+	Seat.onLanded = onLanded
+end
 function Seat.seatPlayers(players)
 	local seated = {}
-	for _, p in players do
+	for i, p in players do
 		seated[p] = true
+		Seat.index[p] = i
 	end
 	return seated
 end
-function Seat.fling(player, tag)
+function Seat.seatIndexOf(player) return Seat.index[player] end
+function Seat.fling(player, tag, delay, size)
 	if Seat.flying[player] or Seat.noChair[player] then
 		return false
 	end
 	Seat.flying[player] = true
-	table.insert(Seat.flings, { player = player, at = now })
+	table.insert(Seat.flings, { player = player, at = now, delay = delay or 0, size = size or 1 })
 	local character = player.Character
 	task.delay(Config.FLING_RETURN_SECONDS, function()
 		if Seat.flying[player] then
@@ -579,6 +584,23 @@ do
 		and final.at - third.at < Config.FLING_RETURN_SECONDS + 1 and final.at - play < 200)
 	local result = phaseAt(list, "Result")
 	check("7q ...and its winner wins the round", result ~= nil and result.message == string.format(Config.TEXT.WINNER, ps[2].DisplayName))
+	local byRun = {}
+	for _, f in Seat.flings do
+		if f.at >= since then
+			table.insert(byRun, f)
+		end
+	end
+	-- (runs 1-3 both fall: two launches each, the chairs in seating order, the second CHAIN_DELAY later)
+	local chained, sized = #byRun >= 6, #byRun >= 6
+	for i = 1, 6, 2 do
+		local a, b = byRun[i], byRun[i + 1]
+		chained = chained and a ~= nil and b ~= nil and a.delay == 0 and math.abs(b.delay - Config.CHAIN_DELAY) < 1e-9
+			and (Seat.index[a.player] or 0) < (Seat.index[b.player] or 0)
+	end
+	sized = sized and byRun[1].size == 1 and byRun[3].size == 1 + Config.BLAST_GROWTH
+		and byRun[5].size == 1 + 2 * Config.BLAST_GROWTH
+	check("7q5 chain explosions (owner 2026-10-24): launched together go off CHAIN_DELAY apart from the left chair; the"
+		.. " blast grows as lives run out (1, 1.5, 2)", chained and sized)
 	local briefs = {}
 	for _, m in sent("Mission", since) do
 		if m.payload.kind == "brief" then
@@ -591,6 +613,35 @@ do
 		.. " briefing tells what the last game did", briefs[1] ~= nil and briefs[1].game == 1 and briefs[1].recap == ""
 		and briefs[1].title == Scripted.title and briefs[1].games == Config.ROUND_GAMES and briefs[2] ~= nil
 		and briefs[2].game == 2 and briefs[2].recap == string.format(Config.TEXT.RECAP_LOST, table.concat(names, ", ")))
+end
+
+-- 7Q6: the round awards on the result screen (owner 2026-10-24): the longest flight, the most games without losing a
+-- life.
+do
+	local ps = newPlayers(3)
+	local since = now
+	local play = begin(ps, 10, function(run)
+		return if run == 1 then { ps[1] } else {}
+	end, nil)
+	at(play + 1)
+	Seat.onLanded(ps[2], 50, 1)
+	Seat.onLanded(ps[1], 100, 1.5)
+	Seat.onLanded(ps[3], 80, 1.2)
+	finish(since)
+	local shown = nil
+	for _, m in sent("Mission", since) do
+		if m.payload.kind == "roundResult" then
+			shown = m.payload
+		end
+	end
+	local names = { ps[2].DisplayName, ps[3].DisplayName }
+	table.sort(names)
+	local lines = shown and shown.lines or {}
+	check("7q6 the result screen: who won, the longest flight (in metres) and the most games without losing a life",
+		shown ~= nil and string.find(shown.title, "우승") ~= nil
+		and lines[1] == string.format(Config.TEXT.AWARD_FLIGHT, ps[1].DisplayName, 100 * Config.STUDS_TO_METERS)
+		and lines[2] == string.format(Config.TEXT.AWARD_SURVIVOR, table.concat(names, ", "), Config.ROUND_GAMES),
+		table.concat(lines, " / "))
 end
 
 -- 7C1: a game with too few players to start (it says "nothing to play") is not one of the round's games.

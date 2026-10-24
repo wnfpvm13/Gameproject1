@@ -6,7 +6,7 @@
 --   Result -> Countdown (quick rematch) ...
 -- Rules live in the services: lives in LifeService, the game count, time cap and final trigger in Timeline, missions in
 -- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
--- join by chat in ChatService, the presenter in PresenterService, banned words in WordService, score in Scores.
+-- join by chat in ChatService, the presenter in PresenterService, banned words in WordService, score in Scores, the round awards in Awards, the beta's measurements in Telemetry.
 -- Bundle 6a: banned words exist only during the banned-word talk (a minigame, played while speech judging is on): its
 -- prep stage draws them (the presenter may re-draw), the talk is judged in chat at once and in speech (JudgeService,
 -- bundle 6e) — the presenter rescues, or without a presenter the hit flies at once — and by the presenter's ear, and
@@ -36,6 +36,8 @@ local VoiceService = require(services:WaitForChild("VoiceService"))
 local ChatService = require(services:WaitForChild("ChatService"))
 local PresenterService = require(services:WaitForChild("PresenterService"))
 local Scores = require(services:WaitForChild("Scores"))
+local Awards = require(services:WaitForChild("Awards"))
+local Telemetry = require(services:WaitForChild("Telemetry"))
 
 local RoundService = {}
 
@@ -104,10 +106,14 @@ local noteDecision: () -> () -- (below mainDecided) in the talk, the moment the 
 local gameLost: { [Player]: boolean } = {}
 local gameOut: { [Player]: boolean } = {}
 
-local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean)
+-- `launchIn`: seconds until each one's launch goes off (a chain), for their screen (they keep the round camera).
+local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean, launchIn: { [Player]: number }?)
 	local list = {}
 	if Match.phase == "Play" and reason ~= "left" then
 		for _, outcome in outcomes do
+			if not gameLost[outcome.player] then
+				Telemetry.lifeLost(outcome.player) -- (now: they may leave before the game is over)
+			end
 			gameLost[outcome.player] = true
 			if outcome.out then
 				gameOut[outcome.player] = true
@@ -120,6 +126,7 @@ local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: bo
 			name = outcome.player.DisplayName,
 			lives = outcome.livesLeft,
 			out = outcome.out,
+			launchIn = if launchIn then launchIn[outcome.player] else nil,
 		})
 	end
 	Net.toAll("LifeLost", { reason = reason, players = list, final = final })
@@ -132,17 +139,31 @@ local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: bo
 end
 
 -- Launches everyone who lost a life. Players who are out reach the stands after their flight (onFlightOver), or
--- right away when there was nothing to launch (no character on the chair at that moment).
+-- right away when there was nothing to launch (no character on the chair at that moment). Owner 2026-10-24: several
+-- go off one after another from the camera's left chair (CHAIN_DELAY apart; the lives are already settled, and each
+-- counts as flying from now on), and the fewer lives left, the bigger the blast.
 local function announce(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean)
 	if #outcomes == 0 then
 		return
 	end
-	for _, outcome in outcomes do
-		if not SeatService.fling(outcome.player, Match.roundId) and outcome.out then
+	local order = table.clone(outcomes)
+	table.sort(order, function(a, b)
+		return (SeatService.seatIndexOf(a.player) or math.huge) < (SeatService.seatIndexOf(b.player) or math.huge)
+	end)
+	local launched = 0
+	local launchIn: { [Player]: number } = {}
+	for _, outcome in order do
+		local lost = Config.LIVES - outcome.livesLeft -- (lives gone counting this one)
+		local size = 1 + Config.BLAST_GROWTH * math.max(0, lost - 1)
+		local delay = launched * Config.CHAIN_DELAY
+		if SeatService.fling(outcome.player, Match.roundId, delay, size) then
+			launched += 1
+			launchIn[outcome.player] = delay
+		elseif outcome.out then
 			SpectatorService.toStands(outcome.player)
 		end
 	end
-	tell(outcomes, reason, final)
+	tell(outcomes, reason, final, launchIn)
 end
 
 -- A main-game fail (a mission, a Studio test): a life each, or the final for exactly those players when nobody
@@ -432,6 +453,7 @@ local function playMain(myRound: number)
 	end
 	local lastId: string? = nil
 	local recap = "" -- (nothing before the first game)
+	local chosenBy, votes = "random", nil :: { [string]: number }?
 	while true do
 		local landed = waitFlights()
 		if over() then
@@ -458,6 +480,7 @@ local function playMain(myRound: number)
 				end
 				mission = MissionRunner.choose(Timeline.left() - Config.BRIEF_SECONDS, #Match.aliveList(),
 					Match.presenter ~= nil and not Match.presenterPending, picked, rng, lastId)
+				chosenBy, votes = if mission and mission.id == picked then "presenter" else "random", nil
 			else
 				-- (the vote's seconds are counted before choosing, so the winner still fits once it is over; with one game
 				-- or none to choose from there is no vote, and its seconds are not counted)
@@ -465,7 +488,8 @@ local function playMain(myRound: number)
 					#Match.aliveList(), rng, lastId)
 				if #ballot > 1 then
 					Match.setMessage(Config.TEXT.NEXT_VOTE)
-					mission = MissionRunner.vote(ballot, recap, Match.aliveList(), rng, over)
+					mission, votes = MissionRunner.vote(ballot, recap, Match.aliveList(), rng, over)
+					chosenBy = "vote"
 					if over() then
 						return
 					end
@@ -473,6 +497,7 @@ local function playMain(myRound: number)
 				else
 					mission = MissionRunner.choose(Timeline.left() - Config.BRIEF_SECONDS, #Match.aliveList(), false, nil,
 						rng, lastId)
+					chosenBy, votes = "random", nil
 				end
 			end
 			if presenting then
@@ -494,6 +519,9 @@ local function playMain(myRound: number)
 			lastId = mission.id
 			table.clear(gameLost)
 			table.clear(gameOut)
+			local playing = Match.aliveList() -- (who plays this game)
+			local startedAt = os.clock()
+			Telemetry.gameStarted(playing, mission.id)
 			local _, didPlay = MissionRunner.run(mission, missionCtx(myRound, false, function(players, key, subjective)
 				failPlayers(players, "m" .. run .. ":" .. key, "fail", if subjective then "subjective" else "objective")
 			end, mainSettled))
@@ -504,6 +532,17 @@ local function playMain(myRound: number)
 			BellService.close()
 			settleTalk() -- (a banned-word talk ends with its settle stage, also when it was cancelled or broke)
 			recap = recapText()
+			if didPlay then
+				local lost, kept = {}, {}
+				for _, player in playing do
+					table.insert(if gameLost[player] then lost else kept, player)
+				end
+				Awards.gameOver(kept)
+				Telemetry.gameEnded({ round = myRound, game = Match.game, mission = mission.id, chosenBy = chosenBy,
+					votes = votes, players = playing, lost = lost, seconds = os.clock() - startedAt })
+			else
+				Telemetry.gameEnded(nil)
+			end
 		end
 	end
 end
@@ -649,6 +688,7 @@ local function runRound()
 	toFinal = false
 	rerollsUsed = 0
 	Scores.resetRound()
+	Awards.beginRound()
 	MissionRunner.beginRound()
 	local presenter = PresenterService.choose(candidates) -- before the chairs are counted: every volunteer is looked at
 	if presenter then
@@ -696,6 +736,7 @@ local function runRound()
 	ChatGate.setGuard(false)
 	openVoices()
 	Match.setPhase("Result", Config.RESULT_TIME, text)
+	MissionRunner.showRoundResult(text, Awards.lines())
 	waitPhase()
 	cleanup()
 	lastEndedAt = os.clock()
@@ -961,7 +1002,9 @@ function RoundService.start()
 	BellService.start(SeatService.isFlying)
 	LifeService.start(SeatService.isFlying)
 	SpectatorService.start(busy)
-	SeatService.init(onFlightOver)
+	SeatService.init(onFlightOver, function(player, distance, _airTime)
+		Awards.flight(player, distance)
+	end)
 	-- "Ready" changes take effect at once; the state broadcast they cause is gathered (at most one per
 	-- READY_BROADCAST_DELAY), so a client flipping it fast cannot make the server message everyone each time.
 	local readyBroadcastQueued = false

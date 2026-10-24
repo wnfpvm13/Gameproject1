@@ -44,6 +44,8 @@ ROUND_MODULES = [
     ("JudgeService", "src/server/services/JudgeService.luau"),
     ("LifeService", "src/server/services/LifeService.luau"),
     ("Timeline", "src/server/services/Timeline.luau"),
+    ("Awards", "src/server/services/Awards.luau"),
+    ("Telemetry", "src/server/services/Telemetry.luau"),
     ("TalkTopics", "src/server/content/TalkTopics.luau"),
     ("BannedTalk", "src/server/missions/BannedTalk.luau"),
     ("BombBank", "src/server/content/BombBank.luau"),

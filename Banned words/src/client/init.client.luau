@@ -2,6 +2,7 @@
 -- every part from State (HUD, head bubbles, camera, reaction bar, getting ready, presenter controls, recognizer on/off,
 -- seat lock). The mission card shows what the server's "Mission" says.
 local Players = game:GetService("Players")
+local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
@@ -294,6 +295,17 @@ local function showMission()
 	end
 	MissionPanel.show(payload, canAnswer, names, State.myId())
 end
+-- I am flying (or waiting my turn in a chain) until `untilAt` (os.clock()): the round camera stays, my buttons and
+-- the mission card wait; everything is looked at again once that time has passed (the latest deadline wins).
+local function flyingUntil(untilAt: number)
+	myFlightEndsAt = math.max(myFlightEndsAt, untilAt)
+	refresh()
+	showMission()
+	task.delay(untilAt - os.clock() + 0.1, function()
+		refresh()
+		showMission()
+	end)
+end
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	lastMission = payload
 	othersLaunchHideUntil = 0
@@ -348,6 +360,10 @@ remotes.LifeLost.OnClientEvent:Connect(function(info)
 	local lost, out, lines = {}, {}, {}
 	local anyOut = false
 	for _, entry in info.players do
+		if entry.userId == State.myId() and typeof(entry.launchIn) == "number" then
+			-- (my launch waits its turn in a chain: I keep the round camera until I am back, owner 2026-10-24)
+			flyingUntil(os.clock() + entry.launchIn + Config.FLING_RETURN_SECONDS + 0.5)
+		end
 		Billboards.hit(entry.userId, entry.lives, State.round.maxLives, entry.out)
 		anyOut = anyOut or entry.out
 		if entry.userId == State.myId() and info.reason ~= "left" then
@@ -382,7 +398,7 @@ remotes.LifeLost.OnClientEvent:Connect(function(info)
 		table.insert(lines, Config.TEXT.TO_FINAL)
 	end
 	if anyOut then
-		Fx.elimination()
+		Fx.elimination(GuiService.ReducedMotionEnabled)
 	end
 	Toast.show(table.concat(lines, "\n"), if anyOut then "elim" else "near")
 end)
@@ -405,20 +421,22 @@ end)
 
 -- A flying chair fired (docs/DESIGN_V3.md §10): everyone sees the flap snap back and hears the bang.
 remotes.Fling.OnClientEvent:Connect(function(info)
+	if info.userId == State.myId() then
+		flyingUntil(os.clock() + Config.FLING_RETURN_SECONDS + 0.5) -- (first: the round camera must be on before it shakes)
+	end
 	Fx.fling(info)
+	-- (shake and flash: not with the device's reduced motion setting)
+	if not GuiService.ReducedMotionEnabled then
+		local size = if typeof(info.size) == "number" then info.size else 1
+		ShowCamera.shake(Config.SHAKE_STUDS * size, Config.SHAKE_SECONDS)
+		if size >= Config.FLASH_FROM_SIZE then
+			Fx.whiteFlash()
+		end
+	end
 	if info.userId ~= State.myId() and passiveScreen(lastMission) then
 		othersLaunchHideUntil = os.clock() + Config.FLING_RETURN_SECONDS
 		showMission()
 		task.delay(Config.FLING_RETURN_SECONDS + 0.05, showMission)
-	end
-	if info.userId == State.myId() then
-		myFlightEndsAt = os.clock() + Config.FLING_RETURN_SECONDS + 0.5
-		refresh()
-		showMission()
-		task.delay(Config.FLING_RETURN_SECONDS + 0.6, function()
-			refresh()
-			showMission()
-		end)
 	end
 end)
 

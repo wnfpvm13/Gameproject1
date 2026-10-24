@@ -191,6 +191,21 @@ return {
 	-- throw stays over the landing zone: the end chairs fly only straight or inward)
 	BLAST_SPIN = 12, -- rad/s tumble about a random axis
 	BLAST_RADIUS = 12, -- size of the drawn explosion (studs; it pushes nothing itself)
+	-- Owner 2026-10-24: the fewer lives left, the bigger the blast (drawn only; the throw keeps its speed until the
+	-- pool's length is checked): size = 1 + BLAST_GROWTH x the lives lost before this one, so with three lives 1, 1.5,
+	-- 2 (the last life and going out).
+	BLAST_GROWTH = 0.5,
+	CHAIN_DELAY = 0.2, -- several launched by one event go off one after another, from the camera's left chair
+	SHAKE_SECONDS = 0.45, -- the round camera shakes this long at a blast (not with the device's reduced motion)
+	SHAKE_STUDS = 0.35, -- how far it moves at a normal blast (times the blast's size)
+	FLASH_FROM_SIZE = 2, -- blasts this big also flash the screen white for a moment
+	FLASH_WHITE_ALPHA = 0.45, -- its transparency at the start
+	FLASH_WHITE_SECONDS = 0.35, -- and how long it takes to fade
+	-- The flight record (owner 2026-10-24): where a flight first comes down — the water, or wherever it stops moving
+	-- (slower than FLIGHT_STOPPED_SPEED studs/s) after FLIGHT_SETTLE_SECONDS.
+	FLIGHT_SETTLE_SECONDS = 0.4,
+	FLIGHT_STOPPED_SPEED = 4,
+	STUDS_TO_METERS = 0.28, -- (Roblox's usual conversion, for the "longest flight" line)
 	FLING_FLOAT_DENSITY = 0.45, -- body density while flying, so it floats on the water (avatars sink otherwise)
 	FLING_COLLIDE_DELAY = 0.2, -- body parts start colliding this long after the launch (seated feet touch the carpet,
 	-- and colliding from the first frame cost ~10% of the throw in the Studio test)
@@ -262,6 +277,9 @@ return {
 		WINNER = "%s 우승!",
 		JOINT_WINNERS = "%s 공동 우승!",
 		NO_WINNER = "우승자 없이 끝났어요",
+		-- Round awards on the result screen (owner 2026-10-24).
+		AWARD_FLIGHT = "최장 비행 %s · %.1fm",
+		AWARD_SURVIVOR = "목숨을 안 잃은 미션 최다 %s · %d개",
 		SETTLING = "마지막 말을 확인하고 있어요…",
 		RECOGNITION_UNSTABLE = "음성 인식이 불안정해요 · 마이크 연결을 확인해 주세요",
 		-- Getting ready (MicPanel, docs/DESIGN_V3.md §2, §7): voice, or chat for players who cannot use voice.

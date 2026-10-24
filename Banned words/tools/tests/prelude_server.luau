@@ -207,6 +207,12 @@ local function require(n)
 	return cache[name]
 end
 local script = node("script")
+-- Analytics (Telemetry): never reached here (it skips Studio, and the tests run as Studio); a call is an error.
+local AnalyticsService = {
+	LogCustomEvent = function()
+		error("analytics from a Studio round")
+	end,
+}
 local game = {
 	GetService = function(_, n)
 		if n == "Players" then
@@ -217,6 +223,8 @@ local game = {
 			return TextChatService
 		elseif n == "VoiceChatService" then
 			return VoiceChatService
+		elseif n == "AnalyticsService" then
+			return AnalyticsService
 		end
 		return node(n)
 	end,

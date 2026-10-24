@@ -1,5 +1,6 @@
 --!strict
--- Effects: the flying chair firing (an explosion, the seat flap snapping back on its hinge, "펑", smoke and confetti),
+-- Effects: the flying chair firing (an explosion — bigger the fewer lives were left, a white flash for the biggest —,
+-- the seat flap snapping back on its hinge, "펑", smoke and confetti),
 -- the splash where the player hits the water (no sound: owner 2026-10-24), the elimination buzzer and red flash, floating emoji reactions, the presenter's sound
 -- buttons and a seat bell's ding with its light (bundle 6b).
 -- The server only sends signals; every client animates the flap itself (a server-moved flap would stutter).
@@ -19,6 +20,7 @@ local CONFETTI = {
 }
 
 local flash: Frame
+local whiteFlashFrame: Frame -- (its own frame: the elimination's red flash may run at the same time)
 local buzzer: Sound
 local bang: Sound
 local bellSound: Sound
@@ -71,6 +73,10 @@ function Fx.init()
 	flash.BackgroundTransparency = 1
 	flash.BorderSizePixel = 0
 	flash.Parent = gui
+	whiteFlashFrame = flash:Clone()
+	whiteFlashFrame.Name = "WhiteFlash"
+	whiteFlashFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+	whiteFlashFrame.Parent = gui
 
 	buzzer = sound("Buzzer", Config.SOUND_BUZZER, 0.6)
 	bang = sound("Bang", Config.SOUND_BANG, 0.8)
@@ -136,18 +142,19 @@ local function emitter(parent: Instance, props: { [string]: any }, count: number
 	e:Emit(count)
 end
 
--- The bang at the chair: a white smoke puff, sparks and a little confetti.
-local function burst(position: Vector3)
+-- The bang at the chair: a white smoke puff, sparks and a little confetti (`size` 1 = normal; a bigger blast throws
+-- more of them and a wider puff).
+local function burst(position: Vector3, size: number)
 	local anchor = anchorAt(position, 3)
 	emitter(anchor, {
 		Color = ColorSequence.new(Color3.fromRGB(242, 242, 242)),
-		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.5), NumberSequenceKeypoint.new(1, 7) }),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.5), NumberSequenceKeypoint.new(1, 7 * size) }),
 		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 1) }),
 		Lifetime = NumberRange.new(0.6, 1.1),
 		Speed = NumberRange.new(6, 14),
 		Drag = 4,
 		SpreadAngle = Vector2.new(180, 180),
-	}, 16)
+	}, math.round(16 * size))
 	emitter(anchor, {
 		Color = ColorSequence.new(Color3.fromRGB(255, 225, 130), Color3.fromRGB(255, 120, 40)),
 		LightEmission = 1,
@@ -156,7 +163,7 @@ local function burst(position: Vector3)
 		Speed = NumberRange.new(25, 45),
 		EmissionDirection = Enum.NormalId.Top,
 		SpreadAngle = Vector2.new(70, 70),
-	}, 24)
+	}, math.round(24 * size))
 	for _, color in CONFETTI do
 		emitter(anchor, {
 			Color = ColorSequence.new(color),
@@ -167,7 +174,7 @@ local function burst(position: Vector3)
 			Acceleration = Vector3.new(0, -30, 0),
 			RotSpeed = NumberRange.new(-300, 300),
 			Rotation = NumberRange.new(0, 360),
-		}, 6)
+		}, math.round(6 * size))
 	end
 end
 
@@ -232,13 +239,15 @@ local function snapFlap(hinge: BasePart)
 end
 
 -- A flying chair fired: the flap snaps back, "펑", smoke at the seat.
-function Fx.fling(info: { seatIndex: number?, blastAt: Vector3? })
+-- A launch (`info.size`: 1 normal, bigger the fewer lives were left, owner 2026-10-24).
+function Fx.fling(info: { seatIndex: number?, blastAt: Vector3?, size: number? })
+	local size = if typeof(info.size) == "number" then math.clamp(info.size, 1, 3) else 1
 	playCopy(bang)
 	if typeof(info.blastAt) == "Vector3" then
 		-- Roblox's own explosion look; it pushes and breaks nothing (the server throws the body).
 		local explosion = Instance.new("Explosion")
 		explosion.Position = info.blastAt
-		explosion.BlastRadius = Config.BLAST_RADIUS
+		explosion.BlastRadius = Config.BLAST_RADIUS * size
 		explosion.BlastPressure = 0
 		explosion.DestroyJointRadiusPercent = 0
 		explosion.ExplosionType = Enum.ExplosionType.NoCraters
@@ -253,8 +262,15 @@ function Fx.fling(info: { seatIndex: number?, blastAt: Vector3? })
 		snapFlap(hinge)
 	end
 	if seat then
-		burst(seat.Position + Vector3.new(0, 1, 0))
+		burst(seat.Position + Vector3.new(0, 1, 0), size)
 	end
+end
+
+-- A white flash over the screen (the biggest blasts; not with the device's reduced motion, checked by the caller).
+function Fx.whiteFlash()
+	whiteFlashFrame.BackgroundTransparency = Config.FLASH_WHITE_ALPHA
+	TweenService:Create(whiteFlashFrame, TweenInfo.new(Config.FLASH_WHITE_SECONDS, Enum.EasingStyle.Quad,
+		Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
 end
 
 -- The presenter pulled the "날려!" lever on the podium (PoolHall.PodiumSet.Lever: Base, Handle, Knob): the handle
@@ -343,8 +359,12 @@ function Fx.splash(position: Vector3)
 end
 
 -- Someone said a word: buzzer + red flash (the launch itself comes with the "Fling" signal).
-function Fx.elimination()
+-- Someone went out: the buzzer, and a red flash unless `calm` (the device's reduced motion setting).
+function Fx.elimination(calm: boolean?)
 	buzzer:Play()
+	if calm then
+		return
+	end
 	flash.BackgroundTransparency = 0.55
 	TweenService:Create(flash, TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
 end

@@ -16,7 +16,8 @@
 --     the end), the bomb (who holds it, the question, two answers for the holder), nunchi (the rule and the seconds
 --     left; at the end the order the bells came in);
 --   - between games (owner 2026-10-24): what the last game did with the vote for the next one (or "the presenter is
---     picking"), then the next game's briefing: its name, its one-line rule, 3-2-1;
+--     picking"), then the next game's briefing: its name, its one-line rule, 3-2-1; at the end the round's result
+--     with its awards (the longest flight, the most games without losing a life);
 --   - bundle 6d: the balance game ("A vs B", who argues, then two picks that may change until the time is up; the
 --     counts), red light (the light big on a green or red card, my steps), the liar (the category, the word — or "you
 --     are the liar" — on my own screen, whose clue it is, the vote, the liar's guess among four, who it was).
@@ -348,7 +349,8 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local games = kind == "croc" or kind == "crocResult" or kind == "bomb" or kind == "bombResult" or kind == "nunchi"
 		or kind == "nunchiResult" or kind == "balance" or kind == "balanceResult" or kind == "redLight"
 		or kind == "redLightResult" or kind == "liar" or kind == "liarGuess" or kind == "liarResult"
-	local between = kind == "nextVote" or kind == "nextPick" or kind == "brief"
+	local between = kind == "nextVote" or kind == "nextPick" or kind == "brief" or kind == "roundResult"
+	note.Size = UDim2.new(1, 0, 0, if kind == "roundResult" then 46 else 22) -- (the awards take two lines)
 	state.shown = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
 		or kind == "talk" or bells or games or between
 	card.Visible = state.shown and not state.hidden
@@ -401,6 +403,10 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			b.Text = choices[i] or ""
 			paint(b, canAnswer and not state.myPick, i == state.myPick)
 		end
+	elseif kind == "roundResult" then
+		title.Text = payload.title or ""
+		note.Text = table.concat(payload.lines or {}, "\n")
+		note.Visible = note.Text ~= ""
 	elseif kind == "brief" then
 		title.Text = string.format("%s · %s", string.format(TEXT.GAME_COUNT, payload.game or 1, payload.games or 1),
 			payload.title or "")

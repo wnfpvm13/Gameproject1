@@ -422,7 +422,9 @@ end
 -- Between games (owner 2026-10-24): `voters` vote for the next game among `ballot` (2+ missions) on a screen that also
 -- shows `recap` (what the last game did), for NEXT_VOTE_SECONDS or until every voter still here voted, or until
 -- `stop`. The most votes win; a tie or no vote at all: at random among the tied (or all). No penalty for not voting.
-function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player }, rng: Random, stop: () -> boolean): Mission
+-- Also returns the count per mission id (the beta's measurements).
+function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player }, rng: Random, stop: () -> boolean):
+	(Mission, { [string]: number })
 	questions += 1
 	local open: Question = { id = questions, from = {}, choices = #ballot, endsAt = Match.now() + Config.NEXT_VOTE_SECONDS,
 		answers = {}, changeable = false }
@@ -457,15 +459,22 @@ function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player
 		counts[choice] = (counts[choice] or 0) + 1
 	end
 	local best, tied = -1, {}
+	local byId: { [string]: number } = {}
 	for i = 1, #ballot do
 		local votes = counts[i] or 0
+		byId[ballot[i].id] = votes
 		if votes > best then
 			best, tied = votes, { i }
 		elseif votes == best then
 			table.insert(tied, i)
 		end
 	end
-	return ballot[tied[rng:NextInteger(1, #tied)]]
+	return ballot[tied[rng:NextInteger(1, #tied)]], byId
+end
+
+-- The round's result on everyone's screen: who won and the round awards (owner 2026-10-24).
+function MissionRunner.showRoundResult(title: string, lines: { string })
+	setScreen({ kind = "roundResult", title = title, lines = lines })
 end
 
 -- Clears a between-games screen left over (the main game ended while it showed).

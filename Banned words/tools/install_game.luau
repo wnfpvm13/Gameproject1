@@ -204,6 +204,21 @@ return {
 	-- throw stays over the landing zone: the end chairs fly only straight or inward)
 	BLAST_SPIN = 12, -- rad/s tumble about a random axis
 	BLAST_RADIUS = 12, -- size of the drawn explosion (studs; it pushes nothing itself)
+	-- Owner 2026-10-24: the fewer lives left, the bigger the blast (drawn only; the throw keeps its speed until the
+	-- pool's length is checked): size = 1 + BLAST_GROWTH x the lives lost before this one, so with three lives 1, 1.5,
+	-- 2 (the last life and going out).
+	BLAST_GROWTH = 0.5,
+	CHAIN_DELAY = 0.2, -- several launched by one event go off one after another, from the camera's left chair
+	SHAKE_SECONDS = 0.45, -- the round camera shakes this long at a blast (not with the device's reduced motion)
+	SHAKE_STUDS = 0.35, -- how far it moves at a normal blast (times the blast's size)
+	FLASH_FROM_SIZE = 2, -- blasts this big also flash the screen white for a moment
+	FLASH_WHITE_ALPHA = 0.45, -- its transparency at the start
+	FLASH_WHITE_SECONDS = 0.35, -- and how long it takes to fade
+	-- The flight record (owner 2026-10-24): where a flight first comes down — the water, or wherever it stops moving
+	-- (slower than FLIGHT_STOPPED_SPEED studs/s) after FLIGHT_SETTLE_SECONDS.
+	FLIGHT_SETTLE_SECONDS = 0.4,
+	FLIGHT_STOPPED_SPEED = 4,
+	STUDS_TO_METERS = 0.28, -- (Roblox's usual conversion, for the "longest flight" line)
 	FLING_FLOAT_DENSITY = 0.45, -- body density while flying, so it floats on the water (avatars sink otherwise)
 	FLING_COLLIDE_DELAY = 0.2, -- body parts start colliding this long after the launch (seated feet touch the carpet,
 	-- and colliding from the first frame cost ~10% of the throw in the Studio test)
@@ -275,6 +290,9 @@ return {
 		WINNER = "%s 우승!",
 		JOINT_WINNERS = "%s 공동 우승!",
 		NO_WINNER = "우승자 없이 끝났어요",
+		-- Round awards on the result screen (owner 2026-10-24).
+		AWARD_FLIGHT = "최장 비행 %s · %.1fm",
+		AWARD_SURVIVOR = "목숨을 안 잃은 미션 최다 %s · %d개",
 		SETTLING = "마지막 말을 확인하고 있어요…",
 		RECOGNITION_UNSTABLE = "음성 인식이 불안정해요 · 마이크 연결을 확인해 주세요",
 		-- Getting ready (MicPanel, docs/DESIGN_V3.md §2, §7): voice, or chat for players who cannot use voice.
@@ -917,7 +935,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "RoundService"; s.Source = [
 --   Result -> Countdown (quick rematch) ...
 -- Rules live in the services: lives in LifeService, the game count, time cap and final trigger in Timeline, missions in
 -- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
--- join by chat in ChatService, the presenter in PresenterService, banned words in WordService, score in Scores.
+-- join by chat in ChatService, the presenter in PresenterService, banned words in WordService, score in Scores, the round awards in Awards, the beta's measurements in Telemetry.
 -- Bundle 6a: banned words exist only during the banned-word talk (a minigame, played while speech judging is on): its
 -- prep stage draws them (the presenter may re-draw), the talk is judged in chat at once and in speech (JudgeService,
 -- bundle 6e) — the presenter rescues, or without a presenter the hit flies at once — and by the presenter's ear, and
@@ -947,6 +965,8 @@ local VoiceService = require(services:WaitForChild("VoiceService"))
 local ChatService = require(services:WaitForChild("ChatService"))
 local PresenterService = require(services:WaitForChild("PresenterService"))
 local Scores = require(services:WaitForChild("Scores"))
+local Awards = require(services:WaitForChild("Awards"))
+local Telemetry = require(services:WaitForChild("Telemetry"))
 
 local RoundService = {}
 
@@ -1015,10 +1035,14 @@ local noteDecision: () -> () -- (below mainDecided) in the talk, the moment the 
 local gameLost: { [Player]: boolean } = {}
 local gameOut: { [Player]: boolean } = {}
 
-local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean)
+-- `launchIn`: seconds until each one's launch goes off (a chain), for their screen (they keep the round camera).
+local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean, launchIn: { [Player]: number }?)
 	local list = {}
 	if Match.phase == "Play" and reason ~= "left" then
 		for _, outcome in outcomes do
+			if not gameLost[outcome.player] then
+				Telemetry.lifeLost(outcome.player) -- (now: they may leave before the game is over)
+			end
 			gameLost[outcome.player] = true
 			if outcome.out then
 				gameOut[outcome.player] = true
@@ -1031,6 +1055,7 @@ local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: bo
 			name = outcome.player.DisplayName,
 			lives = outcome.livesLeft,
 			out = outcome.out,
+			launchIn = if launchIn then launchIn[outcome.player] else nil,
 		})
 	end
 	Net.toAll("LifeLost", { reason = reason, players = list, final = final })
@@ -1043,17 +1068,31 @@ local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: bo
 end
 
 -- Launches everyone who lost a life. Players who are out reach the stands after their flight (onFlightOver), or
--- right away when there was nothing to launch (no character on the chair at that moment).
+-- right away when there was nothing to launch (no character on the chair at that moment). Owner 2026-10-24: several
+-- go off one after another from the camera's left chair (CHAIN_DELAY apart; the lives are already settled, and each
+-- counts as flying from now on), and the fewer lives left, the bigger the blast.
 local function announce(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean)
 	if #outcomes == 0 then
 		return
 	end
-	for _, outcome in outcomes do
-		if not SeatService.fling(outcome.player, Match.roundId) and outcome.out then
+	local order = table.clone(outcomes)
+	table.sort(order, function(a, b)
+		return (SeatService.seatIndexOf(a.player) or math.huge) < (SeatService.seatIndexOf(b.player) or math.huge)
+	end)
+	local launched = 0
+	local launchIn: { [Player]: number } = {}
+	for _, outcome in order do
+		local lost = Config.LIVES - outcome.livesLeft -- (lives gone counting this one)
+		local size = 1 + Config.BLAST_GROWTH * math.max(0, lost - 1)
+		local delay = launched * Config.CHAIN_DELAY
+		if SeatService.fling(outcome.player, Match.roundId, delay, size) then
+			launched += 1
+			launchIn[outcome.player] = delay
+		elseif outcome.out then
 			SpectatorService.toStands(outcome.player)
 		end
 	end
-	tell(outcomes, reason, final)
+	tell(outcomes, reason, final, launchIn)
 end
 
 -- A main-game fail (a mission, a Studio test): a life each, or the final for exactly those players when nobody
@@ -1343,6 +1382,7 @@ local function playMain(myRound: number)
 	end
 	local lastId: string? = nil
 	local recap = "" -- (nothing before the first game)
+	local chosenBy, votes = "random", nil :: { [string]: number }?
 	while true do
 		local landed = waitFlights()
 		if over() then
@@ -1369,6 +1409,7 @@ local function playMain(myRound: number)
 				end
 				mission = MissionRunner.choose(Timeline.left() - Config.BRIEF_SECONDS, #Match.aliveList(),
 					Match.presenter ~= nil and not Match.presenterPending, picked, rng, lastId)
+				chosenBy, votes = if mission and mission.id == picked then "presenter" else "random", nil
 			else
 				-- (the vote's seconds are counted before choosing, so the winner still fits once it is over; with one game
 				-- or none to choose from there is no vote, and its seconds are not counted)
@@ -1376,7 +1417,8 @@ local function playMain(myRound: number)
 					#Match.aliveList(), rng, lastId)
 				if #ballot > 1 then
 					Match.setMessage(Config.TEXT.NEXT_VOTE)
-					mission = MissionRunner.vote(ballot, recap, Match.aliveList(), rng, over)
+					mission, votes = MissionRunner.vote(ballot, recap, Match.aliveList(), rng, over)
+					chosenBy = "vote"
 					if over() then
 						return
 					end
@@ -1384,6 +1426,7 @@ local function playMain(myRound: number)
 				else
 					mission = MissionRunner.choose(Timeline.left() - Config.BRIEF_SECONDS, #Match.aliveList(), false, nil,
 						rng, lastId)
+					chosenBy, votes = "random", nil
 				end
 			end
 			if presenting then
@@ -1405,6 +1448,9 @@ local function playMain(myRound: number)
 			lastId = mission.id
 			table.clear(gameLost)
 			table.clear(gameOut)
+			local playing = Match.aliveList() -- (who plays this game)
+			local startedAt = os.clock()
+			Telemetry.gameStarted(playing, mission.id)
 			local _, didPlay = MissionRunner.run(mission, missionCtx(myRound, false, function(players, key, subjective)
 				failPlayers(players, "m" .. run .. ":" .. key, "fail", if subjective then "subjective" else "objective")
 			end, mainSettled))
@@ -1415,6 +1461,17 @@ local function playMain(myRound: number)
 			BellService.close()
 			settleTalk() -- (a banned-word talk ends with its settle stage, also when it was cancelled or broke)
 			recap = recapText()
+			if didPlay then
+				local lost, kept = {}, {}
+				for _, player in playing do
+					table.insert(if gameLost[player] then lost else kept, player)
+				end
+				Awards.gameOver(kept)
+				Telemetry.gameEnded({ round = myRound, game = Match.game, mission = mission.id, chosenBy = chosenBy,
+					votes = votes, players = playing, lost = lost, seconds = os.clock() - startedAt })
+			else
+				Telemetry.gameEnded(nil)
+			end
 		end
 	end
 end
@@ -1560,6 +1617,7 @@ local function runRound()
 	toFinal = false
 	rerollsUsed = 0
 	Scores.resetRound()
+	Awards.beginRound()
 	MissionRunner.beginRound()
 	local presenter = PresenterService.choose(candidates) -- before the chairs are counted: every volunteer is looked at
 	if presenter then
@@ -1607,6 +1665,7 @@ local function runRound()
 	ChatGate.setGuard(false)
 	openVoices()
 	Match.setPhase("Result", Config.RESULT_TIME, text)
+	MissionRunner.showRoundResult(text, Awards.lines())
 	waitPhase()
 	cleanup()
 	lastEndedAt = os.clock()
@@ -1872,7 +1931,9 @@ function RoundService.start()
 	BellService.start(SeatService.isFlying)
 	LifeService.start(SeatService.isFlying)
 	SpectatorService.start(busy)
-	SeatService.init(onFlightOver)
+	SeatService.init(onFlightOver, function(player, distance, _airTime)
+		Awards.flight(player, distance)
+	end)
 	-- "Ready" changes take effect at once; the state broadcast they cause is gathered (at most one per
 	-- READY_BROADCAST_DELAY), so a client flipping it fast cannot make the server message everyone each time.
 	local readyBroadcastQueued = false
@@ -4526,6 +4587,69 @@ return TestMission
 ]====]; s.Parent = n4 end
 n4.Parent = n2
 local n5 = Instance.new("Folder"); n5.Name = "services"
+do local s = Instance.new("ModuleScript"); s.Name = "Awards"; s.Source = [====[--!strict
+-- Round awards on the result screen (owner 2026-10-24: failing should be fun too): the longest flight of the round
+-- and who got through the most games without losing a life. Only this round; nothing is saved.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+
+local Awards = {}
+
+local farthest: { [Player]: number } = {} -- each player's longest flight this round (studs)
+local survived: { [Player]: number } = {}
+
+function Awards.beginRound()
+	table.clear(farthest)
+	table.clear(survived)
+end
+
+-- A flight came down `distance` studs from its chair.
+function Awards.flight(player: Player, distance: number)
+	farthest[player] = math.max(farthest[player] or 0, distance)
+end
+
+-- A game was played; `players` got through it without losing a life.
+function Awards.gameOver(players: { Player })
+	for _, player in players do
+		survived[player] = (survived[player] or 0) + 1
+	end
+end
+
+-- The names of the players with the highest count (ties share it), sorted, and that count.
+local function best(counts: { [Player]: number }): ({ string }, number)
+	local top = 0
+	for player, count in counts do
+		if player.Parent then
+			top = math.max(top, count)
+		end
+	end
+	local names = {}
+	for player, count in counts do
+		if player.Parent and count == top then
+			table.insert(names, player.DisplayName)
+		end
+	end
+	table.sort(names)
+	return names, top
+end
+
+-- The lines for the result screen (none when nothing happened worth saying).
+function Awards.lines(): { string }
+	local lines = {}
+	local flyers, distance = best(farthest) -- (among the players still here; ties share it)
+	if distance > 0 then
+		table.insert(lines, string.format(Config.TEXT.AWARD_FLIGHT, table.concat(flyers, ", "), distance * Config.STUDS_TO_METERS))
+	end
+	local names, top = best(survived)
+	if top > 0 then
+		table.insert(lines, string.format(Config.TEXT.AWARD_SURVIVOR, table.concat(names, ", "), top))
+	end
+	return lines
+end
+
+return Awards
+]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "BellService"; s.Source = [====[--!strict
 -- The seat bells (docs/DESIGN_V3.md §5.1; bundle 6b, owner 2026-10-23): every chair has a bell next to it. A mission
 -- opens the bells of some players for a while (`collect`); each of them may ring once, and the rings are kept in the
@@ -5692,7 +5816,9 @@ end
 -- Between games (owner 2026-10-24): `voters` vote for the next game among `ballot` (2+ missions) on a screen that also
 -- shows `recap` (what the last game did), for NEXT_VOTE_SECONDS or until every voter still here voted, or until
 -- `stop`. The most votes win; a tie or no vote at all: at random among the tied (or all). No penalty for not voting.
-function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player }, rng: Random, stop: () -> boolean): Mission
+-- Also returns the count per mission id (the beta's measurements).
+function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player }, rng: Random, stop: () -> boolean):
+	(Mission, { [string]: number })
 	questions += 1
 	local open: Question = { id = questions, from = {}, choices = #ballot, endsAt = Match.now() + Config.NEXT_VOTE_SECONDS,
 		answers = {}, changeable = false }
@@ -5727,15 +5853,22 @@ function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player
 		counts[choice] = (counts[choice] or 0) + 1
 	end
 	local best, tied = -1, {}
+	local byId: { [string]: number } = {}
 	for i = 1, #ballot do
 		local votes = counts[i] or 0
+		byId[ballot[i].id] = votes
 		if votes > best then
 			best, tied = votes, { i }
 		elseif votes == best then
 			table.insert(tied, i)
 		end
 	end
-	return ballot[tied[rng:NextInteger(1, #tied)]]
+	return ballot[tied[rng:NextInteger(1, #tied)]], byId
+end
+
+-- The round's result on everyone's screen: who won and the round awards (owner 2026-10-24).
+function MissionRunner.showRoundResult(title: string, lines: { string })
+	setScreen({ kind = "roundResult", title = title, lines = lines })
 end
 
 -- Clears a between-games screen left over (the main game ended while it showed).
@@ -6465,7 +6598,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "SeatService"; s.Source = [=
 -- over the pool, a little differently each time, and physics does the rest. The clients draw the explosion, the seat
 -- flap snapping back and the splash from the "Fling" / "Splash" signals. SeatService only says when the player is due
 -- back (FLING_RETURN_SECONDS after the launch, with the character that flew); RoundService then calls endFling() and
--- picks reseat() or the stands.
+-- picks reseat() or the stands. Since 2026-10-24 a launch may wait its turn in a chain (fling's `delay`) and reports
+-- where it first came down (onLanded, for the round's flight record).
 -- A flight whose character dies or leaves the world is undone at once and never comes back.
 local Players = game:GetService("Players")
 local PhysicsService = game:GetService("PhysicsService")
@@ -6491,6 +6625,7 @@ type Flight = {
 	parts: { [BasePart]: { group: string, collide: boolean, physics: PhysicalProperties? } },
 	body: { BasePart }, -- body parts that collide once the body is off the chair
 	watches: { RBXScriptConnection }, -- the character dying or leaving undoes the flight
+	launched: boolean, -- false while it waits for its turn in a chain (still seated, nothing changed yet)
 }
 
 local rng = Random.new()
@@ -6500,6 +6635,7 @@ local locked = false
 local flights: { [Player]: Flight } = {}
 local nextToken = 0
 local returnDue: ((Player, any, Model) -> ())? = nil
+local landed: ((Player, number, number) -> ())? = nil
 
 local function hall(): Instance
 	return workspace:WaitForChild("PoolHall")
@@ -6544,9 +6680,11 @@ local function watch(seat: Seat)
 end
 
 -- returnDue(player, tag, character): FLING_RETURN_SECONDS after a launch (tag = what the caller passed to fling,
--- character = the one that flew).
-function SeatService.init(onReturnDue: (Player, any, Model) -> ())
+-- character = the one that flew). onLanded(player, distance, airTime): where a flight first came down (studs from
+-- the chair along the ground, seconds in the air; the round's flight record, owner 2026-10-24).
+function SeatService.init(onReturnDue: (Player, any, Model) -> (), onLanded: ((Player, number, number) -> ())?)
 	returnDue = onReturnDue
+	landed = onLanded
 	PhysicsService:RegisterCollisionGroup(FLYING_GROUP)
 	PhysicsService:RegisterCollisionGroup(CHAIR_GROUP)
 	PhysicsService:CollisionGroupSetCollidable(FLYING_GROUP, FLYING_GROUP, false)
@@ -6591,6 +6729,12 @@ function SeatService.seatPlayers(players: { Player }): { [Player]: Seat }
 	end
 	locked = true
 	return result
+end
+
+-- The chair number (SeatIndex, 1..10 from the show camera's left) a player sits on this round, or nil.
+function SeatService.seatIndexOf(player: Player): number?
+	local seat = homeSeat[player]
+	return if seat then seat:GetAttribute("SeatIndex") :: number? else nil
 end
 
 function SeatService.isFlying(player: Player): boolean
@@ -6734,8 +6878,11 @@ local function setOwner(root: BasePart, owner: Player?)
 end
 
 -- Launches a player off their chair (no-op unless they are alive, seated on a chair we gave them and not flying).
--- `tag` comes back with the return signal (RoundService passes the round id). Returns whether a launch started.
-function SeatService.fling(player: Player, tag: any): boolean
+-- `tag` comes back with the return signal (RoundService passes the round id). `delay`: the blast goes off this many
+-- seconds later (chain explosions, owner 2026-10-24) — the player counts as flying from now on, so nothing else can
+-- hit them meanwhile; a death, a new character or the end of the round meanwhile calls it off with the chair
+-- untouched. `size`: how big the clients draw the blast (1 = normal). Returns whether a launch started (or waits).
+function SeatService.fling(player: Player, tag: any, delay: number?, size: number?): boolean
 	if flights[player] then
 		return false
 	end
@@ -6754,16 +6901,6 @@ function SeatService.fling(player: Player, tag: any): boolean
 	if not seat then
 		return false
 	end
-	assigned[seat] = nil
-	local seatIndex = seat:GetAttribute("SeatIndex") :: number?
-	seat.Disabled = true
-	-- The seat weld must be gone before the impulse (and before taking ownership: a body welded to an anchored seat
-	-- is part of an anchored assembly).
-	local weld = seat:FindFirstChild("SeatWeld")
-	if weld then
-		weld:Destroy()
-	end
-	humanoid.Sit = false
 	nextToken += 1
 	local flight: Flight = {
 		character = character,
@@ -6776,6 +6913,7 @@ function SeatService.fling(player: Player, tag: any): boolean
 		parts = {},
 		body = {},
 		watches = {},
+		launched = false,
 	}
 	flights[player] = flight
 	-- A death or a character leaving the world (reset, respawn, removal) undoes the flight right away, so the return
@@ -6791,54 +6929,96 @@ function SeatService.fling(player: Player, tag: any): boolean
 			abandon()
 		end
 	end))
-	ragdoll(flight, root)
-	setOwner(root, nil)
-	-- The blast goes off just in front of the seated body, low (the clients draw it there).
-	local blastAt = root.Position + seat.CFrame.LookVector * Config.BLAST_FORWARD - Vector3.yAxis * Config.BLAST_BELOW
-	Net.toAll("Fling", { userId = player.UserId, seatIndex = seatIndex, blastAt = blastAt })
-	task.spawn(function()
-		-- The throw waits one frame: the humanoid must already be PlatformStanding, or its walking controller brakes
-		-- the first step (Studio test 2026-10-22: ~6 studs/s of the horizontal speed lost).
-		RunService.Heartbeat:Wait()
+	table.insert(flight.watches, player:GetPropertyChangedSignal("Character"):Connect(abandon))
+	local function launch()
 		if flights[player] ~= flight then
+			return -- (undone while waiting for its turn in a chain)
+		end
+		-- (still the same body, alive, on the chair we gave it: else the waiting launch is off)
+		if player.Character ~= character or humanoid.Health <= 0 or assigned[seat :: Seat] ~= humanoid then
+			abandon()
 			return
 		end
-		local velocity = blastVelocity(seat :: Seat)
-		local spin = blastSpin()
-		for part in flight.parts do
-			if not part.Anchored then
-				part.AssemblyLinearVelocity = velocity
-				part.AssemblyAngularVelocity = spin
-			end
+		flight.launched = true
+		local chair = seat :: Seat
+		if assigned[chair] == humanoid then
+			assigned[chair] = nil
 		end
-	end)
-	task.delay(Config.FLING_COLLIDE_DELAY, function()
-		if flights[player] == flight then
-			for _, part in flight.body do
-				part.CanCollide = true
-			end
+		local seatIndex = chair:GetAttribute("SeatIndex") :: number?
+		chair.Disabled = true
+		-- The seat weld must be gone before the impulse (and before taking ownership: a body welded to an anchored
+		-- seat is part of an anchored assembly).
+		local weld = chair:FindFirstChild("SeatWeld")
+		if weld then
+			weld:Destroy()
 		end
-	end)
-
-	local token = flight.token
-	task.spawn(function()
-		-- The splash: the first moment the body comes down to the water, over the pool, after leaving the chair.
-		local water = waterY()
-		local started = os.clock()
-		while flights[player] == flight and os.clock() - started < Config.FLING_RETURN_SECONDS do
-			if root.Parent and root.Position.Y < water + 1.5 and overPool(root.Position) then
-				Net.toAll("Splash", { userId = player.UserId, position = Vector3.new(root.Position.X, water, root.Position.Z) })
-				break
-			end
+		humanoid.Sit = false
+		ragdoll(flight, root)
+		setOwner(root, nil)
+		-- The blast goes off just in front of the seated body, low (the clients draw it there).
+		local from = root.Position
+		local blastAt = from + chair.CFrame.LookVector * Config.BLAST_FORWARD - Vector3.yAxis * Config.BLAST_BELOW
+		Net.toAll("Fling", { userId = player.UserId, seatIndex = seatIndex, blastAt = blastAt, size = size or 1 })
+		task.spawn(function()
+			-- The throw waits one frame: the humanoid must already be PlatformStanding, or its walking controller
+			-- brakes the first step (Studio test 2026-10-22: ~6 studs/s of the horizontal speed lost).
 			RunService.Heartbeat:Wait()
-		end
-	end)
-	task.delay(Config.FLING_RETURN_SECONDS, function()
-		local current = flights[player]
-		if current and current.token == token and returnDue then
-			returnDue(player, tag, character)
-		end
-	end)
+			if flights[player] ~= flight then
+				return
+			end
+			local velocity = blastVelocity(chair)
+			local spin = blastSpin()
+			for part in flight.parts do
+				if not part.Anchored then
+					part.AssemblyLinearVelocity = velocity
+					part.AssemblyAngularVelocity = spin
+				end
+			end
+		end)
+		task.delay(Config.FLING_COLLIDE_DELAY, function()
+			if flights[player] == flight then
+				for _, part in flight.body do
+					part.CanCollide = true
+				end
+			end
+		end)
+		task.spawn(function()
+			-- Where it first comes down: the water over the pool (a splash), or anywhere it stops falling after
+			-- FLIGHT_SETTLE_SECONDS (the deck) — the flight record.
+			local water = waterY()
+			local started = os.clock()
+			while flights[player] == flight and os.clock() - started < Config.FLING_RETURN_SECONDS do
+				if root.Parent then
+					local inWater = root.Position.Y < water + 1.5 and overPool(root.Position)
+					local stopped = os.clock() - started > Config.FLIGHT_SETTLE_SECONDS
+						and root.AssemblyLinearVelocity.Magnitude < Config.FLIGHT_STOPPED_SPEED
+					if inWater or stopped then
+						if inWater then
+							Net.toAll("Splash", { userId = player.UserId, position = Vector3.new(root.Position.X, water, root.Position.Z) })
+						end
+						if landed then
+							local flat = Vector3.new(root.Position.X - from.X, 0, root.Position.Z - from.Z)
+							landed(player, flat.Magnitude, os.clock() - started)
+						end
+						break
+					end
+				end
+				RunService.Heartbeat:Wait()
+			end
+		end)
+		local token = flight.token
+		task.delay(Config.FLING_RETURN_SECONDS, function()
+			local current = flights[player]
+			if current and current.token == token and returnDue then
+				returnDue(player, tag, character)
+			end
+		end)
+	end
+	if delay and delay > 0 then
+		task.delay(delay, launch)
+	else
+		launch()
+	end
 	return true
 end
 
@@ -6854,6 +7034,9 @@ function SeatService.endFling(player: Player)
 	flights[player] = nil
 	for _, connection in flight.watches do
 		connection:Disconnect()
+	end
+	if not flight.launched then
+		return -- (it never left the chair: nothing to undo)
 	end
 	local character, humanoid = flight.character, flight.humanoid
 	table.sort(flight.motors, function(a, b)
@@ -7132,6 +7315,76 @@ function SpectatorService.endRound()
 end
 
 return SpectatorService
+]====]; s.Parent = n5 end
+do local s = Instance.new("ModuleScript"); s.Name = "Telemetry"; s.Source = [====[--!strict
+-- Beta measurements (owner 2026-10-24: decide what to build next from numbers): after each main-game mission, one
+-- server console line (how it was chosen, the vote, players, lives lost, seconds), and on published servers Roblox
+-- custom analytics events per player, sent when they happen (a player may leave before the game is over):
+-- "MissionPlayed" at its start, "MissionLifeLost" at each life lost, with the mission id as custom field 1 (shown on
+-- the Creator Dashboard, up to a day later). Nothing a player said or typed is recorded.
+local AnalyticsService = game:GetService("AnalyticsService")
+local RunService = game:GetService("RunService")
+
+local Telemetry = {}
+
+export type Game = {
+	round: number,
+	game: number, -- its number in the round
+	mission: string, -- the mission id
+	chosenBy: string, -- "vote" | "presenter" | "random"
+	votes: { [string]: number }?, -- the vote's count per mission id
+	players: { Player }, -- who played it (alive participants at its start)
+	lost: { Player }, -- who lost a life in it
+	seconds: number,
+}
+
+local function event(player: Player, name: string, mission: string)
+	if RunService:IsStudio() then
+		return -- (no analytics from Studio tests)
+	end
+	local ok, err = pcall(function()
+		AnalyticsService:LogCustomEvent(player, name, 1, { [Enum.AnalyticsCustomFieldKeys.CustomField01.Name] = mission })
+	end)
+	if not ok then
+		warn("[BannedWords] analytics:", err)
+	end
+end
+
+local current = "" -- the mission being played (for the life events)
+
+-- A main-game mission starts with `players`.
+function Telemetry.gameStarted(players: { Player }, mission: string)
+	current = mission
+	for _, player in players do
+		event(player, "MissionPlayed", mission)
+	end
+end
+
+-- `player` lost a life in the mission being played (once per mission, RoundService checks).
+function Telemetry.lifeLost(player: Player)
+	if current ~= "" then
+		event(player, "MissionLifeLost", current)
+	end
+end
+
+-- The mission is over: its console line (`entry`; nil when it had too few players to start).
+function Telemetry.gameEnded(entry: Game?)
+	current = ""
+	if not entry then
+		return
+	end
+	local votes = {}
+	local counts: { [string]: number } = entry.votes or {}
+	for id, count in counts do
+		table.insert(votes, string.format("%s %d", id, count))
+	end
+	table.sort(votes)
+	print(string.format("[BannedWords] stats round %d game %d %s: chosen by %s%s, %d players, %d lost a life, %.1f s",
+		entry.round, entry.game, entry.mission, entry.chosenBy,
+		if #votes > 0 then " (" .. table.concat(votes, ", ") .. ")" else "", #entry.players, #entry.lost, entry.seconds))
+end
+
+return Telemetry
 ]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "Timeline"; s.Source = [====[--!strict
 -- The round's count and clock (docs/DESIGN_V3.md §2; owner 2026-10-24: a round is a number of games): ROUND_GAMES
@@ -7457,6 +7710,7 @@ local n6 = Instance.new("LocalScript"); n6.Name = "BannedWordsClient"; n6.Source
 -- every part from State (HUD, head bubbles, camera, reaction bar, getting ready, presenter controls, recognizer on/off,
 -- seat lock). The mission card shows what the server's "Mission" says.
 local Players = game:GetService("Players")
+local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
@@ -7749,6 +8003,17 @@ local function showMission()
 	end
 	MissionPanel.show(payload, canAnswer, names, State.myId())
 end
+-- I am flying (or waiting my turn in a chain) until `untilAt` (os.clock()): the round camera stays, my buttons and
+-- the mission card wait; everything is looked at again once that time has passed (the latest deadline wins).
+local function flyingUntil(untilAt: number)
+	myFlightEndsAt = math.max(myFlightEndsAt, untilAt)
+	refresh()
+	showMission()
+	task.delay(untilAt - os.clock() + 0.1, function()
+		refresh()
+		showMission()
+	end)
+end
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	lastMission = payload
 	othersLaunchHideUntil = 0
@@ -7803,6 +8068,10 @@ remotes.LifeLost.OnClientEvent:Connect(function(info)
 	local lost, out, lines = {}, {}, {}
 	local anyOut = false
 	for _, entry in info.players do
+		if entry.userId == State.myId() and typeof(entry.launchIn) == "number" then
+			-- (my launch waits its turn in a chain: I keep the round camera until I am back, owner 2026-10-24)
+			flyingUntil(os.clock() + entry.launchIn + Config.FLING_RETURN_SECONDS + 0.5)
+		end
 		Billboards.hit(entry.userId, entry.lives, State.round.maxLives, entry.out)
 		anyOut = anyOut or entry.out
 		if entry.userId == State.myId() and info.reason ~= "left" then
@@ -7837,7 +8106,7 @@ remotes.LifeLost.OnClientEvent:Connect(function(info)
 		table.insert(lines, Config.TEXT.TO_FINAL)
 	end
 	if anyOut then
-		Fx.elimination()
+		Fx.elimination(GuiService.ReducedMotionEnabled)
 	end
 	Toast.show(table.concat(lines, "\n"), if anyOut then "elim" else "near")
 end)
@@ -7860,20 +8129,22 @@ end)
 
 -- A flying chair fired (docs/DESIGN_V3.md §10): everyone sees the flap snap back and hears the bang.
 remotes.Fling.OnClientEvent:Connect(function(info)
+	if info.userId == State.myId() then
+		flyingUntil(os.clock() + Config.FLING_RETURN_SECONDS + 0.5) -- (first: the round camera must be on before it shakes)
+	end
 	Fx.fling(info)
+	-- (shake and flash: not with the device's reduced motion setting)
+	if not GuiService.ReducedMotionEnabled then
+		local size = if typeof(info.size) == "number" then info.size else 1
+		ShowCamera.shake(Config.SHAKE_STUDS * size, Config.SHAKE_SECONDS)
+		if size >= Config.FLASH_FROM_SIZE then
+			Fx.whiteFlash()
+		end
+	end
 	if info.userId ~= State.myId() and passiveScreen(lastMission) then
 		othersLaunchHideUntil = os.clock() + Config.FLING_RETURN_SECONDS
 		showMission()
 		task.delay(Config.FLING_RETURN_SECONDS + 0.05, showMission)
-	end
-	if info.userId == State.myId() then
-		myFlightEndsAt = os.clock() + Config.FLING_RETURN_SECONDS + 0.5
-		refresh()
-		showMission()
-		task.delay(Config.FLING_RETURN_SECONDS + 0.6, function()
-			refresh()
-			showMission()
-		end)
 	end
 end)
 
@@ -8368,7 +8639,8 @@ end
 return FlatVoice
 ]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "Fx"; s.Source = [====[--!strict
--- Effects: the flying chair firing (an explosion, the seat flap snapping back on its hinge, "펑", smoke and confetti),
+-- Effects: the flying chair firing (an explosion — bigger the fewer lives were left, a white flash for the biggest —,
+-- the seat flap snapping back on its hinge, "펑", smoke and confetti),
 -- the splash where the player hits the water (no sound: owner 2026-10-24), the elimination buzzer and red flash, floating emoji reactions, the presenter's sound
 -- buttons and a seat bell's ding with its light (bundle 6b).
 -- The server only sends signals; every client animates the flap itself (a server-moved flap would stutter).
@@ -8388,6 +8660,7 @@ local CONFETTI = {
 }
 
 local flash: Frame
+local whiteFlashFrame: Frame -- (its own frame: the elimination's red flash may run at the same time)
 local buzzer: Sound
 local bang: Sound
 local bellSound: Sound
@@ -8440,6 +8713,10 @@ function Fx.init()
 	flash.BackgroundTransparency = 1
 	flash.BorderSizePixel = 0
 	flash.Parent = gui
+	whiteFlashFrame = flash:Clone()
+	whiteFlashFrame.Name = "WhiteFlash"
+	whiteFlashFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+	whiteFlashFrame.Parent = gui
 
 	buzzer = sound("Buzzer", Config.SOUND_BUZZER, 0.6)
 	bang = sound("Bang", Config.SOUND_BANG, 0.8)
@@ -8505,18 +8782,19 @@ local function emitter(parent: Instance, props: { [string]: any }, count: number
 	e:Emit(count)
 end
 
--- The bang at the chair: a white smoke puff, sparks and a little confetti.
-local function burst(position: Vector3)
+-- The bang at the chair: a white smoke puff, sparks and a little confetti (`size` 1 = normal; a bigger blast throws
+-- more of them and a wider puff).
+local function burst(position: Vector3, size: number)
 	local anchor = anchorAt(position, 3)
 	emitter(anchor, {
 		Color = ColorSequence.new(Color3.fromRGB(242, 242, 242)),
-		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.5), NumberSequenceKeypoint.new(1, 7) }),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.5), NumberSequenceKeypoint.new(1, 7 * size) }),
 		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 1) }),
 		Lifetime = NumberRange.new(0.6, 1.1),
 		Speed = NumberRange.new(6, 14),
 		Drag = 4,
 		SpreadAngle = Vector2.new(180, 180),
-	}, 16)
+	}, math.round(16 * size))
 	emitter(anchor, {
 		Color = ColorSequence.new(Color3.fromRGB(255, 225, 130), Color3.fromRGB(255, 120, 40)),
 		LightEmission = 1,
@@ -8525,7 +8803,7 @@ local function burst(position: Vector3)
 		Speed = NumberRange.new(25, 45),
 		EmissionDirection = Enum.NormalId.Top,
 		SpreadAngle = Vector2.new(70, 70),
-	}, 24)
+	}, math.round(24 * size))
 	for _, color in CONFETTI do
 		emitter(anchor, {
 			Color = ColorSequence.new(color),
@@ -8536,7 +8814,7 @@ local function burst(position: Vector3)
 			Acceleration = Vector3.new(0, -30, 0),
 			RotSpeed = NumberRange.new(-300, 300),
 			Rotation = NumberRange.new(0, 360),
-		}, 6)
+		}, math.round(6 * size))
 	end
 end
 
@@ -8601,13 +8879,15 @@ local function snapFlap(hinge: BasePart)
 end
 
 -- A flying chair fired: the flap snaps back, "펑", smoke at the seat.
-function Fx.fling(info: { seatIndex: number?, blastAt: Vector3? })
+-- A launch (`info.size`: 1 normal, bigger the fewer lives were left, owner 2026-10-24).
+function Fx.fling(info: { seatIndex: number?, blastAt: Vector3?, size: number? })
+	local size = if typeof(info.size) == "number" then math.clamp(info.size, 1, 3) else 1
 	playCopy(bang)
 	if typeof(info.blastAt) == "Vector3" then
 		-- Roblox's own explosion look; it pushes and breaks nothing (the server throws the body).
 		local explosion = Instance.new("Explosion")
 		explosion.Position = info.blastAt
-		explosion.BlastRadius = Config.BLAST_RADIUS
+		explosion.BlastRadius = Config.BLAST_RADIUS * size
 		explosion.BlastPressure = 0
 		explosion.DestroyJointRadiusPercent = 0
 		explosion.ExplosionType = Enum.ExplosionType.NoCraters
@@ -8622,8 +8902,15 @@ function Fx.fling(info: { seatIndex: number?, blastAt: Vector3? })
 		snapFlap(hinge)
 	end
 	if seat then
-		burst(seat.Position + Vector3.new(0, 1, 0))
+		burst(seat.Position + Vector3.new(0, 1, 0), size)
 	end
+end
+
+-- A white flash over the screen (the biggest blasts; not with the device's reduced motion, checked by the caller).
+function Fx.whiteFlash()
+	whiteFlashFrame.BackgroundTransparency = Config.FLASH_WHITE_ALPHA
+	TweenService:Create(whiteFlashFrame, TweenInfo.new(Config.FLASH_WHITE_SECONDS, Enum.EasingStyle.Quad,
+		Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
 end
 
 -- The presenter pulled the "날려!" lever on the podium (PoolHall.PodiumSet.Lever: Base, Handle, Knob): the handle
@@ -8712,8 +8999,12 @@ function Fx.splash(position: Vector3)
 end
 
 -- Someone said a word: buzzer + red flash (the launch itself comes with the "Fling" signal).
-function Fx.elimination()
+-- Someone went out: the buzzer, and a red flash unless `calm` (the device's reduced motion setting).
+function Fx.elimination(calm: boolean?)
 	buzzer:Play()
+	if calm then
+		return
+	end
 	flash.BackgroundTransparency = 0.55
 	TweenService:Create(flash, TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
 end
@@ -8814,6 +9105,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "ShowCamera"; s.Source = [==
 --               first person; everyone else still sees them).
 -- Everyone else keeps the normal camera.
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local ShowCamera = {}
 
@@ -8987,6 +9279,36 @@ function ShowCamera.set(to: Mode?)
 		camera.CameraType = Enum.CameraType.Custom
 		camera.FieldOfView = DEFAULT_FOV
 	end
+end
+
+-- A blast shakes the round camera for SHAKE_SECONDS (owner 2026-10-24), `strength` studs at first, fading out; it
+-- ends back on the rig. Nothing without a round camera (spectators keep their own).
+local shaking = 0
+function ShowCamera.shake(strength: number, seconds: number)
+	local camera = workspace.CurrentCamera
+	if not (mode and camera) then
+		return
+	end
+	if not rig(camera) then
+		return
+	end
+	shaking += 1
+	local mine = shaking
+	local started = os.clock()
+	local connection: RBXScriptConnection
+	connection = RunService.RenderStepped:Connect(function()
+		local t = (os.clock() - started) / seconds
+		local marker = if mode then rig(camera) else nil -- (read every frame: the mode may change meanwhile)
+		if mine ~= shaking or not marker or t >= 1 then
+			connection:Disconnect()
+			if mine == shaking and marker then
+				camera.CFrame = marker.CFrame
+			end
+			return
+		end
+		local amount = strength * (1 - t)
+		camera.CFrame = marker.CFrame * CFrame.new((math.random() * 2 - 1) * amount, (math.random() * 2 - 1) * amount, 0)
+	end)
 end
 
 -- A new character resets the camera type; put the round camera back if it should be on.
@@ -9584,7 +9906,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [
 --     the end), the bomb (who holds it, the question, two answers for the holder), nunchi (the rule and the seconds
 --     left; at the end the order the bells came in);
 --   - between games (owner 2026-10-24): what the last game did with the vote for the next one (or "the presenter is
---     picking"), then the next game's briefing: its name, its one-line rule, 3-2-1;
+--     picking"), then the next game's briefing: its name, its one-line rule, 3-2-1; at the end the round's result
+--     with its awards (the longest flight, the most games without losing a life);
 --   - bundle 6d: the balance game ("A vs B", who argues, then two picks that may change until the time is up; the
 --     counts), red light (the light big on a green or red card, my steps), the liar (the category, the word — or "you
 --     are the liar" — on my own screen, whose clue it is, the vote, the liar's guess among four, who it was).
@@ -9916,7 +10239,8 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local games = kind == "croc" or kind == "crocResult" or kind == "bomb" or kind == "bombResult" or kind == "nunchi"
 		or kind == "nunchiResult" or kind == "balance" or kind == "balanceResult" or kind == "redLight"
 		or kind == "redLightResult" or kind == "liar" or kind == "liarGuess" or kind == "liarResult"
-	local between = kind == "nextVote" or kind == "nextPick" or kind == "brief"
+	local between = kind == "nextVote" or kind == "nextPick" or kind == "brief" or kind == "roundResult"
+	note.Size = UDim2.new(1, 0, 0, if kind == "roundResult" then 46 else 22) -- (the awards take two lines)
 	state.shown = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
 		or kind == "talk" or bells or games or between
 	card.Visible = state.shown and not state.hidden
@@ -9969,6 +10293,10 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			b.Text = choices[i] or ""
 			paint(b, canAnswer and not state.myPick, i == state.myPick)
 		end
+	elseif kind == "roundResult" then
+		title.Text = payload.title or ""
+		note.Text = table.concat(payload.lines or {}, "\n")
+		note.Visible = note.Text ~= ""
 	elseif kind == "brief" then
 		title.Text = string.format("%s · %s", string.format(TEXT.GAME_COUNT, payload.game or 1, payload.games or 1),
 			payload.title or "")

@@ -9,6 +9,7 @@
 --               first person; everyone else still sees them).
 -- Everyone else keeps the normal camera.
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local ShowCamera = {}
 
@@ -182,6 +183,36 @@ function ShowCamera.set(to: Mode?)
 		camera.CameraType = Enum.CameraType.Custom
 		camera.FieldOfView = DEFAULT_FOV
 	end
+end
+
+-- A blast shakes the round camera for SHAKE_SECONDS (owner 2026-10-24), `strength` studs at first, fading out; it
+-- ends back on the rig. Nothing without a round camera (spectators keep their own).
+local shaking = 0
+function ShowCamera.shake(strength: number, seconds: number)
+	local camera = workspace.CurrentCamera
+	if not (mode and camera) then
+		return
+	end
+	if not rig(camera) then
+		return
+	end
+	shaking += 1
+	local mine = shaking
+	local started = os.clock()
+	local connection: RBXScriptConnection
+	connection = RunService.RenderStepped:Connect(function()
+		local t = (os.clock() - started) / seconds
+		local marker = if mode then rig(camera) else nil -- (read every frame: the mode may change meanwhile)
+		if mine ~= shaking or not marker or t >= 1 then
+			connection:Disconnect()
+			if mine == shaking and marker then
+				camera.CFrame = marker.CFrame
+			end
+			return
+		end
+		local amount = strength * (1 - t)
+		camera.CFrame = marker.CFrame * CFrame.new((math.random() * 2 - 1) * amount, (math.random() * 2 - 1) * amount, 0)
+	end)
 end
 
 -- A new character resets the camera type; put the round camera back if it should be on.

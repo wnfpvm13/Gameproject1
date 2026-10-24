@@ -5,7 +5,8 @@
 -- over the pool, a little differently each time, and physics does the rest. The clients draw the explosion, the seat
 -- flap snapping back and the splash from the "Fling" / "Splash" signals. SeatService only says when the player is due
 -- back (FLING_RETURN_SECONDS after the launch, with the character that flew); RoundService then calls endFling() and
--- picks reseat() or the stands.
+-- picks reseat() or the stands. Since 2026-10-24 a launch may wait its turn in a chain (fling's `delay`) and reports
+-- where it first came down (onLanded, for the round's flight record).
 -- A flight whose character dies or leaves the world is undone at once and never comes back.
 local Players = game:GetService("Players")
 local PhysicsService = game:GetService("PhysicsService")
@@ -31,6 +32,7 @@ type Flight = {
 	parts: { [BasePart]: { group: string, collide: boolean, physics: PhysicalProperties? } },
 	body: { BasePart }, -- body parts that collide once the body is off the chair
 	watches: { RBXScriptConnection }, -- the character dying or leaving undoes the flight
+	launched: boolean, -- false while it waits for its turn in a chain (still seated, nothing changed yet)
 }
 
 local rng = Random.new()
@@ -40,6 +42,7 @@ local locked = false
 local flights: { [Player]: Flight } = {}
 local nextToken = 0
 local returnDue: ((Player, any, Model) -> ())? = nil
+local landed: ((Player, number, number) -> ())? = nil
 
 local function hall(): Instance
 	return workspace:WaitForChild("PoolHall")
@@ -84,9 +87,11 @@ local function watch(seat: Seat)
 end
 
 -- returnDue(player, tag, character): FLING_RETURN_SECONDS after a launch (tag = what the caller passed to fling,
--- character = the one that flew).
-function SeatService.init(onReturnDue: (Player, any, Model) -> ())
+-- character = the one that flew). onLanded(player, distance, airTime): where a flight first came down (studs from
+-- the chair along the ground, seconds in the air; the round's flight record, owner 2026-10-24).
+function SeatService.init(onReturnDue: (Player, any, Model) -> (), onLanded: ((Player, number, number) -> ())?)
 	returnDue = onReturnDue
+	landed = onLanded
 	PhysicsService:RegisterCollisionGroup(FLYING_GROUP)
 	PhysicsService:RegisterCollisionGroup(CHAIR_GROUP)
 	PhysicsService:CollisionGroupSetCollidable(FLYING_GROUP, FLYING_GROUP, false)
@@ -131,6 +136,12 @@ function SeatService.seatPlayers(players: { Player }): { [Player]: Seat }
 	end
 	locked = true
 	return result
+end
+
+-- The chair number (SeatIndex, 1..10 from the show camera's left) a player sits on this round, or nil.
+function SeatService.seatIndexOf(player: Player): number?
+	local seat = homeSeat[player]
+	return if seat then seat:GetAttribute("SeatIndex") :: number? else nil
 end
 
 function SeatService.isFlying(player: Player): boolean
@@ -274,8 +285,11 @@ local function setOwner(root: BasePart, owner: Player?)
 end
 
 -- Launches a player off their chair (no-op unless they are alive, seated on a chair we gave them and not flying).
--- `tag` comes back with the return signal (RoundService passes the round id). Returns whether a launch started.
-function SeatService.fling(player: Player, tag: any): boolean
+-- `tag` comes back with the return signal (RoundService passes the round id). `delay`: the blast goes off this many
+-- seconds later (chain explosions, owner 2026-10-24) — the player counts as flying from now on, so nothing else can
+-- hit them meanwhile; a death, a new character or the end of the round meanwhile calls it off with the chair
+-- untouched. `size`: how big the clients draw the blast (1 = normal). Returns whether a launch started (or waits).
+function SeatService.fling(player: Player, tag: any, delay: number?, size: number?): boolean
 	if flights[player] then
 		return false
 	end
@@ -294,16 +308,6 @@ function SeatService.fling(player: Player, tag: any): boolean
 	if not seat then
 		return false
 	end
-	assigned[seat] = nil
-	local seatIndex = seat:GetAttribute("SeatIndex") :: number?
-	seat.Disabled = true
-	-- The seat weld must be gone before the impulse (and before taking ownership: a body welded to an anchored seat
-	-- is part of an anchored assembly).
-	local weld = seat:FindFirstChild("SeatWeld")
-	if weld then
-		weld:Destroy()
-	end
-	humanoid.Sit = false
 	nextToken += 1
 	local flight: Flight = {
 		character = character,
@@ -316,6 +320,7 @@ function SeatService.fling(player: Player, tag: any): boolean
 		parts = {},
 		body = {},
 		watches = {},
+		launched = false,
 	}
 	flights[player] = flight
 	-- A death or a character leaving the world (reset, respawn, removal) undoes the flight right away, so the return
@@ -331,54 +336,96 @@ function SeatService.fling(player: Player, tag: any): boolean
 			abandon()
 		end
 	end))
-	ragdoll(flight, root)
-	setOwner(root, nil)
-	-- The blast goes off just in front of the seated body, low (the clients draw it there).
-	local blastAt = root.Position + seat.CFrame.LookVector * Config.BLAST_FORWARD - Vector3.yAxis * Config.BLAST_BELOW
-	Net.toAll("Fling", { userId = player.UserId, seatIndex = seatIndex, blastAt = blastAt })
-	task.spawn(function()
-		-- The throw waits one frame: the humanoid must already be PlatformStanding, or its walking controller brakes
-		-- the first step (Studio test 2026-10-22: ~6 studs/s of the horizontal speed lost).
-		RunService.Heartbeat:Wait()
+	table.insert(flight.watches, player:GetPropertyChangedSignal("Character"):Connect(abandon))
+	local function launch()
 		if flights[player] ~= flight then
+			return -- (undone while waiting for its turn in a chain)
+		end
+		-- (still the same body, alive, on the chair we gave it: else the waiting launch is off)
+		if player.Character ~= character or humanoid.Health <= 0 or assigned[seat :: Seat] ~= humanoid then
+			abandon()
 			return
 		end
-		local velocity = blastVelocity(seat :: Seat)
-		local spin = blastSpin()
-		for part in flight.parts do
-			if not part.Anchored then
-				part.AssemblyLinearVelocity = velocity
-				part.AssemblyAngularVelocity = spin
-			end
+		flight.launched = true
+		local chair = seat :: Seat
+		if assigned[chair] == humanoid then
+			assigned[chair] = nil
 		end
-	end)
-	task.delay(Config.FLING_COLLIDE_DELAY, function()
-		if flights[player] == flight then
-			for _, part in flight.body do
-				part.CanCollide = true
-			end
+		local seatIndex = chair:GetAttribute("SeatIndex") :: number?
+		chair.Disabled = true
+		-- The seat weld must be gone before the impulse (and before taking ownership: a body welded to an anchored
+		-- seat is part of an anchored assembly).
+		local weld = chair:FindFirstChild("SeatWeld")
+		if weld then
+			weld:Destroy()
 		end
-	end)
-
-	local token = flight.token
-	task.spawn(function()
-		-- The splash: the first moment the body comes down to the water, over the pool, after leaving the chair.
-		local water = waterY()
-		local started = os.clock()
-		while flights[player] == flight and os.clock() - started < Config.FLING_RETURN_SECONDS do
-			if root.Parent and root.Position.Y < water + 1.5 and overPool(root.Position) then
-				Net.toAll("Splash", { userId = player.UserId, position = Vector3.new(root.Position.X, water, root.Position.Z) })
-				break
-			end
+		humanoid.Sit = false
+		ragdoll(flight, root)
+		setOwner(root, nil)
+		-- The blast goes off just in front of the seated body, low (the clients draw it there).
+		local from = root.Position
+		local blastAt = from + chair.CFrame.LookVector * Config.BLAST_FORWARD - Vector3.yAxis * Config.BLAST_BELOW
+		Net.toAll("Fling", { userId = player.UserId, seatIndex = seatIndex, blastAt = blastAt, size = size or 1 })
+		task.spawn(function()
+			-- The throw waits one frame: the humanoid must already be PlatformStanding, or its walking controller
+			-- brakes the first step (Studio test 2026-10-22: ~6 studs/s of the horizontal speed lost).
 			RunService.Heartbeat:Wait()
-		end
-	end)
-	task.delay(Config.FLING_RETURN_SECONDS, function()
-		local current = flights[player]
-		if current and current.token == token and returnDue then
-			returnDue(player, tag, character)
-		end
-	end)
+			if flights[player] ~= flight then
+				return
+			end
+			local velocity = blastVelocity(chair)
+			local spin = blastSpin()
+			for part in flight.parts do
+				if not part.Anchored then
+					part.AssemblyLinearVelocity = velocity
+					part.AssemblyAngularVelocity = spin
+				end
+			end
+		end)
+		task.delay(Config.FLING_COLLIDE_DELAY, function()
+			if flights[player] == flight then
+				for _, part in flight.body do
+					part.CanCollide = true
+				end
+			end
+		end)
+		task.spawn(function()
+			-- Where it first comes down: the water over the pool (a splash), or anywhere it stops falling after
+			-- FLIGHT_SETTLE_SECONDS (the deck) — the flight record.
+			local water = waterY()
+			local started = os.clock()
+			while flights[player] == flight and os.clock() - started < Config.FLING_RETURN_SECONDS do
+				if root.Parent then
+					local inWater = root.Position.Y < water + 1.5 and overPool(root.Position)
+					local stopped = os.clock() - started > Config.FLIGHT_SETTLE_SECONDS
+						and root.AssemblyLinearVelocity.Magnitude < Config.FLIGHT_STOPPED_SPEED
+					if inWater or stopped then
+						if inWater then
+							Net.toAll("Splash", { userId = player.UserId, position = Vector3.new(root.Position.X, water, root.Position.Z) })
+						end
+						if landed then
+							local flat = Vector3.new(root.Position.X - from.X, 0, root.Position.Z - from.Z)
+							landed(player, flat.Magnitude, os.clock() - started)
+						end
+						break
+					end
+				end
+				RunService.Heartbeat:Wait()
+			end
+		end)
+		local token = flight.token
+		task.delay(Config.FLING_RETURN_SECONDS, function()
+			local current = flights[player]
+			if current and current.token == token and returnDue then
+				returnDue(player, tag, character)
+			end
+		end)
+	end
+	if delay and delay > 0 then
+		task.delay(delay, launch)
+	else
+		launch()
+	end
 	return true
 end
 
@@ -394,6 +441,9 @@ function SeatService.endFling(player: Player)
 	flights[player] = nil
 	for _, connection in flight.watches do
 		connection:Disconnect()
+	end
+	if not flight.launched then
+		return -- (it never left the chair: nothing to undo)
 	end
 	local character, humanoid = flight.character, flight.humanoid
 	table.sort(flight.motors, function(a, b)

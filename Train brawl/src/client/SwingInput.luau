@@ -1,6 +1,6 @@
 --!strict
--- The swing control: click (the on-screen "때리기" button on touch screens, R2 on a gamepad). Calls onSwing() on each
--- press; whether a swing may start is the caller's call.
+-- The swing control: click (the on-screen "때리기" button on touch screens, R2 on a gamepad). Calls onSwing(mouse) on
+-- each press (mouse: it was a mouse click); whether a swing may start is the caller's call.
 -- (The binding follows Western train's JumpInput.)
 local ContextActionService = game:GetService("ContextActionService")
 
@@ -10,10 +10,10 @@ local ACTION = "TrainBrawlSwing"
 local BUTTON_TITLE = "때리기"
 
 -- Returns a function that removes the control.
-function SwingInput.bind(onSwing: () -> ()): () -> ()
-	ContextActionService:BindActionAtPriority(ACTION, function(_, state: Enum.UserInputState)
+function SwingInput.bind(onSwing: (mouse: boolean) -> ()): () -> ()
+	ContextActionService:BindActionAtPriority(ACTION, function(_, state: Enum.UserInputState, input: InputObject)
 		if state == Enum.UserInputState.Begin then
-			onSwing()
+			onSwing(input.UserInputType == Enum.UserInputType.MouseButton1)
 		end
 		return Enum.ContextActionResult.Pass -- clicks still reach the camera and the GUI
 	end, true, Enum.ContextActionPriority.High.Value, Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2)

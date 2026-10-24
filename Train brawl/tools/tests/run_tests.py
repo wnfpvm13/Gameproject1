@@ -2,9 +2,10 @@
 
   python -I tools/tests/run_tests.py
 
-  brawl   src/shared/Config.luau (real numbers), ArenaLayout.luau, BatMath.luau: where the trains, cars, planks and
-          spawn spots are, the fall line, the cone a swing covers and the knock it gives, and that the tuning keeps its
-          promises (the gap is wider than a jump, a knock carries more than half a roof and less than a whole one)
+  brawl   src/shared/Config.luau (real numbers), ArenaLayout.luau, BatMath.luau, HitRules.luau: where the trains, cars,
+          planks and spawn spots are, the fall line, the cone a swing covers and the knock it gives, what a hit does
+          to health (light, launch, smash, the combo and the unhittable moment), and that the tuning keeps its promises
+          (the gap is wider than a jump, a light hit's stun ends before the next swing, a low-health launch goes off)
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
 
 The modules run unchanged; the only fakes are Color3.fromRGB and Vector3.new (Config's colours and sizes), which plain
@@ -19,6 +20,7 @@ MODULES = [
     ("Config", "src/shared/Config.luau"),
     ("ArenaLayout", "src/shared/ArenaLayout.luau"),
     ("BatMath", "src/shared/BatMath.luau"),
+    ("HitRules", "src/shared/HitRules.luau"),
 ]
 PRELUDE = (
     "Color3 = { fromRGB = function(r, g, b) return { r = r, g = g, b = b } end }\n"

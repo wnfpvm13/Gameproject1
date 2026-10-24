@@ -79,16 +79,61 @@ do
 	check("standing on top of each other, the knock goes the way the swinger faces", near(fx, 0) and near(fz, -28))
 end
 
--- 4. Tuning promises.
+-- 4. Hit rules.
+do
+	local rules = { max = 100, damage = 12, window = 1.5, launchOn = 3, immune = 0.9 }
+	local s = HitRules.new(100)
+	check("a fighter starts at full health", s.health == 100)
+	local k1 = HitRules.hit(s, rules, 0)
+	local k2 = HitRules.hit(s, rules, 0.6)
+	local k3 = HitRules.hit(s, rules, 1.2)
+	check("the first two hits of a combo are light, the third launches", k1 == "light" and k2 == "light" and k3 == "launch", k1 .. "," .. k2 .. "," .. k3)
+	check("each hit takes its damage", s.health == 64)
+	check("right after a launch the fighter cannot be hit", HitRules.hit(s, rules, 1.5) == "none" and s.health == 64)
+	check("after the moment passes a new combo starts light", HitRules.hit(s, rules, 2.2) == "light")
+	local t = HitRules.new(100)
+	HitRules.hit(t, rules, 0)
+	check("hits too far apart do not make a combo", HitRules.hit(t, rules, 2) == "light" and HitRules.hit(t, rules, 4) == "light")
+	local u = HitRules.new(100)
+	local kinds, now = {}, 0
+	for _ = 1, 9 do
+		table.insert(kinds, HitRules.hit(u, rules, now))
+		now += 1 -- past the immune moment, and two hits a combo at most
+	end
+	check("the hit that empties health is a smash (the 9th from full)", kinds[9] == "smash" and kinds[8] ~= "smash" and u.health == 0, table.concat(kinds, ","))
+	check("an emptied fighter takes no more hits", HitRules.hit(u, rules, now + 5) == "none")
+	check("push scales from full to empty", HitRules.scale(100, 100, 9, 29) == 9 and HitRules.scale(0, 100, 9, 29) == 29 and HitRules.scale(50, 100, 9, 29) == 19)
+	check("push stays in range outside the health range", HitRules.scale(-5, 100, 9, 29) == 29 and HitRules.scale(150, 100, 9, 29) == 9)
+	check("the real numbers empty health on the 9th hit", math.ceil(Config.Health.Max / Config.Health.HitDamage) == 9)
+	local forces = { LightFull = 5, LightEmpty = 15, LaunchFull = 1, LaunchEmpty = 27, LaunchLift = 28, SmashPush = 70, SmashLift = 60 }
+	local sp, sl = HitRules.force("smash", 0, 100, forces)
+	local lp, ll = HitRules.force("launch", 50, 100, forces)
+	local gp, gl = HitRules.force("light", 50, 100, forces)
+	check("a smash pushes and lifts at its own fixed force", sp == 70 and sl == 60)
+	check("a launch pushes by health and lifts", lp == 14 and ll == 28)
+	check("a light hit pushes by health along the ground only", gp == 10 and gl == 0)
+end
+
+-- 5. Tuning promises.
 do
 	local jumpTime = 2 * math.sqrt(2 * JUMP_HEIGHT / GRAVITY)
 	local jump = WALK_SPEED * jumpTime
 	check("the gap between trains is wider than a jump (a plank or a hit is needed)", A.Gap > jump + 1, string.format("gap %.1f, jump %.1f", A.Gap, jump))
-	local carry = BatMath.flightDistance(Config.Bat.Push, Config.Bat.Lift, GRAVITY)
-	-- Hit across the roof from the middle, the flight lands past the edge; from near one edge (1 in) toward the other,
-	-- it lands on the roof (the slide after landing is not in this; it is measured in Studio).
-	check("a knock across the roof from the middle lands off it", carry > A.RoofWidth / 2, string.format("%.1f", carry))
-	check("a knock from near one edge toward the other lands on the roof", carry < A.RoofWidth - 2, string.format("%.1f", carry))
+	-- Knock reach (the plain flight formula; a lying landing and a short slide add about a fifth, measured in Studio).
+	local h = Config.Hit
+	local max, damage = Config.Health.Max, Config.Health.HitDamage
+	local function launchAt(health: number): number
+		local push, lift = HitRules.force("launch", health, max, h)
+		return BatMath.flightDistance(push, lift, GRAVITY)
+	end
+	local first, second = launchAt(max - h.LaunchOn * damage), launchAt(max - 2 * h.LaunchOn * damage)
+	check("the first combo's launch lands on the roof from its middle", first < A.RoofWidth / 2, string.format("%.1f", first))
+	check("the second combo's launch goes off the roof from its middle", second > A.RoofWidth / 2, string.format("%.1f", second))
+	check("a light hit never pushes off the roof from its middle", h.LightEmpty * h.SlideSeconds < A.RoofWidth / 2)
+	check("a smash flies past the other train", BatMath.flightDistance(h.SmashPush, h.SmashLift, GRAVITY) > A.RoofWidth + A.Gap + A.RoofWidth)
+	check("a light hit's stun ends before the swinger can swing again (the one hit can answer)", h.LightStun + 0.1 < Config.Bat.Cooldown)
+	check("a launched fighter stays unhittable past lying down", h.LaunchImmune > Config.Knock.MinSeconds + 0.2)
+	check("a combo has time for its hits at the swing rate", h.ComboWindow > (h.LaunchOn - 1) * Config.Bat.Cooldown)
 	check("a plank is wider than a character and narrower than a roof", A.PlankWidth > 2.5 and A.PlankWidth < A.RoofWidth)
 	check("the car gap is well under a character's thickness (about 1: nobody slips through)", A.CarGap <= 0.5)
 	check("the bat lands within the drawn swing", Config.Bat.HitAt < Config.Bat.SwingSeconds)

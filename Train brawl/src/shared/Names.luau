@@ -20,4 +20,5 @@ return {
 	SwingAt = "SwingAt", -- server time the character's last swing started (every client draws it)
 	Alive = "Alive", -- in the current round and still on the trains
 	KOs = "KOs", -- knock-offs this round (on the fighter's character or sandbag model)
+	Health = "Health", -- combat health this round (not the Humanoid's), written by the server (FighterHealth)
 }

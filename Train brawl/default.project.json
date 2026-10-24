@@ -18,7 +18,10 @@
     "StarterPlayer": {
       "$properties": {
         "GameSettingsAvatar": "R15",
-        "CharacterUseJumpPower": false
+        "CharacterUseJumpPower": false,
+        "EnableMouseLockOption": false,
+        "DevComputerMovementMode": "KeyboardMouse",
+        "CameraMinZoomDistance": 4
       },
       "StarterPlayerScripts": {
         "$ignoreUnknownInstances": true,

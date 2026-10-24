@@ -11,16 +11,18 @@ local CharacterParts = require(shared:WaitForChild("CharacterParts"))
 
 local SwingTargets = {}
 
--- The bodies of the fighters a swing by `swinger` (its body) hits right now.
-function SwingTargets.find(swinger: CharacterParts.Body, fighters: { Model }, reach: number): { CharacterParts.Body }
+-- The bodies of the fighters a swing by `swinger` (its body) hits right now, aimed along `facing` (default: where
+-- the swinger's root faces).
+function SwingTargets.find(swinger: CharacterParts.Body, fighters: { Model }, reach: number, facing: Vector3?): { CharacterParts.Body }
 	local b = Config.Bat
-	local from, facing = swinger.root.Position, swinger.root.CFrame.LookVector
+	local from = swinger.root.Position
+	local aim = facing or swinger.root.CFrame.LookVector
 	local hit = {}
 	for _, model in fighters do
 		local target = if model ~= swinger.model then CharacterParts.body(model) else nil
 		if target then
 			local at = target.root.Position
-			if BatMath.inCone(from.X, from.Y, from.Z, facing.X, facing.Z, at.X, at.Y, at.Z, reach, b.HeightReach, b.HalfAngle) then
+			if BatMath.inCone(from.X, from.Y, from.Z, aim.X, aim.Z, at.X, at.Y, at.Z, reach, b.HeightReach, b.HalfAngle) then
 				table.insert(hit, target)
 			end
 		end

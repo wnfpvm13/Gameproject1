@@ -22,8 +22,9 @@ local Sandbags = {}
 export type Service = {
 	-- Makes `count` sandbags under `parent` and returns their models (equip(model) is called on each).
 	spawn: (count: number, parent: Instance, equip: (Model) -> ()) -> { Model },
-	-- Knocks a sandbag with this velocity (it goes stiff until it lands). Returns false for a model that is not one.
-	knock: (model: Model, velocity: Vector3) -> boolean,
+	-- A hit of this kind on a sandbag: a light one flinches it, a launch or smash sends it flying (stiff until it
+	-- lands). Returns false for a model that is not one.
+	knock: (model: Model, velocity: Vector3, kind: string) -> boolean,
 	-- Removes every sandbag.
 	clear: () -> (),
 	stop: () -> (),
@@ -121,15 +122,22 @@ function Sandbags.start(fallLine: number): Service
 
 	return {
 		spawn = spawn,
-		knock = function(model: Model, velocity: Vector3): boolean
+		knock = function(model: Model, velocity: Vector3, kind: string): boolean
 			local bag = bags[model]
 			if not bag then
 				return false
 			end
-			bag.stiffSince = os.clock()
-			BodyMotion.launch(bag.body, velocity, function(root: BasePart)
+			local function reclaim(root: BasePart)
 				root:SetNetworkOwner(nil) -- the server keeps moving it
-			end)
+			end
+			if kind == "light" then
+				-- As a player's client does: the server sends a light hit only after a launch's unhittable moment.
+				bag.stiffSince = nil
+				BodyMotion.stagger(bag.body, velocity, reclaim)
+			else
+				bag.stiffSince = os.clock()
+				BodyMotion.launch(bag.body, velocity, reclaim)
+			end
 			return true
 		end,
 		clear = function()

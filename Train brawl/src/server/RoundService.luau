@@ -32,6 +32,7 @@ export type Hooks = {
 	sandbagCount: () -> number, -- how many sandbags join a round (0 outside Studio practice)
 	spawnSandbags: (count: number) -> { Model },
 	clearSandbags: () -> (),
+	resetHealth: (model: Model) -> (), -- full combat health for a fighter entering a round
 }
 
 type Fighter = { model: Model, player: Player? }
@@ -163,6 +164,7 @@ function RoundService.start(spots: { ArenaLayout.Spot }, waitingSpot: CFrame, ho
 			end
 			fighter.model:SetAttribute(Names.Alive, true)
 			fighter.model:SetAttribute(Names.KOs, 0)
+			hooks.resetHealth(fighter.model)
 			if fighter.player then
 				hold(fighter.model, true)
 			end

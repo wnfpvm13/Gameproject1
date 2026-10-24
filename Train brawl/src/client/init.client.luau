@@ -1,10 +1,12 @@
 --!strict
--- Train brawl client entry point: only wiring. The scenery slides past (Scenery); the swing control (SwingInput)
--- starts the player's own swing (OwnSwing: drawn at once by SwingPose and HitFeedback, judged by the server); every
--- character's swings are drawn from their Names.SwingAt; a hit from the server knocks the player's own character
--- (KnockFlight) and is shown for everyone (HitFeedback); a fall lays the player down behind the train (FallDrift); the
--- round shows at the top (RoundHud), and a player who is out watches the others from the stands (SpectateCam; the
--- fall itself is watched first).
+-- Train brawl client entry point: only wiring. The scenery slides past (Scenery); the mouse is locked with a shoulder
+-- camera unless the player shows the cursor (AimLock); the swing control (SwingInput) starts the player's own swing
+-- (OwnSwing: drawn at once by SwingPose and HitFeedback, judged by the server; a mouse click swings only while the
+-- mouse is locked); every character's swings are drawn from their Names.SwingAt; a hit from the server flinches or
+-- launches the player's own character (KnockFlight) and is shown for everyone (HitFeedback); a fall lays the player
+-- down behind the train (FallDrift); health shows over heads and at the bottom (HealthBars), the round at the top
+-- (RoundHud), and a player who is out watches the others from the stands (SpectateCam; a smash flight or a fall is
+-- watched first).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,6 +27,8 @@ local HitFeedback = require(script:WaitForChild("HitFeedback"))
 local FallDrift = require(script:WaitForChild("FallDrift"))
 local RoundHud = require(script:WaitForChild("RoundHud"))
 local SpectateCam = require(script:WaitForChild("SpectateCam"))
+local AimLock = require(script:WaitForChild("AimLock"))
+local HealthBars = require(script:WaitForChild("HealthBars"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
@@ -34,8 +38,11 @@ local hitRemote = remotes:WaitForChild(Names.HitRemote) :: RemoteEvent
 local scenery = Scenery.new()
 local knock = KnockFlight.new()
 local drift = FallDrift.new(ArenaLayout.fallLine(ArenaLayout.carPlaces(Config.Arena.Cars, Config.Arena.CarGap), Config.Fall.Margin))
-local hud = RoundHud.new(player:WaitForChild("PlayerGui"))
+local playerGui = player:WaitForChild("PlayerGui")
+local hud = RoundHud.new(playerGui)
 local spectate = SpectateCam.new()
+local aim = AimLock.new(playerGui)
+local bars = HealthBars.new(playerGui)
 
 -- The characters still in the round, as this client sees them (players' and sandbags').
 local function fighters(): { Model }
@@ -56,8 +63,8 @@ end
 
 local own = OwnSwing.new(swingRemote, {
 	fighters = fighters,
-	flying = function(): boolean
-		return knock:flying()
+	stunned = function(): boolean
+		return knock:stunned()
 	end,
 	draw = function(model: Model, at: number)
 		SwingPose.play(model, at)
@@ -65,8 +72,10 @@ local own = OwnSwing.new(swingRemote, {
 	end,
 	predict = HitFeedback.predict,
 })
-SwingInput.bind(function()
-	own:press(player.Character)
+SwingInput.bind(function(mouse: boolean)
+	if not mouse or aim:clickSwings() then
+		own:press(player.Character)
+	end
 end)
 
 -- Every character's swings, drawn from the server's word (the player's own was drawn when pressed).
@@ -101,27 +110,38 @@ for _, instance in CollectionService:GetTagged(Names.SandbagTag) do
 end
 
 -- A hit, from the server: the victim's own client knocks it; everyone shows it.
-hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swinger: unknown)
+hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swinger: unknown, kind: unknown)
 	if typeof(victim) ~= "Instance" or not victim:IsA("Model") then
 		return
 	end
+	local hitKind = if typeof(kind) == "string" then kind else "launch"
 	local me = victim == player.Character
 	if me and typeof(velocity) == "Vector3" then
-		knock:knock(victim, velocity)
+		knock:hit(victim, velocity, hitKind)
 	end
-	HitFeedback.hit(victim, swinger == player.Character, me)
+	HitFeedback.hit(victim, swinger == player.Character, me, hitKind)
 end)
 
 RunService.RenderStepped:Connect(function(dt: number)
 	scenery:update(dt)
 	knock:update()
 	local character = player.Character
-	drift:update(character, knock:flying())
+	drift:update(character, knock:launched())
 	local state = if character then character:GetAttribute(Names.Alive) else nil
 	local alive = state == true
-	spectate:update(Workspace:GetAttribute(Names.Phase) == "Fight" and not alive and not drift:active(), character, fighters())
+	local list = fighters()
+	spectate:update(Workspace:GetAttribute(Names.Phase) == "Fight" and not alive and not drift:active() and not knock:launched(), character, list)
+	bars:update(list, character, os.clock())
 	local standing = if alive then "in" elseif state == false then "out" else "watching"
 	hud:update(Workspace:GetServerTimeNow(), standing, if character then PartUtil.number(character, Names.KOs) or 0 else 0)
 end)
--- After the camera has moved for the frame: the shake for a hit on the player.
-RunService:BindToRenderStep("TrainBrawlShake", Enum.RenderPriority.Camera.Value + 1, HitFeedback.update)
+-- After the camera has moved for the frame: the mouse lock (the Roblox camera resets the mouse every frame), then the
+-- shake for a hit on the player.
+RunService:BindToRenderStep("TrainBrawlAim", Enum.RenderPriority.Camera.Value + 1, function(dt: number)
+	local character = player.Character
+	local camera = Workspace.CurrentCamera
+	local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+	local onSelf = humanoid ~= nil and camera.CameraSubject == humanoid
+	aim:update(character, onSelf and not drift:active(), not knock:stunned(), dt)
+end)
+RunService:BindToRenderStep("TrainBrawlShake", Enum.RenderPriority.Camera.Value + 2, HitFeedback.update)

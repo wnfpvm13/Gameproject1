@@ -1,8 +1,8 @@
 --!strict
 -- The player's own swing on this client. When the control is pressed and a swing may start (fighting, still in the
--- round, not flying from a hit, the bat ready), it is drawn and heard at once and its hits are shown at once (the
--- same cone the server uses, without the network slack: SwingTargets), and the server is told; the server judges it
--- for real (BatService). The drawing and the hit effects come in as hooks (SwingPose, HitFeedback via init).
+-- round, not stunned by a hit, the bat ready), it is drawn and heard at once and its hits are shown at once (the
+-- same cone the server uses, without the network slack: SwingTargets), and the server is told with where the
+-- character aims (it turns with the camera under the mouse lock); the server judges it for real (BatService). The drawing and the hit effects come in as hooks (SwingPose, HitFeedback via init).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -20,7 +20,7 @@ local SAME_SWING_SECONDS = 0.5
 
 export type Hooks = {
 	fighters: () -> { Model }, -- the characters still in the round
-	flying: () -> boolean, -- the player's character is flying from a hit
+	stunned: () -> boolean, -- the player's character is flinching or flying from a hit
 	draw: (model: Model, at: number) -> (), -- draw and sound a swing that started at server time `at`
 	predict: (victim: Model) -> (), -- show a hit the swing is about to land
 }
@@ -40,17 +40,19 @@ function OwnSwing.press(self: Swing, model: Model?)
 	if not body or body.model:GetAttribute(Names.Alive) ~= true or Workspace:GetAttribute(Names.Phase) ~= "Fight" then
 		return
 	end
-	if self.hooks.flying() or now - self.last < Config.Bat.Cooldown then
+	if self.hooks.stunned() or now - self.last < Config.Bat.Cooldown then
 		return
 	end
 	self.last = now
 	self.hooks.draw(body.model, now)
-	self.remote:FireServer()
+	-- The server judges along this aim (taken now), so the hits shown at once use it too.
+	local aim = body.root.CFrame.LookVector
+	self.remote:FireServer(aim)
 	task.delay(Config.Bat.HitAt, function()
 		local me = CharacterParts.body(body.model)
 		-- Hit while swinging: the server judges from where the knock took the player, so show no hits of its own.
-		if me and not self.hooks.flying() then
-			for _, victim in SwingTargets.find(me, self.hooks.fighters(), Config.Bat.Reach) do
+		if me and not self.hooks.stunned() then
+			for _, victim in SwingTargets.find(me, self.hooks.fighters(), Config.Bat.Reach, aim) do
 				self.hooks.predict(victim.model)
 			end
 		end

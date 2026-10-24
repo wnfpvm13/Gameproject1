@@ -75,25 +75,54 @@ Config.Bat = {
 	CooldownSlack = 0.1, -- the server takes a swing this much early (clock and network jitter)
 	SwingSeconds = 0.32, -- the drawn swing
 	HitAt = 0.12, -- seconds into the swing when it lands
-	-- The knock: speed away from the swinger along the ground, and upward. By the plain formula the flight carries
-	-- about 5.1 (BatMath.flightDistance); measured in Studio a body travels about 6.2 in all, as it lands lying lower
-	-- and slides a little before it gets up (2026-10-24; Push 28 went about 10.6, a whole roof). So: hit across the
-	-- roof from the middle, you go off; hit from the near half toward the far side, or along the train, you stay on.
-	Push = 18,
-	Lift = 28,
 	Length = 4.5, -- a big cartoon bat, so the reach shows
 	Thickness = 0.55,
 	Color = Color3.fromRGB(196, 150, 90),
 }
 
--- Being knocked: stiff while flying, back on the feet after landing.
+-- Health and what a hit does (the rules are in HitRules; Smash Legends-style): health drops with every hit, and the
+-- lower it is the farther a hit pushes. The first hits of a combo are light (a flinch and a short push, no lying
+-- down, over before the swinger's next swing, so the one hit can answer); the hit that ends a combo launches (flying,
+-- lying down) and leaves its fighter unhittable for a moment; the hit that empties health is a smash (a certain
+-- ring-out). Falling off is out at any health. A body travels about 0.35 to 0.42 x the launch push (measured: push 18
+-- went 6.2, 24.4 went 10.3, 28 went 10.6, landing lying and sliding a little) and 1.2 to 2 studs from a light hit.
+Config.Health = {
+	Max = 100,
+	HitDamage = 12, -- the 9th hit from full empties it
+	LowFraction = 0.3, -- at or under this share the bar goes red and blinks
+}
+
+Config.Hit = {
+	ComboWindow = 1.5, -- hits on the same fighter within this long of the combo's first one count together
+	LaunchOn = 3, -- the hit that ends a combo (the 3rd) launches
+	-- Light: held still Config.Feedback.HitStopSeconds, then pushed along the ground for SlideSeconds at a speed from
+	-- LightFull (full health) to LightEmpty (none); no swinging for LightStun. Measured 2026-10-25: 1.2 studs at 88
+	-- health, 2 at 40 (the Humanoid carries on a little after the push).
+	LightStun = 0.3,
+	SlideSeconds = 0.18,
+	LightFull = 5.5,
+	LightEmpty = 14,
+	-- Launch: push from LaunchFull (at full health) to LaunchEmpty (at none), lift LaunchLift. A launch ends a combo,
+	-- so the first one comes at 64 health: measured 3.6 studs; the second at 28: 6.9 (2026-10-25). The two light hits
+	-- before it push too: taken all the same way from the middle of a roof, a first combo can carry a fighter off.
+	LaunchFull = 1,
+	LaunchEmpty = 27,
+	LaunchLift = 28,
+	LaunchImmune = 0.9, -- a launched fighter cannot be hit for this long (flight, getting up and a moment more)
+	-- Smash: off the train for sure, high and far.
+	SmashPush = 70,
+	SmashLift = 60,
+}
+
+-- Being launched: stiff while flying, back on the feet after landing.
 Config.Knock = {
 	MinSeconds = 0.5, -- stiff at least this long
 	MaxSeconds = 2.5, -- and at most this long, landed or not
 	GroundReach = 0.6, -- the feet within this of something solid count as landed
 	PredictForget = 0.6, -- a hit the swinger's screen already showed is not shown again when the server's comes
 	-- A swing reaching the server this soon after its swinger was hit was pressed before the hit reached that player's
-	-- screen (about a round trip), so it is still taken; later, until MinSeconds, the server refuses swings.
+	-- screen (about a round trip), so it is still taken; later, while the hit's stun lasts (Config.Hit.LightStun or
+	-- MinSeconds), the server refuses swings.
 	SwingGrace = 0.25,
 }
 
@@ -107,6 +136,7 @@ Config.Feedback = {
 	FlashSeconds = 0.15,
 	ShakeSeconds = 0.15,
 	ShakeStuds = 0.5,
+	SmashSeconds = 0.9, -- the steam column of a smash rises and fades this long
 }
 
 -- Falling off: feet below this much under the lowest roof have missed the train. From there the body lies down and

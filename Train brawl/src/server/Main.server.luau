@@ -12,6 +12,7 @@ local Net = require(script.Parent:WaitForChild("Net"))
 local ArenaBuilder = require(script.Parent:WaitForChild("ArenaBuilder"))
 local BatGear = require(script.Parent:WaitForChild("BatGear"))
 local Sandbags = require(script.Parent:WaitForChild("Sandbags"))
+local FighterHealth = require(script.Parent:WaitForChild("FighterHealth"))
 local FallWatch = require(script.Parent:WaitForChild("FallWatch"))
 local BatService = require(script.Parent:WaitForChild("BatService"))
 local RoundService = require(script.Parent:WaitForChild("RoundService"))
@@ -22,6 +23,7 @@ local Names = require(shared:WaitForChild("Names"))
 local remotes = Net.create()
 local arena = ArenaBuilder.build()
 local sandbags = Sandbags.start(arena.fallLine)
+local health = FighterHealth.start()
 
 local function equip(model: Model)
 	if not BatGear.equip(model) then
@@ -38,14 +40,17 @@ local round = RoundService.start(arena.spots, arena.waitingSpot, {
 		return sandbags.spawn(count, arena.folder, equip)
 	end,
 	clearSandbags = sandbags.clear,
+	resetHealth = health.reset,
 })
 FallWatch.start(arena.fallLine, round.fighters, round.eliminate)
 
 BatService.start(remotes.Swing, remotes.Hit, {
 	canSwing = round.isFighting,
 	fighters = round.fighters,
+	hit = health.hit,
 	knockHere = sandbags.knock,
 	onHit = round.noteHit,
+	onSmash = round.eliminate,
 })
 
 local function onCharacter(model: Model)

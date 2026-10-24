@@ -1703,6 +1703,12 @@ local OXQuiz = require(node("OXQuiz"))
 local Estimate = require(node("Estimate"))
 check("17a 초성: a word's initial consonants (spaces and other characters kept)", Hangul.initials("바나나") == "ㅂㄴㄴ"
 	and Hangul.initials("택배 기사") == "ㅌㅂ ㄱㅅ" and Hangul.initials("까치") == "ㄲㅊ" and Hangul.initials("A1") == "A1")
+check("17a2 초성 on screen: lone consonants bigger and spaced (RichText), the rest escaped; nil without any",
+	Hangul.richInitials("과일 · ㅂㄴㄴ", 44) == '과일 · <font size="44">ㅂ ㄴ ㄴ</font>'
+	and Hangul.richInitials("a<b & ㄱ", 30) == 'a&lt;b &amp; <font size="30">ㄱ</font>'
+	and Hangul.richInitials("1/3 · 0은 짝수다", 44) == nil
+	and Hangul.richInitials("직업 · ㅌㅂ ㄱㅅ", 40) == '직업 · <font size="40">ㅌ ㅂ   ㄱ ㅅ</font>'
+	and Hangul.richInitials("ㄱ 다", 40) == '<font size="40">ㄱ</font> 다')
 do
 	local rng = Random.new(12345)
 	local ok, seen = true, 0
@@ -2019,6 +2025,13 @@ do
 			and string.find(mission.brief, "%%") == nil
 	end
 	check("17j the new quiz kinds have their one-line rules (formatted)", everyBrief)
+	local Practice = require(node("TestMission"))
+	local off = Practice.available(false)
+	workspaceAttributes.BW_TestMission = true
+	local on = Practice.available(false)
+	workspaceAttributes.BW_TestMission = nil
+	check("17o the Studio practice mission plays only with BW_TestMission (an owner's playtest never meets it)",
+		not off and on)
 end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

@@ -191,8 +191,8 @@ return {
 	VOTE_MIN_VALID = 3,
 	VOTE_MIN_VOTERS = 4,
 
-	-- The Studio-only test mission (bundle 2b, until the real missions of bundle 4): everyone alive fails with
-	-- TEST_FAIL_CHANCE; a final question knocks out each finalist with TEST_FINAL_FAIL_CHANCE.
+	-- The Studio-only practice mission (bundle 2b; since 2026-10-25 only with the workspace attribute BW_TestMission):
+	-- everyone alive fails with TEST_FAIL_CHANCE; a final question knocks out each finalist with TEST_FINAL_FAIL_CHANCE.
 	TEST_MISSION_SECONDS = 8,
 	TEST_FAIL_CHANCE = 0.3,
 	TEST_FINAL_FAIL_CHANCE = 0.4,

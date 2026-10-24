@@ -1,7 +1,9 @@
 --!strict
 -- The Studio-only test mission (bundle 2b): stands in for the real missions until bundle 4, so the round flow (lives,
 -- launches, the final, the time budget) can be tried in Studio. In the main game every alive player fails with
--- TEST_FAIL_CHANCE; as a final question it knocks out each finalist with TEST_FINAL_FAIL_CHANCE.
+-- TEST_FAIL_CHANCE; as a final question it knocks out each finalist with TEST_FINAL_FAIL_CHANCE. Since the real games
+-- are all in, it plays only when asked for (Studio `workspace` attribute `BW_TestMission = true`, 2026-10-25): an
+-- owner's Studio playtest should not meet a game that fails people at random.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -47,7 +49,7 @@ local TestMission = {
 }
 
 function TestMission.available(_final: boolean): boolean
-	return RunService:IsStudio()
+	return RunService:IsStudio() and workspace:GetAttribute("BW_TestMission") == true
 end
 
 function TestMission.run(ctx: Ctx)

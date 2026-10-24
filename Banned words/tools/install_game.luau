@@ -204,8 +204,8 @@ return {
 	VOTE_MIN_VALID = 3,
 	VOTE_MIN_VOTERS = 4,
 
-	-- The Studio-only test mission (bundle 2b, until the real missions of bundle 4): everyone alive fails with
-	-- TEST_FAIL_CHANCE; a final question knocks out each finalist with TEST_FINAL_FAIL_CHANCE.
+	-- The Studio-only practice mission (bundle 2b; since 2026-10-25 only with the workspace attribute BW_TestMission):
+	-- everyone alive fails with TEST_FAIL_CHANCE; a final question knocks out each finalist with TEST_FINAL_FAIL_CHANCE.
 	TEST_MISSION_SECONDS = 8,
 	TEST_FAIL_CHANCE = 0.3,
 	TEST_FINAL_FAIL_CHANCE = 0.4,
@@ -573,13 +573,19 @@ return {
 ]====]; s.Parent = n1 end
 do local s = Instance.new("ModuleScript"); s.Name = "Hangul"; s.Source = [====[--!strict
 -- Hangul helpers (bundle 8c, the 초성 quiz): the initial consonants of a word, e.g. "바나나" -> "ㅂㄴㄴ". Characters
--- that are not complete Hangul syllables (spaces, letters, numbers) are kept as they are.
+-- that are not complete Hangul syllables (spaces, letters, numbers) are kept as they are. And the same initials made
+-- readable on screen: Roblox drew lone consonants (ㄱ-ㅎ) at about half the height of a syllable in every font tried
+-- (BuilderSans, NotoSansCJK, SourceSans, Arimo, Montserrat; 2026-10-25), so they are drawn bigger and spaced out
+-- (RichText; used by the client's MissionPanel).
 local Hangul = {}
 
 local FIRST = 0xAC00 -- 가
 local LAST = 0xD7A3 -- 힣
 local PER_INITIAL = 588 -- 21 vowels x 28 finals
 local INITIALS = { "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ" }
+
+local JAMO_FIRST = 0x3131 -- ㄱ (the consonants of the compatibility jamo)
+local JAMO_LAST = 0x314E -- ㅎ
 
 function Hangul.initials(word: string): string
 	local out = {}
@@ -591,6 +597,64 @@ function Hangul.initials(word: string): string
 		end
 	end
 	return table.concat(out)
+end
+
+local ESCAPES = { ["&"] = "&amp;", ["<"] = "&lt;", [">"] = "&gt;", ['"'] = "&quot;", ["'"] = "&apos;" }
+
+-- `text` as RichText with every run of lone consonants at `size` and spaced out ("과일 · ㅂㄴㄴ" -> "과일 · " plus
+-- "ㅂ ㄴ ㄴ" in a bigger font); a space between two words of consonants stays in the run, wider ("ㅌㅂ ㄱㅅ" -> "ㅌ ㅂ   ㄱ ㅅ"),
+-- so the words still show apart. nil when it has none (show it as plain text). Everything else is escaped.
+local WORD_GAP = "   "
+
+local function isJamo(code: number): boolean
+	return code >= JAMO_FIRST and code <= JAMO_LAST
+end
+
+function Hangul.richInitials(text: string, size: number): string?
+	local codes = {}
+	for _, code in utf8.codes(text) do
+		table.insert(codes, code)
+	end
+	local out, run, found = {}, {}, false
+	local function flush()
+		if #run > 0 then
+			table.insert(out, string.format('<font size="%d">%s</font>', size, table.concat(run)))
+			table.clear(run)
+		end
+	end
+	local i = 1
+	while i <= #codes do
+		local code = codes[i]
+		if isJamo(code) then
+			found = true
+			if #run > 0 then
+				table.insert(run, " ")
+			end
+			table.insert(run, utf8.char(code))
+			i += 1
+		elseif code == 32 and #run > 0 then
+			local j = i
+			while j <= #codes and codes[j] == 32 do
+				j += 1
+			end
+			if j <= #codes and isJamo(codes[j]) then -- (spaces between two words of consonants: one wider gap)
+				table.insert(run, WORD_GAP)
+				table.insert(run, utf8.char(codes[j]))
+				i = j + 1
+			else
+				flush()
+				table.insert(out, " ")
+				i += 1
+			end
+		else
+			flush()
+			local char = utf8.char(code)
+			table.insert(out, ESCAPES[char] or char)
+			i += 1
+		end
+	end
+	flush()
+	return if found then table.concat(out) else nil
 end
 
 return Hangul
@@ -5781,7 +5845,9 @@ return Roulette
 do local s = Instance.new("ModuleScript"); s.Name = "TestMission"; s.Source = [====[--!strict
 -- The Studio-only test mission (bundle 2b): stands in for the real missions until bundle 4, so the round flow (lives,
 -- launches, the final, the time budget) can be tried in Studio. In the main game every alive player fails with
--- TEST_FAIL_CHANCE; as a final question it knocks out each finalist with TEST_FINAL_FAIL_CHANCE.
+-- TEST_FAIL_CHANCE; as a final question it knocks out each finalist with TEST_FINAL_FAIL_CHANCE. Since the real games
+-- are all in, it plays only when asked for (Studio `workspace` attribute `BW_TestMission = true`, 2026-10-25): an
+-- owner's Studio playtest should not meet a game that fails people at random.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -5827,7 +5893,7 @@ local TestMission = {
 }
 
 function TestMission.available(_final: boolean): boolean
-	return RunService:IsStudio()
+	return RunService:IsStudio() and workspace:GetAttribute("BW_TestMission") == true
 end
 
 function TestMission.run(ctx: Ctx)
@@ -11567,6 +11633,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local PowerBar = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("PowerBar"))
+local Hangul = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hangul"))
 local Style = require(script.Parent:WaitForChild("Style"))
 
 local MissionPanel = {}
@@ -11580,6 +11647,8 @@ local COIN_SIZE = 170
 local MAX_BUTTONS = Config.MAX_PLAYERS + 2 -- a vote: everyone on the ground (the liar game), "nobody", "could not hear"
 local TEXT = Config.TEXT
 local ESTIMATE_DIGITS = #tostring(Config.ESTIMATE_MAX) -- (the number box takes no longer number)
+local TITLE_SIZE = 26 -- the title's largest text size (it scales down to fit)
+local INITIALS_SIZE = 40 -- the 초성 quiz's consonants in the title (drawn at about half height, see shared/Hangul)
 local SLICE_COLORS = { Color3.fromRGB(40, 92, 170), Color3.fromRGB(62, 66, 92) } -- name pills, alternating
 local GUM = Color3.fromRGB(226, 110, 132) -- behind a crocodile tooth (a white tooth on white was hard to see)
 local GREEN_LIGHT = Color3.fromRGB(34, 120, 64) -- the red light game's card
@@ -11588,6 +11657,7 @@ local RED_LIGHT = Color3.fromRGB(160, 36, 44)
 local card: Frame
 local cardScale: UIScale
 local title: TextLabel
+local titleLimit: UITextSizeConstraint -- (lifted for the 초성 quiz's bigger consonants)
 local timer: TextLabel
 local note: TextLabel
 local swapButton: TextButton
@@ -11717,7 +11787,8 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	timer = Style.label(card, Style.BOLD, 20, Style.WHITE)
 	timer.Size = UDim2.new(1, 0, 0, 22)
 	timer.LayoutOrder = 0
-	title = Style.label(card, Style.BOLD, 26, Style.WHITE)
+	title = Style.label(card, Style.BOLD, TITLE_SIZE, Style.WHITE)
+	titleLimit = title:FindFirstChildOfClass("UITextSizeConstraint") :: UITextSizeConstraint
 	title.Size = UDim2.new(1, 0, 0, 64)
 	title.LayoutOrder = 1
 	note = Style.label(card, Style.REGULAR, 18, Style.GREY)
@@ -11983,6 +12054,12 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		dropFocus() -- (the box is gone: no phone keyboard left over)
 	end
 	title.TextColor3 = Style.WHITE -- (the duel turns it red at "fire!")
+	-- (only the 초성 quiz's consonants are drawn as RichText, at a fixed size and without the size limit: a bigger
+	-- RichText size inside scaled or limited text is cut off)
+	title.RichText = false
+	title.TextScaled = true
+	title.AutomaticSize = Enum.AutomaticSize.None
+	titleLimit.MaxTextSize = TITLE_SIZE
 	bar.Visible = kind == "bottle"
 	local sameThrow = kind == "bottle" and state.timing.barStartAt == (tonumber(payload.barStartAt) or 0)
 	state.timing = {
@@ -12022,7 +12099,12 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	wheel.Visible = kind == "roulette" and #names > 2
 	coin.Visible = kind == "roulette" and #names <= 2
 	if quizLike then
-		title.Text = payload.question
+		local rich = Hangul.richInitials(payload.question or "", INITIALS_SIZE)
+		title.RichText = rich ~= nil
+		title.TextScaled = rich == nil
+		title.AutomaticSize = if rich then Enum.AutomaticSize.Y else Enum.AutomaticSize.None -- (a long one may wrap)
+		titleLimit.MaxTextSize = if rich then INITIALS_SIZE else TITLE_SIZE
+		title.Text = rich or payload.question
 		local choices = payload.choices :: { string }
 		for i, b in buttons do
 			b.Visible = choices[i] ~= nil

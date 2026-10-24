@@ -385,10 +385,10 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 		end,
 		bell = function(from: { Player }, seconds: number, firstOnly: boolean,
 			enough: (({ Player }, { [Player]: number }, { BellService.Press }) -> boolean)?,
-			repeatEvery: number?): ({ Player }, { [Player]: number }, { BellService.Press })
+			repeatEvery: number?, quiet: boolean?): ({ Player }, { [Player]: number }, { BellService.Press })
 			return BellService.collect(from, seconds, firstOnly, function()
 				return Match.roundId ~= myRound or settled()
-			end, enough, repeatEvery)
+			end, enough, repeatEvery, quiet)
 		end,
 		floor = setFloor,
 		presenterVerdict = function(answer: string, seconds: number): string?

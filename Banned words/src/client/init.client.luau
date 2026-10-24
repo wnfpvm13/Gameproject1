@@ -15,6 +15,7 @@ local State = require(script:WaitForChild("State"))
 local Speech = require(script:WaitForChild("Speech"))
 local FlatVoice = require(script:WaitForChild("FlatVoice"))
 local ShowCamera = require(script:WaitForChild("ShowCamera"))
+local Bottles = require(script:WaitForChild("Bottles"))
 local GetUp = require(script:WaitForChild("GetUp"))
 local Billboards = require(script:WaitForChild("Billboards"))
 local ChatLook = require(script:WaitForChild("ChatLook"))
@@ -181,6 +182,7 @@ local function ringMyBell()
 	elseif not bellRung then
 		bellRung = true
 		remotes.Bell:FireServer(bellWindow)
+		MissionPanel.rang(workspace:GetServerTimeNow()) -- (물병 세우기: my bar stops where I stopped it)
 		refresh()
 	end
 end
@@ -306,9 +308,38 @@ local function flyingUntil(untilAt: number)
 		showMission()
 	end)
 end
+-- 물병 세우기's bottles on their little tables (bundle 8b): set up at the first throw, flipped by each throw's result,
+-- gone with the next game's screens.
+local bottlesUp = false
+local function bottlesFor(payload: { [string]: any })
+	local kind = payload.kind
+	if kind == "bottle" then
+		if not bottlesUp or payload.throw == 1 then
+			Bottles.setup(payload.ids or {})
+			bottlesUp = true
+		else
+			Bottles.reset()
+		end
+	elseif kind == "bottleThrow" or kind == "bottleResult" then
+		if not bottlesUp then -- (joined or resynced mid-game: the bottles first)
+			Bottles.setup(payload.ids or {})
+			bottlesUp = true
+		end
+		if kind == "bottleThrow" then
+			local landed = payload.landed or {}
+			for i, userId in payload.ids or {} do
+				Bottles.flip(userId, landed[i] == true)
+			end
+		end
+	elseif bottlesUp then
+		Bottles.clear()
+		bottlesUp = false
+	end
+end
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	lastMission = payload
 	othersLaunchHideUntil = 0
+	bottlesFor(payload)
 	showMission()
 end)
 

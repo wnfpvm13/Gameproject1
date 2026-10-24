@@ -77,7 +77,8 @@ local function fakeCtx(alive, final, flyingSet)
 			return if record.pick then record.pick(options) else nil
 		end,
 		-- Bundle 6b: the bells answer at once with the next list of record.rings; floors, verdicts and points recorded.
-		bell = function(from, seconds, firstOnly, enough, repeatEvery)
+		bell = function(from, seconds, firstOnly, enough, repeatEvery, quiet)
+			record.bellQuiet = quiet == true
 			if record.bellOverride then
 				return record.bellOverride(from, seconds, firstOnly, enough, repeatEvery)
 			end
@@ -342,9 +343,10 @@ do
 	at(now + 30)
 	local afterRoulette = menuIds()
 	check("3d the menu order: games not played yet first (list order), played ones after; the roulette once a round",
-		fresh == "quiz,roulette,croc,bomb,nunchi,balance,redLight,liar"
-		and afterQuiz == "roulette,croc,bomb,nunchi,balance,redLight,liar,quiz"
-		and afterRoulette == "croc,bomb,nunchi,balance,redLight,liar,quiz", fresh .. " | " .. afterQuiz .. " | " .. afterRoulette)
+		fresh == "quiz,roulette,croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle"
+		and afterQuiz == "roulette,croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle,quiz"
+		and afterRoulette == "croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle,quiz",
+		fresh .. " | " .. afterQuiz .. " | " .. afterRoulette)
 	MissionRunner.beginRound()
 	local small = MissionRunner.candidates(300, 1, false)
 	local rouletteListed = false
@@ -1470,6 +1472,226 @@ do
 		everyBrief = everyBrief and typeof(mission.brief) == "string" and mission.brief ~= ""
 	end
 	check("15j every game has a one-line rule for its briefing", everyBrief)
+end
+
+---------------------------------------------------------------- 16. timing games (bundle 8b, owner 2026-10-24)
+local TimeGuess = require(node("TimeGuess"))
+local Duel = require(node("Duel"))
+local Bottle = require(node("Bottle"))
+local PowerBar = require(node("PowerBar"))
+-- A bell stand-in: `pressAt(player, screen)` gives each player's press time (nil = never) from the latest screen.
+local function timedBell(record, kind, since, pressAt)
+	record.bellOverride = function(from, _seconds, _firstOnly, enough, _repeatEvery)
+		local screen = lastScreenOf(since, kind)
+		local rung, times, presses = {}, {}, {}
+		for _, player in from do
+			local at = pressAt(player, screen)
+			if at then
+				table.insert(rung, player)
+				times[player] = at
+				table.insert(presses, { player = player, at = at })
+			end
+		end
+		if enough then
+			enough(rung, times, presses)
+		end
+		return rung, times, presses
+	end
+end
+do
+	local a, b, c = table.unpack(newPlayers(3))
+	check("16a 숫자 맞추기: the farthest from the target flies (ties all); who never rang flies instead",
+		#TimeGuess.losers({ a, b, c }, { [a] = 7.30, [b] = 7.0, [c] = 8.0 }, 7.32) == 1
+		and TimeGuess.losers({ a, b, c }, { [a] = 7.30, [b] = 7.0, [c] = 8.0 }, 7.32)[1] == c
+		and #TimeGuess.losers({ a, b }, { [a] = 7.0, [b] = 8.0 }, 7.5) == 2
+		and #TimeGuess.losers({ a, b, c }, { [a] = 7.30, [b] = 9.9 }, 7.32) == 1
+		and TimeGuess.losers({ a, b, c }, { [a] = 7.30, [b] = 9.9 }, 7.32)[1] == c)
+
+	local since = now
+	local record = fakeCtx({ a, b, c }, false, nil)
+	timedBell(record, "timeGuess", since, function(player, screen)
+		if player == a then
+			return screen.startAt + screen.target + 0.05
+		elseif player == b then
+			return screen.startAt + screen.target - 0.5
+		end
+		return nil
+	end)
+	local run = start(TimeGuess, record)
+	at(now + Config.TIMEGUESS_READ_SECONDS + Config.TIMEGUESS_MAX + Config.TIMEGUESS_LATE + Config.MINIGAME_RESULT_SECONDS + 1)
+	local first = lastScreenOf(since, "timeGuess")
+	local result = lastScreenOf(since, "timeGuessResult")
+	local f = record.fails[1]
+	local target = first and first.target or 0
+	check("16b 숫자 맞추기 runs: a target in 5-10 with two decimals, shown before the clock starts; the one who never rang"
+		.. " flies and missed an answer", run.done and first ~= nil and target >= Config.TIMEGUESS_MIN
+		and target <= Config.TIMEGUESS_MAX and math.abs(target * 100 - math.round(target * 100)) < 1e-6
+		and first.startAt - since >= Config.TIMEGUESS_READ_SECONDS - 0.01 and first.visibleFor == Config.TIMEGUESS_VISIBLE_SECONDS
+		and f ~= nil and #f.players == 1 and f.players[1] == c and has(record.missed, c) and not has(record.missed, a)
+		and result ~= nil and result.seconds[3] == -1 and math.abs(result.seconds[1] - (target + 0.05)) < 1e-9
+		and record.bellQuiet == true)
+end
+do
+	local a, b, c = table.unpack(newPlayers(3))
+	local function lose(x, y, reactX, reactY)
+		local out = Duel.loserOf(x, y, reactX, reactY)
+		local names = {}
+		for _, p in out do
+			table.insert(names, p.Name)
+		end
+		table.sort(names)
+		return table.concat(names, ",")
+	end
+	check("16c 총잡이 결투: the slower flies; a false start flies (both: both); who never rang flies; exactly equal: nobody",
+		lose(a, b, 0.2, 0.3) == b.Name and lose(a, b, -0.1, 0.3) == a.Name
+		and lose(a, b, -0.1, -0.2) == table.concat({ a.Name, b.Name }, ",") and lose(a, b, 0.2, nil) == b.Name
+		and lose(a, b, nil, nil) == table.concat({ a.Name, b.Name }, ",") and lose(a, b, 0.2, 0.2) == ""
+		and lose(a, b, nil, -1.0) == b.Name)
+
+	-- A bell stand-in that waits for "fire!" (sent at its moment, never ahead) and answers from when it was sent.
+	local function duelBell(record, since, offsets)
+		record.bellOverride = function(from, _seconds, _firstOnly, enough, _repeatEvery)
+			local readyAt = now
+			local fireSent = nil
+			while not fireSent and now - readyAt < Config.DUEL_READY_MAX + 1 do
+				for _, m in screens(since) do
+					if m.payload.kind == "duel" and m.payload.stage == "fire" then
+						fireSent = m.at
+					end
+				end
+				if not fireSent then
+					task.wait(0.05)
+				end
+			end
+			local ready = lastScreenOf(since, "duel")
+			local rung, times = {}, {}
+			for _, player in from do
+				local index = table.find(ready.ids, player.UserId)
+				local offset = offsets[index or 0]
+				if offset and fireSent then
+					table.insert(rung, player)
+					times[player] = fireSent + offset
+				end
+			end
+			if enough then
+				enough(rung, times, {})
+			end
+			return rung, times, {}
+		end
+	end
+	local since = now
+	local record = fakeCtx({ a, b, c }, false, nil)
+	duelBell(record, since, { 0.2, 0.3 })
+	local run = start(Duel, record)
+	at(now + Config.DUEL_READY_MAX + Config.DUEL_WINDOW + Config.TIMING_GRACE + Config.MINIGAME_RESULT_SECONDS + 1)
+	local ready, fire = nil, nil
+	for _, m in screens(since) do
+		if m.payload.kind == "duel" and m.payload.stage == "ready" then
+			ready = m
+		elseif m.payload.kind == "duel" and m.payload.stage == "fire" then
+			fire = m
+		end
+	end
+	local result = lastScreenOf(since, "duelResult")
+	local f = record.fails[1]
+	check("16d a duel of three: one pair (the slower flies), the third sits out safe; \"fire!\" sent READY_MIN-MAX after"
+		.. " \"ready\" and never told ahead; the screen lists the reactions", run.done and ready ~= nil and fire ~= nil
+		and ready.payload.hasBye == true and ready.payload.fireAt == nil
+		and fire.at - ready.at >= Config.DUEL_READY_MIN - 0.01 and fire.at - ready.at <= Config.DUEL_READY_MAX + 0.01
+		and f ~= nil and #f.players == 1 and f.players[1].UserId == ready.payload.ids[2]
+		and result ~= nil and result.ms[1] == 200 and result.ms[2] == 300)
+
+	-- A false start: the other side is safe and not an AFK miss even without ringing.
+	local since2 = now
+	local record2 = fakeCtx({ a, b }, false, nil)
+	duelBell(record2, since2, { -0.4 })
+	local run2 = start(Duel, record2)
+	at(now + Config.DUEL_READY_MAX + Config.DUEL_WINDOW + Config.TIMING_GRACE + Config.MINIGAME_RESULT_SECONDS + 1)
+	local ready2 = lastScreenOf(since2, "duel")
+	local result2 = lastScreenOf(since2, "duelResult")
+	local f2 = record2.fails[1]
+	local starter = ready2 and ready2.ids[1]
+	check("16d2 a false start flies alone (shown as negative ms); the other, who never rang, is not counted as AFK",
+		run2.done and f2 ~= nil and #f2.players == 1 and f2.players[1].UserId == starter and result2 ~= nil
+		and result2.ms[1] <= -1 and result2.ms[2] == false and #(record2.missed or {}) == 0)
+
+	-- The other player leaves: the duel is off (no penalty, nothing to play).
+	local since3 = now
+	local both = { a, b }
+	local record3 = fakeCtx(both, false, nil)
+	record3.bellOverride = function(_from, _seconds, _firstOnly, _enough, _repeatEvery)
+		table.remove(both, 2)
+		return {}, {}, {}
+	end
+	local run3 = start(Duel, record3)
+	at(now + Config.DUEL_READY_MAX + 2)
+	check("16d3 the other player leaves: the duel is off, no penalty", run3.done and #record3.fails == 0
+		and lastScreenOf(since3, "duelResult") == nil)
+end
+
+do
+	-- PressTiming: the trip read when the press is seen, capped; half for a start told ahead, all for a signal.
+	local PressTiming = require(node("PressTiming"))
+	local slow = newPlayers(1)[1]
+	local ping = 0.2
+	slow.GetNetworkPing = function() return ping end
+	local far = newPlayers(1)[1]
+	far.GetNetworkPing = function() return 3 end
+	local rec = PressTiming.recorder()
+	rec.note({ [slow] = 10, [far] = 10 })
+	ping = 0.4 -- (changed after the press was seen: must not move it)
+	check("16h PressTiming: a press counts from when it was made — half the round trip for a start told ahead, the whole"
+		.. " round trip for a signal sent at its moment; read when seen; capped at TIMING_PING_CAP",
+		math.abs(rec.pressedAt(slow, 10) - 9.9) < 1e-9 and math.abs(rec.reactedAt(slow, 10) - 9.8) < 1e-9
+		and math.abs(rec.reactedAt(far, 10) - (10 - Config.TIMING_PING_CAP)) < 1e-9)
+end
+do
+	local a, b, c = table.unpack(newPlayers(3))
+	check("16e 물병 세우기: the fewest standing fly; everyone the same: nobody", #Bottle.losers({ a, b, c }, { [a] = 2, [b] = 1, [c] = 1 }) == 2
+		and #Bottle.losers({ a, b, c }, { [a] = 2, [b] = 2, [c] = 2 }) == 0
+		and #Bottle.losers({ a, b }, { [a] = 0, [b] = 0 }) == 0)
+	local p = Config.BOTTLE_PERIOD
+	check("16f the power bar goes 0 -> 1 -> 0 once a period (and stays at 0 before it starts)",
+		PowerBar.at(0, p) == 0 and math.abs(PowerBar.at(p / 4, p) - 0.5) < 1e-9 and math.abs(PowerBar.at(p / 2, p) - 1) < 1e-9
+		and math.abs(PowerBar.at(3 * p / 4, p) - 0.5) < 1e-9 and PowerBar.at(-1, p) == 0)
+
+	local since = now
+	local throw = 0
+	local record = fakeCtx({ a, b, c }, false, nil)
+	-- a always hits the zone's middle; b hits it twice then stops at the far end; c never rings.
+	timedBell(record, "bottle", since, function(player, screen)
+		if player == a then
+			return screen.barStartAt + screen.center * p / 2
+		elseif player == b then
+			local far = if screen.center < 0.5 then p / 2 else 0
+			return screen.barStartAt + (if screen.throw < 3 then screen.center * p / 2 else far)
+		end
+		return nil
+	end)
+	local run = start(Bottle, record)
+	at(now + Bottle.expectedSeconds + 2)
+	local throws = {}
+	for _, m in screens(since) do
+		if m.payload.kind == "bottleThrow" then
+			table.insert(throws, m.payload)
+		end
+	end
+	local result = lastScreenOf(since, "bottleResult")
+	local f = record.fails[1]
+	local zones = true
+	for _, m in screens(since) do
+		if m.payload.kind == "bottle" then
+			throw += 1
+			zones = zones and m.payload.width == Config.BOTTLE_ZONES[throw]
+				and m.payload.center - m.payload.width / 2 >= Config.BOTTLE_EDGE - 1e-9
+				and m.payload.center + m.payload.width / 2 <= 1 - Config.BOTTLE_EDGE + 1e-9
+		end
+	end
+	check("16g 물병 세우기 runs: three throws with narrower zones; stood 3, 2, 0 -> the one at 0 flies and missed an answer",
+		run.done and throw == #Config.BOTTLE_ZONES and zones and #throws == #Config.BOTTLE_ZONES
+		and throws[3].landed[1] == true and throws[3].landed[2] == false and result ~= nil
+		and result.stood[1] == 3 and result.stood[2] == 2 and result.stood[3] == 0
+		and f ~= nil and #f.players == 1 and f.players[1] == c and has(record.missed, c) and not has(record.missed, b))
 end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

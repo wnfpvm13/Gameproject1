@@ -141,6 +141,34 @@ return {
 	LIAR_CLUE_CHAT_SECONDS = 12,
 	LIAR_GUESS_SECONDS = 8,
 	LIAR_GUESS_CHOICES = 4, -- the word among this many of its category
+	-- Timing games (bundle 8b, owner 2026-10-24). Presses count from the moment the player made them: the server's
+	-- arrival time less half their round trip, up to TIMING_PING_CAP of round trip (shared/PressTiming).
+	TIMING_PING_CAP = 0.5,
+	TIMING_GRACE = 0.3, -- the bells stay open this much past the shown end, for presses made in time arriving late
+	-- 숫자 맞추기: ring once at a target between TIMEGUESS_MIN and TIMEGUESS_MAX seconds (two decimals), shown
+	-- TIMEGUESS_READ_SECONDS before the clock starts; the clock is visible TIMEGUESS_VISIBLE_SECONDS, the bells stay
+	-- open TIMEGUESS_LATE past the target. The farthest from it flies.
+	TIMEGUESS_MIN = 5,
+	TIMEGUESS_MAX = 10,
+	TIMEGUESS_READ_SECONDS = 3,
+	TIMEGUESS_VISIBLE_SECONDS = 3,
+	TIMEGUESS_LATE = 3,
+	TIMEGUESS_MIN_PLAYERS = 2,
+	-- 총잡이 결투: pairs at random; "fire!" DUEL_READY_MIN-MAX seconds after "ready", then DUEL_WINDOW to ring.
+	DUEL_READY_MIN = 2,
+	DUEL_READY_MAX = 5,
+	DUEL_WINDOW = 2,
+	DUEL_MIN_PLAYERS = 2,
+	-- 물병 세우기: one throw per zone width (fractions of the bar, narrower each time); the bar starts
+	-- BOTTLE_LEAD_SECONDS after the throw shows and sweeps there and back every BOTTLE_PERIOD; BOTTLE_THROW_SECONDS to
+	-- ring; the throw's result shows BOTTLE_SHOW_SECONDS. A zone keeps BOTTLE_EDGE from the bar's ends.
+	BOTTLE_ZONES = { 0.3, 0.2, 0.12 },
+	BOTTLE_PERIOD = 1.6,
+	BOTTLE_LEAD_SECONDS = 1,
+	BOTTLE_THROW_SECONDS = 5,
+	BOTTLE_SHOW_SECONDS = 2,
+	BOTTLE_EDGE = 0.05,
+	BOTTLE_MIN_PLAYERS = 2,
 	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
 	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
 	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
@@ -425,6 +453,34 @@ return {
 		WORDS_REROLL_ALL = "전원 다시 뽑기",
 		TALK_START_NOW = "▶ 바로 시작",
 		TALK_TITLE = "금칙어 토크",
+		-- Bundle 8b (owner 2026-10-24).
+		TIMEGUESS_TITLE = "숫자 맞추기",
+		TIMEGUESS_BRIEF = "목표 시간에 맞춰 벨 · 시계는 %d초만 보여요 · 가장 많이 빗나간 사람이 날아가요",
+		TIMEGUESS_START = "%.2f초에 맞춰 벨을 눌러요",
+		TIMEGUESS_TARGET = "목표 %.2f초",
+		TIMEGUESS_HOW = "시계는 처음 %d초만 보여요 · 맞다 싶을 때 벨 한 번",
+		TIMEGUESS_RESULT = "목표 %.2f초 · %s 날아가요",
+		TIMEGUESS_NONE = "안 누름",
+		DUEL_TITLE = "총잡이 결투",
+		DUEL_BRIEF = "발사! 신호에 먼저 벨 · 신호 전에 누르면 날아가요",
+		DUEL_READY = "준비… 신호를 기다려요",
+		DUEL_WAIT = "준비…",
+		DUEL_FIRE = "발사!",
+		DUEL_VS = "상대: %s",
+		DUEL_BYE = "이번엔 쉬어요",
+		DUEL_PAIR = "%s 대 %s",
+		DUEL_MS = "%s %dms",
+		DUEL_FALSE = "%s 부정 출발",
+		DUEL_NEVER = "%s 안 누름",
+		DUEL_RESULT = "%s 날아가요",
+		DUEL_DRAW = "동시! 아무도 안 날아가요",
+		BOTTLE_TITLE = "물병 세우기",
+		BOTTLE_BRIEF = "움직이는 막대를 초록 칸에서 벨로 멈춰요 · %d번 · 가장 적게 세운 사람이 날아가요",
+		BOTTLE_START = "막대가 초록 칸에 올 때 벨",
+		BOTTLE_THROW = "%d / %d번째",
+		BOTTLE_STOOD = "%s %d개",
+		BOTTLE_RESULT = "가장 적게 세운 %s 날아가요",
+		BOTTLE_TIE = "모두 똑같이 세웠어요 · 아무도 안 날아가요",
 		TALK_BRIEF = "남의 머리 위 금칙어를 말하게 해요 · 내 금칙어를 말하면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		TALK_SOON = "곧 시작",
 		TALK_PREP = "금칙어를 나눠 주는 중 · 내 머리 위 단어는 나만 몰라요",

@@ -15,6 +15,10 @@
 --   - bundle 6c: crocodile teeth (whose turn and ten teeth, pressable on my turn, pressed ones shut; the biting one at
 --     the end), the bomb (who holds it, the question, two answers for the holder), nunchi (the rule and the seconds
 --     left; at the end the order the bells came in);
+--   - bundle 8b (owner 2026-10-24): 숫자 맞추기 (the target, a clock counting up that hides after a few seconds, then
+--     everyone's time), 총잡이 결투 ("ready…", then a red "fire!" when the server says so, my opponent; then the
+--     reactions), 물병 세우기 (a power bar with a green zone and a marker sweeping at the server's pace, stopping where
+--     I rang; who stood);
 --   - between games (owner 2026-10-24): what the last game did with the vote for the next one (or "the presenter is
 --     picking"), then the next game's briefing: its name, its one-line rule, 3-2-1; at the end the round's result
 --     with its awards (the longest flight, the most games without losing a life);
@@ -25,6 +29,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local PowerBar = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("PowerBar"))
 local Style = require(script.Parent:WaitForChild("Style"))
 
 local MissionPanel = {}
@@ -60,6 +65,9 @@ local needle: Frame
 local arrow: TextLabel
 local coin: TextLabel
 local ringPills: { Frame } = {}
+local bar: Frame -- 물병 세우기's power bar, its green zone and the marker
+local zone: Frame
+local marker: Frame
 local onAnswer: (number, number) -> () = function(_id, _choice) end
 
 local state = {
@@ -81,6 +89,8 @@ local state = {
 	startsAt = 0,
 	spinSeconds = 1,
 	topicLine = "", -- the banned-word talk's topic line (the seconds are added every frame)
+	timing = { startAt = 0, visibleFor = 0, barStartAt = 0, period = 1, stoppedAt = 0 }, -- bundle 8b's moments
+	-- (`stoppedAt`: when I rang in this 물병 throw, 0 = not yet)
 	slim = false, -- the talk's slim line at the top (else the card sits on the bottom row)
 	hidden = false, -- stepped aside for a launch (setHidden)
 	shown = false, -- what the screen asks for, before `hidden`
@@ -281,6 +291,20 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	local round = Instance.new("UICorner")
 	round.CornerRadius = UDim.new(1, 0)
 	round.Parent = coin
+
+	-- 물병 세우기's power bar (bundle 8b): the track, the green zone, the marker the bell stops.
+	bar = Style.panel(card, Style.BUTTON, 0.1, 8)
+	bar.Size = UDim2.new(1, 0, 0, 26)
+	bar.LayoutOrder = 7
+	bar.Visible = false
+	zone = Style.panel(bar, Style.GREEN, 0.15, 6)
+	zone.AnchorPoint = Vector2.new(0.5, 0)
+	zone.Size = UDim2.fromScale(0.3, 1)
+	marker = Style.panel(bar, Style.WHITE, 0, 3)
+	marker.AnchorPoint = Vector2.new(0.5, 0.5)
+	marker.Size = UDim2.new(0, 6, 1, 10)
+	marker.Position = UDim2.fromScale(0, 0.5)
+	marker.ZIndex = 2
 end
 
 -- Sizes the wheel for a ring of this radius (more names need a wider ring so the pills do not overlap).
@@ -350,20 +374,34 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		or kind == "nunchiResult" or kind == "balance" or kind == "balanceResult" or kind == "redLight"
 		or kind == "redLightResult" or kind == "liar" or kind == "liarGuess" or kind == "liarResult"
 	local between = kind == "nextVote" or kind == "nextPick" or kind == "brief" or kind == "roundResult"
-	note.Size = UDim2.new(1, 0, 0, if kind == "roundResult" then 46 else 22) -- (the awards take two lines)
+	local timing = kind == "timeGuess" or kind == "timeGuessResult" or kind == "duel" or kind == "duelResult"
+		or kind == "bottle" or kind == "bottleThrow" or kind == "bottleResult"
+	title.TextColor3 = Style.WHITE -- (the duel turns it red at "fire!")
+	bar.Visible = kind == "bottle"
+	local sameThrow = kind == "bottle" and state.timing.barStartAt == (tonumber(payload.barStartAt) or 0)
+	state.timing = {
+		startAt = tonumber(payload.startAt) or 0,
+		visibleFor = tonumber(payload.visibleFor) or 0,
+		barStartAt = tonumber(payload.barStartAt) or 0,
+		period = tonumber(payload.period) or 1,
+		stoppedAt = if sameThrow then state.timing.stoppedAt else 0, -- (the same throw sent again keeps my stop)
+	}
+	-- (the awards and the timing games' results take two lines: many names)
+	note.Size = UDim2.new(1, 0, 0, if kind == "roundResult" or kind == "timeGuessResult" or kind == "duelResult"
+		or kind == "bottleThrow" or kind == "bottleResult" then 46 else 22)
 	state.shown = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
-		or kind == "talk" or bells or games or between
+		or kind == "talk" or bells or games or between or timing
 	card.Visible = state.shown and not state.hidden
 	answerGrid.Visible = quizLike or kind == "vote" or kind == "bomb" or (kind == "balance" and payload.stage == "pick")
 		or kind == "liarGuess" or kind == "nextVote"
 	teethGrid.Visible = kind == "croc" or kind == "crocResult"
 	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
-		or games or between
+		or games or between or timing
 	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc" or kind == "bomb"
 		or kind == "nunchi" or kind == "balance" or kind == "redLight" or kind == "liar" or kind == "liarGuess"
-		or kind == "nextVote" or kind == "brief"
+		or kind == "nextVote" or kind == "brief" or kind == "timeGuess" or kind == "bottle"
 	note.Visible = kind == "oneWord" or kind == "bellQuiz" or kind == "bomb" or kind == "nunchi" or kind == "nunchiResult"
-		or between
+		or between or timing
 		or kind == "balance" or kind == "balanceResult" or kind == "redLight" or kind == "redLightResult" or kind == "liar"
 	card.BackgroundColor3 = if kind == "redLight" then (if payload.light == "red" then RED_LIGHT else GREEN_LIGHT)
 		else Style.PANEL
@@ -402,6 +440,69 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			b.Visible = choices[i] ~= nil
 			b.Text = choices[i] or ""
 			paint(b, canAnswer and not state.myPick, i == state.myPick)
+		end
+	elseif kind == "timeGuess" or kind == "timeGuessResult" then
+		title.Text = string.format(TEXT.TIMEGUESS_TARGET, tonumber(payload.target) or 0)
+		if kind == "timeGuess" then
+			note.Text = string.format(TEXT.TIMEGUESS_HOW, tonumber(payload.visibleFor) or 0)
+		else
+			local seconds, losers, ids = payload.seconds or {}, payload.losers or {}, payload.ids or {}
+			local parts = {}
+			for i, name in names do
+				local s = tonumber(seconds[i])
+				local mark = if table.find(losers, ids[i]) then " 💥" else ""
+				table.insert(parts, name .. " " .. (if s and s >= 0 then string.format("%.2f", s) else TEXT.TIMEGUESS_NONE) .. mark)
+			end
+			note.Text = table.concat(parts, " · ")
+		end
+	elseif kind == "duel" or kind == "duelResult" then
+		-- (everyone in pair order a, b, a, b, ...; with `hasBye` the last one sits this one out)
+		local ids = payload.ids or {}
+		local fighters = if payload.hasBye then #ids - 1 else #ids
+		local fire = kind == "duel" and payload.stage == "fire"
+		title.Text = if kind == "duelResult" then TEXT.DUEL_TITLE elseif fire then TEXT.DUEL_FIRE else TEXT.DUEL_WAIT
+		title.TextColor3 = if fire then Style.RED else Style.WHITE
+		local mine = table.find(ids, myId)
+		if kind == "duel" and mine and mine > fighters then
+			note.Text = TEXT.DUEL_BYE
+		elseif kind == "duel" and mine then
+			local other = if mine % 2 == 1 then mine + 1 else mine - 1
+			note.Text = string.format(TEXT.DUEL_VS, names[other] or "?")
+		else
+			local ms, losers, parts = payload.ms or {}, payload.losers or {}, {}
+			for i = 1, fighters - 1, 2 do
+				if kind == "duel" then
+					table.insert(parts, string.format(TEXT.DUEL_PAIR, names[i] or "?", names[i + 1] or "?"))
+				else
+					local sides = {}
+					for _, j in { i, i + 1 } do
+						local n = names[j] or "?"
+						local value = tonumber(ms[j])
+						local text = if value == nil then string.format(TEXT.DUEL_NEVER, n)
+							elseif value < 0 then string.format(TEXT.DUEL_FALSE, n)
+							else string.format(TEXT.DUEL_MS, n, value)
+						table.insert(sides, text .. (if table.find(losers, ids[j]) then " 💥" else ""))
+					end
+					table.insert(parts, table.concat(sides, " · "))
+				end
+			end
+			note.Text = table.concat(parts, "  |  ")
+		end
+	elseif kind == "bottle" or kind == "bottleThrow" or kind == "bottleResult" then
+		title.Text = if kind == "bottleResult" then TEXT.BOTTLE_TITLE
+			else string.format(TEXT.BOTTLE_THROW, tonumber(payload.throw) or 1, tonumber(payload.throws) or 3)
+		local stood, landed, losers, ids = payload.stood or {}, payload.landed or {}, payload.losers or {}, payload.ids or {}
+		local parts = {}
+		for i, name in names do
+			local mark = if kind == "bottleThrow" then (if landed[i] then " ✔" else " ✖")
+				elseif table.find(losers, ids[i]) then " 💥" else ""
+			table.insert(parts, string.format(TEXT.BOTTLE_STOOD, name, tonumber(stood[i]) or 0) .. mark)
+		end
+		note.Text = table.concat(parts, " · ")
+		if kind == "bottle" then
+			local width = tonumber(payload.width) or 0.3
+			zone.Size = UDim2.fromScale(width, 1)
+			zone.Position = UDim2.fromScale(tonumber(payload.center) or 0.5, 0)
 		end
 	elseif kind == "roundResult" then
 		title.Text = payload.title or ""
@@ -563,6 +664,13 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end
 
+-- I rang my bell at `now` (server time): 물병 세우기's marker stops there on my screen.
+function MissionPanel.rang(now: number)
+	if state.kind == "bottle" and state.timing.stoppedAt == 0 and now >= state.timing.barStartAt then
+		state.timing.stoppedAt = now
+	end
+end
+
 -- A seat bell rang (nunchi counts them: the next number on the card).
 function MissionPanel.bellRang()
 	if state.kind == "nunchi" then
@@ -594,6 +702,15 @@ function MissionPanel.tick(now: number)
 	if state.kind == "talk" then
 		timer.Text = ""
 		title.Text = string.format("%s · %d", state.topicLine, math.max(0, math.ceil(state.endsAt - now)))
+	elseif state.kind == "timeGuess" then
+		-- (3, 2, 1 before the start; then the clock for a few seconds; then only "?")
+		local t = now - state.timing.startAt
+		timer.Text = if t < 0 then tostring(math.ceil(-t)) elseif t < state.timing.visibleFor then string.format("%.2f", t)
+			else "?"
+	elseif state.kind == "bottle" then
+		local at = if state.timing.stoppedAt > 0 then state.timing.stoppedAt else now
+		marker.Position = UDim2.fromScale(PowerBar.at(at - state.timing.barStartAt, state.timing.period), 0.5)
+		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" or state.kind == "oneWordBell"
 		or state.kind == "bellQuiz" or state.kind == "croc" or state.kind == "bomb" or state.kind == "nunchi"
 		or state.kind == "balance" or state.kind == "redLight" or state.kind == "liar" or state.kind == "liarGuess"

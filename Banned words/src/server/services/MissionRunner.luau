@@ -12,8 +12,8 @@
 -- shows on everyone's screen goes out as "Mission" and is sent again on Sync.
 -- Bundle 4: the quiz (also the final), the roulette, "say what you like" (4b, bells since 6b); bundle 6a: the
 -- banned-word talk (only while speech judging is on); bundle 6b: the bell quiz (only with a presenter); bundle 6c:
--- crocodile teeth, the bomb, nunchi; bundle 6d: the balance game, red light, the liar; and the Studio-only test
--- mission.
+-- crocodile teeth, the bomb, nunchi; bundle 6d: the balance game, red light, the liar; bundle 8b: 숫자 맞추기, 총잡이
+-- 결투, 물병 세우기; and the Studio-only test mission.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -32,6 +32,9 @@ local Balance = require(missionFolder:WaitForChild("Balance"))
 local RedLight = require(missionFolder:WaitForChild("RedLight"))
 local Liar = require(missionFolder:WaitForChild("Liar"))
 local TestMission = require(missionFolder:WaitForChild("TestMission"))
+local TimeGuess = require(missionFolder:WaitForChild("TimeGuess"))
+local Duel = require(missionFolder:WaitForChild("Duel"))
+local Bottle = require(missionFolder:WaitForChild("Bottle"))
 
 local MissionRunner = {}
 
@@ -64,7 +67,8 @@ export type Ctx = {
 	-- at the first ring; `enough(rung, times, presses)`: closes when the game knows its outcome, bundle 6c;
 	-- `repeatEvery`: every press at least that far apart counts and comes back in `presses`, bundle 6d).
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?,
+		quiet: boolean?)
 		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
 	-- The floor (§5.1): only `player` (and the presenter) heard by everyone, alive players receive only their chat;
 	-- nil ends it. RoundService ends it after every mission too.
@@ -102,7 +106,8 @@ export type MissionCtx = {
 	talk: (stage: string, topic: string?) -> (),
 	presenterReroll: (seconds: number) -> boolean,
 	bell: (from: { Player }, seconds: number, firstOnly: boolean,
-		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?)
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?,
+		quiet: boolean?)
 		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
 	-- One player's own screen instead of everyone's (the liar must not get the word; nil gives them everyone's
 	-- again). Cleared by the next screen for everyone and when the mission ends.
@@ -128,7 +133,7 @@ export type Mission = {
 export type Option = { id: string, title: string, recommended: boolean }
 
 local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, Crocodile, BombPass, Nunchi, Balance,
-	RedLight, Liar, TestMission }
+	RedLight, Liar, TimeGuess, Duel, Bottle, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
@@ -354,11 +359,11 @@ local function missionCtx(ctx: Ctx): MissionCtx
 		end,
 		bell = function(from: { Player }, seconds: number, firstOnly: boolean,
 			enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?,
-			repeatEvery: number?): ({ Player }, { [Player]: number }, { { player: Player, at: number } })
+			repeatEvery: number?, quiet: boolean?): ({ Player }, { [Player]: number }, { { player: Player, at: number } })
 			if ctx.cancelled() then
 				return {}, {}, {}
 			end
-			return ctx.bell(from, seconds, firstOnly, enough, repeatEvery)
+			return ctx.bell(from, seconds, firstOnly, enough, repeatEvery, quiet)
 		end,
 		screenTo = function(player: Player, payload: { [string]: any }?)
 			if not ctx.cancelled() then

@@ -321,6 +321,9 @@ loaders.Nunchi = function() return never("nunchi") end
 loaders.Balance = function() return never("balance") end
 loaders.RedLight = function() return never("redLight") end
 loaders.Liar = function() return never("liar") end
+loaders.TimeGuess = function() return never("timeGuess") end
+loaders.Duel = function() return never("duel") end
+loaders.Bottle = function() return never("bottle") end
 
 local function advanceUntil(cond, limit)
 	local deadline = now + limit

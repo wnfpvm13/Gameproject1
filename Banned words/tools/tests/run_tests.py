@@ -86,6 +86,11 @@ MISSION_MODULES = [
     ("Balance", "src/server/missions/Balance.luau"),
     ("RedLight", "src/server/missions/RedLight.luau"),
     ("Liar", "src/server/missions/Liar.luau"),
+    ("PressTiming", "src/shared/PressTiming.luau"),
+    ("PowerBar", "src/shared/PowerBar.luau"),
+    ("TimeGuess", "src/server/missions/TimeGuess.luau"),
+    ("Duel", "src/server/missions/Duel.luau"),
+    ("Bottle", "src/server/missions/Bottle.luau"),
     ("MissionRunner", "src/server/services/MissionRunner.luau"),
 ]
 

@@ -20,7 +20,7 @@ local POLL = 0.05 -- seconds between "done yet?" checks while the bells are open
 
 export type Press = { player: Player, at: number }
 type Window = { id: number, from: { [Player]: boolean }, rung: { Player }, times: { [Player]: number }, endsAt: number,
-	firstOnly: boolean, repeatEvery: number?, presses: { Press }, lastPress: { [Player]: number } }
+	firstOnly: boolean, repeatEvery: number?, presses: { Press }, lastPress: { [Player]: number }, quiet: boolean }
 
 local window: Window? = nil
 local windows = 0
@@ -86,7 +86,12 @@ function BellService.start(isBusy: (Player) -> boolean)
 		lastRing[player] = now
 		table.insert(open.rung, player)
 		open.times[player] = Match.now()
-		Net.toAll("BellRang", { userId = player.UserId })
+		-- (a quiet window: only the ringer hears their own ding — 숫자 맞추기, where a ding would give the time away)
+		if open.quiet then
+			Net.to(player, "BellRang", { userId = player.UserId })
+		else
+			Net.toAll("BellRang", { userId = player.UserId })
+		end
 		if open.firstOnly then
 			window = nil -- (closed at once: nobody else rings in the moment before collect looks again)
 			tell(nil)
@@ -97,13 +102,14 @@ end
 -- Opens the bells of `from` for `seconds` and waits. Returns who rang, first to last, when each first ring arrived
 -- (Match.now()) and, for a repeating window (`repeatEvery`), every press. `firstOnly`: closes at the first ring. Ends
 -- early when `enough(rung, times, presses)` says so (a game that knows its outcome; it is asked every poll, so a game
--- may also follow the presses live) or `stop()` (the mission was cancelled).
+-- may also follow the presses live) or `stop()` (the mission was cancelled). `quiet`: the others do not hear the
+-- rings (bundle 8b).
 function BellService.collect(from: { Player }, seconds: number, firstOnly: boolean, stop: () -> boolean,
-	enough: (({ Player }, { [Player]: number }, { Press }) -> boolean)?, repeatEvery: number?)
+	enough: (({ Player }, { [Player]: number }, { Press }) -> boolean)?, repeatEvery: number?, quiet: boolean?)
 	: ({ Player }, { [Player]: number }, { Press })
 	windows += 1
 	local open: Window = { id = windows, from = {}, rung = {}, times = {}, endsAt = Match.now() + seconds,
-		firstOnly = firstOnly, repeatEvery = repeatEvery, presses = {}, lastPress = {} }
+		firstOnly = firstOnly, repeatEvery = repeatEvery, presses = {}, lastPress = {}, quiet = quiet == true }
 	for _, player in from do
 		open.from[player] = true
 	end

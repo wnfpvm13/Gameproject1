@@ -12,7 +12,7 @@ local FallWatch = {}
 
 -- fighters() lists the models still in the round; onFall(model) is called for each that falls. Returns a stop
 -- function.
-function FallWatch.start(fallLine: number, fighters: () -> { Model }, onFall: (Model) -> ()): () -> ()
+function FallWatch.start(fallLine: number, fighters: () -> { Model }, onFall: (model: Model) -> ()): () -> ()
 	local ticking = RunService.Heartbeat:Connect(function()
 		for _, model in fighters() do
 			local body = CharacterParts.body(model)

@@ -57,7 +57,12 @@ function KnockFlight.update(self: Flight)
 		return
 	end
 	local elapsed = os.clock() - since
-	local over = if self.flying then BodyMotion.landed(body, elapsed) else elapsed >= Config.Hit.LightStun
+	-- Taken to the stands mid-flight (a home run): stop there instead of sliding on with the flight's speed.
+	local inStands = body.root.Position.Y > Config.Arena.WaitingRoomHeight - 8
+	if inStands then
+		body.root.AssemblyLinearVelocity = Vector3.zero
+	end
+	local over = inStands or (if self.flying then BodyMotion.landed(body, elapsed) else elapsed >= Config.Hit.LightStun)
 	if not body.model.Parent or over then
 		local wasFlying = self.flying
 		self.since = nil

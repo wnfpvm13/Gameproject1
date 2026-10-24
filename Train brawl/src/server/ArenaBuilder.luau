@@ -105,6 +105,11 @@ local function addWaitingRoom(parent: Instance): CFrame
 	spawn.CanCollide = false
 	spawn.CFrame = CFrame.new(0, y + 0.2, 0)
 	spawn.Parent = room
+	for _, part in room:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.CastShadow = false -- a box floating in the late sun would throw a big square shadow on the trains
+		end
+	end
 	room.Parent = parent
 	return CFrame.new(0, y + 3, 0)
 end

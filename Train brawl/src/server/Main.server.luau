@@ -1,6 +1,7 @@
 --!strict
 -- Train brawl server entry point: only wiring. The arena is built once (ArenaBuilder); rounds run on their own
--- (RoundService); swings are judged by BatService; falls are noticed by FallWatch and end that fighter's round;
+-- (RoundService); swings are judged by BatService; falls are noticed by FallWatch and end that fighter's round, as
+-- does a home run (health emptied, kept by FighterHealth); knock-offs go to every client as a feed;
 -- every character gets a bat (BatGear). For testing alone in Studio, the Workspace attribute Names.Solo makes
 -- sandbags (Sandbags) join every round as fighters.
 local Players = game:GetService("Players")
@@ -41,8 +42,15 @@ local round = RoundService.start(arena.spots, arena.waitingSpot, {
 	end,
 	clearSandbags = sandbags.clear,
 	resetHealth = health.reset,
+	announce = function(victim: string, by: string?, how: string)
+		remotes.Feed:FireAllClients(victim, by, how)
+	end,
 })
-FallWatch.start(arena.fallLine, round.fighters, round.eliminate)
+FallWatch.start(arena.fallLine, round.fighters, function(model: Model)
+	if round.isFighting(model) then -- a winner falling during the result stays the winner
+		round.eliminate(model, "fall")
+	end
+end)
 
 BatService.start(remotes.Swing, remotes.Hit, {
 	canSwing = round.isFighting,
@@ -50,7 +58,9 @@ BatService.start(remotes.Swing, remotes.Hit, {
 	hit = health.hit,
 	knockHere = sandbags.knock,
 	onHit = round.noteHit,
-	onSmash = round.eliminate,
+	onSmash = function(victim: Model)
+		round.eliminate(victim, "homerun")
+	end,
 })
 
 local function onCharacter(model: Model)

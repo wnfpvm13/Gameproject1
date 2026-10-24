@@ -36,6 +36,7 @@ function FallDrift.update(self: Drift, model: Model?, knocked: boolean)
 	elseif was then
 		self.drifting = nil
 		if was.model.Parent and not knocked then
+			was.root.AssemblyLinearVelocity = Vector3.zero -- arrived in the stands: no sliding on at the run's speed
 			BodyMotion.getUp(was)
 		end
 	end

@@ -3,10 +3,11 @@
 -- camera unless the player shows the cursor (AimLock); the swing control (SwingInput) starts the player's own swing
 -- (OwnSwing: drawn at once by SwingPose and HitFeedback, judged by the server; a mouse click swings only while the
 -- mouse is locked); every character's swings are drawn from their Names.SwingAt; a hit from the server flinches or
--- launches the player's own character (KnockFlight) and is shown for everyone (HitFeedback); a fall lays the player
--- down behind the train (FallDrift); health shows over heads and at the bottom (HealthBars), the round at the top
--- (RoundHud), and a player who is out watches the others from the stands (SpectateCam; a smash flight or a fall is
--- watched first).
+-- launches the player's own character (KnockFlight) and is shown for everyone (HitFeedback; a home run also
+-- HomeRunShow); a fall lays the player down behind the train (FallDrift); health shows over heads and at the bottom
+-- (HealthBars), the round at the top (RoundHud) with the knock-off feed under it (FeedHud) and the round's sound
+-- (RoundAudio), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
+-- is watched first).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,6 +19,7 @@ local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
 local ArenaLayout = require(shared:WaitForChild("ArenaLayout"))
+local SoundBank = require(shared:WaitForChild("SoundBank"))
 local Scenery = require(script:WaitForChild("Scenery"))
 local SwingInput = require(script:WaitForChild("SwingInput"))
 local SwingPose = require(script:WaitForChild("SwingPose"))
@@ -29,12 +31,17 @@ local RoundHud = require(script:WaitForChild("RoundHud"))
 local SpectateCam = require(script:WaitForChild("SpectateCam"))
 local AimLock = require(script:WaitForChild("AimLock"))
 local HealthBars = require(script:WaitForChild("HealthBars"))
+local HomeRunShow = require(script:WaitForChild("HomeRunShow"))
+local FeedHud = require(script:WaitForChild("FeedHud"))
+local RoundAudio = require(script:WaitForChild("RoundAudio"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
 local swingRemote = remotes:WaitForChild(Names.SwingRemote) :: RemoteEvent
 local hitRemote = remotes:WaitForChild(Names.HitRemote) :: RemoteEvent
+local feedRemote = remotes:WaitForChild(Names.FeedRemote) :: RemoteEvent
 
+SoundBank.preload()
 local scenery = Scenery.new()
 local knock = KnockFlight.new()
 local drift = FallDrift.new(ArenaLayout.fallLine(ArenaLayout.carPlaces(Config.Arena.Cars, Config.Arena.CarGap), Config.Fall.Margin))
@@ -43,6 +50,8 @@ local hud = RoundHud.new(playerGui)
 local spectate = SpectateCam.new()
 local aim = AimLock.new(playerGui)
 local bars = HealthBars.new(playerGui)
+local feed = FeedHud.new(playerGui)
+local audio = RoundAudio.new(playerGui)
 
 -- The characters still in the round, as this client sees them (players' and sandbags').
 local function fighters(): { Model }
@@ -120,6 +129,16 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 		knock:hit(victim, velocity, hitKind)
 	end
 	HitFeedback.hit(victim, swinger == player.Character, me, hitKind)
+	if hitKind == "smash" then
+		HomeRunShow.play(victim)
+	end
+end)
+
+-- A knock-out, from the server: a line in the feed.
+feedRemote.OnClientEvent:Connect(function(victim: unknown, by: unknown, how: unknown)
+	if typeof(victim) == "string" and typeof(how) == "string" then
+		feed:add(victim, if typeof(by) == "string" then by else nil, how)
+	end
 end)
 
 RunService.RenderStepped:Connect(function(dt: number)
@@ -132,6 +151,8 @@ RunService.RenderStepped:Connect(function(dt: number)
 	local list = fighters()
 	spectate:update(Workspace:GetAttribute(Names.Phase) == "Fight" and not alive and not drift:active() and not knock:launched(), character, list)
 	bars:update(list, character, os.clock())
+	feed:update()
+	audio:update(Workspace:GetServerTimeNow())
 	local standing = if alive then "in" elseif state == false then "out" else "watching"
 	hud:update(Workspace:GetServerTimeNow(), standing, if character then PartUtil.number(character, Names.KOs) or 0 else 0)
 end)

@@ -5,6 +5,7 @@ return {
 	RemotesFolder = "Remotes",
 	SwingRemote = "Swing", -- client -> server: I swing
 	HitRemote = "Hit", -- server -> every client: who was hit, and the knock for the one it hit
+	FeedRemote = "Feed", -- server -> every client: who knocked whom out and how ("homerun" or "fall")
 	ArenaFolder = "TrainBrawlArena",
 	SceneryFolder = "TrainBrawlScenery",
 	WaitingRoom = "WaitingRoom",

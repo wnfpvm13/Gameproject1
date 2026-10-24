@@ -24,7 +24,8 @@ export type Service = {
 	fighters: () -> { Model }, -- the models still in the running round
 	isFighting: (model: Model) -> boolean, -- still in, and the fight has started
 	noteHit: (victim: Model, swinger: Model) -> (),
-	eliminate: (model: Model) -> (), -- fell off (or died, or left)
+	-- Out of the round: how is "homerun" (health emptied), "fall" (fell off) or "gone" (died or left).
+	eliminate: (model: Model, how: string) -> (),
 	stop: () -> (),
 }
 
@@ -33,6 +34,8 @@ export type Hooks = {
 	spawnSandbags: (count: number) -> { Model },
 	clearSandbags: () -> (),
 	resetHealth: (model: Model) -> (), -- full combat health for a fighter entering a round
+	-- A fighter knocked out by a home run or a fall: its name, the name of who gets the knock-off (nil = nobody).
+	announce: (victim: string, by: string?, how: string) -> (),
 }
 
 type Fighter = { model: Model, player: Player? }
@@ -103,7 +106,14 @@ function RoundService.start(spots: { ArenaLayout.Spot }, waitingSpot: CFrame, ho
 		return waitingSpot + Vector3.new((math.random() * 2 - 1) * half, 0, (math.random() * 2 - 1) * half)
 	end
 
-	local function eliminate(model: Model)
+	-- A fighter's shown name (the player's display name or the sandbag's).
+	local function nameOf(model: Model): string
+		local player = Players:GetPlayerFromCharacter(model)
+		local humanoid = model:FindFirstChildOfClass("Humanoid")
+		return if player then player.DisplayName elseif humanoid then humanoid.DisplayName else model.Name
+	end
+
+	local function eliminate(model: Model, how: string)
 		local fighter = alive[model]
 		if not fighter then
 			return
@@ -114,12 +124,19 @@ function RoundService.start(spots: { ArenaLayout.Spot }, waitingSpot: CFrame, ho
 			hold(model, false) -- out during the count-down: free to move in the stands
 		end
 		local hit = lastHit[model]
+		local by: Model? = nil
 		if hit and now() - hit.at <= r.KillCreditSeconds and hit.swinger ~= model then
+			by = hit.swinger
 			hit.swinger:SetAttribute(Names.KOs, (PartUtil.number(hit.swinger, Names.KOs) or 0) + 1)
 		end
 		publishAlive()
-		-- The fall plays on (drifting behind the train) before the player goes up to the stands; a sandbag just goes.
-		task.delay(Config.Fall.ShowSeconds, function()
+		if how ~= "gone" then
+			hooks.announce(nameOf(model), if by then nameOf(by) else nil, how)
+		end
+		-- The fall (drifting behind the train) or the home-run flight (twinkling out in the sky) plays on before the
+		-- player goes up to the stands; a sandbag just goes.
+		local show = if how == "homerun" then Config.Fall.HomeRunSeconds else Config.Fall.ShowSeconds
+		task.delay(show, function()
 			if fighter.player then
 				if fighter.player.Character == model and model.Parent then
 					model:PivotTo(stands())
@@ -219,9 +236,7 @@ function RoundService.start(spots: { ArenaLayout.Spot }, waitingSpot: CFrame, ho
 			local winner = ""
 			local last = if count() == 1 then next(alive) else nil
 			if last then
-				local fighter = alive[last]
-				local humanoid = last:FindFirstChildOfClass("Humanoid")
-				winner = if fighter.player then fighter.player.DisplayName elseif humanoid then humanoid.DisplayName else last.Name
+				winner = nameOf(last)
 			end
 			Workspace:SetAttribute(Names.Winner, winner)
 			setPhase("Ended", now() + r.EndSeconds)
@@ -237,7 +252,7 @@ function RoundService.start(spots: { ArenaLayout.Spot }, waitingSpot: CFrame, ho
 		local humanoid = model:WaitForChild("Humanoid", 10)
 		if humanoid and humanoid:IsA("Humanoid") then
 			humanoid.Died:Connect(function()
-				eliminate(model)
+				eliminate(model, "gone")
 			end)
 		end
 	end

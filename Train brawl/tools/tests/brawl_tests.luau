@@ -131,6 +131,19 @@ do
 	check("the second combo's launch goes off the roof from its middle", second > A.RoofWidth / 2, string.format("%.1f", second))
 	check("a light hit never pushes off the roof from its middle", h.LightEmpty * h.SlideSeconds < A.RoofWidth / 2)
 	check("a smash flies past the other train", BatMath.flightDistance(h.SmashPush, h.SmashLift, GRAVITY) > A.RoofWidth + A.Gap + A.RoofWidth)
+	-- The home run: from a body on a roof (its middle about 3 above), still flying over the roofs when it twinkles out,
+	-- and never up into the stands.
+	local startY, t = 10 + 3, Config.Fall.HomeRunSeconds
+	local yAtTwinkle = startY + h.SmashLift * t - GRAVITY / 2 * t * t
+	local top = startY + h.SmashLift * h.SmashLift / (2 * GRAVITY)
+	check("a home run is still higher than the roofs when it twinkles out", yAtTwinkle - 3 > 10, string.format("%.1f", yAtTwinkle))
+	-- It would reach the sand (its middle about 3 above it) a good moment after the twinkle, so a late network word
+	-- does not show it lying on the sand first.
+	local sandY = A.GroundY + 3
+	local land = (h.SmashLift + math.sqrt(h.SmashLift * h.SmashLift + 2 * GRAVITY * (startY - sandY))) / GRAVITY
+	-- The flight starts after the hold, so it has flown (t - hold) when the server takes it away.
+	check("a home run reaches the sand at least 0.2 s after it twinkles out", land > t - Config.Feedback.HitStopSeconds + 0.2, string.format("%.2f", land))
+	check("a home run's top stays under the stands", top < A.WaitingRoomHeight - 5, string.format("%.1f", top))
 	check("a light hit's stun ends before the swinger can swing again (the one hit can answer)", h.LightStun + 0.1 < Config.Bat.Cooldown)
 	check("a launched fighter stays unhittable past lying down", h.LaunchImmune > Config.Knock.MinSeconds + 0.2)
 	check("a combo has time for its hits at the swing rate", h.ComboWindow > (h.LaunchOn - 1) * Config.Bat.Cooldown)

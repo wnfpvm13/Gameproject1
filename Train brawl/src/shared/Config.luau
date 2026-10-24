@@ -109,9 +109,11 @@ Config.Hit = {
 	LaunchEmpty = 27,
 	LaunchLift = 28,
 	LaunchImmune = 0.9, -- a launched fighter cannot be hit for this long (flight, getting up and a moment more)
-	-- Smash: off the train for sure, high and far.
-	SmashPush = 70,
-	SmashLift = 60,
+	-- Smash, the home run: high into the sky and away. With this lift a body is still in the air (higher than the roofs)
+	-- when Config.Fall.HomeRunSeconds ends and it twinkles out - it would reach the sand about 0.27 s later - and its
+	-- top (about 50) stays under the stands (70).
+	SmashPush = 60,
+	SmashLift = 120,
 }
 
 -- Being launched: stiff while flying, back on the feet after landing.
@@ -126,17 +128,36 @@ Config.Knock = {
 	SwingGrace = 0.25,
 }
 
--- How a hit feels: a sound, a white flash on whoever is hit, and a little shake for the one hit.
+-- How a hit feels: its sound (Config.Sounds), a white flash on whoever is hit, and a little shake for the one hit.
 Config.Feedback = {
-	HitSound = "rbxasset://sounds/swordlunge.wav", -- built into every Roblox client
-	SwingSound = "rbxasset://sounds/swordslash.wav",
-	HitVolume = 0.8,
-	SwingVolume = 0.4,
 	HitStopSeconds = 0.06, -- whoever is hit holds still this long before flying (the beat that makes a hit land)
 	FlashSeconds = 0.15,
 	ShakeSeconds = 0.15,
 	ShakeStuds = 0.5,
-	SmashSeconds = 0.9, -- the steam column of a smash rises and fades this long
+	HomeRunTextSeconds = 1.6, -- the big "홈런!" over where the home run was hit
+	Gold = Color3.fromRGB(255, 214, 90), -- the home run's colour (text, trail, feed line)
+	TrailSeconds = 0.25, -- the light trail behind a home-run flight
+	TwinkleSeconds = 0.7, -- the star a home-run flight ends in
+	FeedSeconds = 4, -- a line in the knock-off feed stays this long
+	FeedLines = 3,
+}
+
+-- Sounds: Roblox's own licensed library (Pro Sound Effects and APM Music uploads), free to use in Roblox games; and
+-- the built-in rbxasset ones. volume is the Sound's; seconds cuts a long one short (it fades out over the last 0.5).
+-- Music plays in the Music group (the on-screen button mutes it), the rest in Effects.
+Config.Sounds = {
+	Swing = { id = "rbxassetid://9120972321", volume = 0.5 }, -- Wood Whoosh Slicing Air Quick Swings 4
+	HitLight = { id = "rbxassetid://9119330371", volume = 0.9 }, -- Soccer Ball Tackle 4 (a deep thump)
+	HitLaunch = { id = "rbxassetid://9125380595", volume = 0.9, seconds = 1.2 }, -- Baseball Wood Bat Power Whack 1
+	HomeRun = { id = "rbxassetid://9125380872", volume = 1, seconds = 2 }, -- Baseball Wood Bat Power Whack 5
+	Cheer = { id = "rbxassetid://9120973900", volume = 0.45, seconds = 3.5 }, -- Wrestling Crowd 2 (cheers)
+	Twinkle = { id = "rbxassetid://9126073001", volume = 0.7 }, -- Synth Sparkle Tone Ding 4
+	Whistle = { id = "rbxassetid://9119628070", volume = 0.55, seconds = 2.5 }, -- Steam Train Whistle Airy 2
+	Tick = { id = "rbxasset://sounds/electronicpingshort.wav", volume = 0.45 },
+	Win = { id = "rbxassetid://9126073318", volume = 0.7 }, -- Synth Sparkle Tone Ding 1 (with the cheer)
+	Train = { id = "rbxassetid://9112889081", volume = 0.22, looped = true }, -- Train Steam 2 (a steady chuff)
+	MusicWaiting = { id = "rbxassetid://1840254626", volume = 0.25, looped = true, music = true }, -- Country Fiddle
+	MusicFight = { id = "rbxassetid://1838431777", volume = 0.2, looped = true, music = true }, -- Resophonic Reel
 }
 
 -- Falling off: feet below this much under the lowest roof have missed the train. From there the body lies down and
@@ -144,6 +165,7 @@ Config.Feedback = {
 Config.Fall = {
 	Margin = 4,
 	ShowSeconds = 1.6, -- the fall plays this long before the fighter goes to the stands (a sandbag is removed)
+	HomeRunSeconds = 1.1, -- a home-run flight lasts this long, then twinkles out and goes to the stands
 }
 
 -- Rounds: wait for players, count down on the roofs, fight until one is left.

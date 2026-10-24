@@ -41,17 +41,9 @@ local selected: string? = nil -- the name tapped in a "judge" menu
 local onPickMission: (string) -> () = function(_id) end
 
 local function button(parent: Instance, text: string, width: number, height: number): TextButton
-	local b = Instance.new("TextButton")
+	local b = Style.button(Style.BOLD, 18)
 	b.Size = UDim2.fromOffset(width, height)
-	b.BackgroundColor3 = Style.PANEL
-	b.BackgroundTransparency = 0.15
-	b.FontFace = Style.BOLD
-	b.TextSize = 18
-	b.TextColor3 = Style.WHITE
 	b.Text = text
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = b
 	b.Parent = parent
 	return b
 end
@@ -76,7 +68,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 		onVolunteer(not volunteered)
 	end)
 
-	menuFrame = Style.panel(Style.gui(), Style.PANEL, 0.15, 14)
+	menuFrame = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 14)
 	menuFrame.Name = "MissionMenu"
 	menuFrame.AnchorPoint = Vector2.new(1, 0.5)
 	menuFrame.Position = UDim2.new(1, -16, 0.5, 0)
@@ -143,7 +135,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 		end)
 	end
 
-	wordFrame = Style.panel(Style.gui(), Style.PANEL, 0.15, 14)
+	wordFrame = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 14)
 	wordFrame.Name = "WordList"
 	wordFrame.AnchorPoint = Vector2.new(0, 0.5)
 	wordFrame.Position = UDim2.new(0, 16, 0.55, 0)
@@ -292,7 +284,7 @@ function PresenterPanel.setWords(rows: { WordRow }, mode: string?, everyone: boo
 		action.AnchorPoint = Vector2.new(1, 0.5)
 		action.Position = UDim2.fromScale(1, 0.5)
 		action.TextSize = 16
-		action.BackgroundColor3 = if mode == "reroll" then Style.PANEL else Style.RED
+		action.BackgroundColor3 = if mode == "reroll" then Style.BUTTON else Style.RED
 		action.Activated:Connect(function()
 			onWordAction(mode, row.userId)
 		end)
@@ -346,7 +338,7 @@ function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: stri
 			end
 			selected = option.id
 			for id, other in nameButtons do
-				other.BackgroundColor3 = if id == option.id then Style.AMBER else Style.PANEL
+				other.BackgroundColor3 = if id == option.id then Style.AMBER else Style.BUTTON
 				other.TextColor3 = if id == option.id then Style.PANEL else Style.WHITE
 			end
 			flingButton.AutoButtonColor = true

@@ -38,6 +38,7 @@ local Match = {
 	presenterPending = false, -- a replacement is being looked for (clients wait before naming who presents)
 	participants = {} :: { [Player]: Participant },
 	startedWith = 0,
+	game = 0, -- the main game's mission being briefed or played, 1..Config.ROUND_GAMES (0 before the first)
 	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
 	chatJoin = {} :: { [Player]: boolean }, -- joins by text chat instead (ChatService decides who may)
 	-- Speech judging (JudgeService, bundle 6e; the talk stage sets them, the settle stage ends them):
@@ -112,6 +113,8 @@ function Match.payload()
 		lives = lives, -- userId string -> lives left
 		maxLives = Config.LIVES,
 		total = Match.startedWith,
+		game = Match.game,
+		games = Config.ROUND_GAMES,
 		readyCount = #Match.eligiblePlayers(),
 		requireReady = Config.REQUIRE_VOICE_READY,
 		serverKind = Match.serverKind,
@@ -142,6 +145,7 @@ end
 function Match.resetRound()
 	table.clear(Match.participants)
 	Match.startedWith = 0
+	Match.game = 0
 	Match.presenter = nil
 	Match.presenterPending = false
 	Match.talk = nil

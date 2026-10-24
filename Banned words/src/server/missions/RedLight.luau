@@ -43,6 +43,7 @@ type Ctx = {
 local RedLight = {
 	id = "redLight",
 	title = Config.TEXT.REDLIGHT_TITLE,
+	brief = Config.TEXT.REDLIGHT_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.REDLIGHT_SECONDS + Config.MINIGAME_RESULT_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.REDLIGHT_MIN_PLAYERS :: number?,

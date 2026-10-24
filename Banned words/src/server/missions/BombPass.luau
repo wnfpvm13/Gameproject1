@@ -46,6 +46,7 @@ type Ctx = {
 local BombPass = {
 	id = "bomb",
 	title = Config.TEXT.BOMB_TITLE,
+	brief = Config.TEXT.BOMB_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.BOMB_MAX_SECONDS + Config.MINIGAME_RESULT_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BOMB_MIN_PLAYERS :: number?,

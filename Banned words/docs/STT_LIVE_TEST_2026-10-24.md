@@ -2,6 +2,8 @@
 
 6e(`docs/SPEECH_JUDGING_2026-10-23.md`, 태그 `banned-words-v3-6e`)로 받아쓰기 판정 코드는 들어갔다. 다만 로컬 Studio 시험(서버 + 클라이언트)에는 받아쓰기가 돌지 않는다. 그래서 실제 음성으로 정확도와 한도를 재고, 그 결과를 보고 오너가 `VOICE_JUDGING`을 켤지 정한다(설계 3번 표, 16번).
 
+> **2026-10-24 갱신(친구 체험판, 묶음 7):** 오너가 체험판에서 받아쓰기 판정을 켜기로 해서 저장소의 `Config.VOICE_JUDGING`이 이제 `true`다. 친구와 하는 체험판(시험 장소 비공개 게시 = 길 2)이 곧 이 시험이다. 그래서 아래의 "기본판(꺼짐)으로 되돌리기"는 이제 "결과가 나쁘면 오너가 `false`로 되돌리기(커밋 + 다음 게시)"로 읽는다. `--voice-judging` 시험판은 기본판과 결과 문구만 다르다. 혼자 시험판(`--solo`, 9절)은 그대로 기본판으로 다시 설치해야 한다(자기 단어가 보이는 판).
+
 ## 0. 두 가지 길
 
 - **길 1 — Team Test(게시 없음, 먼저 권함):** Roblox 공식 튜토리얼은 받아쓰기를 Studio의 **Team Test**에서 시험하라고 안내한다(Test → Clients and Servers → Team Test → Start, 마이크 켜고 말하기; 단 장소가 한 번은 게시돼 있고 경험 설정에서 마이크가 켜져 있어야 함 — [튜토리얼](https://create.roblox.com/docs/tutorials/use-case-tutorials/audio/speech-to-text)). 시험 장소(84102094280848)는 이미 게시된 클라우드 장소이므로, 새 버전을 게시하지 않고 Studio 편집 상태 그대로 시험 서버에서 돌린다. PC 계정만 들어올 수 있다(폰 시험 H는 길 2). Team Test **서버**의 `RunService:IsStudio()` 값은 공식 자료끼리 다르다(API 표는 참, Roblox 직원 설명은 서버 거짓). 참이면 코드의 Studio 설정이 적용된다: 최소 1명, 준비 완료 필수 아님(A는 "마이크 확인 완료" 알림으로 본다), 서버 종류는 `STUDIO_SERVER_KIND`(공개 규칙; `workspace`의 `BW_ServerKind = "private"`로 비공개 규칙). 거짓이면 라이브와 같다: 최소 2명(혼자 시험판은 1명), 준비 완료 필수, Studio 속성 무시. 시작할 때 서버 콘솔에서 확인해 결과에 적는다.
@@ -59,7 +61,7 @@
 1. 오너: 시험 계정 준비 — 오너를 포함해 계정마다 **13세 이상 연령 확인 + 음성 사용 가능**(받아쓰기·음성 조건).
     - 길 1(Team Test)은 시험 계정이 **장소 공동 작업자(편집 권한)**여야 한다. 공동 작업에도 연령 확인 등 조건이 있고, **개인 소유 경험은 친구에게만 편집 권한을 줄 수 있다**([협업](https://create.roblox.com/docs/projects/collaboration)). 그러면 시험 계정끼리 친구라서, 공개 규칙에서는 그 안에서 진행자가 뽑히지 않는다 → 길 1은 **진행자 없이**(C·D·E·F·G·I) 하거나, Team Test 서버가 Studio로 취급되면 `BW_ServerKind = "private"`로 비공개 규칙을 써서 진행자(J)를 본다.
     - 길 2는 Creator Dashboard의 접근 관리(Playtest 초대 또는 편집 권한)로 들인다. 진행자(J)를 보려면 참가자와 친구가 아닌 계정이 필요하다.
-2. 작성자: `python -I tools/install_game.py --voice-judging` → `.qa/install_game_stt.luau`. 성공하면 경로가 찍힌다. 실패(모르는 인자, Config 줄을 못 찾음)하면 아무것도 쓰지 않고 멈추므로, **그때 남아 있던 옛 `.qa` 파일을 설치하지 않는다.** 저장소의 `Config.VOICE_JUDGING`은 `false` 그대로이고 이 파일만 `true`다. Studio에서 실행하면 결과가 `[speech judging ON - live test build] game installed`로 시작한다.
+2. 작성자: `python -I tools/install_game.py --voice-judging` → `.qa/install_game_stt.luau`. 성공하면 경로가 찍힌다. 실패(모르는 인자, Config 줄을 못 찾음)하면 아무것도 쓰지 않고 멈추므로, **그때 남아 있던 옛 `.qa` 파일을 설치하지 않는다.** 저장소의 `Config.VOICE_JUDGING`은 체험판 전까지 `false`였고 이 파일만 `true`였다(2026-10-24부터 저장소도 `true`). Studio에서 실행하면 결과가 `[speech judging ON - live test build] game installed`로 시작한다.
 3. 오너: Studio에서 시험 장소를 연다.
 4. 작성자(Studio MCP): 맵이 없으면 `tools/build_pool_hall.luau` → `tools/build_pool_lighting.luau`, 그다음 `.qa/install_game_stt.luau`를 Edit에서 실행.
 5. 오너가 장소에서 직접 맞출 것(스크립트로 못 바꿈, `docs/PUBLISH_CHECK_2026-10-23.md`). **바꾼 설정은 적어 둔다**(되돌리기용).
@@ -86,7 +88,7 @@
 ## 6. 끝나면 되돌리기
 
 - **길 1:** 게시하지 않았지만, 시험판 스크립트가 클라우드 장소의 편집 상태에 남는다. **다음 게시 전에 반드시 기본판으로 재설치**한다: 작성자가 `python -I tools/install_game.py`로 만든 `tools/install_game.luau`를 Studio Edit에서 실행 → 결과에 `speech judging ON`이 **없는지** 확인.
-- **길 2:** 위와 같이 기본판을 Studio에서 재설치 → 게시 → 기존 서버 종료(Creator Dashboard) → 다시 접속해 토크가 안 나오는지 확인. 또는 버전 복원: **열려 있는 Studio 편집 세션을 모두 닫음**(자동 저장이 복원을 덮지 않게) → Creator Dashboard 버전 기록에서 4-6에 적은 이전 버전을 복원 → Studio에서 장소를 **다시 열어** 복원본인지 확인(설치 결과 문구·`Config.VOICE_JUDGING`) → 게시 → 기존 서버 종료 → 재접속 확인([버전 기록](https://create.roblox.com/docs/projects/version-history): 복원은 자동 게시가 아님).
+- **길 2:** (2026-10-24부터 기본판도 받아쓰기 켬이라, 토크를 끄려면 먼저 오너 결정으로 `Config.VOICE_JUDGING = false` → 커밋 → `python -I tools/install_game.py`로 설치 파일 다시 만들기.) 그 기본판을 Studio에서 재설치 → 게시 → 기존 서버 종료(Creator Dashboard) → 다시 접속해 토크가 안 나오는지 확인. 또는 버전 복원: **열려 있는 Studio 편집 세션을 모두 닫음**(자동 저장이 복원을 덮지 않게) → Creator Dashboard 버전 기록에서 4-6에 적은 이전 버전을 복원 → Studio에서 장소를 **다시 열어** 복원본인지 확인(설치 결과 문구·`Config.VOICE_JUDGING`) → 게시 → 기존 서버 종료 → 재접속 확인([버전 기록](https://create.roblox.com/docs/projects/version-history): 복원은 자동 게시가 아님).
 - 4-5에서 바꾼 경험 설정 중 시험만을 위한 것은 적어 둔 대로 되돌린다.
 - 결과가 좋으면 `Config.VOICE_JUDGING = true`로 바꾸는 것은 오너 결정(커밋 + 다음 게시).
 
@@ -111,7 +113,7 @@
 ## 9. 혼자 시험판 (`--voice-judging --solo`)
 
 - 만들기: `python -I tools/install_game.py --voice-judging --solo` → `.qa/install_game_stt_solo.luau`. Studio 결과가 `[speech judging ON - SOLO live test build, own word shown] game installed`로 시작한다.
-- 기본판과 다른 것은 Config 네 줄뿐이다: `VOICE_JUDGING = true`, `SHOW_OWN_WORD = true`(자기 단어도 보임), `MIN_PLAYERS = 1`, `TALK_MIN_PLAYERS = 1`. 저장소 기본값은 모두 그대로다. `SHOW_OWN_WORD`는 기본판에서 켜질 길이 없지만, 혼자 시험판을 그대로 게시하면 켜진 채 나간다 — 그래서 서버가 시작할 때 콘솔에 `SOLO speech test build` 경고를 찍는다. 토크 준비 문구 "내 머리 위 단어는 나만 몰라요"는 혼자 시험판에서는 무시한다.
+- 기본판과 다른 것은 Config 세 줄뿐이다(2026-10-24부터 기본판도 `VOICE_JUDGING = true`; 그 전에는 이 줄까지 네 줄): `SHOW_OWN_WORD = true`(자기 단어도 보임), `MIN_PLAYERS = 1`, `TALK_MIN_PLAYERS = 1`. 저장소 기본값은 모두 그대로다. `SHOW_OWN_WORD`는 기본판에서 켜질 길이 없지만, 혼자 시험판을 그대로 게시하면 켜진 채 나간다 — 그래서 서버가 시작할 때 콘솔에 `SOLO speech test build` 경고를 찍는다. 토크 준비 문구 "내 머리 위 단어는 나만 몰라요"는 혼자 시험판에서는 무시한다.
 - 혼자일 때 다음 게임 후보: 다른 미션은 모두 2명 이상이 필요해서, 라이브(길 2)에서는 퀴즈와 금칙어 토크(혼자 시험판에서 1명)뿐이고 같은 게임은 연달아 안 나와 번갈아 나온다. **Studio이거나 Team Test 서버가 Studio로 취급되면 연습 미션도 끼어든다**(30% 확률로 무작위 실패라 목숨이 빨리 준다). 토크는 **판당 2번까지**(`GAME_PER_ROUND`)라 그 뒤 그 판은 퀴즈(와 연습 미션)만 나오고, 판 끝 무렵에는 남은 시간 때문에 토크가 빠질 수 있다 → C의 5번 시도에는 판이 여러 개 필요하다.
 - 혼자 판에서 **세 번째로 걸리면 탈락하지 않는다**: 마지막 한 명이 떨어지면 "그대로 결승으로 가요" 규칙(남은 목숨 0으로 생존)이 적용되고, 결승은 1명이라 건너뛰어 결과에 본인이 우승으로 나온다 → 그 판이 끝나고 다음 판. (퀴즈 답을 두 번 연속 안 하면 잠수로 탈락하고 결과는 우승자 없음.)
 - 순서: 1절 규칙 중 "자기 금칙어는 안 보인다"만 빼고 그대로. 토크 준비 구간에 머리 위 자기 단어를 확인 → 대화 구간에 C·D·E → 정산 뒤 콘솔 한 줄(F·G).

@@ -51,6 +51,7 @@ type Ctx = {
 local OneWord = {
 	id = "oneWord",
 	title = Config.TEXT.ONE_WORD_TITLE,
+	brief = Config.TEXT.ONE_WORD_BRIEF, -- (the briefing before it)
 	-- The time budget counts the longest run: the bells, everyone swaps the topic and types by chat, then a vote and the
 	-- result.
 	expectedSeconds = Config.BELL_ORDER_SECONDS

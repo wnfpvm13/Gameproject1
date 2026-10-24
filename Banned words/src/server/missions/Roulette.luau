@@ -39,6 +39,7 @@ type Ctx = {
 local Roulette = {
 	id = "roulette",
 	title = Config.TEXT.ROULETTE_TITLE,
+	brief = Config.TEXT.ROULETTE_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.ROULETTE_SPIN_SECONDS + Config.ROULETTE_REVEAL_SECONDS,
 	maxPerRound = Config.ROULETTE_PER_ROUND :: number?,
 	minPlayers = Config.ROULETTE_MIN_PLAYERS :: number?,

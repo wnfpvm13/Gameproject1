@@ -31,21 +31,29 @@ return {
 	ASSIGN_TIME = 8,
 	RESULT_TIME = 10,
 
-	-- Round (docs/DESIGN_V3.md §2, §4; minigame overhaul 2026-10-23): 8 minutes of minigames back to back (no free
-	-- talk), then a sudden-death final.
+	-- Round (docs/DESIGN_V3.md §2, §4; minigame overhaul 2026-10-23; owner 2026-10-24: a number of games, like the
+	-- minigame collections on Roblox): ROUND_GAMES minigames back to back (no free talk), then a sudden-death final.
+	-- ROUND_MAX_SECONDS only caps a round of long games (a game that would not fit is not started).
 	LIVES = 3,
-	ROUND_SECONDS = 480,
+	ROUND_GAMES = 6,
+	ROUND_MAX_SECONDS = 720,
 	FINAL_AT_ALIVE = 3, -- a round begun with 4+ players goes to the final as soon as this few are left
 	FINAL_MAX_SECONDS = 90, -- past this the survivors share the win
-	NEXT_GAME_CARD_SECONDS = 3, -- without a presenter: "next: ..." shows this long before a game starts
+	-- Between games (owner 2026-10-24): what the last game did, then without a presenter the alive players vote for the
+	-- next game among NEXT_VOTE_CHOICES (NEXT_VOTE_SECONDS, over once all voted; none: at random), then the next
+	-- game's briefing (its name and one-line rule, 3-2-1) for BRIEF_SECONDS.
+	NEXT_VOTE_CHOICES = 3,
+	NEXT_VOTE_SECONDS = 7,
+	BRIEF_SECONDS = 3,
 	AFK_MISSES = 2, -- answer missions missed in a row -> out (a spectator)
 	SUBJECTIVE_FLINGS = 1, -- public servers: launches by the presenter or a vote, per player per round
 	-- Studio has no private servers: this says which rules a Studio round plays (workspace attribute BW_ServerKind =
 	-- "public" / "private" overrides it while testing).
 	STUDIO_SERVER_KIND = "public",
 	-- Speech judging of banned words (bundle 6e, after a live test). The banned-word talk is played only while it is on
-	-- (owner 2026-10-23); Studio can pretend it is with the workspace attribute BW_VoiceJudging = true.
-	VOICE_JUDGING = false,
+	-- (owner 2026-10-23); Studio can pretend it is with the workspace attribute BW_VoiceJudging = true. On since the
+	-- friend beta (owner 2026-10-24: that test is also the live speech test, docs/STT_LIVE_TEST_2026-10-24.md).
+	VOICE_JUDGING = true,
 	-- The solo speech test build only (tools/install_game.py --voice-judging --solo, docs/STT_LIVE_TEST_2026-10-24.md):
 	-- a player also sees their own banned word, so one tester knows what to say. Never on in a real game.
 	SHOW_OWN_WORD = false,
@@ -182,13 +190,20 @@ return {
 	SETTLE_SLACK = 1, -- the settle stage waits at most this much past the rescue and the lever for them to end
 	RESPAWN_TIME = 3,
 
-	-- V3 flying chair (docs/DESIGN_V3.md §10, owner 2026-10-22): the seat flap snaps back with a bang, the player flies
-	-- off as a ragdoll far into the pool and is back on the seat FLING_RETURN_SECONDS after the launch.
+	-- V3 flying chair (docs/DESIGN_V3.md §10; owner 2026-10-24: an explosion, no flight path): a blast in front of the
+	-- chair throws the player off as a ragdoll, backward over the pool, and they are back on the seat
+	-- FLING_RETURN_SECONDS after the launch.
 	FLING_RETURN_SECONDS = 5,
-	FLING_APEX_HEIGHT = 20, -- studs above the launch point at the top of the arc (keeps it under the show camera's
-	-- top edge and the HUD; also capped under PoolHall CeilingY)
-	FLING_BODY_TOP = 4, -- studs from the root to the top of a tumbling body (keeps the whole body under CeilingY)
-	FLING_SPIN = 7, -- rad/s backward tumble at the launch
+	BLAST_FORWARD = 1.5, -- studs in front of the seated body where the blast goes off (drawn by the clients)
+	BLAST_BELOW = 1, -- and this far below its root
+	BLAST_SPEED_MIN = 90, -- studs/s the blast gives the body (a random speed in this range)
+	BLAST_SPEED_MAX = 125,
+	BLAST_PITCH_MIN = 28, -- degrees above the ground (a random angle; 125 studs/s at 40 degrees tops out ~16 studs up,
+	BLAST_PITCH_MAX = 40, -- under PoolHall CeilingY)
+	BLAST_SPREAD = 15, -- degrees left or right of straight back at most (SeatService narrows it so even the farthest
+	-- throw stays over the landing zone: the end chairs fly only straight or inward)
+	BLAST_SPIN = 12, -- rad/s tumble about a random axis
+	BLAST_RADIUS = 12, -- size of the drawn explosion (studs; it pushes nothing itself)
 	FLING_FLOAT_DENSITY = 0.45, -- body density while flying, so it floats on the water (avatars sink otherwise)
 	FLING_COLLIDE_DELAY = 0.2, -- body parts start colliding this long after the launch (seated feet touch the carpet,
 	-- and colliding from the first frame cost ~10% of the throw in the Studio test)
@@ -241,14 +256,20 @@ return {
 		ASSIGN = "목숨은 %d개예요 · 미션에 실패하면 날아가요",
 		PLAY_START = "본 경기 시작!",
 		NEXT_GAME = "다음: %s",
+		GAME_COUNT = "미션 %d/%d", -- the status board during the main game: the game now / games in a round
+		NEXT_VOTE = "다음에 할 미션을 골라요",
+		RECAP_LOST = "%s 목숨 잃음",
+		RECAP_OUT = "%s 탈락",
+		RECAP_NONE = "아무도 안 날아갔어요",
 		PICKING = "진행자가 다음 미션을 고르는 중",
 		TEST_MISSION = "연습 미션 · 운에 맡겨 보세요",
 		FINAL = "결승 · 틀리면 바로 탈락",
 		ALL_WRONG = "모두 틀려서 아무도 탈락하지 않아요 · 다시!",
 		TO_FINAL = "남은 사람이 한꺼번에 떨어져서 그대로 결승으로 가요",
-		LIFE_LOST = "%s 목숨 -1",
+		LIFE_LOST = "%s · 목숨 1개 잃음",
 		OUT = "%s 탈락!",
-		MY_LIFE_LOST = "내 목숨 -1 · 남은 목숨 %d",
+		MY_LIFE_LOST = "목숨 1개를 잃었어요 · 남은 목숨 %d개",
+		MY_NO_LIVES = "목숨을 모두 잃었어요", -- (the last one left, or everyone left fell at once)
 		MY_OUT = "탈락! 관람석에서 응원해 주세요",
 		LEFT = "%s 님이 나갔어요",
 		WINNER = "%s 우승!",
@@ -290,15 +311,19 @@ return {
 		PICK_RECOMMENDED = "추천",
 		PICK_AUTO = "시간이 지나서 무작위로 골랐어요",
 		TEST_MISSION_TITLE = "연습 미션",
+		TEST_MISSION_BRIEF = "운에 맡겨요 · 가끔 날아가요", -- (the briefing before it, owner 2026-10-24)
 		QUIZ_TITLE = "퀴즈",
+		QUIZ_BRIEF = "4개 중 정답을 골라요 · 틀리거나 안 고르면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		QUIZ_START = "퀴즈 · 정답을 골라요 · 틀리거나 안 고르면 날아가요",
 		FINAL_QUIZ = "결승 퀴즈 · 틀리면 바로 탈락",
 		QUIZ_ANSWER = "정답: %s",
 		QUIZ_ALL_RIGHT = "모두 정답!",
 		ROULETTE_TITLE = "룰렛",
+		ROULETTE_BRIEF = "원판이 한 명을 골라요 · 걸리면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		ROULETTE_START = "룰렛이 돌아가요 · 걸린 한 명이 날아가요",
 		ROULETTE_HIT = "%s 당첨!",
 		ONE_WORD_TITLE = "좋아하는 거 말하기",
+		ONE_WORD_BRIEF = "벨 순서대로 주제에 맞게 말해요 · 진행자나 투표로 한 명이 날아가요", -- (the briefing before it, owner 2026-10-24)
 		ONE_WORD_START = "좋아하는 거 말하기 · 벨을 누르면 먼저 말해요",
 		ONE_WORD_BELL = "🔔 벨을 누르면 먼저 말해요",
 		ONE_WORD_TURN = "%s 차례 · %s",
@@ -321,6 +346,7 @@ return {
 		MY_WORD_WAS = "내 금칙어: '%s'", -- (no particle: it would depend on the word's last syllable)
 		BELL_BUTTON = "🔔 벨",
 		BELL_QUIZ_TITLE = "벨 퀴즈",
+		BELL_QUIZ_BRIEF = "먼저 벨을 누르고 말로 답해요 · 진행자가 판정해요", -- (the briefing before it, owner 2026-10-24)
 		BELL_QUIZ_START = "벨 퀴즈 · 먼저 벨을 누른 사람이 말로 답해요",
 		BELL_QUIZ_WAIT = "🔔 벨을 눌러 답하세요",
 		BELL_QUIZ_ANSWERING = "%s 님이 답하는 중",
@@ -329,15 +355,18 @@ return {
 		BELL_QUIZ_NOBODY = "아무도 안 눌러서 모두 답해요",
 		VERDICT_PICK = "맞았나요? 정답: %s",
 		CROC_TITLE = "악어 이빨",
+		CROC_BRIEF = "차례대로 이빨을 하나씩 눌러요 · 무는 이빨이면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		CROC_START = "악어 이빨 · 차례대로 이빨을 하나 눌러요 · 물리면 날아가요",
 		CROC_TURN = "%s 차례",
 		CROC_BITE = "😱 덥석! %s",
 		CROC_LATE = "⏰ 시간 초과! %s",
 		BOMB_TITLE = "폭탄 돌리기",
+		BOMB_BRIEF = "폭탄을 들면 문제를 맞혀 넘겨요 · 터질 때 들고 있으면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		BOMB_START = "폭탄 돌리기 · 맞히면 다음 사람에게 넘어가요",
 		BOMB_HOLDER = "💣 %s",
 		BOMB_BOOM = "💥 펑! %s",
 		NUNCHI_TITLE = "눈치 게임",
+		NUNCHI_BRIEF = "1부터 한 명씩 벨을 눌러요 · 겹치거나 마지막이면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		NUNCHI_START = "눈치 게임 · 1부터 한 명씩 벨! 겹치거나 꼴찌면 날아가요",
 		NUNCHI_CLASH = "💥 겹쳤다! %s",
 		NUNCHI_LAST = "🐢 꼴찌! %s",
@@ -346,6 +375,7 @@ return {
 		NUNCHI_ORDER = "%d %s",
 		NUNCHI_NONE = "✕ %s",
 		BALANCE_TITLE = "밸런스 게임",
+		BALANCE_BRIEF = "둘 중 하나를 몰래 골라요 · 적은 쪽이 날아가요", -- (the briefing before it, owner 2026-10-24)
 		BALANCE_START = "밸런스 게임 · 적은 쪽이 날아가요",
 		BALANCE_VS = "%s vs %s",
 		BALANCE_BELL = "🔔 벨을 누르면 먼저 말해요",
@@ -357,6 +387,7 @@ return {
 		BALANCE_NOBODY = "아무도 안 날아가요",
 		BALANCE_NONE = "안 고름: %s",
 		REDLIGHT_TITLE = "무궁화 꽃이 피었습니다",
+		REDLIGHT_BRIEF = "초록불에 벨을 눌러 앞으로 · 빨간불에 누르면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		REDLIGHT_START = "무궁화 꽃이 피었습니다 · 초록불에 벨! 빨간불엔 멈춰요",
 		REDLIGHT_GREEN = "🟢 가세요!",
 		REDLIGHT_RED = "🔴 멈춰요!",
@@ -367,6 +398,7 @@ return {
 		REDLIGHT_SHORT = "🐌 못 왔다! %s",
 		REDLIGHT_ALL_SAFE = "모두 도착!",
 		LIAR_TITLE = "라이어 게임",
+		LIAR_BRIEF = "제시어를 모르는 라이어를 찾아요 · 라이어가 못 맞히면 라이어만 날아가요", -- (the briefing before it, owner 2026-10-24)
 		LIAR_START = "라이어 게임 · 제시어를 모르는 한 명을 찾아요",
 		LIAR_CATEGORY = "주제: %s",
 		LIAR_WORD = "제시어: %s",
@@ -388,6 +420,7 @@ return {
 		WORDS_REROLL_ALL = "전원 다시 뽑기",
 		TALK_START_NOW = "▶ 바로 시작",
 		TALK_TITLE = "금칙어 토크",
+		TALK_BRIEF = "남의 머리 위 금칙어를 말하게 해요 · 내 금칙어를 말하면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		TALK_SOON = "곧 시작",
 		TALK_PREP = "금칙어를 나눠 주는 중 · 내 머리 위 단어는 나만 몰라요",
 		TALK_ON = "주제로 이야기하세요 · 자기 금칙어를 말하면 날아가요",
@@ -423,7 +456,6 @@ return {
 	-- Roblox-licensed Pro Sound Effects (public, free).
 	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)
 	SOUND_BANG = "rbxassetid://9114086657", -- Dirt Explosion 1: sharp bang (SFX), the flying chair firing
-	SOUND_SPLASH = "rbxassetid://9120585252", -- Water Splash, Big Water Splash, Dive In 1 (SFX), the landing
 	SOUND_BELL = "rbxassetid://1839997929", -- the seat bell's ding (APM game show toolkit, Correct Answer 2; replace
 	-- with a shorter desk-bell sound after the owner hears it)
 }
@@ -667,6 +699,7 @@ local Match = {
 	presenterPending = false, -- a replacement is being looked for (clients wait before naming who presents)
 	participants = {} :: { [Player]: Participant },
 	startedWith = 0,
+	game = 0, -- the main game's mission being briefed or played, 1..Config.ROUND_GAMES (0 before the first)
 	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
 	chatJoin = {} :: { [Player]: boolean }, -- joins by text chat instead (ChatService decides who may)
 	-- Speech judging (JudgeService, bundle 6e; the talk stage sets them, the settle stage ends them):
@@ -741,6 +774,8 @@ function Match.payload()
 		lives = lives, -- userId string -> lives left
 		maxLives = Config.LIVES,
 		total = Match.startedWith,
+		game = Match.game,
+		games = Config.ROUND_GAMES,
 		readyCount = #Match.eligiblePlayers(),
 		requireReady = Config.REQUIRE_VOICE_READY,
 		serverKind = Match.serverKind,
@@ -771,6 +806,7 @@ end
 function Match.resetRound()
 	table.clear(Match.participants)
 	Match.startedWith = 0
+	Match.game = 0
 	Match.presenter = nil
 	Match.presenterPending = false
 	Match.talk = nil
@@ -803,7 +839,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 --   (client -> server: MissionAnswer (question id, choice number) while a question is open)
 --   Notice      short toast text
 --   Reaction    emoji shown above a player
---   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
+--   Fling       a flying chair fired: { userId, seatIndex, blastAt }
 --   Splash      that player hit the water: { userId, position }
 --   Words       to each player: the banned words they may see (WordService.payloadFor; bundle 5a)
 --               (sent during the banned-word talk only, bundle 6a; outside it everyone has no word)
@@ -875,10 +911,11 @@ return Net
 ]====]; s.Parent = n2 end
 do local s = Instance.new("ModuleScript"); s.Name = "RoundService"; s.Source = [====[--!strict
 -- Round flow (V3, docs/DESIGN_V3.md §2; the only module that wires the services together):
---   Lobby -> Countdown -> Assign (chairs, lives) -> Play (ROUND_SECONDS: the next game (the presenter picks, else at
---   random) -> the game -> launches -> ...; no free talk since the minigame overhaul, bundle 6a) -> Final (sudden
---   death) -> Result -> Countdown (quick rematch) ...
--- Rules live in the services: lives in LifeService, the time budget and the final trigger in Timeline, missions in
+--   Lobby -> Countdown -> Assign (chairs, lives) -> Play (ROUND_GAMES games: what the last one did + the next one
+--   (the presenter picks, else the players vote) -> its briefing -> the game -> launches -> ...; no free talk since
+--   the minigame overhaul, bundle 6a; games counted since the friend beta, 2026-10-24) -> Final (sudden death) ->
+--   Result -> Countdown (quick rematch) ...
+-- Rules live in the services: lives in LifeService, the game count, time cap and final trigger in Timeline, missions in
 -- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
 -- join by chat in ChatService, the presenter in PresenterService, banned words in WordService, score in Scores.
 -- Bundle 6a: banned words exist only during the banned-word talk (a minigame, played while speech judging is on): its
@@ -974,8 +1011,20 @@ end
 
 local noteDecision: () -> () -- (below mainDecided) in the talk, the moment the main game is decided ends speech judging
 
+-- The game being played: who lost a life in it and who went out (the recap before the next one, owner 2026-10-24).
+local gameLost: { [Player]: boolean } = {}
+local gameOut: { [Player]: boolean } = {}
+
 local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean)
 	local list = {}
+	if Match.phase == "Play" and reason ~= "left" then
+		for _, outcome in outcomes do
+			gameLost[outcome.player] = true
+			if outcome.out then
+				gameOut[outcome.player] = true
+			end
+		end
+	end
 	for _, outcome in outcomes do
 		table.insert(list, {
 			userId = outcome.player.UserId,
@@ -1014,7 +1063,8 @@ local function failPlayers(players: { Player }, eventId: string, reason: Reason,
 	if everyone then
 		toFinal = true
 	end
-	announce(outcomes, reason, everyone)
+	-- ("to the final" only when there is one: a single player left wins without it)
+	announce(outcomes, reason, everyone and #outcomes > 1)
 end
 
 -- Flights in progress land and come back first (the next step, the final or the result waits for them). Returns
@@ -1259,59 +1309,92 @@ local function waitPhase(shouldStop: (() -> boolean)?)
 	end
 end
 
--- Main game: missions back to back until the time is up, the final is due or the round is decided (no free talk,
--- docs/DESIGN_V3.md §2). Between games the presenter picks the next one within PRESENTER_PICK_SECONDS (else at
--- random, with a notice); without a presenter a random one is named for NEXT_GAME_CARD_SECONDS first. A mission
--- starts only when nobody is in the air and only if it fits the time left; when none fits, the final starts at once.
--- One running when the time is up is played to its end.
+-- What the last game did, for the screens before the next one: who lost a life, who is out.
+local function recapText(): string
+	local lost, out = {}, {}
+	for player in gameLost do
+		table.insert(if gameOut[player] then out else lost, player.DisplayName)
+	end
+	table.sort(lost)
+	table.sort(out)
+	local parts = {}
+	if #lost > 0 then
+		table.insert(parts, string.format(Config.TEXT.RECAP_LOST, table.concat(lost, ", ")))
+	end
+	if #out > 0 then
+		table.insert(parts, string.format(Config.TEXT.RECAP_OUT, table.concat(out, ", ")))
+	end
+	return if #parts > 0 then table.concat(parts, " · ") else Config.TEXT.RECAP_NONE
+end
+
+-- Main game: ROUND_GAMES missions back to back (owner 2026-10-24; no free talk, docs/DESIGN_V3.md §2) until the final
+-- is due or the round is decided. Between games, once nobody is in the air, everyone sees what the last game did
+-- while the next one is chosen: the presenter picks within PRESENTER_PICK_SECONDS (else at random, with a notice), or
+-- without a presenter the alive players vote among a few (MissionRunner.vote); then its briefing (BRIEF_SECONDS). A
+-- mission starts only if it fits the time cap; when none fits, the final starts at once.
 local function playMain(myRound: number)
 	-- Players who left during the assignment do not count as having started (§2: "4명 이상으로 시작한 판").
 	Timeline.begin(#Match.aliveList())
-	Match.setPhase("Play", Config.ROUND_SECONDS, Config.TEXT.PLAY_START)
+	Match.game = 0
+	Match.setPhase("Play", 0, Config.TEXT.PLAY_START) -- (no clock: the status board counts the games)
 	local function over(): boolean
 		return Match.roundId ~= myRound or mainSettled()
 			or (Timeline.finalDue(#Match.aliveList()) and RescueService.pending() == 0) -- (the final waits for rescues too)
 	end
 	local lastId: string? = nil
+	local recap = "" -- (nothing before the first game)
 	while true do
 		local landed = waitFlights()
 		if over() then
 			return
 		end
 		if landed then
-			local picked: string? = nil
-			local missed = false
-			-- (a presenter being replaced after missed picks no longer counts: the system picks meanwhile)
+			local mission: MissionRunner.Mission? = nil
+			-- (a presenter being replaced after missed picks no longer counts: the players vote meanwhile)
 			local presenting = Match.presenter ~= nil and not Match.presenterPending
 			if presenting then
-				local options = MissionRunner.options(Timeline.left() - Config.PRESENTER_PICK_SECONDS, #Match.aliveList())
+				local options = MissionRunner.options(Timeline.left() - Config.PRESENTER_PICK_SECONDS - Config.BRIEF_SECONDS,
+					#Match.aliveList())
 				if #options == 0 then
 					return -- nothing fits any more: the final
 				end
 				Match.setMessage(Config.TEXT.PICKING)
-				picked, missed = PresenterService.ask("pick", options, Config.PRESENTER_PICK_SECONDS, over)
+				MissionRunner.showPicking(recap)
+				local picked, missed = PresenterService.ask("pick", options, Config.PRESENTER_PICK_SECONDS, over)
 				if over() then
 					return
 				end
 				if missed then
 					Net.notice(Config.TEXT.PICK_AUTO)
 				end
+				mission = MissionRunner.choose(Timeline.left() - Config.BRIEF_SECONDS, #Match.aliveList(),
+					Match.presenter ~= nil and not Match.presenterPending, picked, rng, lastId)
+			else
+				-- (the vote's seconds are counted before choosing, so the winner still fits once it is over; with one game
+				-- or none to choose from there is no vote, and its seconds are not counted)
+				local ballot = MissionRunner.ballot(Timeline.left() - Config.NEXT_VOTE_SECONDS - Config.BRIEF_SECONDS,
+					#Match.aliveList(), rng, lastId)
+				if #ballot > 1 then
+					Match.setMessage(Config.TEXT.NEXT_VOTE)
+					mission = MissionRunner.vote(ballot, recap, Match.aliveList(), rng, over)
+					if over() then
+						return
+					end
+					recap = "" -- (shown on the vote screen)
+				else
+					mission = MissionRunner.choose(Timeline.left() - Config.BRIEF_SECONDS, #Match.aliveList(), false, nil,
+						rng, lastId)
+				end
 			end
-			-- No card after the presenter's pick or their missed pick (its notice says it); otherwise (no presenter, or
-			-- they changed meanwhile) the card names the game first. Its seconds are counted before choosing, so the
-			-- mission still fits once it is over.
-			local card = if picked or missed then 0 else Config.NEXT_GAME_CARD_SECONDS
-			local mission = MissionRunner.choose(Timeline.left() - card, #Match.aliveList(),
-				Match.presenter ~= nil and not Match.presenterPending, picked, rng, lastId)
+			if presenting then
+				recap = "" -- (shown on the picking screen)
+			end
 			if not mission then
 				return -- nothing fits any more: the final
 			end
+			Match.game = Config.ROUND_GAMES - Timeline.gamesLeft() + 1
 			Match.setMessage(string.format(Config.TEXT.NEXT_GAME, mission.title))
-			local cardUntil = os.clock() + card
-			while os.clock() < cardUntil and not over() do
-				task.wait(0.1)
-			end
-			if over() then
+			if not MissionRunner.brief(mission, Match.game, Config.ROUND_GAMES, recap, over) then
 				return
 			end
 			if SeatService.anyFlying() then
@@ -1320,12 +1403,18 @@ local function playMain(myRound: number)
 			runs += 1
 			local run = runs
 			lastId = mission.id
-			MissionRunner.run(mission, missionCtx(myRound, false, function(players, key, subjective)
+			table.clear(gameLost)
+			table.clear(gameOut)
+			local _, didPlay = MissionRunner.run(mission, missionCtx(myRound, false, function(players, key, subjective)
 				failPlayers(players, "m" .. run .. ":" .. key, "fail", if subjective then "subjective" else "objective")
 			end, mainSettled))
+			if didPlay then
+				Timeline.gameStarted() -- (a game with too few players to start is not one of the round's games)
+			end
 			setFloor(nil) -- (whatever the mission did: the bells close, everyone has their voice back)
 			BellService.close()
 			settleTalk() -- (a banned-word talk ends with its settle stage, also when it was cancelled or broke)
+			recap = recapText()
 		end
 	end
 end
@@ -1438,6 +1527,9 @@ local function cleanup()
 	earsPending = 0
 	heldFails = {}
 	holdingLate = false
+	table.clear(gameLost)
+	table.clear(gameOut)
+	MissionRunner.clearScreen() -- (a between-games screen left by a round that broke)
 	-- Chat participants whose voice got ready during the round join by voice from now on.
 	for player in Match.chatJoin do
 		if Match.ready[player] then
@@ -1502,6 +1594,7 @@ local function runRound()
 	waitPhase()
 
 	playMain(myRound)
+	MissionRunner.clearScreen() -- (a between-games screen when the main game ended during it)
 	waitFlights()
 	playFinal(myRound)
 	waitFlights()
@@ -2447,6 +2540,7 @@ type Ctx = {
 local Balance = {
 	id = "balance",
 	title = Config.TEXT.BALANCE_TITLE,
+	brief = Config.TEXT.BALANCE_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.BALANCE_BELL_SECONDS + Config.BALANCE_TALKERS * Config.BALANCE_TALK_CHAT_SECONDS
 		+ Config.BALANCE_PICK_SECONDS + Config.MINIGAME_RESULT_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
@@ -2625,6 +2719,7 @@ type Ctx = {
 local BannedTalk = {
 	id = "bannedTalk",
 	title = Config.TEXT.TALK_TITLE,
+	brief = Config.TEXT.TALK_BRIEF, -- (the briefing before it)
 	-- The longest run: the presenter's re-draw window, the talk, then the settle stage (a late speech result and a
 	-- rescue still waiting).
 	expectedSeconds = Config.TALK_REROLL_SECONDS + Config.TALK_SECONDS + Config.SETTLE_MAX + Config.RESCUE_SECONDS
@@ -2706,6 +2801,7 @@ type Ctx = {
 local BombPass = {
 	id = "bomb",
 	title = Config.TEXT.BOMB_TITLE,
+	brief = Config.TEXT.BOMB_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.BOMB_MAX_SECONDS + Config.MINIGAME_RESULT_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BOMB_MIN_PLAYERS :: number?,
@@ -2863,6 +2959,7 @@ type Ctx = {
 local Crocodile = {
 	id = "croc",
 	title = Config.TEXT.CROC_TITLE,
+	brief = Config.TEXT.CROC_BRIEF, -- (the briefing before it)
 	-- The longest run (capped in `run`): CROC_TEETH turns at the last moment, then the result.
 	expectedSeconds = Config.CROC_TEETH * Config.CROC_TURN_SECONDS + Config.MINIGAME_RESULT_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
@@ -3022,6 +3119,7 @@ type Ctx = {
 local Liar = {
 	id = "liar",
 	title = Config.TEXT.LIAR_TITLE,
+	brief = Config.TEXT.LIAR_BRIEF, -- (the briefing before it)
 	-- The longest run: everyone (MAX_PLAYERS) clues by chat, the presenter misses, a vote, the guess.
 	expectedSeconds = Config.LIAR_READ_SECONDS + Config.LIAR_BELL_SECONDS
 		+ Config.MAX_PLAYERS * Config.LIAR_CLUE_CHAT_SECONDS + Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS
@@ -3294,6 +3392,7 @@ type Ctx = {
 local Nunchi = {
 	id = "nunchi",
 	title = Config.TEXT.NUNCHI_TITLE,
+	brief = Config.TEXT.NUNCHI_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.NUNCHI_MAX_SECONDS + Config.MINIGAME_RESULT_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.NUNCHI_MIN_PLAYERS :: number?,
@@ -3490,6 +3589,7 @@ type Ctx = {
 local OneWord = {
 	id = "oneWord",
 	title = Config.TEXT.ONE_WORD_TITLE,
+	brief = Config.TEXT.ONE_WORD_BRIEF, -- (the briefing before it)
 	-- The time budget counts the longest run: the bells, everyone swaps the topic and types by chat, then a vote and the
 	-- result.
 	expectedSeconds = Config.BELL_ORDER_SECONDS
@@ -3833,6 +3933,7 @@ type Ctx = {
 local Quiz = {
 	id = "quiz",
 	title = Config.TEXT.QUIZ_TITLE,
+	brief = Config.TEXT.QUIZ_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.QUIZ_REVEAL_SECONDS,
 	maxPerRound = nil :: number?, -- the basic mission: no limit (§5)
 	minPlayers = nil :: number?,
@@ -3941,6 +4042,7 @@ end
 local BellQuiz = {
 	id = "bellQuiz",
 	title = Config.TEXT.BELL_QUIZ_TITLE,
+	brief = Config.TEXT.BELL_QUIZ_BRIEF, -- (the briefing before it)
 	-- The longest run: every question with every answer chance (each its own bells, an answer by chat, judged at the
 	-- last moment).
 	expectedSeconds = Config.BELL_QUIZ_QUESTIONS * (Config.BELL_TRIES
@@ -4084,6 +4186,7 @@ type Ctx = {
 local RedLight = {
 	id = "redLight",
 	title = Config.TEXT.REDLIGHT_TITLE,
+	brief = Config.TEXT.REDLIGHT_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.REDLIGHT_SECONDS + Config.MINIGAME_RESULT_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.REDLIGHT_MIN_PLAYERS :: number?,
@@ -4312,6 +4415,7 @@ type Ctx = {
 local Roulette = {
 	id = "roulette",
 	title = Config.TEXT.ROULETTE_TITLE,
+	brief = Config.TEXT.ROULETTE_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.ROULETTE_SPIN_SECONDS + Config.ROULETTE_REVEAL_SECONDS,
 	maxPerRound = Config.ROULETTE_PER_ROUND :: number?,
 	minPlayers = Config.ROULETTE_MIN_PLAYERS :: number?,
@@ -4392,6 +4496,7 @@ type Ctx = {
 local TestMission = {
 	id = "test",
 	title = Config.TEXT.TEST_MISSION_TITLE,
+	brief = Config.TEXT.TEST_MISSION_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.TEST_MISSION_SECONDS,
 	maxPerRound = nil :: number?, -- like the quiz: no limit
 	minPlayers = nil :: number?,
@@ -5166,7 +5271,9 @@ return LifeService
 do local s = Instance.new("ModuleScript"); s.Name = "MissionRunner"; s.Source = [====[--!strict
 -- Missions (docs/DESIGN_V3.md §5, §13): lists the missions that may run next (recommended order, also the presenter's
 -- menu), picks the next one that fits the time left (the presenter's pick, else at random: missions played less this
--- round are likelier and the one just played is skipped when another fits) and runs one at a time with a
+-- round are likelier and the one just played is skipped when another fits), shows the screens between games (owner
+-- 2026-10-24: the vote among a few of them with what the last game did, the presenter picking, the next game's
+-- briefing) and runs one at a time with a
 -- ctx (missions cannot require services, so everything they may do comes through the ctx RoundService builds). A
 -- mission stops as soon as it is cancelled (the round was decided or is over): its waits wake up and its fails and
 -- notices are dropped. Only this service requires the modules under server/missions (tools/tests/check_deps.py
@@ -5278,6 +5385,7 @@ export type MissionCtx = {
 export type Mission = {
 	id: string,
 	title: string, -- shown in the presenter's menu
+	brief: string?, -- its one-line rule for the briefing before it (owner 2026-10-24)
 	expectedSeconds: number, -- for the time budget, without the launches afterwards
 	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
 	minPlayers: number?, -- alive participants it needs (nil = any)
@@ -5345,6 +5453,34 @@ function MissionRunner.options(secondsLeft: number, alive: number): { Option }
 	return options
 end
 
+-- Drops `lastId` (the game just played) from `list` while another one is left.
+local function withoutLast(list: { Mission }, lastId: string?)
+	if #list > 1 and lastId then
+		for i, mission in list do
+			if mission.id == lastId then
+				table.remove(list, i)
+				return
+			end
+		end
+	end
+end
+
+-- The index of one of `list` (not empty) at random: weight 1 / (1 + runs this round).
+local function drawIndex(list: { Mission }, rng: Random): number
+	local total = 0
+	for _, mission in list do
+		total += 1 / (1 + (played[mission.id] or 0))
+	end
+	local roll = rng:NextNumber() * total
+	for i, mission in list do
+		roll -= 1 / (1 + (played[mission.id] or 0))
+		if roll <= 0 then
+			return i
+		end
+	end
+	return #list
+end
+
 -- The next main-game mission: `pickedId` if it may still run, else one at random (docs/DESIGN_V3.md §5.1): weight
 -- 1 / (1 + runs this round), and not `lastId` (the one just played) while another one fits. nil if none fits.
 -- `presenter`: someone presents now.
@@ -5356,26 +5492,23 @@ function MissionRunner.choose(secondsLeft: number, alive: number, presenter: boo
 			return mission
 		end
 	end
-	if #list > 1 and lastId then
-		for i, mission in list do
-			if mission.id == lastId then
-				table.remove(list, i)
-				break
-			end
-		end
+	withoutLast(list, lastId)
+	if #list == 0 then
+		return nil
 	end
-	local total = 0
-	for _, mission in list do
-		total += 1 / (1 + (played[mission.id] or 0))
+	return list[drawIndex(list, rng)]
+end
+
+-- Between games without a presenter (owner 2026-10-24): up to NEXT_VOTE_CHOICES missions for the vote, drawn like
+-- choose() draws one (weight 1 / (1 + runs this round), not `lastId` while another one fits), all different.
+function MissionRunner.ballot(secondsLeft: number, alive: number, rng: Random, lastId: string?): { Mission }
+	local list = MissionRunner.candidates(secondsLeft, alive, false)
+	withoutLast(list, lastId)
+	local ballot: { Mission } = {}
+	while #list > 0 and #ballot < Config.NEXT_VOTE_CHOICES do
+		table.insert(ballot, table.remove(list, drawIndex(list, rng)) :: Mission)
 	end
-	local roll = rng:NextNumber() * total
-	for _, mission in list do
-		roll -= 1 / (1 + (played[mission.id] or 0))
-		if roll <= 0 then
-			return mission
-		end
-	end
-	return list[#list]
+	return ballot
 end
 
 -- A mission that can ask final questions, or nil (then the survivors share the win).
@@ -5554,6 +5687,84 @@ function MissionRunner.run(mission: Mission, ctx: Ctx): (boolean, boolean)
 	end
 	table.clear(privateScreens) -- (also when the mission cleared everyone's screen itself)
 	return ok, didPlay
+end
+
+-- Between games (owner 2026-10-24): `voters` vote for the next game among `ballot` (2+ missions) on a screen that also
+-- shows `recap` (what the last game did), for NEXT_VOTE_SECONDS or until every voter still here voted, or until
+-- `stop`. The most votes win; a tie or no vote at all: at random among the tied (or all). No penalty for not voting.
+function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player }, rng: Random, stop: () -> boolean): Mission
+	questions += 1
+	local open: Question = { id = questions, from = {}, choices = #ballot, endsAt = Match.now() + Config.NEXT_VOTE_SECONDS,
+		answers = {}, changeable = false }
+	for _, player in voters do
+		open.from[player] = true
+	end
+	question = open
+	local titles = {}
+	for _, mission in ballot do
+		table.insert(titles, mission.title)
+	end
+	setScreen({ kind = "nextVote", recap = recap, choices = titles, id = open.id, endsAt = open.endsAt })
+	local untilAt = os.clock() + Config.NEXT_VOTE_SECONDS
+	while os.clock() < untilAt and not stop() do
+		local waiting = false
+		for player in open.from do
+			if not open.answers[player] and player.Parent then
+				waiting = true
+				break
+			end
+		end
+		if not waiting then
+			break
+		end
+		task.wait(math.min(POLL, untilAt - os.clock()))
+	end
+	if question == open then
+		question = nil
+	end
+	local counts: { [number]: number } = {}
+	for _, choice in open.answers do
+		counts[choice] = (counts[choice] or 0) + 1
+	end
+	local best, tied = -1, {}
+	for i = 1, #ballot do
+		local votes = counts[i] or 0
+		if votes > best then
+			best, tied = votes, { i }
+		elseif votes == best then
+			table.insert(tied, i)
+		end
+	end
+	return ballot[tied[rng:NextInteger(1, #tied)]]
+end
+
+-- Clears a between-games screen left over (the main game ended while it showed).
+function MissionRunner.clearScreen()
+	if screenNow then
+		setScreen(nil)
+	end
+end
+
+-- While the presenter picks the next game: what the last game did, and that they are picking.
+function MissionRunner.showPicking(recap: string)
+	setScreen({ kind = "nextPick", recap = recap })
+end
+
+-- The next game's briefing (owner 2026-10-24): its number, its name and its one-line rule, counting down BRIEF_SECONDS,
+-- and `recap` (what the last game did) when no vote or picking screen showed it. False if `stop` came meanwhile. The
+-- screen is cleared for the game's own.
+function MissionRunner.brief(mission: Mission, game: number, games: number, recap: string, stop: () -> boolean): boolean
+	setScreen({ kind = "brief", title = mission.title, rule = mission.brief or "", game = game, games = games,
+		recap = recap, endsAt = Match.now() + Config.BRIEF_SECONDS })
+	local untilAt = os.clock() + Config.BRIEF_SECONDS
+	while os.clock() < untilAt do
+		if stop() then
+			return false
+		end
+		task.wait(math.min(POLL, untilAt - os.clock()))
+	end
+	setScreen(nil)
+	return not stop()
 end
 
 -- Answers to the open question: its number, a whole number in 1..choices, from someone asked, before the end; the
@@ -6249,10 +6460,12 @@ return Scores
 ]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "SeatService"; s.Source = [====[--!strict
 -- Flying chairs in a row at the near edge of the pool (docs/DESIGN_V3.md §9-10): seat the players of a round in the
--- middle chairs, keep them seated, and launch a failed player. A launch turns the character into a ragdoll and throws
--- it far into the pool's landing zone; the clients draw the seat flap snapping back, the bang and the splash from the
--- "Fling" / "Splash" signals. SeatService only says when the player is due back (FLING_RETURN_SECONDS after the
--- launch, with the character that flew); RoundService then calls endFling() and picks reseat() or the stands.
+-- middle chairs, keep them seated, and launch a failed player. A launch is an explosion in front of the chair (owner
+-- 2026-10-24: no flight path, the blast's force): the character turns into a ragdoll and the blast throws it backward
+-- over the pool, a little differently each time, and physics does the rest. The clients draw the explosion, the seat
+-- flap snapping back and the splash from the "Fling" / "Splash" signals. SeatService only says when the player is due
+-- back (FLING_RETURN_SECONDS after the launch, with the character that flew); RoundService then calls endFling() and
+-- picks reseat() or the stands.
 -- A flight whose character dies or leaves the world is undone at once and never comes back.
 local Players = game:GetService("Players")
 local PhysicsService = game:GetService("PhysicsService")
@@ -6444,29 +6657,71 @@ local function ragdoll(flight: Flight, root: BasePart)
 	end
 end
 
--- A random point on the water of the landing zone (several flying players land apart).
-local function landingTarget(): Vector3
-	local landing = hall():WaitForChild("Landing") :: BasePart
-	local waterY = (landing:GetAttribute("WaterY") or landing.Position.Y) :: number
-	local half = landing.Size / 2
-	return Vector3.new(
-		landing.Position.X + rng:NextNumber(-half.X, half.X),
-		waterY,
-		landing.Position.Z + rng:NextNumber(-half.Z, half.Z)
-	)
+local function landingZone(): BasePart?
+	return hall():FindFirstChild("Landing") :: BasePart?
 end
 
--- Initial velocity of a ballistic arc from `from` to `target` whose top (plus the body's own height) stays under the
--- hall's CeilingY. Returns the velocity and the flight time. (The arc always rises at least 4 studs: only a seat
--- higher than CeilingY - FLING_BODY_TOP - 4 could break the ceiling rule, which no chair of the map is.)
-local function arcVelocity(from: Vector3, target: Vector3): (Vector3, number)
-	local ceiling = (hall():GetAttribute("CeilingY") or 40) :: number
-	local gravity = workspace.Gravity
-	local apexY = math.max(from.Y + 4, math.min(from.Y + Config.FLING_APEX_HEIGHT, ceiling - Config.FLING_BODY_TOP))
-	local up = math.sqrt(2 * gravity * (apexY - from.Y))
-	local flightTime = up / gravity + math.sqrt(2 * (apexY - target.Y) / gravity)
-	local flat = Vector3.new(target.X - from.X, 0, target.Z - from.Z)
-	return flat / flightTime + Vector3.new(0, up, 0), flightTime
+-- The water level of the pool (for the splash).
+local function waterY(): number
+	local landing = landingZone()
+	return if landing then (landing:GetAttribute("WaterY") or landing.Position.Y) :: number else 0
+end
+
+-- The farthest a blast carries a body over flat ground (the fastest speed at the pitch, within the range, that goes
+-- farthest); a little more from the seat's height.
+local function farthest(): number
+	local best = 0
+	for _, degrees in { Config.BLAST_PITCH_MIN, Config.BLAST_PITCH_MAX } do
+		best = math.max(best, math.sin(2 * math.rad(degrees)))
+	end
+	return Config.BLAST_SPEED_MAX ^ 2 / workspace.Gravity * best
+end
+
+-- The blast's push: backward from the chair (the chairs face away from the pool) and up, turned a little at random so
+-- no two launches look alike. A speed, not an aim: where the body comes down is up to physics. Sideways it is kept
+-- so that even the farthest throw stays above the landing zone's width (the end chairs only fly straight or inward;
+-- 15 degrees either way took their players onto the deck beside the pool).
+local function blastVelocity(seat: Seat): Vector3
+	local back = -seat.CFrame.LookVector
+	back = Vector3.new(back.X, 0, back.Z).Unit
+	local side = Vector3.new(back.Z, 0, -back.X) -- (up x back: positive yaw turns `back` toward this)
+	local spread = math.sin(math.rad(Config.BLAST_SPREAD))
+	local low, high = -spread, spread
+	local landing = landingZone()
+	if landing then
+		local offset = (seat.Position - landing.Position):Dot(side) -- the seat's distance from the zone's middle line
+		local half = math.abs(landing.CFrame.RightVector:Dot(side)) * landing.Size.X / 2
+			+ math.abs(landing.CFrame.LookVector:Dot(side)) * landing.Size.Z / 2
+		local reach = farthest()
+		low = math.max(low, math.clamp((-half - offset) / reach, -1, 1))
+		high = math.min(high, math.clamp((half - offset) / reach, -1, 1))
+		if low > high then
+			low, high = 0, 0
+		end
+	end
+	local pitch = math.rad(rng:NextNumber(Config.BLAST_PITCH_MIN, Config.BLAST_PITCH_MAX))
+	local yaw = math.asin(rng:NextNumber(low, high))
+	local direction = CFrame.fromAxisAngle(Vector3.yAxis, yaw):VectorToWorldSpace(back) * math.cos(pitch)
+		+ Vector3.yAxis * math.sin(pitch)
+	return direction * rng:NextNumber(Config.BLAST_SPEED_MIN, Config.BLAST_SPEED_MAX)
+end
+
+-- Whether a point is over the pool (the splash): within the landing zone's width plus the attribute PoolMargin (the
+-- pool is that much wider on each side, map contract) and not in front of the chairs.
+local function overPool(position: Vector3): boolean
+	local landing = landingZone()
+	if not landing then
+		return true
+	end
+	local margin = (landing:GetAttribute("PoolMargin") or 0) :: number
+	local localPoint = landing.CFrame:PointToObjectSpace(position)
+	return math.abs(localPoint.X) <= landing.Size.X / 2 + margin
+end
+
+-- A random tumble (the blast hits the body unevenly).
+local function blastSpin(): Vector3
+	local axis = Vector3.new(rng:NextNumber(-1, 1), rng:NextNumber(-1, 1), rng:NextNumber(-1, 1))
+	return (if axis.Magnitude > 0.1 then axis.Unit else Vector3.xAxis) * Config.BLAST_SPIN
 end
 
 local function setOwner(root: BasePart, owner: Player?)
@@ -6538,19 +6793,18 @@ function SeatService.fling(player: Player, tag: any): boolean
 	end))
 	ragdoll(flight, root)
 	setOwner(root, nil)
-	local landAt = landingTarget()
-	local _, flightTime = arcVelocity(root.Position, landAt)
-	Net.toAll("Fling", { userId = player.UserId, seatIndex = seatIndex, flightTime = flightTime, landAt = landAt })
+	-- The blast goes off just in front of the seated body, low (the clients draw it there).
+	local blastAt = root.Position + seat.CFrame.LookVector * Config.BLAST_FORWARD - Vector3.yAxis * Config.BLAST_BELOW
+	Net.toAll("Fling", { userId = player.UserId, seatIndex = seatIndex, blastAt = blastAt })
 	task.spawn(function()
 		-- The throw waits one frame: the humanoid must already be PlatformStanding, or its walking controller brakes
-		-- the first step (Studio test 2026-10-22: ~6 studs/s of the horizontal speed lost, landings 5 studs short).
+		-- the first step (Studio test 2026-10-22: ~6 studs/s of the horizontal speed lost).
 		RunService.Heartbeat:Wait()
 		if flights[player] ~= flight then
 			return
 		end
-		local velocity = arcVelocity(root.Position, landAt)
-		-- A backflip: about the seated body's right axis, head going back toward the pool (like the flap).
-		local spin = root.CFrame.RightVector * Config.FLING_SPIN
+		local velocity = blastVelocity(seat :: Seat)
+		local spin = blastSpin()
 		for part in flight.parts do
 			if not part.Anchored then
 				part.AssemblyLinearVelocity = velocity
@@ -6568,12 +6822,12 @@ function SeatService.fling(player: Player, tag: any): boolean
 
 	local token = flight.token
 	task.spawn(function()
-		-- The splash: the first moment the body reaches the water after leaving the chair.
-		local waterY = landAt.Y
+		-- The splash: the first moment the body comes down to the water, over the pool, after leaving the chair.
+		local water = waterY()
 		local started = os.clock()
 		while flights[player] == flight and os.clock() - started < Config.FLING_RETURN_SECONDS do
-			if os.clock() - started > flightTime * 0.5 and root.Parent and root.Position.Y < waterY + 1.5 then
-				Net.toAll("Splash", { userId = player.UserId, position = Vector3.new(root.Position.X, waterY, root.Position.Z) })
+			if root.Parent and root.Position.Y < water + 1.5 and overPool(root.Position) then
+				Net.toAll("Splash", { userId = player.UserId, position = Vector3.new(root.Position.X, water, root.Position.Z) })
 				break
 			end
 			RunService.Heartbeat:Wait()
@@ -6880,9 +7134,10 @@ end
 return SpectatorService
 ]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "Timeline"; s.Source = [====[--!strict
--- The round's clock (docs/DESIGN_V3.md §2): ROUND_SECONDS of main game, a time budget for missions (a mission that
--- would not fit in the time left is not started; when none fits, the final starts), and when the final is due: when the time
--- is up, or as soon as FINAL_AT_ALIVE or fewer are left in a round begun with more than that (3 -> rounds of 4+).
+-- The round's count and clock (docs/DESIGN_V3.md §2; owner 2026-10-24: a round is a number of games): ROUND_GAMES
+-- games of main game, a time cap ROUND_MAX_SECONDS for missions (a mission that would not fit in the time left is not
+-- started; when none fits, the final starts), and when the final is due: when the games are played or the time is up,
+-- or as soon as FINAL_AT_ALIVE or fewer are left in a round begun with more than that (3 -> rounds of 4+).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -6891,15 +7146,27 @@ local Timeline = {}
 
 local startedAt = 0
 local startedWith = 0
+local gamesStarted = 0
 
 -- The main game starts now with `players` participants.
 function Timeline.begin(players: number)
 	startedAt = os.clock()
 	startedWith = players
+	gamesStarted = 0
+end
+
+-- A main-game mission was played (one that had too few players to start does not count); returns how many so far.
+function Timeline.gameStarted(): number
+	gamesStarted += 1
+	return gamesStarted
+end
+
+function Timeline.gamesLeft(): number
+	return math.max(0, Config.ROUND_GAMES - gamesStarted)
 end
 
 function Timeline.left(): number
-	return math.max(0, Config.ROUND_SECONDS - (os.clock() - startedAt))
+	return math.max(0, Config.ROUND_MAX_SECONDS - (os.clock() - startedAt))
 end
 
 -- Whether so few are left that the final starts at once (only in a round begun with more than FINAL_AT_ALIVE).
@@ -6909,7 +7176,7 @@ end
 
 -- Whether the main game is over and the final should start, with `alive` participants left.
 function Timeline.finalDue(alive: number): boolean
-	return Timeline.left() <= 0 or Timeline.fewLeft(alive)
+	return Timeline.gamesLeft() <= 0 or Timeline.left() <= 0 or Timeline.fewLeft(alive)
 end
 
 return Timeline
@@ -7457,22 +7724,34 @@ remotes.Sound.OnClientEvent:Connect(function(info)
 end)
 
 -- The mission card (quiz, roulette, a word to everyone, votes). My buttons work while I am alive and not flying (it
--- is shown again when my flight starts and ends).
+-- is shown again when my flight starts and ends). It steps aside so the blast is seen (owner 2026-10-24): while I am
+-- the one flying (until I am back), and while someone else's launch flies over a screen with nothing to do on it (a
+-- result, the roulette, a vote) until the next screen comes.
 local lastMission: { [string]: any } = { kind = "none" }
+local othersLaunchHideUntil = 0
+local function passiveScreen(payload: { [string]: any }): boolean
+	local kind = payload.kind
+	-- (a vote's screen stays while its result launches someone: a launch on it comes only once the vote is over, also
+	-- when everyone voted early)
+	return kind == nil or kind == "none" or kind == "roulette" or kind == "oneWordJudge" or kind == "brief"
+		or kind == "nextPick" or kind == "vote" or string.sub(kind, -6) == "Result"
+end
 local function showMission()
 	local payload = lastMission
+	MissionPanel.setHidden(os.clock() < myFlightEndsAt or os.clock() < othersLaunchHideUntil)
 	local names = {}
 	for _, userId in payload.ids or {} do
 		table.insert(names, nameOf(userId))
 	end
 	local canAnswer = State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
-	if payload.kind == "oneWordJudge" and State.mePresenting() then
-		payload = { kind = "none" } -- the presenter judges in their own menu ("the presenter is choosing" is for the others)
+	if (payload.kind == "oneWordJudge" or payload.kind == "nextPick") and State.mePresenting() then
+		payload = { kind = "none" } -- the presenter picks in their own menu ("the presenter is choosing" is for the others)
 	end
 	MissionPanel.show(payload, canAnswer, names, State.myId())
 end
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	lastMission = payload
+	othersLaunchHideUntil = 0
 	showMission()
 end)
 
@@ -7527,7 +7806,9 @@ remotes.LifeLost.OnClientEvent:Connect(function(info)
 		Billboards.hit(entry.userId, entry.lives, State.round.maxLives, entry.out)
 		anyOut = anyOut or entry.out
 		if entry.userId == State.myId() and info.reason ~= "left" then
-			table.insert(lines, if entry.out then Config.TEXT.MY_OUT else string.format(Config.TEXT.MY_LIFE_LOST, entry.lives))
+			table.insert(lines, if entry.out then Config.TEXT.MY_OUT
+				elseif entry.lives <= 0 then Config.TEXT.MY_NO_LIVES
+				else string.format(Config.TEXT.MY_LIFE_LOST, entry.lives))
 		elseif entry.out then
 			table.insert(out, entry.name)
 		else
@@ -7580,6 +7861,11 @@ end)
 -- A flying chair fired (docs/DESIGN_V3.md §10): everyone sees the flap snap back and hears the bang.
 remotes.Fling.OnClientEvent:Connect(function(info)
 	Fx.fling(info)
+	if info.userId ~= State.myId() and passiveScreen(lastMission) then
+		othersLaunchHideUntil = os.clock() + Config.FLING_RETURN_SECONDS
+		showMission()
+		task.delay(Config.FLING_RETURN_SECONDS + 0.05, showMission)
+	end
 	if info.userId == State.myId() then
 		myFlightEndsAt = os.clock() + Config.FLING_RETURN_SECONDS + 0.5
 		refresh()
@@ -7642,7 +7928,11 @@ Players.PlayerAdded:Connect(watchCharacters)
 
 RunService.Heartbeat:Connect(function()
 	local remaining = State.round.endsAt - workspace:GetServerTimeNow()
-	Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
+	if State.round.phase == "Play" and State.round.games then
+		Hud.setCount(State.round.game or 0, State.round.games)
+	else
+		Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
+	end
 	PresenterPanel.tick(workspace:GetServerTimeNow())
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end)
@@ -7747,7 +8037,7 @@ local HEART_ROW = 0.8
 local CARD_COLOR = Color3.fromRGB(255, 255, 255)
 local NEW_COLOR = Color3.fromRGB(255, 225, 90)
 local OUTLINE = Color3.fromRGB(22, 34, 64)
-local NAME_PILL = Color3.fromRGB(22, 34, 64)
+local NAME_PILL = Color3.fromRGB(0, 0, 0) -- (the HUD's black, owner 2026-10-24)
 local HIDDEN = "???" -- my own words while I play
 
 local GROW_SECONDS = 0.15 -- hit(): the pop grows, then settles back
@@ -7857,7 +8147,7 @@ local function build(player: Player, words: { string }, caption: string, previou
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "Caption"
 	nameLabel.BackgroundColor3 = NAME_PILL
-	nameLabel.BackgroundTransparency = 0.1
+	nameLabel.BackgroundTransparency = 0.3
 	nameLabel.Position = UDim2.fromScale(0.1, wordsHeight / total + 0.02)
 	nameLabel.Size = UDim2.fromScale(0.8, NAME_ROW / total - 0.02)
 	nameLabel.FontFace = NAME_FONT
@@ -8078,8 +8368,8 @@ end
 return FlatVoice
 ]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "Fx"; s.Source = [====[--!strict
--- Effects: the flying chair firing (seat flap snapping back on its hinge, "펑", smoke and confetti), the splash where
--- the player hits the water, the elimination buzzer and red flash, floating emoji reactions, the presenter's sound
+-- Effects: the flying chair firing (an explosion, the seat flap snapping back on its hinge, "펑", smoke and confetti),
+-- the splash where the player hits the water (no sound: owner 2026-10-24), the elimination buzzer and red flash, floating emoji reactions, the presenter's sound
 -- buttons and a seat bell's ding with its light (bundle 6b).
 -- The server only sends signals; every client animates the flap itself (a server-moved flap would stutter).
 local Debris = game:GetService("Debris")
@@ -8100,7 +8390,6 @@ local CONFETTI = {
 local flash: Frame
 local buzzer: Sound
 local bang: Sound
-local splashSound: Sound
 local bellSound: Sound
 local presenterSounds: { Sound } = {} -- the presenter's sound buttons (Config.PRESENTER_SOUNDS order)
 local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
@@ -8154,7 +8443,6 @@ function Fx.init()
 
 	buzzer = sound("Buzzer", Config.SOUND_BUZZER, 0.6)
 	bang = sound("Bang", Config.SOUND_BANG, 0.8)
-	splashSound = sound("Splash", Config.SOUND_SPLASH, 0.8)
 	bellSound = sound("Bell", Config.SOUND_BELL, 0.7)
 	for i, entry in Config.PRESENTER_SOUNDS do
 		presenterSounds[i] = sound("PresenterSound" .. i, entry.id, 0.7)
@@ -8313,8 +8601,19 @@ local function snapFlap(hinge: BasePart)
 end
 
 -- A flying chair fired: the flap snaps back, "펑", smoke at the seat.
-function Fx.fling(info: { seatIndex: number? })
+function Fx.fling(info: { seatIndex: number?, blastAt: Vector3? })
 	playCopy(bang)
+	if typeof(info.blastAt) == "Vector3" then
+		-- Roblox's own explosion look; it pushes and breaks nothing (the server throws the body).
+		local explosion = Instance.new("Explosion")
+		explosion.Position = info.blastAt
+		explosion.BlastRadius = Config.BLAST_RADIUS
+		explosion.BlastPressure = 0
+		explosion.DestroyJointRadiusPercent = 0
+		explosion.ExplosionType = Enum.ExplosionType.NoCraters
+		explosion.Parent = workspace
+		Debris:AddItem(explosion, 3)
+	end
 	local seat: BasePart?, hinge: BasePart? = nil, nil
 	if info.seatIndex then
 		seat, hinge = chairOf(info.seatIndex)
@@ -8377,9 +8676,8 @@ function Fx.lever()
 end
 
 -- The player hit the water: a white column, a spray of drops and a ring of mist, sized to read from the show camera
--- (the landing zone is 95-130 studs away).
+-- (a blast carries them about 40-85 studs out over the pool, 80-130 studs from the camera).
 function Fx.splash(position: Vector3)
-	playCopy(splashSound)
 	local anchor = anchorAt(position + Vector3.new(0, 0.5, 0), 3)
 	emitter(anchor, {
 		Color = ColorSequence.new(Color3.fromRGB(255, 255, 255)),
@@ -9088,6 +9386,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "Hud"; s.Source = [====[--!s
 -- chair row under it stays visible.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Hearts = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hearts"))
 local Style = require(script.Parent:WaitForChild("Style"))
 
@@ -9108,7 +9407,7 @@ local aliveL: TextLabel
 local livesL: TextLabel
 
 function Hud.build()
-	local top = Style.panel(Style.gui(), Style.PANEL, 0.2, 14)
+	local top = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 14)
 	top.AnchorPoint = Vector2.new(0.5, 0)
 	top.Position = UDim2.new(0.5, 0, 0, 8)
 	top.Size = UDim2.new(0.5, 0, 0, 64)
@@ -9117,7 +9416,7 @@ function Hud.build()
 	statusL = Style.label(top, Style.BOLD, 22, Style.WHITE)
 	statusL.Position = UDim2.fromScale(0.04, 0.06)
 	statusL.Size = UDim2.fromScale(0.92, 0.46)
-	timerL = Style.label(top, Style.BOLD, 22, Style.AMBER)
+	timerL = Style.label(top, Style.BOLD, 22, Style.WHITE)
 	timerL.Position = UDim2.fromScale(0.04, 0.55)
 	timerL.Size = UDim2.fromScale(0.28, 0.38)
 	timerL.TextXAlignment = Enum.TextXAlignment.Left
@@ -9142,7 +9441,13 @@ function Hud.setTimer(seconds: number?)
 	end
 	local s = math.max(0, math.ceil(seconds))
 	timerL.Text = string.format("%d:%02d", s // 60, s % 60)
-	timerL.TextColor3 = if s <= 30 then Style.RED else Style.AMBER
+	timerL.TextColor3 = if s <= 30 then Style.RED else Style.WHITE
+end
+
+-- The main game's count instead of a clock ("미션 3/6", owner 2026-10-24).
+function Hud.setCount(game: number, games: number)
+	timerL.Text = string.format(Config.TEXT.GAME_COUNT, math.max(1, game), games)
+	timerL.TextColor3 = Style.WHITE
 end
 
 function Hud.setAlive(alive: number, total: number)
@@ -9187,20 +9492,12 @@ local chatMode = false
 function MicPanel.build(onChat: (boolean) -> ())
 	voiceL = Style.line(0, Style.RED)
 	testL = Style.line(1, Style.AMBER)
-	chatButton = Instance.new("TextButton")
+	chatButton = Style.button(Style.BOLD, 18, Style.AMBER)
 	chatButton.Name = "ChatJoin"
 	chatButton.AnchorPoint = Vector2.new(0.5, 0)
 	chatButton.Position = UDim2.new(0.5, 0, 0, Style.row(2) + 2)
 	chatButton.Size = UDim2.fromOffset(240, 34)
-	chatButton.BackgroundColor3 = Style.PANEL
-	chatButton.BackgroundTransparency = 0.15
-	chatButton.FontFace = Style.BOLD
-	chatButton.TextSize = 18
-	chatButton.TextColor3 = Style.AMBER
 	chatButton.Visible = false
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = chatButton
 	chatButton.Parent = Style.gui()
 	chatButton.Activated:Connect(function()
 		onChat(not chatMode)
@@ -9270,7 +9567,8 @@ end
 return MicPanel
 ]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [====[--!strict
--- The mission card in the middle of the screen (docs/DESIGN_V3.md §5; bundle 4a):
+-- The mission card at the bottom of the screen (docs/DESIGN_V3.md §5; bundle 4a; owner 2026-10-24: low, so the chairs
+-- and the pool behind them stay in view):
 --   - quiz: the question, four answer buttons (only for players who may answer) and the seconds left; afterwards the
 --     right answer turns green and my wrong pick red;
 --   - roulette (owner 2026-10-23: a 2D wheel): the names on a ring and a pointer that spins and slows down onto the
@@ -9285,6 +9583,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [
 --   - bundle 6c: crocodile teeth (whose turn and ten teeth, pressable on my turn, pressed ones shut; the biting one at
 --     the end), the bomb (who holds it, the question, two answers for the holder), nunchi (the rule and the seconds
 --     left; at the end the order the bells came in);
+--   - between games (owner 2026-10-24): what the last game did with the vote for the next one (or "the presenter is
+--     picking"), then the next game's briefing: its name, its one-line rule, 3-2-1;
 --   - bundle 6d: the balance game ("A vs B", who argues, then two picks that may change until the time is up; the
 --     counts), red light (the light big on a green or red card, my steps), the liar (the category, the word — or "you
 --     are the liar" — on my own screen, whose clue it is, the vote, the liar's guess among four, who it was).
@@ -9348,22 +9648,27 @@ local state = {
 	startsAt = 0,
 	spinSeconds = 1,
 	topicLine = "", -- the banned-word talk's topic line (the seconds are added every frame)
+	slim = false, -- the talk's slim line at the top (else the card sits on the bottom row)
+	hidden = false, -- stepped aside for a launch (setHidden)
+	shown = false, -- what the screen asks for, before `hidden`
 }
-local CARD_POSITION = UDim2.fromScale(0.5, 0.56) -- a little low: the status board sits above
+local CARD_GAP = 8 -- pixels between the card and the bottom row (the bell button, the reactions), which it sits on
 local TALK_POSITION = UDim2.new(0.5, 0, 0, Style.row(4)) -- the talk's slim line: under the status board and the
 -- getting-ready lines (rows 1-3), above the chair row
 
+-- Where the card goes: the talk's slim line under the status board, else on top of the bottom row (its height changes
+-- with the bell button and the reactions).
+local function place()
+	if state.slim then
+		card.Position = TALK_POSITION
+	else
+		card.Position = UDim2.new(0.5, 0, 1, -(Style.bottomStack().AbsoluteSize.Y + 12 + CARD_GAP))
+	end
+end
+
 local function answerButton(index: number): TextButton
-	local b = Instance.new("TextButton")
-	b.BackgroundColor3 = Style.PANEL
-	b.BackgroundTransparency = 0.1
-	b.FontFace = Style.BOLD
+	local b = Style.button(Style.BOLD, 22)
 	b.TextScaled = true
-	b.TextColor3 = Style.WHITE
-	b.AutoButtonColor = true
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = b
 	local pad = Instance.new("UIPadding")
 	pad.PaddingLeft = UDim.new(0, 8)
 	pad.PaddingRight = UDim.new(0, 8)
@@ -9378,13 +9683,13 @@ local function answerButton(index: number): TextButton
 		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt -- (not while the question shows first)
 		local mine = state.kind == "vote" and state.voteIds[index] == state.myId
 		local answering = state.kind == "quiz" or state.kind == "vote" or state.kind == "bomb" or state.kind == "balance"
-			or state.kind == "liarGuess"
+			or state.kind == "liarGuess" or state.kind == "nextVote"
 		local repick = state.kind == "balance" -- (a balance pick may change until the time is up)
 		if answering and state.canAnswer and open and (repick or not state.myPick) and not mine then
 			state.myPick = index
 			onAnswer(state.id, index)
 			for i, other in buttons do
-				other.BackgroundColor3 = if i == index then Style.AMBER else Style.PANEL
+				other.BackgroundColor3 = if i == index then Style.AMBER else Style.BUTTON
 				other.TextColor3 = if i == index then Style.PANEL elseif repick then Style.WHITE else Style.GREY
 				other.AutoButtonColor = repick -- (answered: nothing else can be pressed, except a balance pick)
 			end
@@ -9397,10 +9702,9 @@ end
 -- onPick(questionId, choice): I pressed an answer button.
 function MissionPanel.build(onPick: (number, number) -> ())
 	onAnswer = onPick
-	card = Style.panel(Style.gui(), Style.PANEL, 0.2, 16)
+	card = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 16)
 	card.Name = "MissionCard"
 	card.AnchorPoint = Vector2.new(0.5, 0.5)
-	card.Position = CARD_POSITION
 	card.Size = UDim2.fromScale(0.5, 0)
 	card.AutomaticSize = Enum.AutomaticSize.Y
 	card.Visible = false
@@ -9419,7 +9723,7 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	layout.Padding = UDim.new(0, 10)
 	layout.Parent = card
 
-	timer = Style.label(card, Style.BOLD, 20, Style.AMBER)
+	timer = Style.label(card, Style.BOLD, 20, Style.WHITE)
 	timer.Size = UDim2.new(1, 0, 0, 22)
 	timer.LayoutOrder = 0
 	title = Style.label(card, Style.BOLD, 26, Style.WHITE)
@@ -9436,7 +9740,7 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	answerGrid.LayoutOrder = 3
 	answerGrid.Parent = card
 	answerLayout = Instance.new("UIGridLayout")
-	answerLayout.CellSize = UDim2.new(0.5, -4, 0, 52)
+	answerLayout.CellSize = UDim2.new(0.5, -4, 0, 44)
 	answerLayout.CellPadding = UDim2.fromOffset(8, 8)
 	answerLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	answerLayout.Parent = answerGrid
@@ -9508,10 +9812,10 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	disc.AnchorPoint = Vector2.new(0.5, 0.5)
 	disc.Position = UDim2.fromScale(0.5, 0.5)
 	disc.Size = UDim2.fromOffset(2 * RING_RADIUS + 44, 2 * RING_RADIUS + 44)
-	local rim = Instance.new("UIStroke")
+	local rim = disc:FindFirstChildOfClass("UIStroke") :: UIStroke -- (Style.panel's edge, made the amber rim)
 	rim.Color = Style.AMBER
+	rim.Transparency = 0
 	rim.Thickness = 4
-	rim.Parent = disc
 	pointer = Instance.new("Frame")
 	pointer.BackgroundTransparency = 1
 	pointer.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -9586,7 +9890,7 @@ end
 -- Colours one answer button: open (can be pressed), mine (my pick), or neither.
 local function paint(b: TextButton, open: boolean, picked: boolean)
 	b.AutoButtonColor = open
-	b.BackgroundColor3 = if picked then Style.AMBER else Style.PANEL
+	b.BackgroundColor3 = if picked then Style.AMBER else Style.BUTTON
 	b.TextColor3 = if picked then Style.PANEL elseif open then Style.WHITE else Style.GREY
 end
 
@@ -9596,7 +9900,8 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local kind = payload.kind
 	local quizLike = kind == "quiz" or kind == "quizResult"
 	local newQuestion = if quizLike then payload.question ~= state.question
-		elseif kind == "vote" or kind == "balance" or kind == "liarGuess" then payload.id ~= nil and payload.id ~= state.id
+		elseif kind == "vote" or kind == "balance" or kind == "liarGuess" or kind == "nextVote" then
+			payload.id ~= nil and payload.id ~= state.id
 		else true
 	if newQuestion then
 		state.myPick = nil -- a new question (a quiz comes twice: before and once the buttons work), a new vote, or none
@@ -9611,24 +9916,30 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local games = kind == "croc" or kind == "crocResult" or kind == "bomb" or kind == "bombResult" or kind == "nunchi"
 		or kind == "nunchiResult" or kind == "balance" or kind == "balanceResult" or kind == "redLight"
 		or kind == "redLightResult" or kind == "liar" or kind == "liarGuess" or kind == "liarResult"
-	card.Visible = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
-		or kind == "talk" or bells or games
+	local between = kind == "nextVote" or kind == "nextPick" or kind == "brief"
+	state.shown = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
+		or kind == "talk" or bells or games or between
+	card.Visible = state.shown and not state.hidden
 	answerGrid.Visible = quizLike or kind == "vote" or kind == "bomb" or (kind == "balance" and payload.stage == "pick")
-		or kind == "liarGuess"
+		or kind == "liarGuess" or kind == "nextVote"
 	teethGrid.Visible = kind == "croc" or kind == "crocResult"
 	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
-		or games
+		or games or between
 	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc" or kind == "bomb"
 		or kind == "nunchi" or kind == "balance" or kind == "redLight" or kind == "liar" or kind == "liarGuess"
+		or kind == "nextVote" or kind == "brief"
 	note.Visible = kind == "oneWord" or kind == "bellQuiz" or kind == "bomb" or kind == "nunchi" or kind == "nunchiResult"
+		or between
 		or kind == "balance" or kind == "balanceResult" or kind == "redLight" or kind == "redLightResult" or kind == "liar"
 	card.BackgroundColor3 = if kind == "redLight" then (if payload.light == "red" then RED_LIGHT else GREEN_LIGHT)
 		else Style.PANEL
 	local slim = kind == "talk"
-	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 0.5)
-	card.Position = if slim then TALK_POSITION else CARD_POSITION
-	title.TextSize = if slim then 22 else 26
-	title.Size = UDim2.new(1, 0, 0, if slim then 30 else 64)
+	card.BackgroundTransparency = if kind == "redLight" then 0.15 else Style.PANEL_ALPHA
+	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 1)
+	state.slim = slim
+	place()
+	title.TextSize = if slim then 20 else 24
+	title.Size = UDim2.new(1, 0, 0, if slim then 28 else 52)
 	swapButton.Visible = false
 	wheel.Visible = kind == "roulette" and #names > 2
 	coin.Visible = kind == "roulette" and #names <= 2
@@ -9642,12 +9953,26 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			if kind == "quizResult" then
 				local right = i == payload.answer
 				b.AutoButtonColor = false
-				b.BackgroundColor3 = if right then Style.GREEN elseif i == state.myPick then Style.RED else Style.PANEL
+				b.BackgroundColor3 = if right then Style.GREEN elseif i == state.myPick then Style.RED else Style.BUTTON
 				b.TextColor3 = if right or i == state.myPick then Style.PANEL else Style.GREY
 			else
 				paint(b, open, i == state.myPick)
 			end
 		end
+	elseif kind == "nextVote" or kind == "nextPick" then
+		title.Text = if kind == "nextVote" then TEXT.NEXT_VOTE else TEXT.PICKING
+		note.Text = payload.recap or "" -- (what the last game did; nothing before the first)
+		note.Visible = note.Text ~= ""
+		local choices = if kind == "nextVote" then payload.choices or {} else {}
+		for i, b in buttons do
+			b.Visible = choices[i] ~= nil
+			b.Text = choices[i] or ""
+			paint(b, canAnswer and not state.myPick, i == state.myPick)
+		end
+	elseif kind == "brief" then
+		title.Text = string.format("%s · %s", string.format(TEXT.GAME_COUNT, payload.game or 1, payload.games or 1),
+			payload.title or "")
+		note.Text = if (payload.recap or "") ~= "" then payload.recap .. "  ·  " .. (payload.rule or "") else payload.rule or ""
 	elseif kind == "vote" then
 		local liarVote = payload.prompt == "liar"
 		title.Text = if liarVote then TEXT.LIAR_VOTE else TEXT.JUDGE_VOTE
@@ -9784,14 +10109,19 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			setRing(names)
 		end
 	end
-	local shownButtons = 0
+	local shownButtons, longest = 0, 0
 	for _, b in buttons do
 		if b.Visible then
 			shownButtons += 1
+			longest = math.max(longest, utf8.len(b.Text) or #b.Text)
 		end
 	end
-	-- (a big vote: three smaller columns, so twelve still fit a phone)
-	answerLayout.CellSize = if shownButtons > 6 then UDim2.new(1 / 3, -6, 0, 44) else UDim2.new(0.5, -4, 0, 52)
+	-- (four short answers: one row, so the card stays low; a big vote: three smaller columns, so twelve still fit a
+	-- phone)
+	answerLayout.CellSize = if shownButtons > 6 then UDim2.new(1 / 3, -6, 0, 40)
+		elseif shownButtons == 4 and longest <= 7 then UDim2.new(0.25, -6, 0, 44)
+		elseif shownButtons == 3 then UDim2.new(1 / 3, -6, 0, 44) -- (the next-game vote)
+		else UDim2.new(0.5, -4, 0, 44)
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end
 
@@ -9804,8 +10134,15 @@ function MissionPanel.bellRang()
 end
 
 -- Every frame (server time): the quiz countdown, the spinning pointer or the flipping coin, and the card's size.
+-- Steps the card aside (a launch flying, owner 2026-10-24) without forgetting what it shows or what I picked.
+function MissionPanel.setHidden(hidden: boolean)
+	state.hidden = hidden
+	card.Visible = state.shown and not hidden
+end
+
 function MissionPanel.tick(now: number)
 	if card.Visible then
+		place()
 		-- Keep the card within 80% of the screen height and 90% of its width (a big wheel on a small phone screen).
 		local camera = workspace.CurrentCamera
 		local scale = math.max(cardScale.Scale, 0.01)
@@ -9821,7 +10158,8 @@ function MissionPanel.tick(now: number)
 		title.Text = string.format("%s · %d", state.topicLine, math.max(0, math.ceil(state.endsAt - now)))
 	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" or state.kind == "oneWordBell"
 		or state.kind == "bellQuiz" or state.kind == "croc" or state.kind == "bomb" or state.kind == "nunchi"
-		or state.kind == "balance" or state.kind == "redLight" or state.kind == "liar" or state.kind == "liarGuess" then
+		or state.kind == "balance" or state.kind == "redLight" or state.kind == "liar" or state.kind == "liarGuess"
+		or state.kind == "nextVote" or state.kind == "brief" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""
@@ -9899,17 +10237,9 @@ local selected: string? = nil -- the name tapped in a "judge" menu
 local onPickMission: (string) -> () = function(_id) end
 
 local function button(parent: Instance, text: string, width: number, height: number): TextButton
-	local b = Instance.new("TextButton")
+	local b = Style.button(Style.BOLD, 18)
 	b.Size = UDim2.fromOffset(width, height)
-	b.BackgroundColor3 = Style.PANEL
-	b.BackgroundTransparency = 0.15
-	b.FontFace = Style.BOLD
-	b.TextSize = 18
-	b.TextColor3 = Style.WHITE
 	b.Text = text
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = b
 	b.Parent = parent
 	return b
 end
@@ -9934,7 +10264,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 		onVolunteer(not volunteered)
 	end)
 
-	menuFrame = Style.panel(Style.gui(), Style.PANEL, 0.15, 14)
+	menuFrame = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 14)
 	menuFrame.Name = "MissionMenu"
 	menuFrame.AnchorPoint = Vector2.new(1, 0.5)
 	menuFrame.Position = UDim2.new(1, -16, 0.5, 0)
@@ -10001,7 +10331,7 @@ function PresenterPanel.build(onVolunteer: (boolean) -> (), onPick: (string) -> 
 		end)
 	end
 
-	wordFrame = Style.panel(Style.gui(), Style.PANEL, 0.15, 14)
+	wordFrame = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 14)
 	wordFrame.Name = "WordList"
 	wordFrame.AnchorPoint = Vector2.new(0, 0.5)
 	wordFrame.Position = UDim2.new(0, 16, 0.55, 0)
@@ -10150,7 +10480,7 @@ function PresenterPanel.setWords(rows: { WordRow }, mode: string?, everyone: boo
 		action.AnchorPoint = Vector2.new(1, 0.5)
 		action.Position = UDim2.fromScale(1, 0.5)
 		action.TextSize = 16
-		action.BackgroundColor3 = if mode == "reroll" then Style.PANEL else Style.RED
+		action.BackgroundColor3 = if mode == "reroll" then Style.BUTTON else Style.RED
 		action.Activated:Connect(function()
 			onWordAction(mode, row.userId)
 		end)
@@ -10204,7 +10534,7 @@ function PresenterPanel.openMenu(options: { Option }, endsAt: number, kind: stri
 			end
 			selected = option.id
 			for id, other in nameButtons do
-				other.BackgroundColor3 = if id == option.id then Style.AMBER else Style.PANEL
+				other.BackgroundColor3 = if id == option.id then Style.AMBER else Style.BUTTON
 				other.TextColor3 = if id == option.id then Style.PANEL else Style.WHITE
 			end
 			flingButton.AutoButtonColor = true
@@ -10269,16 +10599,14 @@ function ReactionBar.build(onPick: (number) -> ())
 	layout.Parent = bar
 	for index, emoji in Config.REACTIONS do
 		local b = Instance.new("TextButton")
-		b.Size = UDim2.new(0, 56, 0, 56)
+		b.Size = UDim2.new(0, 44, 0, 44)
 		b.BackgroundColor3 = Style.PANEL
-		b.BackgroundTransparency = 0.25
+		b.BackgroundTransparency = Style.PANEL_ALPHA
 		b.Text = emoji
 		b.TextScaled = true
 		b.FontFace = Style.BOLD
 		b.TextColor3 = Style.WHITE
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(1, 0)
-		corner.Parent = b
+		Style.round(b, 22)
 		b.Activated:Connect(function()
 			onPick(index)
 		end)
@@ -10293,7 +10621,9 @@ end
 return ReactionBar
 ]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "Style"; s.Source = [====[--!strict
--- Shared look for every HUD panel: fonts, colours, the one ScreenGui, and small constructors.
+-- Shared look for every HUD panel: fonts, colours, the one ScreenGui, and small constructors. Owner 2026-10-24: clean,
+-- black panels only a little see-through, white text, a thin light edge; colour only where it means something (right
+-- / wrong, the timer running out, my pick).
 local Players = game:GetService("Players")
 
 local Style = {}
@@ -10301,12 +10631,15 @@ local Style = {}
 Style.BOLD = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold)
 Style.REGULAR = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Regular)
 
-Style.WHITE = Color3.fromRGB(240, 240, 245)
-Style.GREY = Color3.fromRGB(170, 175, 185)
-Style.RED = Color3.fromRGB(255, 110, 110)
-Style.AMBER = Color3.fromRGB(255, 200, 90)
-Style.GREEN = Color3.fromRGB(120, 220, 140)
-Style.PANEL = Color3.fromRGB(18, 22, 30)
+Style.WHITE = Color3.fromRGB(245, 245, 247)
+Style.GREY = Color3.fromRGB(160, 163, 170)
+Style.RED = Color3.fromRGB(255, 96, 96)
+Style.AMBER = Color3.fromRGB(255, 208, 92)
+Style.GREEN = Color3.fromRGB(96, 208, 128)
+Style.PANEL = Color3.fromRGB(0, 0, 0)
+Style.PANEL_ALPHA = 0.3 -- panel background transparency
+Style.BUTTON = Color3.fromRGB(44, 44, 48) -- a button on a panel (my pick turns it AMBER, right GREEN, wrong RED)
+Style.EDGE_ALPHA = 0.85 -- the thin white edge of panels and buttons
 
 local gui: ScreenGui? = nil
 local stack: Frame? = nil
@@ -10366,16 +10699,41 @@ function Style.label(parent: Instance, font: Font, maxSize: number, color: Color
 	return l
 end
 
+-- Rounded corners and the thin light edge (panels and buttons).
+function Style.round(object: GuiObject, radius: number)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius)
+	corner.Parent = object
+	local edge = Instance.new("UIStroke")
+	edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	edge.Color = Color3.new(1, 1, 1)
+	edge.Transparency = Style.EDGE_ALPHA
+	edge.Thickness = 1
+	edge.Parent = object
+end
+
 function Style.panel(parent: Instance, color: Color3, transparency: number, radius: number): Frame
 	local f = Instance.new("Frame")
 	f.BackgroundColor3 = color
 	f.BackgroundTransparency = transparency
 	f.BorderSizePixel = 0
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, radius)
-	corner.Parent = f
+	Style.round(f, radius)
 	f.Parent = parent
 	return f
+end
+
+-- A button in the shared look (the caller sets its size, text and parent).
+function Style.button(font: Font, textSize: number, color: Color3?): TextButton
+	local b = Instance.new("TextButton")
+	b.BackgroundColor3 = Style.BUTTON
+	b.BackgroundTransparency = 0.1
+	b.BorderSizePixel = 0
+	b.FontFace = font
+	b.TextSize = textSize
+	b.TextColor3 = color or Style.WHITE
+	b.AutoButtonColor = true
+	Style.round(b, 10)
+	return b
 end
 
 function Style.limit(frame: GuiObject, min: Vector2, max: Vector2)
@@ -10390,20 +10748,80 @@ function Style.row(row: number): number
 	return 78 + row * 26
 end
 
--- A line of text centred under the status board (row 0, 1, 2 ...).
+-- Keeps `object` at most `fraction` of the screen wide (and `maxWidth` pixels), following the screen size.
+function Style.fitWidth(object: GuiObject, fraction: number, maxWidth: number, maxHeight: number)
+	local limit = Instance.new("UISizeConstraint")
+	limit.Parent = object
+	local function update()
+		local camera = workspace.CurrentCamera
+		local width = if camera then camera.ViewportSize.X * fraction else maxWidth
+		limit.MaxSize = Vector2.new(math.max(120, math.min(maxWidth, width)), maxHeight)
+	end
+	update()
+	local function watch()
+		local camera = workspace.CurrentCamera
+		if camera then
+			camera:GetPropertyChangedSignal("ViewportSize"):Connect(update)
+		end
+		update()
+	end
+	watch()
+	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watch)
+end
+
+-- A line of text centred under the status board (row 0, 1, 2 ...): a black pill as wide as its text (at most 92% of
+-- the screen: a longer text gets smaller), gone while the text is empty.
+local LINE_TEXT = 16
+local LINE_MIN_TEXT = 11
 function Style.line(row: number, color: Color3): TextLabel
-	local l = Style.label(Style.gui(), Style.BOLD, 20, color)
+	local l = Instance.new("TextLabel")
 	l.AnchorPoint = Vector2.new(0.5, 0)
 	l.Position = UDim2.new(0.5, 0, 0, Style.row(row))
-	l.Size = UDim2.new(0.7, 0, 0, 24)
-	l.TextStrokeTransparency = 0.5
+	l.Size = UDim2.fromOffset(0, 22)
+	l.AutomaticSize = Enum.AutomaticSize.X
+	l.BackgroundColor3 = Style.PANEL
+	l.BackgroundTransparency = Style.PANEL_ALPHA
+	l.BorderSizePixel = 0
+	l.FontFace = Style.BOLD
+	l.TextSize = LINE_TEXT
+	l.TextColor3 = color
+	l.Text = ""
+	l.Visible = false
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 12)
+	pad.PaddingRight = UDim.new(0, 12)
+	pad.Parent = l
+	Style.round(l, 11)
+	Style.fitWidth(l, 0.92, 720, 22)
+	local fitting = 0
+	local function fit()
+		fitting += 1
+		local mine = fitting
+		l.TextSize = LINE_TEXT
+		task.defer(function() -- (TextFits is known after the layout)
+			while mine == fitting and not l.TextFits and l.TextSize > LINE_MIN_TEXT do
+				l.TextSize -= 1
+				task.wait()
+			end
+		end)
+	end
+	l:GetPropertyChangedSignal("Text"):Connect(function()
+		l.Visible = l.Text ~= ""
+		fit()
+	end)
+	l:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		if not l.TextFits then
+			fit()
+		end
+	end)
+	l.Parent = Style.gui()
 	return l
 end
 
 return Style
 ]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "Toast"; s.Source = [====[--!strict
--- Big centre toast (elimination, warnings, info) that fades out by itself.
+-- Centre toast (elimination, warnings, info) on a black pill that fades out by itself; the kind colours the text.
 local TweenService = game:GetService("TweenService")
 
 local Style = require(script.Parent:WaitForChild("Style"))
@@ -10411,23 +10829,53 @@ local Style = require(script.Parent:WaitForChild("Style"))
 local Toast = {}
 
 local toastL: TextLabel
+local edge: UIStroke
+local fading: { Tween } = {}
 
 function Toast.build()
-	toastL = Style.label(Style.gui(), Style.BOLD, 46, Style.WHITE)
+	toastL = Instance.new("TextLabel")
 	toastL.AnchorPoint = Vector2.new(0.5, 0.5)
-	toastL.Position = UDim2.fromScale(0.5, 0.4)
-	toastL.Size = UDim2.fromScale(0.8, 0.14)
+	toastL.Position = UDim2.fromScale(0.5, 0.36)
+	toastL.Size = UDim2.fromOffset(0, 0)
+	toastL.AutomaticSize = Enum.AutomaticSize.XY
+	toastL.BackgroundColor3 = Style.PANEL
+	toastL.BorderSizePixel = 0
+	toastL.FontFace = Style.BOLD
+	toastL.TextSize = 24
+	toastL.TextWrapped = true -- (grows with the text up to the size limit, then wraps)
+	toastL.Text = ""
+	Style.fitWidth(toastL, 0.9, 560, 400) -- (narrower on a small screen)
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 22)
+	pad.PaddingRight = UDim.new(0, 22)
+	pad.PaddingTop = UDim.new(0, 10)
+	pad.PaddingBottom = UDim.new(0, 10)
+	pad.Parent = toastL
+	Style.round(toastL, 14)
+	edge = toastL:FindFirstChildOfClass("UIStroke") :: UIStroke
+	toastL.BackgroundTransparency = 1
 	toastL.TextTransparency = 1
-	toastL.TextStrokeTransparency = 1
+	edge.Transparency = 1
+	toastL.Parent = Style.gui()
 end
 
 function Toast.show(text: string, kind: "elim" | "near" | "info")
+	for _, tween in fading do
+		tween:Cancel()
+	end
 	toastL.Text = text
-	toastL.TextColor3 = if kind == "elim" then Style.RED elseif kind == "near" then Style.AMBER else Style.GREEN
+	toastL.TextColor3 = if kind == "elim" then Style.RED elseif kind == "near" then Style.WHITE else Style.GREEN
 	toastL.TextTransparency = 0
-	toastL.TextStrokeTransparency = 0.3
+	toastL.BackgroundTransparency = Style.PANEL_ALPHA
+	edge.Transparency = Style.EDGE_ALPHA
 	local info = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 2.4)
-	TweenService:Create(toastL, info, { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+	fading = {
+		TweenService:Create(toastL, info, { TextTransparency = 1, BackgroundTransparency = 1 }),
+		TweenService:Create(edge, info, { Transparency = 1 }),
+	}
+	for _, tween in fading do
+		tween:Play()
+	end
 end
 
 return Toast

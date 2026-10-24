@@ -39,6 +39,7 @@ type Ctx = {
 local TestMission = {
 	id = "test",
 	title = Config.TEXT.TEST_MISSION_TITLE,
+	brief = Config.TEXT.TEST_MISSION_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.TEST_MISSION_SECONDS,
 	maxPerRound = nil :: number?, -- like the quiz: no limit
 	minPlayers = nil :: number?,

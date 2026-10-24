@@ -1,9 +1,11 @@
 --!strict
 -- Flying chairs in a row at the near edge of the pool (docs/DESIGN_V3.md §9-10): seat the players of a round in the
--- middle chairs, keep them seated, and launch a failed player. A launch turns the character into a ragdoll and throws
--- it far into the pool's landing zone; the clients draw the seat flap snapping back, the bang and the splash from the
--- "Fling" / "Splash" signals. SeatService only says when the player is due back (FLING_RETURN_SECONDS after the
--- launch, with the character that flew); RoundService then calls endFling() and picks reseat() or the stands.
+-- middle chairs, keep them seated, and launch a failed player. A launch is an explosion in front of the chair (owner
+-- 2026-10-24: no flight path, the blast's force): the character turns into a ragdoll and the blast throws it backward
+-- over the pool, a little differently each time, and physics does the rest. The clients draw the explosion, the seat
+-- flap snapping back and the splash from the "Fling" / "Splash" signals. SeatService only says when the player is due
+-- back (FLING_RETURN_SECONDS after the launch, with the character that flew); RoundService then calls endFling() and
+-- picks reseat() or the stands.
 -- A flight whose character dies or leaves the world is undone at once and never comes back.
 local Players = game:GetService("Players")
 local PhysicsService = game:GetService("PhysicsService")
@@ -195,29 +197,71 @@ local function ragdoll(flight: Flight, root: BasePart)
 	end
 end
 
--- A random point on the water of the landing zone (several flying players land apart).
-local function landingTarget(): Vector3
-	local landing = hall():WaitForChild("Landing") :: BasePart
-	local waterY = (landing:GetAttribute("WaterY") or landing.Position.Y) :: number
-	local half = landing.Size / 2
-	return Vector3.new(
-		landing.Position.X + rng:NextNumber(-half.X, half.X),
-		waterY,
-		landing.Position.Z + rng:NextNumber(-half.Z, half.Z)
-	)
+local function landingZone(): BasePart?
+	return hall():FindFirstChild("Landing") :: BasePart?
 end
 
--- Initial velocity of a ballistic arc from `from` to `target` whose top (plus the body's own height) stays under the
--- hall's CeilingY. Returns the velocity and the flight time. (The arc always rises at least 4 studs: only a seat
--- higher than CeilingY - FLING_BODY_TOP - 4 could break the ceiling rule, which no chair of the map is.)
-local function arcVelocity(from: Vector3, target: Vector3): (Vector3, number)
-	local ceiling = (hall():GetAttribute("CeilingY") or 40) :: number
-	local gravity = workspace.Gravity
-	local apexY = math.max(from.Y + 4, math.min(from.Y + Config.FLING_APEX_HEIGHT, ceiling - Config.FLING_BODY_TOP))
-	local up = math.sqrt(2 * gravity * (apexY - from.Y))
-	local flightTime = up / gravity + math.sqrt(2 * (apexY - target.Y) / gravity)
-	local flat = Vector3.new(target.X - from.X, 0, target.Z - from.Z)
-	return flat / flightTime + Vector3.new(0, up, 0), flightTime
+-- The water level of the pool (for the splash).
+local function waterY(): number
+	local landing = landingZone()
+	return if landing then (landing:GetAttribute("WaterY") or landing.Position.Y) :: number else 0
+end
+
+-- The farthest a blast carries a body over flat ground (the fastest speed at the pitch, within the range, that goes
+-- farthest); a little more from the seat's height.
+local function farthest(): number
+	local best = 0
+	for _, degrees in { Config.BLAST_PITCH_MIN, Config.BLAST_PITCH_MAX } do
+		best = math.max(best, math.sin(2 * math.rad(degrees)))
+	end
+	return Config.BLAST_SPEED_MAX ^ 2 / workspace.Gravity * best
+end
+
+-- The blast's push: backward from the chair (the chairs face away from the pool) and up, turned a little at random so
+-- no two launches look alike. A speed, not an aim: where the body comes down is up to physics. Sideways it is kept
+-- so that even the farthest throw stays above the landing zone's width (the end chairs only fly straight or inward;
+-- 15 degrees either way took their players onto the deck beside the pool).
+local function blastVelocity(seat: Seat): Vector3
+	local back = -seat.CFrame.LookVector
+	back = Vector3.new(back.X, 0, back.Z).Unit
+	local side = Vector3.new(back.Z, 0, -back.X) -- (up x back: positive yaw turns `back` toward this)
+	local spread = math.sin(math.rad(Config.BLAST_SPREAD))
+	local low, high = -spread, spread
+	local landing = landingZone()
+	if landing then
+		local offset = (seat.Position - landing.Position):Dot(side) -- the seat's distance from the zone's middle line
+		local half = math.abs(landing.CFrame.RightVector:Dot(side)) * landing.Size.X / 2
+			+ math.abs(landing.CFrame.LookVector:Dot(side)) * landing.Size.Z / 2
+		local reach = farthest()
+		low = math.max(low, math.clamp((-half - offset) / reach, -1, 1))
+		high = math.min(high, math.clamp((half - offset) / reach, -1, 1))
+		if low > high then
+			low, high = 0, 0
+		end
+	end
+	local pitch = math.rad(rng:NextNumber(Config.BLAST_PITCH_MIN, Config.BLAST_PITCH_MAX))
+	local yaw = math.asin(rng:NextNumber(low, high))
+	local direction = CFrame.fromAxisAngle(Vector3.yAxis, yaw):VectorToWorldSpace(back) * math.cos(pitch)
+		+ Vector3.yAxis * math.sin(pitch)
+	return direction * rng:NextNumber(Config.BLAST_SPEED_MIN, Config.BLAST_SPEED_MAX)
+end
+
+-- Whether a point is over the pool (the splash): within the landing zone's width plus the attribute PoolMargin (the
+-- pool is that much wider on each side, map contract) and not in front of the chairs.
+local function overPool(position: Vector3): boolean
+	local landing = landingZone()
+	if not landing then
+		return true
+	end
+	local margin = (landing:GetAttribute("PoolMargin") or 0) :: number
+	local localPoint = landing.CFrame:PointToObjectSpace(position)
+	return math.abs(localPoint.X) <= landing.Size.X / 2 + margin
+end
+
+-- A random tumble (the blast hits the body unevenly).
+local function blastSpin(): Vector3
+	local axis = Vector3.new(rng:NextNumber(-1, 1), rng:NextNumber(-1, 1), rng:NextNumber(-1, 1))
+	return (if axis.Magnitude > 0.1 then axis.Unit else Vector3.xAxis) * Config.BLAST_SPIN
 end
 
 local function setOwner(root: BasePart, owner: Player?)
@@ -289,19 +333,18 @@ function SeatService.fling(player: Player, tag: any): boolean
 	end))
 	ragdoll(flight, root)
 	setOwner(root, nil)
-	local landAt = landingTarget()
-	local _, flightTime = arcVelocity(root.Position, landAt)
-	Net.toAll("Fling", { userId = player.UserId, seatIndex = seatIndex, flightTime = flightTime, landAt = landAt })
+	-- The blast goes off just in front of the seated body, low (the clients draw it there).
+	local blastAt = root.Position + seat.CFrame.LookVector * Config.BLAST_FORWARD - Vector3.yAxis * Config.BLAST_BELOW
+	Net.toAll("Fling", { userId = player.UserId, seatIndex = seatIndex, blastAt = blastAt })
 	task.spawn(function()
 		-- The throw waits one frame: the humanoid must already be PlatformStanding, or its walking controller brakes
-		-- the first step (Studio test 2026-10-22: ~6 studs/s of the horizontal speed lost, landings 5 studs short).
+		-- the first step (Studio test 2026-10-22: ~6 studs/s of the horizontal speed lost).
 		RunService.Heartbeat:Wait()
 		if flights[player] ~= flight then
 			return
 		end
-		local velocity = arcVelocity(root.Position, landAt)
-		-- A backflip: about the seated body's right axis, head going back toward the pool (like the flap).
-		local spin = root.CFrame.RightVector * Config.FLING_SPIN
+		local velocity = blastVelocity(seat :: Seat)
+		local spin = blastSpin()
 		for part in flight.parts do
 			if not part.Anchored then
 				part.AssemblyLinearVelocity = velocity
@@ -319,12 +362,12 @@ function SeatService.fling(player: Player, tag: any): boolean
 
 	local token = flight.token
 	task.spawn(function()
-		-- The splash: the first moment the body reaches the water after leaving the chair.
-		local waterY = landAt.Y
+		-- The splash: the first moment the body comes down to the water, over the pool, after leaving the chair.
+		local water = waterY()
 		local started = os.clock()
 		while flights[player] == flight and os.clock() - started < Config.FLING_RETURN_SECONDS do
-			if os.clock() - started > flightTime * 0.5 and root.Parent and root.Position.Y < waterY + 1.5 then
-				Net.toAll("Splash", { userId = player.UserId, position = Vector3.new(root.Position.X, waterY, root.Position.Z) })
+			if root.Parent and root.Position.Y < water + 1.5 and overPool(root.Position) then
+				Net.toAll("Splash", { userId = player.UserId, position = Vector3.new(root.Position.X, water, root.Position.Z) })
 				break
 			end
 			RunService.Heartbeat:Wait()

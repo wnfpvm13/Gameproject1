@@ -1356,4 +1356,120 @@ do
 	playerList = {}
 end
 
+---------------------------------------------------------------- 15. between games (owner 2026-10-24)
+do
+	MissionRunner.beginRound()
+	local rng = Random.new(11)
+	local ballot = MissionRunner.ballot(600, 4, rng, "quiz")
+	local ids, distinct = {}, true
+	for _, m in ballot do
+		distinct = distinct and not ids[m.id]
+		ids[m.id] = true
+	end
+	check("15a the ballot: NEXT_VOTE_CHOICES different games, never the one just played", #ballot == Config.NEXT_VOTE_CHOICES
+		and distinct and not ids.quiz)
+	local small = MissionRunner.ballot(600, 2, rng, nil)
+	local allowed = #small > 0
+	for _, m in small do
+		allowed = allowed and (m.minPlayers or 0) <= 2 and not m.needsPresenter
+	end
+	check("15b the ballot offers only games that may run now (enough players, no presenter needed)", allowed)
+	check("15c nothing fits the time left -> an empty ballot", #MissionRunner.ballot(5, 4, rng, nil) == 0)
+
+	local voters = newPlayers(3)
+	local result = nil
+	local since = now
+	task.spawn(function()
+		result = MissionRunner.vote(ballot, "recap!", voters, Random.new(3), function() return false end)
+	end)
+	at(now + 0.3)
+	local screen = lastScreenOf(since, "nextVote")
+	answer(voters[1], 2)
+	answer(voters[2], 2)
+	answer(newPlayers(1)[1], 1) -- not a voter: does not count
+	answer(voters[3], 1)
+	at(now + 0.5)
+	check("15d the vote shows the recap and the choices, ends once everyone voted, the most votes win", screen ~= nil
+		and screen.recap == "recap!" and #screen.choices == #ballot and screen.choices[1] == ballot[1].title
+		and screen.endsAt ~= nil and result == ballot[2] and now - since < 1.5)
+
+	local seen, inBallot, slow = {}, true, false
+	for seed = 1, 12 do
+		local r = nil
+		local started = now
+		task.spawn(function()
+			-- (seeds spread out: the fake Random's first draw from a small seed is always small)
+			r = MissionRunner.vote(ballot, "", voters, Random.new(seed * 104729 + 17), function() return false end)
+		end)
+		at(now + Config.NEXT_VOTE_SECONDS + 0.3)
+		inBallot = inBallot and r ~= nil and table.find(ballot, r) ~= nil
+		slow = slow or now - started < Config.NEXT_VOTE_SECONDS
+		if r then
+			seen[r.id] = true
+		end
+	end
+	local kinds = 0
+	for _ in seen do
+		kinds += 1
+	end
+	check("15e nobody votes: after NEXT_VOTE_SECONDS one of the ballot at random", inBallot and not slow and kinds >= 2,
+		string.format("inBallot %s slow %s kinds %d", tostring(inBallot), tostring(slow), kinds))
+
+	local tieOk = true
+	for seed = 1, 8 do
+		local r = nil
+		local gone = newPlayers(1)[1]
+		local group = { voters[1], voters[2], gone }
+		task.spawn(function()
+			r = MissionRunner.vote(ballot, "", group, Random.new(seed * 104729 + 17), function() return false end)
+		end)
+		at(now + 0.2)
+		answer(voters[1], 1)
+		answer(voters[2], 3)
+		gone.Parent = nil -- left: not waited for
+		at(now + 0.5)
+		tieOk = tieOk and (r == ballot[1] or r == ballot[3])
+	end
+	check("15f a tie: one of the tied at random; a voter who left is not waited for", tieOk)
+
+	local stopped = false
+	local r2 = "running" :: any
+	task.spawn(function()
+		r2 = MissionRunner.vote(ballot, "", voters, Random.new(1), function() return stopped end)
+	end)
+	at(now + 0.5)
+	stopped = true
+	at(now + 0.5)
+	check("15g the vote ends when the main game does (it still names a game)", r2 ~= "running" and table.find(ballot, r2) ~= nil)
+
+	local briefed = nil
+	local since2 = now
+	task.spawn(function()
+		briefed = MissionRunner.brief(Quiz, 2, Config.ROUND_GAMES, "recap?", function() return false end)
+	end)
+	at(now + 0.3)
+	local shown = lastScreenOf(since2, "brief")
+	local early = briefed
+	at(since2 + Config.BRIEF_SECONDS + 0.3)
+	check("15h the briefing: the game's name, its rule, its number, a 3-2-1; then the screen is left for the game",
+		shown ~= nil and shown.title == Quiz.title and shown.rule == Quiz.brief and shown.rule ~= "" and shown.game == 2
+		and shown.games == Config.ROUND_GAMES and shown.recap == "recap?" and early == nil and briefed == true
+		and lastScreenOf(since2, "none") ~= nil)
+	local stopNow = false
+	local b2 = nil
+	task.spawn(function()
+		b2 = MissionRunner.brief(Quiz, 1, Config.ROUND_GAMES, "", function() return stopNow end)
+	end)
+	at(now + 0.5)
+	stopNow = true
+	at(now + 0.5)
+	check("15i a briefing cut short by the end of the main game says so", b2 == false)
+	local everyBrief = true
+	for _, mission in { Quiz, Quiz.bell, Roulette, OneWord, Crocodile, BombPass, Nunchi, Balance, RedLight, Liar,
+		require(node("BannedTalk")), require(node("TestMission")) } do
+		everyBrief = everyBrief and typeof(mission.brief) == "string" and mission.brief ~= ""
+	end
+	check("15j every game has a one-line rule for its briefing", everyBrief)
+end
+
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

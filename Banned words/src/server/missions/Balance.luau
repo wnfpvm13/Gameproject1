@@ -42,6 +42,7 @@ type Ctx = {
 local Balance = {
 	id = "balance",
 	title = Config.TEXT.BALANCE_TITLE,
+	brief = Config.TEXT.BALANCE_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.BALANCE_BELL_SECONDS + Config.BALANCE_TALKERS * Config.BALANCE_TALK_CHAT_SECONDS
 		+ Config.BALANCE_PICK_SECONDS + Config.MINIGAME_RESULT_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,

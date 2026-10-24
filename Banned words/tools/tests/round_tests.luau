@@ -7,6 +7,9 @@
 -- accounts, the round lock), the real VoiceService routing, the presenter, and the real banned-word talk (words in
 -- its prep stage only, chat judging, rescues, the presenter's ear and re-draws, public limits, the settle stage).
 local Config = require(node("Config"))
+-- The shipped Config has speech judging on (the friend beta, owner 2026-10-24); these rounds start without it and
+-- turn it on the Studio way (workspace attribute BW_VoiceJudging) for the banned-word talk (section 13).
+Config.VOICE_JUDGING = false
 local Match = require(node("Match"))
 local LifeService = require(node("LifeService"))
 local Timeline = require(node("Timeline"))
@@ -159,17 +162,28 @@ check("5r AFK: missions missed while flying do not count", alive(k[1]) and Match
 
 ---------------------------------------------------------------- 6. Timeline
 Timeline.begin(5)
-check("6a the whole main game is left at the start", math.abs(Timeline.left() - Config.ROUND_SECONDS) < 1e-6)
+check("6a the whole main game is left at the start", math.abs(Timeline.left() - Config.ROUND_MAX_SECONDS) < 1e-6
+	and Timeline.gamesLeft() == Config.ROUND_GAMES)
 check("6b begun with 4+: the final is due as soon as FINAL_AT_ALIVE are left", not Timeline.finalDue(Config.FINAL_AT_ALIVE + 1)
 	and Timeline.finalDue(Config.FINAL_AT_ALIVE))
 Timeline.begin(Config.FINAL_AT_ALIVE)
 check("6c begun with FINAL_AT_ALIVE or fewer: no early final", not Timeline.finalDue(2) and not Timeline.finalDue(1))
-at(now + Config.ROUND_SECONDS)
+at(now + Config.ROUND_MAX_SECONDS)
 check("6d time up -> the final is due", Timeline.left() == 0 and Timeline.finalDue(Config.FINAL_AT_ALIVE))
 Timeline.begin(Config.FINAL_AT_ALIVE + 2)
 local fewWithMany = Timeline.fewLeft(Config.FINAL_AT_ALIVE) and not Timeline.fewLeft(Config.FINAL_AT_ALIVE + 1)
 Timeline.begin(Config.FINAL_AT_ALIVE)
 check("6e fewLeft: only the head count rule (begun with 4+), never the clock", fewWithMany and not Timeline.fewLeft(1))
+Timeline.begin(Config.FINAL_AT_ALIVE)
+local numbers = {}
+for _ = 1, Config.ROUND_GAMES - 1 do
+	table.insert(numbers, Timeline.gameStarted())
+end
+local dueBefore = Timeline.finalDue(Config.FINAL_AT_ALIVE)
+table.insert(numbers, Timeline.gameStarted())
+check("6f ROUND_GAMES games: numbered 1.., the final is due once the last one started (owner 2026-10-24)",
+	not dueBefore and Timeline.finalDue(Config.FINAL_AT_ALIVE) and Timeline.gamesLeft() == 0
+	and numbers[1] == 1 and numbers[#numbers] == Config.ROUND_GAMES)
 
 ---------------------------------------------------------------- 7. whole rounds (RoundService + stubs)
 local Seat = { flying = {}, flings = {}, reseats = {}, noChair = {} }
@@ -238,9 +252,15 @@ loaders.Scores = function() return Score end
 -- The mission: waits expectedSeconds (ctx.wait, so a cancel stops it), then fails whoever pick(run number, alive
 -- players) names; secondPick, if set, is a second event of the same main-game run right after the first.
 local Scripted = { id = "scripted", title = "scripted", expectedSeconds = 10, runs = {}, finalRuns = {}, pick = nil, finalPick = nil, secondPick = nil,
-	off = false } -- off: not offered in the main game (the banned-word talk sections), still the final's questions
+	off = false, noPlay = 0 } -- off: not offered in the main game (the banned-word talk sections), still the final's
+-- questions; noPlay: this many next runs end at once with "nothing to play" (too few players)
 function Scripted.available(final) return final or not Scripted.off end
 function Scripted.run(ctx)
+	if not ctx.final and Scripted.noPlay > 0 then
+		Scripted.noPlay -= 1
+		Scripted.skipped = (Scripted.skipped or 0) + 1
+		return false
+	end
 	local list = if ctx.final then Scripted.finalRuns else Scripted.runs
 	table.insert(list, now)
 	if not ctx.wait(Scripted.expectedSeconds) then
@@ -285,10 +305,13 @@ loaders.Quiz = function()
 	quiz.bell = never("bellQuiz")
 	return quiz
 end
-loaders.Roulette = function() return never("roulette") end
+-- (one test switches the roulette stand-in on, so a vote between two games happens)
+local rouletteStub = never("roulette")
+loaders.Roulette = function() return rouletteStub end
 loaders.OneWord = function() return never("oneWord") end
 loaders.Crocodile = function() return never("croc") end
-loaders.BombPass = function() return never("bomb") end
+local bombStub = never("bomb")
+loaders.BombPass = function() return bombStub end
 loaders.Nunchi = function() return never("nunchi") end
 loaders.Balance = function() return never("balance") end
 loaders.RedLight = function() return never("redLight") end
@@ -410,13 +433,15 @@ local function leave(player, stays)
 	playerList = stays
 	task.spawn(Players.PlayerRemoving.fire, player)
 end
--- Without a presenter each game is named for NEXT_GAME_CARD_SECONDS before it starts (bundle 6a: no free talk).
-local CARD = Config.NEXT_GAME_CARD_SECONDS
--- How many main-game missions of `seconds` start in ROUND_SECONDS without a presenter (one starts only if it fits
--- with its launches once its card is over).
+-- Each game is briefed for BRIEF_SECONDS before it starts (owner 2026-10-24). Here only the scripted mission can
+-- run, so there is never a vote (a ballot of one), but without a presenter its seconds are counted for the fit.
+local CARD = Config.BRIEF_SECONDS
+-- How many main-game missions of `seconds` start without a presenter: ROUND_GAMES, or fewer if the time cap comes
+-- first (one starts only if it fits with its launches once the vote and the briefing are over).
 local function expectedRuns(seconds)
 	local count, t = 0, 0
-	while Config.ROUND_SECONDS - t - CARD >= seconds + Config.FLING_RETURN_SECONDS do
+	while count < Config.ROUND_GAMES
+		and Config.ROUND_MAX_SECONDS - t - Config.NEXT_VOTE_SECONDS - CARD >= seconds + Config.FLING_RETURN_SECONDS do
 		count += 1
 		t += CARD + seconds
 	end
@@ -473,12 +498,12 @@ do
 	local list = finish(since)
 	local final, result = phaseAt(list, "Final"), phaseAt(list, "Result")
 	local runs = Scripted.runs
-	check("7b missions run until the next would not fit the time left", #runs == expectedRuns(seconds) and #runs >= 2,
+	check("7b ROUND_GAMES missions run (none would miss the time cap)", #runs == expectedRuns(seconds)
+		and #runs == Config.ROUND_GAMES,
 		string.format("%d runs (expected %d)", #runs, expectedRuns(seconds)))
 	local lastEnd = (runs[#runs] or play) + seconds - play -- (each start drifts by a scheduler tick, so measure the last one)
-	check("7c the final starts as soon as no game fits the time left (not later than the 8 minutes)", final ~= nil
-		and math.abs(final.at - play - lastEnd) < 0.5 and Config.ROUND_SECONDS - lastEnd - CARD < seconds + Config.FLING_RETURN_SECONDS
-		and final.at - play <= Config.ROUND_SECONDS,
+	check("7c the final starts as soon as the last game is over", final ~= nil
+		and math.abs(final.at - play - lastEnd) < 0.5 and final.at - play <= Config.ROUND_MAX_SECONDS,
 		final and string.format("final at +%.1f (last game over at +%.1f)", final.at - play, lastEnd))
 	local questions = math.ceil(Config.FINAL_MAX_SECONDS / seconds)
 	check("7d final cap -> the survivors share the win; a question begun before the cap is finished", result ~= nil and final ~= nil
@@ -554,6 +579,47 @@ do
 		and final.at - third.at < Config.FLING_RETURN_SECONDS + 1 and final.at - play < 200)
 	local result = phaseAt(list, "Result")
 	check("7q ...and its winner wins the round", result ~= nil and result.message == string.format(Config.TEXT.WINNER, ps[2].DisplayName))
+	local briefs = {}
+	for _, m in sent("Mission", since) do
+		if m.payload.kind == "brief" then
+			table.insert(briefs, m.payload)
+		end
+	end
+	local names = { ps[1].DisplayName, ps[2].DisplayName }
+	table.sort(names)
+	check("7q2 the briefings (owner 2026-10-24): each game's number and name; with no vote (one game to choose from) the"
+		.. " briefing tells what the last game did", briefs[1] ~= nil and briefs[1].game == 1 and briefs[1].recap == ""
+		and briefs[1].title == Scripted.title and briefs[1].games == Config.ROUND_GAMES and briefs[2] ~= nil
+		and briefs[2].game == 2 and briefs[2].recap == string.format(Config.TEXT.RECAP_LOST, table.concat(names, ", ")))
+end
+
+-- 7C1: a game with too few players to start (it says "nothing to play") is not one of the round's games.
+do
+	local ps = newPlayers(3)
+	local since = now
+	Scripted.noPlay = 2
+	Scripted.skipped = 0
+	begin(ps, 10, nil, nil)
+	finish(since)
+	check("7q4 a game that had nothing to play does not count: ROUND_GAMES games are played anyway",
+		Scripted.skipped == 2 and #Scripted.runs == Config.ROUND_GAMES, string.format("%d skipped, %d runs", Scripted.skipped, #Scripted.runs))
+	Scripted.noPlay = 0
+end
+
+-- 7C2: alone (Studio): the last life lost -> no "to the final" (there is none: one player), they win with no lives left.
+do
+	local ps = newPlayers(1)
+	local since = now
+	begin(ps, 10, function(run)
+		return if run <= 3 then { ps[1] } else {}
+	end, nil)
+	local list = finish(since)
+	local events = lifeLost(since, "fail")
+	local result = phaseAt(list, "Result")
+	check("7q3 alone: the third life lost does not say 'to the final'; no final, the player wins with no lives left",
+		#events == 3 and events[3].payload.final == false and events[3].payload.players[1].lives == 0
+		and phaseAt(list, "Final") == nil and result ~= nil
+		and result.message == string.format(Config.TEXT.WINNER, ps[1].DisplayName))
 end
 
 -- 7D: one of two loses all lives -> the other wins without a final, once the flight is over.
@@ -701,6 +767,66 @@ for _, line in warnings do
 	end
 end
 check("7zf no round crashed; the only mission error is 7H's", crashed == 0 and #warnings == 1, table.concat(warnings, " | "))
+
+-- 7V: no presenter and two games that may run -> between games the alive players vote (owner 2026-10-24): the vote
+-- screen with the recap, the most votes win, then that game's briefing and the game.
+do
+	local rouletteRuns = 0
+	rouletteStub.available = function(final) return not final end
+	local ps = nil :: any
+	rouletteStub.run = function(ctx)
+		rouletteRuns += 1
+		ctx.wait(1)
+		if rouletteRuns == 1 then
+			ctx.fail({ ps[1] }, "result")
+		end
+	end
+	bombStub.available = function(final) return not final end
+	bombStub.run = function(ctx) ctx.wait(1) end
+	ps = newPlayers(3)
+	local since = now
+	local play = begin(ps, 10, nil, nil)
+	at(play + 0.5)
+	local vote = nil
+	for _, m in sent("Mission", since) do
+		if m.payload.kind == "nextVote" then
+			vote = m.payload
+		end
+	end
+	local rouletteAt = vote and table.find(vote.choices, "roulette")
+	if vote and rouletteAt then
+		for _, p in ps do
+			NetStub.listeners.MissionAnswer(p, vote.id, rouletteAt)
+		end
+	end
+	at(now + 0.5)
+	local brief = nil
+	for _, m in sent("Mission", since) do
+		if m.payload.kind == "brief" then
+			brief = m.payload
+		end
+	end
+	at(now + Config.BRIEF_SECONDS + 0.5)
+	check("7va a vote among three games: the choices (no recap before the first); once all voted the winner is briefed"
+		.. " and played", vote ~= nil and vote.recap == "" and #vote.choices == 3 and rouletteAt ~= nil
+		and brief ~= nil and brief.title == "roulette" and rouletteRuns == 1 and #Scripted.runs == 0
+		and Match.message ~= Config.TEXT.NEXT_VOTE)
+	at(now + 1 + Config.FLING_RETURN_SECONDS + 1)
+	local second = nil
+	for _, m in sent("Mission", since) do
+		if m.payload.kind == "nextVote" then
+			second = m.payload
+		end
+	end
+	check("7vb the next vote tells what the last game did (who lost a life), and the game just played is not offered",
+		second ~= nil and second ~= vote and second.recap == string.format(Config.TEXT.RECAP_LOST, ps[1].DisplayName)
+		and table.find(second.choices, "roulette") == nil and #second.choices == 2)
+	bombStub.available = function(_final) return false end
+	rouletteStub.available = function(_final) return false end
+	NetStub.listeners.DevFling(ps[2], "out")
+	NetStub.listeners.DevFling(ps[3], "out")
+	finish(since)
+end
 
 ---------------------------------------------------------------- 8. joining by chat (ChatService through RoundService)
 do
@@ -998,9 +1124,9 @@ do
 	local closedEarly = closes()
 	local pickedAt = now
 	pickMission(ps[1], "scripted")
-	at(now + 1)
-	check("10d a pick by anyone else or of something not offered is ignored; the presenter's pick starts at once",
-		#stillOpen == 1 and closedEarly == 0 and #Scripted.runs == 1 and Scripted.runs[1] - pickedAt < 0.3
+	at(now + 1 + CARD)
+	check("10d a pick by anyone else or of something not offered is ignored; the presenter's pick starts after its briefing",
+		#stillOpen == 1 and closedEarly == 0 and #Scripted.runs == 1 and math.abs(Scripted.runs[1] - pickedAt - CARD) < 0.3
 		and noticesWith(Config.TEXT.PICK_AUTO, since) == 0)
 	local before = #sent("Sound", since)
 	pressSound(ps[1], 1)
@@ -1012,7 +1138,7 @@ do
 	check("10e sound buttons: the presenter only, each button once per PRESENTER_SOUND_COOLDOWN", #sounds == before + 2
 		and sounds[#sounds - 1].payload.index == 1 and sounds[#sounds].payload.index == 2)
 	-- No more picks: the system picks; PRESENTER_MISSES misses in a row and nobody else volunteers -> the system.
-	local cycle = Config.PRESENTER_PICK_SECONDS + Scripted.expectedSeconds
+	local cycle = Config.PRESENTER_PICK_SECONDS + CARD + Scripted.expectedSeconds
 	advanceUntil(function() return Match.presenter == nil end, cycle * (Config.PRESENTER_MISSES + 1))
 	check("10f a missed pick is made by the system (notice); PRESENTER_MISSES in a row end the presenting",
 		noticesWith(Config.TEXT.PICK_AUTO, since) == Config.PRESENTER_MISSES and Match.presenter == nil
@@ -1256,7 +1382,7 @@ do
 		end
 		return nil
 	end
-	local missionAt = play + Config.PRESENTER_PICK_SECONDS + Scripted.expectedSeconds -- (the pick menu runs out first)
+	local missionAt = play + Config.PRESENTER_PICK_SECONDS + CARD + Scripted.expectedSeconds -- (the pick menu runs out first)
 	at(missionAt + 0.5)
 	local menu = judgeMenu(since)
 	local target = ps[3]
@@ -1268,7 +1394,7 @@ do
 		and menu.to == ps[1] and Match.participants[target].lives == Config.LIVES - 1 and Scripted.judged[1] == tostring(target.UserId))
 	-- The next mission: the same player again -> public servers allow SUBJECTIVE_FLINGS per player per round.
 	local since2 = now
-	at(missionAt + 0.5 + Config.FLING_RETURN_SECONDS + Config.PRESENTER_PICK_SECONDS + Scripted.expectedSeconds + 1)
+	at(missionAt + 0.5 + Config.FLING_RETURN_SECONDS + Config.PRESENTER_PICK_SECONDS + CARD + Scripted.expectedSeconds + 1)
 	local menu2 = judgeMenu(since2)
 	if menu2 then
 		pickMission(ps[1], tostring(target.UserId))
@@ -1343,7 +1469,7 @@ local function pickTalk(presenter, since)
 	if menu then
 		NetStub.listeners.PresenterPick(presenter, "bannedTalk")
 	end
-	at(now + 0.3)
+	at(now + 0.3 + CARD) -- (its briefing first)
 	return menu
 end
 local function noticesTo(player, since)
@@ -1888,7 +2014,7 @@ do
 	local pickMission = NetStub.listeners.PresenterPick
 	at(play + 0.3)
 	pickMission(ps[1], "scripted")
-	local missionAt = now
+	local missionAt = now + CARD -- (after its briefing)
 	at(missionAt + Scripted.expectedSeconds + 0.5) -- the bells of ps[2] and ps[3] are open now
 	local openMsg = lastSent("BellOpen", missionAt)
 	ring(ps[4]) -- not open to them
@@ -1932,7 +2058,7 @@ do
 	at(now + Config.FLING_RETURN_SECONDS + 1)
 	local menuSeen = lastSent("PresenterMenu", now - 30, ps[1], "pick")
 	pickMission(ps[1], "scripted")
-	local started = now
+	local started = now + CARD -- (after its briefing)
 	at(started + Scripted.expectedSeconds + 0.5)
 	leave(ps[2], { ps[1], ps[3], ps[4] })
 	at(now + 1)

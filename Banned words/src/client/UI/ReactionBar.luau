@@ -23,16 +23,14 @@ function ReactionBar.build(onPick: (number) -> ())
 	layout.Parent = bar
 	for index, emoji in Config.REACTIONS do
 		local b = Instance.new("TextButton")
-		b.Size = UDim2.new(0, 56, 0, 56)
+		b.Size = UDim2.new(0, 44, 0, 44)
 		b.BackgroundColor3 = Style.PANEL
-		b.BackgroundTransparency = 0.25
+		b.BackgroundTransparency = Style.PANEL_ALPHA
 		b.Text = emoji
 		b.TextScaled = true
 		b.FontFace = Style.BOLD
 		b.TextColor3 = Style.WHITE
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(1, 0)
-		corner.Parent = b
+		Style.round(b, 22)
 		b.Activated:Connect(function()
 			onPick(index)
 		end)

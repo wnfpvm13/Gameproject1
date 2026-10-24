@@ -1,9 +1,10 @@
 --!strict
 -- Round flow (V3, docs/DESIGN_V3.md §2; the only module that wires the services together):
---   Lobby -> Countdown -> Assign (chairs, lives) -> Play (ROUND_SECONDS: the next game (the presenter picks, else at
---   random) -> the game -> launches -> ...; no free talk since the minigame overhaul, bundle 6a) -> Final (sudden
---   death) -> Result -> Countdown (quick rematch) ...
--- Rules live in the services: lives in LifeService, the time budget and the final trigger in Timeline, missions in
+--   Lobby -> Countdown -> Assign (chairs, lives) -> Play (ROUND_GAMES games: what the last one did + the next one
+--   (the presenter picks, else the players vote) -> its briefing -> the game -> launches -> ...; no free talk since
+--   the minigame overhaul, bundle 6a; games counted since the friend beta, 2026-10-24) -> Final (sudden death) ->
+--   Result -> Countdown (quick rematch) ...
+-- Rules live in the services: lives in LifeService, the game count, time cap and final trigger in Timeline, missions in
 -- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
 -- join by chat in ChatService, the presenter in PresenterService, banned words in WordService, score in Scores.
 -- Bundle 6a: banned words exist only during the banned-word talk (a minigame, played while speech judging is on): its
@@ -99,8 +100,20 @@ end
 
 local noteDecision: () -> () -- (below mainDecided) in the talk, the moment the main game is decided ends speech judging
 
+-- The game being played: who lost a life in it and who went out (the recap before the next one, owner 2026-10-24).
+local gameLost: { [Player]: boolean } = {}
+local gameOut: { [Player]: boolean } = {}
+
 local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: boolean)
 	local list = {}
+	if Match.phase == "Play" and reason ~= "left" then
+		for _, outcome in outcomes do
+			gameLost[outcome.player] = true
+			if outcome.out then
+				gameOut[outcome.player] = true
+			end
+		end
+	end
 	for _, outcome in outcomes do
 		table.insert(list, {
 			userId = outcome.player.UserId,
@@ -139,7 +152,8 @@ local function failPlayers(players: { Player }, eventId: string, reason: Reason,
 	if everyone then
 		toFinal = true
 	end
-	announce(outcomes, reason, everyone)
+	-- ("to the final" only when there is one: a single player left wins without it)
+	announce(outcomes, reason, everyone and #outcomes > 1)
 end
 
 -- Flights in progress land and come back first (the next step, the final or the result waits for them). Returns
@@ -384,59 +398,92 @@ local function waitPhase(shouldStop: (() -> boolean)?)
 	end
 end
 
--- Main game: missions back to back until the time is up, the final is due or the round is decided (no free talk,
--- docs/DESIGN_V3.md §2). Between games the presenter picks the next one within PRESENTER_PICK_SECONDS (else at
--- random, with a notice); without a presenter a random one is named for NEXT_GAME_CARD_SECONDS first. A mission
--- starts only when nobody is in the air and only if it fits the time left; when none fits, the final starts at once.
--- One running when the time is up is played to its end.
+-- What the last game did, for the screens before the next one: who lost a life, who is out.
+local function recapText(): string
+	local lost, out = {}, {}
+	for player in gameLost do
+		table.insert(if gameOut[player] then out else lost, player.DisplayName)
+	end
+	table.sort(lost)
+	table.sort(out)
+	local parts = {}
+	if #lost > 0 then
+		table.insert(parts, string.format(Config.TEXT.RECAP_LOST, table.concat(lost, ", ")))
+	end
+	if #out > 0 then
+		table.insert(parts, string.format(Config.TEXT.RECAP_OUT, table.concat(out, ", ")))
+	end
+	return if #parts > 0 then table.concat(parts, " · ") else Config.TEXT.RECAP_NONE
+end
+
+-- Main game: ROUND_GAMES missions back to back (owner 2026-10-24; no free talk, docs/DESIGN_V3.md §2) until the final
+-- is due or the round is decided. Between games, once nobody is in the air, everyone sees what the last game did
+-- while the next one is chosen: the presenter picks within PRESENTER_PICK_SECONDS (else at random, with a notice), or
+-- without a presenter the alive players vote among a few (MissionRunner.vote); then its briefing (BRIEF_SECONDS). A
+-- mission starts only if it fits the time cap; when none fits, the final starts at once.
 local function playMain(myRound: number)
 	-- Players who left during the assignment do not count as having started (§2: "4명 이상으로 시작한 판").
 	Timeline.begin(#Match.aliveList())
-	Match.setPhase("Play", Config.ROUND_SECONDS, Config.TEXT.PLAY_START)
+	Match.game = 0
+	Match.setPhase("Play", 0, Config.TEXT.PLAY_START) -- (no clock: the status board counts the games)
 	local function over(): boolean
 		return Match.roundId ~= myRound or mainSettled()
 			or (Timeline.finalDue(#Match.aliveList()) and RescueService.pending() == 0) -- (the final waits for rescues too)
 	end
 	local lastId: string? = nil
+	local recap = "" -- (nothing before the first game)
 	while true do
 		local landed = waitFlights()
 		if over() then
 			return
 		end
 		if landed then
-			local picked: string? = nil
-			local missed = false
-			-- (a presenter being replaced after missed picks no longer counts: the system picks meanwhile)
+			local mission: MissionRunner.Mission? = nil
+			-- (a presenter being replaced after missed picks no longer counts: the players vote meanwhile)
 			local presenting = Match.presenter ~= nil and not Match.presenterPending
 			if presenting then
-				local options = MissionRunner.options(Timeline.left() - Config.PRESENTER_PICK_SECONDS, #Match.aliveList())
+				local options = MissionRunner.options(Timeline.left() - Config.PRESENTER_PICK_SECONDS - Config.BRIEF_SECONDS,
+					#Match.aliveList())
 				if #options == 0 then
 					return -- nothing fits any more: the final
 				end
 				Match.setMessage(Config.TEXT.PICKING)
-				picked, missed = PresenterService.ask("pick", options, Config.PRESENTER_PICK_SECONDS, over)
+				MissionRunner.showPicking(recap)
+				local picked, missed = PresenterService.ask("pick", options, Config.PRESENTER_PICK_SECONDS, over)
 				if over() then
 					return
 				end
 				if missed then
 					Net.notice(Config.TEXT.PICK_AUTO)
 				end
+				mission = MissionRunner.choose(Timeline.left() - Config.BRIEF_SECONDS, #Match.aliveList(),
+					Match.presenter ~= nil and not Match.presenterPending, picked, rng, lastId)
+			else
+				-- (the vote's seconds are counted before choosing, so the winner still fits once it is over; with one game
+				-- or none to choose from there is no vote, and its seconds are not counted)
+				local ballot = MissionRunner.ballot(Timeline.left() - Config.NEXT_VOTE_SECONDS - Config.BRIEF_SECONDS,
+					#Match.aliveList(), rng, lastId)
+				if #ballot > 1 then
+					Match.setMessage(Config.TEXT.NEXT_VOTE)
+					mission = MissionRunner.vote(ballot, recap, Match.aliveList(), rng, over)
+					if over() then
+						return
+					end
+					recap = "" -- (shown on the vote screen)
+				else
+					mission = MissionRunner.choose(Timeline.left() - Config.BRIEF_SECONDS, #Match.aliveList(), false, nil,
+						rng, lastId)
+				end
 			end
-			-- No card after the presenter's pick or their missed pick (its notice says it); otherwise (no presenter, or
-			-- they changed meanwhile) the card names the game first. Its seconds are counted before choosing, so the
-			-- mission still fits once it is over.
-			local card = if picked or missed then 0 else Config.NEXT_GAME_CARD_SECONDS
-			local mission = MissionRunner.choose(Timeline.left() - card, #Match.aliveList(),
-				Match.presenter ~= nil and not Match.presenterPending, picked, rng, lastId)
+			if presenting then
+				recap = "" -- (shown on the picking screen)
+			end
 			if not mission then
 				return -- nothing fits any more: the final
 			end
+			Match.game = Config.ROUND_GAMES - Timeline.gamesLeft() + 1
 			Match.setMessage(string.format(Config.TEXT.NEXT_GAME, mission.title))
-			local cardUntil = os.clock() + card
-			while os.clock() < cardUntil and not over() do
-				task.wait(0.1)
-			end
-			if over() then
+			if not MissionRunner.brief(mission, Match.game, Config.ROUND_GAMES, recap, over) then
 				return
 			end
 			if SeatService.anyFlying() then
@@ -445,12 +492,18 @@ local function playMain(myRound: number)
 			runs += 1
 			local run = runs
 			lastId = mission.id
-			MissionRunner.run(mission, missionCtx(myRound, false, function(players, key, subjective)
+			table.clear(gameLost)
+			table.clear(gameOut)
+			local _, didPlay = MissionRunner.run(mission, missionCtx(myRound, false, function(players, key, subjective)
 				failPlayers(players, "m" .. run .. ":" .. key, "fail", if subjective then "subjective" else "objective")
 			end, mainSettled))
+			if didPlay then
+				Timeline.gameStarted() -- (a game with too few players to start is not one of the round's games)
+			end
 			setFloor(nil) -- (whatever the mission did: the bells close, everyone has their voice back)
 			BellService.close()
 			settleTalk() -- (a banned-word talk ends with its settle stage, also when it was cancelled or broke)
+			recap = recapText()
 		end
 	end
 end
@@ -563,6 +616,9 @@ local function cleanup()
 	earsPending = 0
 	heldFails = {}
 	holdingLate = false
+	table.clear(gameLost)
+	table.clear(gameOut)
+	MissionRunner.clearScreen() -- (a between-games screen left by a round that broke)
 	-- Chat participants whose voice got ready during the round join by voice from now on.
 	for player in Match.chatJoin do
 		if Match.ready[player] then
@@ -627,6 +683,7 @@ local function runRound()
 	waitPhase()
 
 	playMain(myRound)
+	MissionRunner.clearScreen() -- (a between-games screen when the main game ended during it)
 	waitFlights()
 	playFinal(myRound)
 	waitFlights()

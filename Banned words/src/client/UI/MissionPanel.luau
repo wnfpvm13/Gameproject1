@@ -1,5 +1,6 @@
 --!strict
--- The mission card in the middle of the screen (docs/DESIGN_V3.md §5; bundle 4a):
+-- The mission card at the bottom of the screen (docs/DESIGN_V3.md §5; bundle 4a; owner 2026-10-24: low, so the chairs
+-- and the pool behind them stay in view):
 --   - quiz: the question, four answer buttons (only for players who may answer) and the seconds left; afterwards the
 --     right answer turns green and my wrong pick red;
 --   - roulette (owner 2026-10-23: a 2D wheel): the names on a ring and a pointer that spins and slows down onto the
@@ -14,6 +15,8 @@
 --   - bundle 6c: crocodile teeth (whose turn and ten teeth, pressable on my turn, pressed ones shut; the biting one at
 --     the end), the bomb (who holds it, the question, two answers for the holder), nunchi (the rule and the seconds
 --     left; at the end the order the bells came in);
+--   - between games (owner 2026-10-24): what the last game did with the vote for the next one (or "the presenter is
+--     picking"), then the next game's briefing: its name, its one-line rule, 3-2-1;
 --   - bundle 6d: the balance game ("A vs B", who argues, then two picks that may change until the time is up; the
 --     counts), red light (the light big on a green or red card, my steps), the liar (the category, the word — or "you
 --     are the liar" — on my own screen, whose clue it is, the vote, the liar's guess among four, who it was).
@@ -77,22 +80,27 @@ local state = {
 	startsAt = 0,
 	spinSeconds = 1,
 	topicLine = "", -- the banned-word talk's topic line (the seconds are added every frame)
+	slim = false, -- the talk's slim line at the top (else the card sits on the bottom row)
+	hidden = false, -- stepped aside for a launch (setHidden)
+	shown = false, -- what the screen asks for, before `hidden`
 }
-local CARD_POSITION = UDim2.fromScale(0.5, 0.56) -- a little low: the status board sits above
+local CARD_GAP = 8 -- pixels between the card and the bottom row (the bell button, the reactions), which it sits on
 local TALK_POSITION = UDim2.new(0.5, 0, 0, Style.row(4)) -- the talk's slim line: under the status board and the
 -- getting-ready lines (rows 1-3), above the chair row
 
+-- Where the card goes: the talk's slim line under the status board, else on top of the bottom row (its height changes
+-- with the bell button and the reactions).
+local function place()
+	if state.slim then
+		card.Position = TALK_POSITION
+	else
+		card.Position = UDim2.new(0.5, 0, 1, -(Style.bottomStack().AbsoluteSize.Y + 12 + CARD_GAP))
+	end
+end
+
 local function answerButton(index: number): TextButton
-	local b = Instance.new("TextButton")
-	b.BackgroundColor3 = Style.PANEL
-	b.BackgroundTransparency = 0.1
-	b.FontFace = Style.BOLD
+	local b = Style.button(Style.BOLD, 22)
 	b.TextScaled = true
-	b.TextColor3 = Style.WHITE
-	b.AutoButtonColor = true
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = b
 	local pad = Instance.new("UIPadding")
 	pad.PaddingLeft = UDim.new(0, 8)
 	pad.PaddingRight = UDim.new(0, 8)
@@ -107,13 +115,13 @@ local function answerButton(index: number): TextButton
 		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt -- (not while the question shows first)
 		local mine = state.kind == "vote" and state.voteIds[index] == state.myId
 		local answering = state.kind == "quiz" or state.kind == "vote" or state.kind == "bomb" or state.kind == "balance"
-			or state.kind == "liarGuess"
+			or state.kind == "liarGuess" or state.kind == "nextVote"
 		local repick = state.kind == "balance" -- (a balance pick may change until the time is up)
 		if answering and state.canAnswer and open and (repick or not state.myPick) and not mine then
 			state.myPick = index
 			onAnswer(state.id, index)
 			for i, other in buttons do
-				other.BackgroundColor3 = if i == index then Style.AMBER else Style.PANEL
+				other.BackgroundColor3 = if i == index then Style.AMBER else Style.BUTTON
 				other.TextColor3 = if i == index then Style.PANEL elseif repick then Style.WHITE else Style.GREY
 				other.AutoButtonColor = repick -- (answered: nothing else can be pressed, except a balance pick)
 			end
@@ -126,10 +134,9 @@ end
 -- onPick(questionId, choice): I pressed an answer button.
 function MissionPanel.build(onPick: (number, number) -> ())
 	onAnswer = onPick
-	card = Style.panel(Style.gui(), Style.PANEL, 0.2, 16)
+	card = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 16)
 	card.Name = "MissionCard"
 	card.AnchorPoint = Vector2.new(0.5, 0.5)
-	card.Position = CARD_POSITION
 	card.Size = UDim2.fromScale(0.5, 0)
 	card.AutomaticSize = Enum.AutomaticSize.Y
 	card.Visible = false
@@ -148,7 +155,7 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	layout.Padding = UDim.new(0, 10)
 	layout.Parent = card
 
-	timer = Style.label(card, Style.BOLD, 20, Style.AMBER)
+	timer = Style.label(card, Style.BOLD, 20, Style.WHITE)
 	timer.Size = UDim2.new(1, 0, 0, 22)
 	timer.LayoutOrder = 0
 	title = Style.label(card, Style.BOLD, 26, Style.WHITE)
@@ -165,7 +172,7 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	answerGrid.LayoutOrder = 3
 	answerGrid.Parent = card
 	answerLayout = Instance.new("UIGridLayout")
-	answerLayout.CellSize = UDim2.new(0.5, -4, 0, 52)
+	answerLayout.CellSize = UDim2.new(0.5, -4, 0, 44)
 	answerLayout.CellPadding = UDim2.fromOffset(8, 8)
 	answerLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	answerLayout.Parent = answerGrid
@@ -237,10 +244,10 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	disc.AnchorPoint = Vector2.new(0.5, 0.5)
 	disc.Position = UDim2.fromScale(0.5, 0.5)
 	disc.Size = UDim2.fromOffset(2 * RING_RADIUS + 44, 2 * RING_RADIUS + 44)
-	local rim = Instance.new("UIStroke")
+	local rim = disc:FindFirstChildOfClass("UIStroke") :: UIStroke -- (Style.panel's edge, made the amber rim)
 	rim.Color = Style.AMBER
+	rim.Transparency = 0
 	rim.Thickness = 4
-	rim.Parent = disc
 	pointer = Instance.new("Frame")
 	pointer.BackgroundTransparency = 1
 	pointer.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -315,7 +322,7 @@ end
 -- Colours one answer button: open (can be pressed), mine (my pick), or neither.
 local function paint(b: TextButton, open: boolean, picked: boolean)
 	b.AutoButtonColor = open
-	b.BackgroundColor3 = if picked then Style.AMBER else Style.PANEL
+	b.BackgroundColor3 = if picked then Style.AMBER else Style.BUTTON
 	b.TextColor3 = if picked then Style.PANEL elseif open then Style.WHITE else Style.GREY
 end
 
@@ -325,7 +332,8 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local kind = payload.kind
 	local quizLike = kind == "quiz" or kind == "quizResult"
 	local newQuestion = if quizLike then payload.question ~= state.question
-		elseif kind == "vote" or kind == "balance" or kind == "liarGuess" then payload.id ~= nil and payload.id ~= state.id
+		elseif kind == "vote" or kind == "balance" or kind == "liarGuess" or kind == "nextVote" then
+			payload.id ~= nil and payload.id ~= state.id
 		else true
 	if newQuestion then
 		state.myPick = nil -- a new question (a quiz comes twice: before and once the buttons work), a new vote, or none
@@ -340,24 +348,30 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local games = kind == "croc" or kind == "crocResult" or kind == "bomb" or kind == "bombResult" or kind == "nunchi"
 		or kind == "nunchiResult" or kind == "balance" or kind == "balanceResult" or kind == "redLight"
 		or kind == "redLightResult" or kind == "liar" or kind == "liarGuess" or kind == "liarResult"
-	card.Visible = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
-		or kind == "talk" or bells or games
+	local between = kind == "nextVote" or kind == "nextPick" or kind == "brief"
+	state.shown = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
+		or kind == "talk" or bells or games or between
+	card.Visible = state.shown and not state.hidden
 	answerGrid.Visible = quizLike or kind == "vote" or kind == "bomb" or (kind == "balance" and payload.stage == "pick")
-		or kind == "liarGuess"
+		or kind == "liarGuess" or kind == "nextVote"
 	teethGrid.Visible = kind == "croc" or kind == "crocResult"
 	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
-		or games
+		or games or between
 	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc" or kind == "bomb"
 		or kind == "nunchi" or kind == "balance" or kind == "redLight" or kind == "liar" or kind == "liarGuess"
+		or kind == "nextVote" or kind == "brief"
 	note.Visible = kind == "oneWord" or kind == "bellQuiz" or kind == "bomb" or kind == "nunchi" or kind == "nunchiResult"
+		or between
 		or kind == "balance" or kind == "balanceResult" or kind == "redLight" or kind == "redLightResult" or kind == "liar"
 	card.BackgroundColor3 = if kind == "redLight" then (if payload.light == "red" then RED_LIGHT else GREEN_LIGHT)
 		else Style.PANEL
 	local slim = kind == "talk"
-	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 0.5)
-	card.Position = if slim then TALK_POSITION else CARD_POSITION
-	title.TextSize = if slim then 22 else 26
-	title.Size = UDim2.new(1, 0, 0, if slim then 30 else 64)
+	card.BackgroundTransparency = if kind == "redLight" then 0.15 else Style.PANEL_ALPHA
+	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 1)
+	state.slim = slim
+	place()
+	title.TextSize = if slim then 20 else 24
+	title.Size = UDim2.new(1, 0, 0, if slim then 28 else 52)
 	swapButton.Visible = false
 	wheel.Visible = kind == "roulette" and #names > 2
 	coin.Visible = kind == "roulette" and #names <= 2
@@ -371,12 +385,26 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			if kind == "quizResult" then
 				local right = i == payload.answer
 				b.AutoButtonColor = false
-				b.BackgroundColor3 = if right then Style.GREEN elseif i == state.myPick then Style.RED else Style.PANEL
+				b.BackgroundColor3 = if right then Style.GREEN elseif i == state.myPick then Style.RED else Style.BUTTON
 				b.TextColor3 = if right or i == state.myPick then Style.PANEL else Style.GREY
 			else
 				paint(b, open, i == state.myPick)
 			end
 		end
+	elseif kind == "nextVote" or kind == "nextPick" then
+		title.Text = if kind == "nextVote" then TEXT.NEXT_VOTE else TEXT.PICKING
+		note.Text = payload.recap or "" -- (what the last game did; nothing before the first)
+		note.Visible = note.Text ~= ""
+		local choices = if kind == "nextVote" then payload.choices or {} else {}
+		for i, b in buttons do
+			b.Visible = choices[i] ~= nil
+			b.Text = choices[i] or ""
+			paint(b, canAnswer and not state.myPick, i == state.myPick)
+		end
+	elseif kind == "brief" then
+		title.Text = string.format("%s · %s", string.format(TEXT.GAME_COUNT, payload.game or 1, payload.games or 1),
+			payload.title or "")
+		note.Text = if (payload.recap or "") ~= "" then payload.recap .. "  ·  " .. (payload.rule or "") else payload.rule or ""
 	elseif kind == "vote" then
 		local liarVote = payload.prompt == "liar"
 		title.Text = if liarVote then TEXT.LIAR_VOTE else TEXT.JUDGE_VOTE
@@ -513,14 +541,19 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			setRing(names)
 		end
 	end
-	local shownButtons = 0
+	local shownButtons, longest = 0, 0
 	for _, b in buttons do
 		if b.Visible then
 			shownButtons += 1
+			longest = math.max(longest, utf8.len(b.Text) or #b.Text)
 		end
 	end
-	-- (a big vote: three smaller columns, so twelve still fit a phone)
-	answerLayout.CellSize = if shownButtons > 6 then UDim2.new(1 / 3, -6, 0, 44) else UDim2.new(0.5, -4, 0, 52)
+	-- (four short answers: one row, so the card stays low; a big vote: three smaller columns, so twelve still fit a
+	-- phone)
+	answerLayout.CellSize = if shownButtons > 6 then UDim2.new(1 / 3, -6, 0, 40)
+		elseif shownButtons == 4 and longest <= 7 then UDim2.new(0.25, -6, 0, 44)
+		elseif shownButtons == 3 then UDim2.new(1 / 3, -6, 0, 44) -- (the next-game vote)
+		else UDim2.new(0.5, -4, 0, 44)
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end
 
@@ -533,8 +566,15 @@ function MissionPanel.bellRang()
 end
 
 -- Every frame (server time): the quiz countdown, the spinning pointer or the flipping coin, and the card's size.
+-- Steps the card aside (a launch flying, owner 2026-10-24) without forgetting what it shows or what I picked.
+function MissionPanel.setHidden(hidden: boolean)
+	state.hidden = hidden
+	card.Visible = state.shown and not hidden
+end
+
 function MissionPanel.tick(now: number)
 	if card.Visible then
+		place()
 		-- Keep the card within 80% of the screen height and 90% of its width (a big wheel on a small phone screen).
 		local camera = workspace.CurrentCamera
 		local scale = math.max(cardScale.Scale, 0.01)
@@ -550,7 +590,8 @@ function MissionPanel.tick(now: number)
 		title.Text = string.format("%s · %d", state.topicLine, math.max(0, math.ceil(state.endsAt - now)))
 	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" or state.kind == "oneWordBell"
 		or state.kind == "bellQuiz" or state.kind == "croc" or state.kind == "bomb" or state.kind == "nunchi"
-		or state.kind == "balance" or state.kind == "redLight" or state.kind == "liar" or state.kind == "liarGuess" then
+		or state.kind == "balance" or state.kind == "redLight" or state.kind == "liar" or state.kind == "liarGuess"
+		or state.kind == "nextVote" or state.kind == "brief" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""

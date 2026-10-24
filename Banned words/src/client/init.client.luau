@@ -269,22 +269,34 @@ remotes.Sound.OnClientEvent:Connect(function(info)
 end)
 
 -- The mission card (quiz, roulette, a word to everyone, votes). My buttons work while I am alive and not flying (it
--- is shown again when my flight starts and ends).
+-- is shown again when my flight starts and ends). It steps aside so the blast is seen (owner 2026-10-24): while I am
+-- the one flying (until I am back), and while someone else's launch flies over a screen with nothing to do on it (a
+-- result, the roulette, a vote) until the next screen comes.
 local lastMission: { [string]: any } = { kind = "none" }
+local othersLaunchHideUntil = 0
+local function passiveScreen(payload: { [string]: any }): boolean
+	local kind = payload.kind
+	-- (a vote's screen stays while its result launches someone: a launch on it comes only once the vote is over, also
+	-- when everyone voted early)
+	return kind == nil or kind == "none" or kind == "roulette" or kind == "oneWordJudge" or kind == "brief"
+		or kind == "nextPick" or kind == "vote" or string.sub(kind, -6) == "Result"
+end
 local function showMission()
 	local payload = lastMission
+	MissionPanel.setHidden(os.clock() < myFlightEndsAt or os.clock() < othersLaunchHideUntil)
 	local names = {}
 	for _, userId in payload.ids or {} do
 		table.insert(names, nameOf(userId))
 	end
 	local canAnswer = State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
-	if payload.kind == "oneWordJudge" and State.mePresenting() then
-		payload = { kind = "none" } -- the presenter judges in their own menu ("the presenter is choosing" is for the others)
+	if (payload.kind == "oneWordJudge" or payload.kind == "nextPick") and State.mePresenting() then
+		payload = { kind = "none" } -- the presenter picks in their own menu ("the presenter is choosing" is for the others)
 	end
 	MissionPanel.show(payload, canAnswer, names, State.myId())
 end
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	lastMission = payload
+	othersLaunchHideUntil = 0
 	showMission()
 end)
 
@@ -339,7 +351,9 @@ remotes.LifeLost.OnClientEvent:Connect(function(info)
 		Billboards.hit(entry.userId, entry.lives, State.round.maxLives, entry.out)
 		anyOut = anyOut or entry.out
 		if entry.userId == State.myId() and info.reason ~= "left" then
-			table.insert(lines, if entry.out then Config.TEXT.MY_OUT else string.format(Config.TEXT.MY_LIFE_LOST, entry.lives))
+			table.insert(lines, if entry.out then Config.TEXT.MY_OUT
+				elseif entry.lives <= 0 then Config.TEXT.MY_NO_LIVES
+				else string.format(Config.TEXT.MY_LIFE_LOST, entry.lives))
 		elseif entry.out then
 			table.insert(out, entry.name)
 		else
@@ -392,6 +406,11 @@ end)
 -- A flying chair fired (docs/DESIGN_V3.md §10): everyone sees the flap snap back and hears the bang.
 remotes.Fling.OnClientEvent:Connect(function(info)
 	Fx.fling(info)
+	if info.userId ~= State.myId() and passiveScreen(lastMission) then
+		othersLaunchHideUntil = os.clock() + Config.FLING_RETURN_SECONDS
+		showMission()
+		task.delay(Config.FLING_RETURN_SECONDS + 0.05, showMission)
+	end
 	if info.userId == State.myId() then
 		myFlightEndsAt = os.clock() + Config.FLING_RETURN_SECONDS + 0.5
 		refresh()
@@ -454,7 +473,11 @@ Players.PlayerAdded:Connect(watchCharacters)
 
 RunService.Heartbeat:Connect(function()
 	local remaining = State.round.endsAt - workspace:GetServerTimeNow()
-	Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
+	if State.round.phase == "Play" and State.round.games then
+		Hud.setCount(State.round.game or 0, State.round.games)
+	else
+		Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
+	end
 	PresenterPanel.tick(workspace:GetServerTimeNow())
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end)

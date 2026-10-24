@@ -50,6 +50,7 @@ type Ctx = {
 local Liar = {
 	id = "liar",
 	title = Config.TEXT.LIAR_TITLE,
+	brief = Config.TEXT.LIAR_BRIEF, -- (the briefing before it)
 	-- The longest run: everyone (MAX_PLAYERS) clues by chat, the presenter misses, a vote, the guess.
 	expectedSeconds = Config.LIAR_READ_SECONDS + Config.LIAR_BELL_SECONDS
 		+ Config.MAX_PLAYERS * Config.LIAR_CLUE_CHAT_SECONDS + Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS

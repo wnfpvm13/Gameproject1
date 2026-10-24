@@ -8,16 +8,18 @@
 --   10 flying chairs (the 플라잉 체어 of the variety shows: a blue box with white cushions, owner pick 2026-10-22) in a
 --   row on a red carpet at the near end (z = 7, 5 studs apart), backs to the pool, facing the show camera (z = -36).
 --   The presenter's podium stands off to the camera's right (x = -24), angled at the row, so nothing sits between the
---   camera and the faces. A failed player is blown off the chair as a ragdoll and lands far out in the pool (Landing,
---   z 58-94) while the chair's seat flap snaps back and eases down again. Spectator stands along the +X side (the
+--   camera and the faces. A failed player is blown off the chair as a ragdoll by an explosion (owner 2026-10-24) and
+--   comes down far out over the pool (Landing, z 58-94, keeps the throws within its width) while the chair's seat flap
+--   snaps back and eases down again. Spectator stands along the +X side (the
 --   camera's left), windows along -X and the far end, a white roof (y 56) with skylights and white trusses over the
 --   water (y 44) that stay above the flight arc.
--- Code reads (map contract, DESIGN_V3 §9): PoolHall (attribute CeilingY), PoolHall.Chairs (Chair01..10, each a Model
+-- Code reads (map contract, DESIGN_V3 §9): PoolHall (attribute CeilingY: the highest a flying player should reach; the
+-- Config.BLAST_* values keep under it, no code reads it now), PoolHall.Chairs (Chair01..10, each a Model
 -- with Base, an invisible Seat carrying SeatIndex 1..10 from the show camera's left (+X) to its right, Flap: the
 -- visible cushion and backrest, welded to the anchored invisible Hinge on the box's back top edge; clients turn the
 -- Hinge about its own X axis for a launch, the server never moves any of it; and Bell (bundle 6b): a desk bell on a
 -- post at the seated player's right, PrimaryPart Button (clients put their prompt on it), Light (the dome, a PointLight
--- clients switch on when it rings)), Landing, Podium, ShowCamera,
+-- clients switch on when it rings)), Landing (attributes WaterY, PoolMargin), Podium, ShowCamera,
 -- PresenterCamera, Stands, Lobby.
 
 local CHAIR_COUNT = 10
@@ -277,8 +279,10 @@ local waterSize = Vector3.new(POOL_HALF_X * 2, WATER_TOP_Y - POOL_FLOOR_Y, POOL_
 terrain:FillBlock(CFrame.new(0, (WATER_TOP_Y + POOL_FLOOR_Y) / 2, (POOL_NEAR_Z + POOL_FAR_Z) / 2), waterSize, Enum.Material.Water)
 
 -- Landing zone for flying players (far half of the pool, inside the lanes).
-local landing = marker("Landing", Vector3.new(POOL_HALF_X * 2 - 12, 1, 36), CFrame.new(0, WATER_TOP_Y, 76))
+local LANDING_MARGIN = 6 -- studs of water beside the landing zone on each side
+local landing = marker("Landing", Vector3.new((POOL_HALF_X - LANDING_MARGIN) * 2, 1, 36), CFrame.new(0, WATER_TOP_Y, 76))
 landing:SetAttribute("WaterY", WATER_TOP_Y)
+landing:SetAttribute("PoolMargin", LANDING_MARGIN) -- (the splash shows over the whole width of the pool)
 
 ---------------------------------------------------------------- red carpet and flying chairs
 -- A red carpet runner along the near edge (as on the shows), white edge lines, the chairs on it.

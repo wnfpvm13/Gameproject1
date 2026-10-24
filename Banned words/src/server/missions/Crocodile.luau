@@ -42,6 +42,7 @@ type Ctx = {
 local Crocodile = {
 	id = "croc",
 	title = Config.TEXT.CROC_TITLE,
+	brief = Config.TEXT.CROC_BRIEF, -- (the briefing before it)
 	-- The longest run (capped in `run`): CROC_TEETH turns at the last moment, then the result.
 	expectedSeconds = Config.CROC_TEETH * Config.CROC_TURN_SECONDS + Config.MINIGAME_RESULT_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,

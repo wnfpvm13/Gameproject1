@@ -29,20 +29,12 @@ local chatMode = false
 function MicPanel.build(onChat: (boolean) -> ())
 	voiceL = Style.line(0, Style.RED)
 	testL = Style.line(1, Style.AMBER)
-	chatButton = Instance.new("TextButton")
+	chatButton = Style.button(Style.BOLD, 18, Style.AMBER)
 	chatButton.Name = "ChatJoin"
 	chatButton.AnchorPoint = Vector2.new(0.5, 0)
 	chatButton.Position = UDim2.new(0.5, 0, 0, Style.row(2) + 2)
 	chatButton.Size = UDim2.fromOffset(240, 34)
-	chatButton.BackgroundColor3 = Style.PANEL
-	chatButton.BackgroundTransparency = 0.15
-	chatButton.FontFace = Style.BOLD
-	chatButton.TextSize = 18
-	chatButton.TextColor3 = Style.AMBER
 	chatButton.Visible = false
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = chatButton
 	chatButton.Parent = Style.gui()
 	chatButton.Activated:Connect(function()
 		onChat(not chatMode)

@@ -1,7 +1,9 @@
 --!strict
 -- Missions (docs/DESIGN_V3.md §5, §13): lists the missions that may run next (recommended order, also the presenter's
 -- menu), picks the next one that fits the time left (the presenter's pick, else at random: missions played less this
--- round are likelier and the one just played is skipped when another fits) and runs one at a time with a
+-- round are likelier and the one just played is skipped when another fits), shows the screens between games (owner
+-- 2026-10-24: the vote among a few of them with what the last game did, the presenter picking, the next game's
+-- briefing) and runs one at a time with a
 -- ctx (missions cannot require services, so everything they may do comes through the ctx RoundService builds). A
 -- mission stops as soon as it is cancelled (the round was decided or is over): its waits wake up and its fails and
 -- notices are dropped. Only this service requires the modules under server/missions (tools/tests/check_deps.py
@@ -113,6 +115,7 @@ export type MissionCtx = {
 export type Mission = {
 	id: string,
 	title: string, -- shown in the presenter's menu
+	brief: string?, -- its one-line rule for the briefing before it (owner 2026-10-24)
 	expectedSeconds: number, -- for the time budget, without the launches afterwards
 	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
 	minPlayers: number?, -- alive participants it needs (nil = any)
@@ -180,6 +183,34 @@ function MissionRunner.options(secondsLeft: number, alive: number): { Option }
 	return options
 end
 
+-- Drops `lastId` (the game just played) from `list` while another one is left.
+local function withoutLast(list: { Mission }, lastId: string?)
+	if #list > 1 and lastId then
+		for i, mission in list do
+			if mission.id == lastId then
+				table.remove(list, i)
+				return
+			end
+		end
+	end
+end
+
+-- The index of one of `list` (not empty) at random: weight 1 / (1 + runs this round).
+local function drawIndex(list: { Mission }, rng: Random): number
+	local total = 0
+	for _, mission in list do
+		total += 1 / (1 + (played[mission.id] or 0))
+	end
+	local roll = rng:NextNumber() * total
+	for i, mission in list do
+		roll -= 1 / (1 + (played[mission.id] or 0))
+		if roll <= 0 then
+			return i
+		end
+	end
+	return #list
+end
+
 -- The next main-game mission: `pickedId` if it may still run, else one at random (docs/DESIGN_V3.md §5.1): weight
 -- 1 / (1 + runs this round), and not `lastId` (the one just played) while another one fits. nil if none fits.
 -- `presenter`: someone presents now.
@@ -191,26 +222,23 @@ function MissionRunner.choose(secondsLeft: number, alive: number, presenter: boo
 			return mission
 		end
 	end
-	if #list > 1 and lastId then
-		for i, mission in list do
-			if mission.id == lastId then
-				table.remove(list, i)
-				break
-			end
-		end
+	withoutLast(list, lastId)
+	if #list == 0 then
+		return nil
 	end
-	local total = 0
-	for _, mission in list do
-		total += 1 / (1 + (played[mission.id] or 0))
+	return list[drawIndex(list, rng)]
+end
+
+-- Between games without a presenter (owner 2026-10-24): up to NEXT_VOTE_CHOICES missions for the vote, drawn like
+-- choose() draws one (weight 1 / (1 + runs this round), not `lastId` while another one fits), all different.
+function MissionRunner.ballot(secondsLeft: number, alive: number, rng: Random, lastId: string?): { Mission }
+	local list = MissionRunner.candidates(secondsLeft, alive, false)
+	withoutLast(list, lastId)
+	local ballot: { Mission } = {}
+	while #list > 0 and #ballot < Config.NEXT_VOTE_CHOICES do
+		table.insert(ballot, table.remove(list, drawIndex(list, rng)) :: Mission)
 	end
-	local roll = rng:NextNumber() * total
-	for _, mission in list do
-		roll -= 1 / (1 + (played[mission.id] or 0))
-		if roll <= 0 then
-			return mission
-		end
-	end
-	return list[#list]
+	return ballot
 end
 
 -- A mission that can ask final questions, or nil (then the survivors share the win).
@@ -389,6 +417,84 @@ function MissionRunner.run(mission: Mission, ctx: Ctx): (boolean, boolean)
 	end
 	table.clear(privateScreens) -- (also when the mission cleared everyone's screen itself)
 	return ok, didPlay
+end
+
+-- Between games (owner 2026-10-24): `voters` vote for the next game among `ballot` (2+ missions) on a screen that also
+-- shows `recap` (what the last game did), for NEXT_VOTE_SECONDS or until every voter still here voted, or until
+-- `stop`. The most votes win; a tie or no vote at all: at random among the tied (or all). No penalty for not voting.
+function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player }, rng: Random, stop: () -> boolean): Mission
+	questions += 1
+	local open: Question = { id = questions, from = {}, choices = #ballot, endsAt = Match.now() + Config.NEXT_VOTE_SECONDS,
+		answers = {}, changeable = false }
+	for _, player in voters do
+		open.from[player] = true
+	end
+	question = open
+	local titles = {}
+	for _, mission in ballot do
+		table.insert(titles, mission.title)
+	end
+	setScreen({ kind = "nextVote", recap = recap, choices = titles, id = open.id, endsAt = open.endsAt })
+	local untilAt = os.clock() + Config.NEXT_VOTE_SECONDS
+	while os.clock() < untilAt and not stop() do
+		local waiting = false
+		for player in open.from do
+			if not open.answers[player] and player.Parent then
+				waiting = true
+				break
+			end
+		end
+		if not waiting then
+			break
+		end
+		task.wait(math.min(POLL, untilAt - os.clock()))
+	end
+	if question == open then
+		question = nil
+	end
+	local counts: { [number]: number } = {}
+	for _, choice in open.answers do
+		counts[choice] = (counts[choice] or 0) + 1
+	end
+	local best, tied = -1, {}
+	for i = 1, #ballot do
+		local votes = counts[i] or 0
+		if votes > best then
+			best, tied = votes, { i }
+		elseif votes == best then
+			table.insert(tied, i)
+		end
+	end
+	return ballot[tied[rng:NextInteger(1, #tied)]]
+end
+
+-- Clears a between-games screen left over (the main game ended while it showed).
+function MissionRunner.clearScreen()
+	if screenNow then
+		setScreen(nil)
+	end
+end
+
+-- While the presenter picks the next game: what the last game did, and that they are picking.
+function MissionRunner.showPicking(recap: string)
+	setScreen({ kind = "nextPick", recap = recap })
+end
+
+-- The next game's briefing (owner 2026-10-24): its number, its name and its one-line rule, counting down BRIEF_SECONDS,
+-- and `recap` (what the last game did) when no vote or picking screen showed it. False if `stop` came meanwhile. The
+-- screen is cleared for the game's own.
+function MissionRunner.brief(mission: Mission, game: number, games: number, recap: string, stop: () -> boolean): boolean
+	setScreen({ kind = "brief", title = mission.title, rule = mission.brief or "", game = game, games = games,
+		recap = recap, endsAt = Match.now() + Config.BRIEF_SECONDS })
+	local untilAt = os.clock() + Config.BRIEF_SECONDS
+	while os.clock() < untilAt do
+		if stop() then
+			return false
+		end
+		task.wait(math.min(POLL, untilAt - os.clock()))
+	end
+	setScreen(nil)
+	return not stop()
 end
 
 -- Answers to the open question: its number, a whole number in 1..choices, from someone asked, before the end; the

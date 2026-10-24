@@ -44,6 +44,7 @@ type Ctx = {
 local BannedTalk = {
 	id = "bannedTalk",
 	title = Config.TEXT.TALK_TITLE,
+	brief = Config.TEXT.TALK_BRIEF, -- (the briefing before it)
 	-- The longest run: the presenter's re-draw window, the talk, then the settle stage (a late speech result and a
 	-- rescue still waiting).
 	expectedSeconds = Config.TALK_REROLL_SECONDS + Config.TALK_SECONDS + Config.SETTLE_MAX + Config.RESCUE_SECONDS

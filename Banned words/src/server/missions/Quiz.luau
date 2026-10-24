@@ -49,6 +49,7 @@ type Ctx = {
 local Quiz = {
 	id = "quiz",
 	title = Config.TEXT.QUIZ_TITLE,
+	brief = Config.TEXT.QUIZ_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.QUIZ_REVEAL_SECONDS,
 	maxPerRound = nil :: number?, -- the basic mission: no limit (§5)
 	minPlayers = nil :: number?,
@@ -157,6 +158,7 @@ end
 local BellQuiz = {
 	id = "bellQuiz",
 	title = Config.TEXT.BELL_QUIZ_TITLE,
+	brief = Config.TEXT.BELL_QUIZ_BRIEF, -- (the briefing before it)
 	-- The longest run: every question with every answer chance (each its own bells, an answer by chat, judged at the
 	-- last moment).
 	expectedSeconds = Config.BELL_QUIZ_QUESTIONS * (Config.BELL_TRIES

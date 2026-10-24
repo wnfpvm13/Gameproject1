@@ -1,6 +1,6 @@
 --!strict
--- Effects: the flying chair firing (seat flap snapping back on its hinge, "펑", smoke and confetti), the splash where
--- the player hits the water, the elimination buzzer and red flash, floating emoji reactions, the presenter's sound
+-- Effects: the flying chair firing (an explosion, the seat flap snapping back on its hinge, "펑", smoke and confetti),
+-- the splash where the player hits the water (no sound: owner 2026-10-24), the elimination buzzer and red flash, floating emoji reactions, the presenter's sound
 -- buttons and a seat bell's ding with its light (bundle 6b).
 -- The server only sends signals; every client animates the flap itself (a server-moved flap would stutter).
 local Debris = game:GetService("Debris")
@@ -21,7 +21,6 @@ local CONFETTI = {
 local flash: Frame
 local buzzer: Sound
 local bang: Sound
-local splashSound: Sound
 local bellSound: Sound
 local presenterSounds: { Sound } = {} -- the presenter's sound buttons (Config.PRESENTER_SOUNDS order)
 local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
@@ -75,7 +74,6 @@ function Fx.init()
 
 	buzzer = sound("Buzzer", Config.SOUND_BUZZER, 0.6)
 	bang = sound("Bang", Config.SOUND_BANG, 0.8)
-	splashSound = sound("Splash", Config.SOUND_SPLASH, 0.8)
 	bellSound = sound("Bell", Config.SOUND_BELL, 0.7)
 	for i, entry in Config.PRESENTER_SOUNDS do
 		presenterSounds[i] = sound("PresenterSound" .. i, entry.id, 0.7)
@@ -234,8 +232,19 @@ local function snapFlap(hinge: BasePart)
 end
 
 -- A flying chair fired: the flap snaps back, "펑", smoke at the seat.
-function Fx.fling(info: { seatIndex: number? })
+function Fx.fling(info: { seatIndex: number?, blastAt: Vector3? })
 	playCopy(bang)
+	if typeof(info.blastAt) == "Vector3" then
+		-- Roblox's own explosion look; it pushes and breaks nothing (the server throws the body).
+		local explosion = Instance.new("Explosion")
+		explosion.Position = info.blastAt
+		explosion.BlastRadius = Config.BLAST_RADIUS
+		explosion.BlastPressure = 0
+		explosion.DestroyJointRadiusPercent = 0
+		explosion.ExplosionType = Enum.ExplosionType.NoCraters
+		explosion.Parent = workspace
+		Debris:AddItem(explosion, 3)
+	end
 	local seat: BasePart?, hinge: BasePart? = nil, nil
 	if info.seatIndex then
 		seat, hinge = chairOf(info.seatIndex)
@@ -298,9 +307,8 @@ function Fx.lever()
 end
 
 -- The player hit the water: a white column, a spray of drops and a ring of mist, sized to read from the show camera
--- (the landing zone is 95-130 studs away).
+-- (a blast carries them about 40-85 studs out over the pool, 80-130 studs from the camera).
 function Fx.splash(position: Vector3)
-	playCopy(splashSound)
 	local anchor = anchorAt(position + Vector3.new(0, 0.5, 0), 3)
 	emitter(anchor, {
 		Color = ColorSequence.new(Color3.fromRGB(255, 255, 255)),

@@ -22,7 +22,7 @@ local HEART_ROW = 0.8
 local CARD_COLOR = Color3.fromRGB(255, 255, 255)
 local NEW_COLOR = Color3.fromRGB(255, 225, 90)
 local OUTLINE = Color3.fromRGB(22, 34, 64)
-local NAME_PILL = Color3.fromRGB(22, 34, 64)
+local NAME_PILL = Color3.fromRGB(0, 0, 0) -- (the HUD's black, owner 2026-10-24)
 local HIDDEN = "???" -- my own words while I play
 
 local GROW_SECONDS = 0.15 -- hit(): the pop grows, then settles back
@@ -132,7 +132,7 @@ local function build(player: Player, words: { string }, caption: string, previou
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "Caption"
 	nameLabel.BackgroundColor3 = NAME_PILL
-	nameLabel.BackgroundTransparency = 0.1
+	nameLabel.BackgroundTransparency = 0.3
 	nameLabel.Position = UDim2.fromScale(0.1, wordsHeight / total + 0.02)
 	nameLabel.Size = UDim2.fromScale(0.8, NAME_ROW / total - 0.02)
 	nameLabel.FontFace = NAME_FONT

@@ -18,21 +18,29 @@ return {
 	ASSIGN_TIME = 8,
 	RESULT_TIME = 10,
 
-	-- Round (docs/DESIGN_V3.md §2, §4; minigame overhaul 2026-10-23): 8 minutes of minigames back to back (no free
-	-- talk), then a sudden-death final.
+	-- Round (docs/DESIGN_V3.md §2, §4; minigame overhaul 2026-10-23; owner 2026-10-24: a number of games, like the
+	-- minigame collections on Roblox): ROUND_GAMES minigames back to back (no free talk), then a sudden-death final.
+	-- ROUND_MAX_SECONDS only caps a round of long games (a game that would not fit is not started).
 	LIVES = 3,
-	ROUND_SECONDS = 480,
+	ROUND_GAMES = 6,
+	ROUND_MAX_SECONDS = 720,
 	FINAL_AT_ALIVE = 3, -- a round begun with 4+ players goes to the final as soon as this few are left
 	FINAL_MAX_SECONDS = 90, -- past this the survivors share the win
-	NEXT_GAME_CARD_SECONDS = 3, -- without a presenter: "next: ..." shows this long before a game starts
+	-- Between games (owner 2026-10-24): what the last game did, then without a presenter the alive players vote for the
+	-- next game among NEXT_VOTE_CHOICES (NEXT_VOTE_SECONDS, over once all voted; none: at random), then the next
+	-- game's briefing (its name and one-line rule, 3-2-1) for BRIEF_SECONDS.
+	NEXT_VOTE_CHOICES = 3,
+	NEXT_VOTE_SECONDS = 7,
+	BRIEF_SECONDS = 3,
 	AFK_MISSES = 2, -- answer missions missed in a row -> out (a spectator)
 	SUBJECTIVE_FLINGS = 1, -- public servers: launches by the presenter or a vote, per player per round
 	-- Studio has no private servers: this says which rules a Studio round plays (workspace attribute BW_ServerKind =
 	-- "public" / "private" overrides it while testing).
 	STUDIO_SERVER_KIND = "public",
 	-- Speech judging of banned words (bundle 6e, after a live test). The banned-word talk is played only while it is on
-	-- (owner 2026-10-23); Studio can pretend it is with the workspace attribute BW_VoiceJudging = true.
-	VOICE_JUDGING = false,
+	-- (owner 2026-10-23); Studio can pretend it is with the workspace attribute BW_VoiceJudging = true. On since the
+	-- friend beta (owner 2026-10-24: that test is also the live speech test, docs/STT_LIVE_TEST_2026-10-24.md).
+	VOICE_JUDGING = true,
 	-- The solo speech test build only (tools/install_game.py --voice-judging --solo, docs/STT_LIVE_TEST_2026-10-24.md):
 	-- a player also sees their own banned word, so one tester knows what to say. Never on in a real game.
 	SHOW_OWN_WORD = false,
@@ -169,13 +177,20 @@ return {
 	SETTLE_SLACK = 1, -- the settle stage waits at most this much past the rescue and the lever for them to end
 	RESPAWN_TIME = 3,
 
-	-- V3 flying chair (docs/DESIGN_V3.md §10, owner 2026-10-22): the seat flap snaps back with a bang, the player flies
-	-- off as a ragdoll far into the pool and is back on the seat FLING_RETURN_SECONDS after the launch.
+	-- V3 flying chair (docs/DESIGN_V3.md §10; owner 2026-10-24: an explosion, no flight path): a blast in front of the
+	-- chair throws the player off as a ragdoll, backward over the pool, and they are back on the seat
+	-- FLING_RETURN_SECONDS after the launch.
 	FLING_RETURN_SECONDS = 5,
-	FLING_APEX_HEIGHT = 20, -- studs above the launch point at the top of the arc (keeps it under the show camera's
-	-- top edge and the HUD; also capped under PoolHall CeilingY)
-	FLING_BODY_TOP = 4, -- studs from the root to the top of a tumbling body (keeps the whole body under CeilingY)
-	FLING_SPIN = 7, -- rad/s backward tumble at the launch
+	BLAST_FORWARD = 1.5, -- studs in front of the seated body where the blast goes off (drawn by the clients)
+	BLAST_BELOW = 1, -- and this far below its root
+	BLAST_SPEED_MIN = 90, -- studs/s the blast gives the body (a random speed in this range)
+	BLAST_SPEED_MAX = 125,
+	BLAST_PITCH_MIN = 28, -- degrees above the ground (a random angle; 125 studs/s at 40 degrees tops out ~16 studs up,
+	BLAST_PITCH_MAX = 40, -- under PoolHall CeilingY)
+	BLAST_SPREAD = 15, -- degrees left or right of straight back at most (SeatService narrows it so even the farthest
+	-- throw stays over the landing zone: the end chairs fly only straight or inward)
+	BLAST_SPIN = 12, -- rad/s tumble about a random axis
+	BLAST_RADIUS = 12, -- size of the drawn explosion (studs; it pushes nothing itself)
 	FLING_FLOAT_DENSITY = 0.45, -- body density while flying, so it floats on the water (avatars sink otherwise)
 	FLING_COLLIDE_DELAY = 0.2, -- body parts start colliding this long after the launch (seated feet touch the carpet,
 	-- and colliding from the first frame cost ~10% of the throw in the Studio test)
@@ -228,14 +243,20 @@ return {
 		ASSIGN = "목숨은 %d개예요 · 미션에 실패하면 날아가요",
 		PLAY_START = "본 경기 시작!",
 		NEXT_GAME = "다음: %s",
+		GAME_COUNT = "미션 %d/%d", -- the status board during the main game: the game now / games in a round
+		NEXT_VOTE = "다음에 할 미션을 골라요",
+		RECAP_LOST = "%s 목숨 잃음",
+		RECAP_OUT = "%s 탈락",
+		RECAP_NONE = "아무도 안 날아갔어요",
 		PICKING = "진행자가 다음 미션을 고르는 중",
 		TEST_MISSION = "연습 미션 · 운에 맡겨 보세요",
 		FINAL = "결승 · 틀리면 바로 탈락",
 		ALL_WRONG = "모두 틀려서 아무도 탈락하지 않아요 · 다시!",
 		TO_FINAL = "남은 사람이 한꺼번에 떨어져서 그대로 결승으로 가요",
-		LIFE_LOST = "%s 목숨 -1",
+		LIFE_LOST = "%s · 목숨 1개 잃음",
 		OUT = "%s 탈락!",
-		MY_LIFE_LOST = "내 목숨 -1 · 남은 목숨 %d",
+		MY_LIFE_LOST = "목숨 1개를 잃었어요 · 남은 목숨 %d개",
+		MY_NO_LIVES = "목숨을 모두 잃었어요", -- (the last one left, or everyone left fell at once)
 		MY_OUT = "탈락! 관람석에서 응원해 주세요",
 		LEFT = "%s 님이 나갔어요",
 		WINNER = "%s 우승!",
@@ -277,15 +298,19 @@ return {
 		PICK_RECOMMENDED = "추천",
 		PICK_AUTO = "시간이 지나서 무작위로 골랐어요",
 		TEST_MISSION_TITLE = "연습 미션",
+		TEST_MISSION_BRIEF = "운에 맡겨요 · 가끔 날아가요", -- (the briefing before it, owner 2026-10-24)
 		QUIZ_TITLE = "퀴즈",
+		QUIZ_BRIEF = "4개 중 정답을 골라요 · 틀리거나 안 고르면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		QUIZ_START = "퀴즈 · 정답을 골라요 · 틀리거나 안 고르면 날아가요",
 		FINAL_QUIZ = "결승 퀴즈 · 틀리면 바로 탈락",
 		QUIZ_ANSWER = "정답: %s",
 		QUIZ_ALL_RIGHT = "모두 정답!",
 		ROULETTE_TITLE = "룰렛",
+		ROULETTE_BRIEF = "원판이 한 명을 골라요 · 걸리면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		ROULETTE_START = "룰렛이 돌아가요 · 걸린 한 명이 날아가요",
 		ROULETTE_HIT = "%s 당첨!",
 		ONE_WORD_TITLE = "좋아하는 거 말하기",
+		ONE_WORD_BRIEF = "벨 순서대로 주제에 맞게 말해요 · 진행자나 투표로 한 명이 날아가요", -- (the briefing before it, owner 2026-10-24)
 		ONE_WORD_START = "좋아하는 거 말하기 · 벨을 누르면 먼저 말해요",
 		ONE_WORD_BELL = "🔔 벨을 누르면 먼저 말해요",
 		ONE_WORD_TURN = "%s 차례 · %s",
@@ -308,6 +333,7 @@ return {
 		MY_WORD_WAS = "내 금칙어: '%s'", -- (no particle: it would depend on the word's last syllable)
 		BELL_BUTTON = "🔔 벨",
 		BELL_QUIZ_TITLE = "벨 퀴즈",
+		BELL_QUIZ_BRIEF = "먼저 벨을 누르고 말로 답해요 · 진행자가 판정해요", -- (the briefing before it, owner 2026-10-24)
 		BELL_QUIZ_START = "벨 퀴즈 · 먼저 벨을 누른 사람이 말로 답해요",
 		BELL_QUIZ_WAIT = "🔔 벨을 눌러 답하세요",
 		BELL_QUIZ_ANSWERING = "%s 님이 답하는 중",
@@ -316,15 +342,18 @@ return {
 		BELL_QUIZ_NOBODY = "아무도 안 눌러서 모두 답해요",
 		VERDICT_PICK = "맞았나요? 정답: %s",
 		CROC_TITLE = "악어 이빨",
+		CROC_BRIEF = "차례대로 이빨을 하나씩 눌러요 · 무는 이빨이면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		CROC_START = "악어 이빨 · 차례대로 이빨을 하나 눌러요 · 물리면 날아가요",
 		CROC_TURN = "%s 차례",
 		CROC_BITE = "😱 덥석! %s",
 		CROC_LATE = "⏰ 시간 초과! %s",
 		BOMB_TITLE = "폭탄 돌리기",
+		BOMB_BRIEF = "폭탄을 들면 문제를 맞혀 넘겨요 · 터질 때 들고 있으면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		BOMB_START = "폭탄 돌리기 · 맞히면 다음 사람에게 넘어가요",
 		BOMB_HOLDER = "💣 %s",
 		BOMB_BOOM = "💥 펑! %s",
 		NUNCHI_TITLE = "눈치 게임",
+		NUNCHI_BRIEF = "1부터 한 명씩 벨을 눌러요 · 겹치거나 마지막이면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		NUNCHI_START = "눈치 게임 · 1부터 한 명씩 벨! 겹치거나 꼴찌면 날아가요",
 		NUNCHI_CLASH = "💥 겹쳤다! %s",
 		NUNCHI_LAST = "🐢 꼴찌! %s",
@@ -333,6 +362,7 @@ return {
 		NUNCHI_ORDER = "%d %s",
 		NUNCHI_NONE = "✕ %s",
 		BALANCE_TITLE = "밸런스 게임",
+		BALANCE_BRIEF = "둘 중 하나를 몰래 골라요 · 적은 쪽이 날아가요", -- (the briefing before it, owner 2026-10-24)
 		BALANCE_START = "밸런스 게임 · 적은 쪽이 날아가요",
 		BALANCE_VS = "%s vs %s",
 		BALANCE_BELL = "🔔 벨을 누르면 먼저 말해요",
@@ -344,6 +374,7 @@ return {
 		BALANCE_NOBODY = "아무도 안 날아가요",
 		BALANCE_NONE = "안 고름: %s",
 		REDLIGHT_TITLE = "무궁화 꽃이 피었습니다",
+		REDLIGHT_BRIEF = "초록불에 벨을 눌러 앞으로 · 빨간불에 누르면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		REDLIGHT_START = "무궁화 꽃이 피었습니다 · 초록불에 벨! 빨간불엔 멈춰요",
 		REDLIGHT_GREEN = "🟢 가세요!",
 		REDLIGHT_RED = "🔴 멈춰요!",
@@ -354,6 +385,7 @@ return {
 		REDLIGHT_SHORT = "🐌 못 왔다! %s",
 		REDLIGHT_ALL_SAFE = "모두 도착!",
 		LIAR_TITLE = "라이어 게임",
+		LIAR_BRIEF = "제시어를 모르는 라이어를 찾아요 · 라이어가 못 맞히면 라이어만 날아가요", -- (the briefing before it, owner 2026-10-24)
 		LIAR_START = "라이어 게임 · 제시어를 모르는 한 명을 찾아요",
 		LIAR_CATEGORY = "주제: %s",
 		LIAR_WORD = "제시어: %s",
@@ -375,6 +407,7 @@ return {
 		WORDS_REROLL_ALL = "전원 다시 뽑기",
 		TALK_START_NOW = "▶ 바로 시작",
 		TALK_TITLE = "금칙어 토크",
+		TALK_BRIEF = "남의 머리 위 금칙어를 말하게 해요 · 내 금칙어를 말하면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		TALK_SOON = "곧 시작",
 		TALK_PREP = "금칙어를 나눠 주는 중 · 내 머리 위 단어는 나만 몰라요",
 		TALK_ON = "주제로 이야기하세요 · 자기 금칙어를 말하면 날아가요",
@@ -410,7 +443,6 @@ return {
 	-- Roblox-licensed Pro Sound Effects (public, free).
 	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)
 	SOUND_BANG = "rbxassetid://9114086657", -- Dirt Explosion 1: sharp bang (SFX), the flying chair firing
-	SOUND_SPLASH = "rbxassetid://9120585252", -- Water Splash, Big Water Splash, Dive In 1 (SFX), the landing
 	SOUND_BELL = "rbxassetid://1839997929", -- the seat bell's ding (APM game show toolkit, Correct Answer 2; replace
 	-- with a shorter desk-bell sound after the owner hears it)
 }

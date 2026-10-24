@@ -3,6 +3,7 @@
 -- chair row under it stays visible.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Hearts = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hearts"))
 local Style = require(script.Parent:WaitForChild("Style"))
 
@@ -23,7 +24,7 @@ local aliveL: TextLabel
 local livesL: TextLabel
 
 function Hud.build()
-	local top = Style.panel(Style.gui(), Style.PANEL, 0.2, 14)
+	local top = Style.panel(Style.gui(), Style.PANEL, Style.PANEL_ALPHA, 14)
 	top.AnchorPoint = Vector2.new(0.5, 0)
 	top.Position = UDim2.new(0.5, 0, 0, 8)
 	top.Size = UDim2.new(0.5, 0, 0, 64)
@@ -32,7 +33,7 @@ function Hud.build()
 	statusL = Style.label(top, Style.BOLD, 22, Style.WHITE)
 	statusL.Position = UDim2.fromScale(0.04, 0.06)
 	statusL.Size = UDim2.fromScale(0.92, 0.46)
-	timerL = Style.label(top, Style.BOLD, 22, Style.AMBER)
+	timerL = Style.label(top, Style.BOLD, 22, Style.WHITE)
 	timerL.Position = UDim2.fromScale(0.04, 0.55)
 	timerL.Size = UDim2.fromScale(0.28, 0.38)
 	timerL.TextXAlignment = Enum.TextXAlignment.Left
@@ -57,7 +58,13 @@ function Hud.setTimer(seconds: number?)
 	end
 	local s = math.max(0, math.ceil(seconds))
 	timerL.Text = string.format("%d:%02d", s // 60, s % 60)
-	timerL.TextColor3 = if s <= 30 then Style.RED else Style.AMBER
+	timerL.TextColor3 = if s <= 30 then Style.RED else Style.WHITE
+end
+
+-- The main game's count instead of a clock ("미션 3/6", owner 2026-10-24).
+function Hud.setCount(game: number, games: number)
+	timerL.Text = string.format(Config.TEXT.GAME_COUNT, math.max(1, game), games)
+	timerL.TextColor3 = Style.WHITE
 end
 
 function Hud.setAlive(alive: number, total: number)

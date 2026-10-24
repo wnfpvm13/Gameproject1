@@ -8,9 +8,10 @@ The map is separate (tools/build_pool_hall.luau, then tools/build_pool_lighting.
 because its UI overlaps the HUD.
 
 --voice-judging builds the speech judging live test instead (docs/STT_LIVE_TEST_2026-10-24.md): the same code with
-Config.VOICE_JUDGING = true, written to .qa/install_game_stt.luau (not committed; the repository keeps it off until
-the owner turns it on). --voice-judging --solo: also one player may play a round and the talk and sees their own word
-(SHOW_OWN_WORD, MIN_PLAYERS 1, TALK_MIN_PLAYERS 1), written to .qa/install_game_stt_solo.luau.
+Config.VOICE_JUDGING = true, written to .qa/install_game_stt.luau (not committed). Since the friend beta (owner
+2026-10-24) the repository has it on already, so that build differs from the default one only by its result tag.
+--voice-judging --solo: also one player may play a round and the talk and sees their own word (SHOW_OWN_WORD,
+MIN_PLAYERS 1, TALK_MIN_PLAYERS 1), written to .qa/install_game_stt_solo.luau.
 """
 import io, os, sys
 
@@ -33,9 +34,11 @@ SOLO_BUILD = "--solo" in ARGS
 if SOLO_BUILD and not VOICE_JUDGING_BUILD:
     sys.exit("--solo is a speech judging live test build: use --voice-judging --solo")
 CONFIG = os.path.join(SRC, "shared", "Config.luau")
-# (Config line in the repository, the live test build's line); each must be found exactly once.
-SWITCHES = [("\tVOICE_JUDGING = false,\n",
-             "\tVOICE_JUDGING = true, -- (speech judging live test build: tools/install_game.py --voice-judging)\n")]
+# (Config line in the repository, the live test build's line); each must be found exactly once. VOICE_JUDGING may
+# already be on in the repository (then its line must be there instead, and stays).
+VOICE_OFF = "\tVOICE_JUDGING = false,\n"
+VOICE_ON = "\tVOICE_JUDGING = true,\n"
+SWITCHES = [(VOICE_OFF, "\tVOICE_JUDGING = true, -- (speech judging live test build: tools/install_game.py --voice-judging)\n")]
 if SOLO_BUILD:
     # One tester: a round and the banned-word talk with one player, who also sees their own word.
     SWITCHES += [
@@ -49,6 +52,8 @@ def long_string(path):
     text = io.open(path, encoding="utf-8").read()
     if VOICE_JUDGING_BUILD and os.path.samefile(path, CONFIG):
         for old, new in SWITCHES:
+            if old == VOICE_OFF and text.count(VOICE_OFF) == 0 and text.count(VOICE_ON) == 1:
+                continue  # already on in the repository
             if text.count(old) != 1:
                 raise SystemExit("Config line not found exactly once: " + old.strip() + " (nothing written)")
             text = text.replace(old, new)

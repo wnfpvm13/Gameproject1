@@ -16,6 +16,8 @@ the REAL module sources from src/ + the test file. The modules run unchanged; on
           ctx): the quiz (answers, fails,
           the AFK report, no repeats, no words in play, the final bank), the roulette, the menu order, the real bank
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
+  install tools/install_game.luau (what goes into Studio) carries every src/ file as it is now (rebuild it with
+          `python -I tools/install_game.py` after a change, review 2026-10-24)
 """
 import io, os, subprocess, sys, tempfile
 
@@ -122,6 +124,19 @@ def build_mission():
     return build_with_modules(MISSION_MODULES, "mission_tests.luau")
 
 
+def check_installer():
+    """Every source file under src/ appears unchanged in tools/install_game.luau. Returns the stale ones."""
+    installer = read(os.path.join(REPO, "tools", "install_game.luau"))
+    stale = []
+    for folder, _, files in os.walk(os.path.join(REPO, "src")):
+        for name in files:
+            if name.endswith(".luau"):
+                path = os.path.join(folder, name)
+                if "[====[" + read(path) + "]====]" not in installer:
+                    stale.append(os.path.relpath(path, REPO))
+    return sorted(stale)
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     failed = False
@@ -142,6 +157,13 @@ def main():
     print((deps.stdout + deps.stderr).rstrip())
     if deps.returncode != 0 or "ALL PASS" not in deps.stdout:
         failed = True
+    stale = check_installer()
+    print("== install")
+    if stale:
+        print("FAIL tools/install_game.luau is older than: " + ", ".join(stale) + " (run python -I tools/install_game.py)")
+        failed = True
+    else:
+        print("ALL PASS (every src/ file is in tools/install_game.luau as it is)")
     print("RESULT: " + ("FAILED" if failed else "ALL SUITES PASS"))
     sys.exit(1 if failed else 0)
 

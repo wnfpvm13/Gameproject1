@@ -44,6 +44,7 @@ type Ctx = {
 local Nunchi = {
 	id = "nunchi",
 	title = Config.TEXT.NUNCHI_TITLE,
+	brief = Config.TEXT.NUNCHI_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.NUNCHI_MAX_SECONDS + Config.MINIGAME_RESULT_SECONDS,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.NUNCHI_MIN_PLAYERS :: number?,

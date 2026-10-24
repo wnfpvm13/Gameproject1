@@ -21,7 +21,7 @@
 --   (client -> server: MissionAnswer (question id, choice number) while a question is open)
 --   Notice      short toast text
 --   Reaction    emoji shown above a player
---   Fling       a flying chair fired: { userId, seatIndex, flightTime, landAt }
+--   Fling       a flying chair fired: { userId, seatIndex, blastAt }
 --   Splash      that player hit the water: { userId, position }
 --   Words       to each player: the banned words they may see (WordService.payloadFor; bundle 5a)
 --               (sent during the banned-word talk only, bundle 6a; outside it everyone has no word)

@@ -4,27 +4,63 @@
 
 local Config = {}
 
+-- A kind of car: the shape ArenaLayout.Kind reads (written out again here, as Config requires nothing). The arena's
+-- builders pass Config.Arena to ArenaLayout, so the type check catches most drift between the two (a field added
+-- on one side fails it); keep them the same by hand.
+type CarKind = {
+	length: number,
+	roof: number,
+	roofFrom: number?,
+	spawns: { number },
+	plank: boolean,
+	boiler: { to: number, top: number, width: number }?,
+	crates: { { along: number, width: number, length: number, height: number } }?,
+	cupola: { from: number, to: number, width: number, height: number }?,
+}
+
 -- The arena: big trains side by side on parallel tracks. They stand still in the world; the scenery scrolls past
 -- (Config.Run), so everything players stand on keeps still for physics.
 Config.Arena = {
-	Trains = 2,
-	-- Between the roof edges of two trains: wider than a jump on the flat (about 8.7 studs with Roblox's default
-	-- jump), so crossing takes a plank or a big hit.
-	Gap = 12,
-	RoofWidth = 10,
-	-- Each train front to back: its cars. roof = the walkable top above the rails.
-	Cars = {
-		{ kind = "Locomotive", length = 18, roof = 11.5 },
-		{ kind = "Boxcar", length = 20, roof = 10 },
-		{ kind = "Boxcar", length = 20, roof = 10 },
-	},
+	-- Between the roof edges of two trains: wider than a running jump, even one dropping from the highest top to the
+	-- lowest across from it, so crossing takes a plank or a big hit. Measured in Studio (2026-10-25, default R15, jump
+	-- pressed as late as 1.9 past the edge, where it still stands): a jump crossed 12.75 on the flat, 13.75 dropping 5,
+	-- 14.25 dropping 8, never 13 / 14 / 14.5 or 15 — the first 12 was crossed from a roof down onto a flatcar (tests:
+	-- JUMP_EXTRA).
+	Gap = 15,
+	RoofWidth = 10, -- every car is this wide
 	CarGap = 0.5, -- between two cars of a train (well under a character's thickness, so nobody slips through)
-	-- Planks across the gap between neighbouring trains, in the middle of these cars (both trains' cars there have
-	-- the same roof height).
-	PlankCars = { 2, 3 },
+	-- The kinds of car (ArenaLayout.Kind): length, walkable roof height, spawn spots (shares along the car), whether
+	-- planks may rest on the roof, and their extra tops. Flatcars are low decks to drop into and climb out of (the
+	-- crates are steps; the bat does not care about them), a caboose's lookout is the highest perch.
+	CarKinds = {
+		-- A round boiler in front (its top a narrow ridge) and the cab's flat roof over the back 35%.
+		Locomotive = { length = 18, roof = 11.5, roofFrom = 0.65, spawns = { 0.82 }, plank = false, boiler = { to = 0.65, top = 11, width = 8 } },
+		Tender = { length = 10, roof = 8, spawns = { 0.5 }, plank = true }, -- the coal car behind a locomotive: low and flat
+		Boxcar = { length = 20, roof = 10, spawns = { 0.3, 0.7 }, plank = true },
+		Flatcar = {
+			length = 18,
+			roof = 5,
+			spawns = { 0.25 },
+			plank = true,
+			crates = { { along = 0.62, width = 4, length = 4, height = 2.5 }, { along = 0.86, width = 5, length = 3, height = 4.5 } },
+		},
+		Caboose = { length = 14, roof = 10, spawns = { 0.3 }, plank = true, cupola = { from = 0.55, to = 0.9, width = 6, height = 3 } },
+	} :: { [string]: CarKind },
+	-- The trains, left to right: their cars front to back, and how far each stands back (+Z) or ahead (-Z), so that
+	-- different cars face each other. The middle one is the main stage (spawns fill it first).
+	Trains = {
+		{ shift = 3, cars = { "Locomotive", "Tender", "Boxcar", "Flatcar" } },
+		{ shift = 0, cars = { "Locomotive", "Tender", "Boxcar", "Caboose" } },
+		{ shift = -3, cars = { "Locomotive", "Tender", "Flatcar", "Boxcar" } },
+	},
+	-- Planks across a gap only where two flat tops of the same height face each other along at least PlankWidth
+	-- (PlankEdge in from their ends), the widest first, at most PlanksPerGap per gap, PlankSpacing apart.
 	PlankWidth = 4,
 	PlankThickness = 0.4,
 	PlankOverlap = 1, -- how far a plank lies on each roof
+	PlankEdge = 0.5,
+	PlanksPerGap = 2,
+	PlankSpacing = 8,
 	-- The sand's top, under the rail tops (y 0). It is solid: a fighter who falls off lands on it and is left behind
 	-- (the fall line is above it, so landing there is always out).
 	GroundY = -1,
@@ -33,6 +69,11 @@ Config.Arena = {
 	WaitingRoomWall = 14, -- glass walls higher than a jump off someone's head
 	Colors = {
 		Boxcar = Color3.fromRGB(150, 58, 40),
+		Tender = Color3.fromRGB(58, 52, 50),
+		Coal = Color3.fromRGB(30, 28, 28),
+		Flatcar = Color3.fromRGB(120, 84, 52),
+		Crate = Color3.fromRGB(176, 132, 80),
+		Caboose = Color3.fromRGB(176, 46, 38),
 		Roof = Color3.fromRGB(62, 58, 60),
 		Boiler = Color3.fromRGB(52, 88, 64),
 		Cab = Color3.fromRGB(40, 38, 42),
@@ -49,7 +90,7 @@ Config.Run = {
 	ViewBehind = 160,
 	SleeperSpacing = 3,
 	RoadsideProps = 20,
-	RoadsideNear = 22, -- props stand this far from the arena's middle line, on both sides
+	RoadsideClearance = 7, -- props stand at least this far beyond the outermost train's edge
 	RoadsideFar = 60,
 	Colors = {
 		Sand = Color3.fromRGB(214, 176, 120),
@@ -109,9 +150,9 @@ Config.Hit = {
 	LaunchEmpty = 27,
 	LaunchLift = 28,
 	LaunchImmune = 0.9, -- a launched fighter cannot be hit for this long (flight, getting up and a moment more)
-	-- Smash, the home run: high into the sky and away. With this lift a body is still in the air (higher than the roofs)
-	-- when Config.Fall.HomeRunSeconds ends and it twinkles out - it would reach the sand about 0.27 s later - and its
-	-- top (about 50) stays under the stands (70).
+	-- Smash, the home run: high into the sky and away. With this lift a body is still in the air (higher than the
+	-- highest top) when Config.Fall.HomeRunSeconds ends and it twinkles out - hit on the lowest deck it would reach the
+	-- sand about 0.23 s later - and its top (about 50, 53 from the lookout) stays under the stands (70) (tests).
 	SmashPush = 60,
 	SmashLift = 120,
 }
@@ -160,7 +201,7 @@ Config.Sounds = {
 	MusicFight = { id = "rbxassetid://1838431777", volume = 0.2, looped = true, music = true }, -- Resophonic Reel
 }
 
--- Falling off: feet below this much under the lowest roof have missed the train. From there the body lies down and
+-- Falling off: feet below this much under the lowest top (a flatcar's deck) have missed the train. From there the body lies down and
 -- slides backward with the ground (left behind by the train) until it is taken to the stands.
 Config.Fall = {
 	Margin = 4,
@@ -168,7 +209,7 @@ Config.Fall = {
 	HomeRunSeconds = 1.1, -- a home-run flight lasts this long, then twinkles out and goes to the stands
 }
 
--- Rounds: wait for players, count down on the roofs, fight until one is left.
+-- Rounds: wait for players, count down on the trains, fight until one is left.
 Config.Round = {
 	MinPlayers = 2, -- counting sandbags in solo mode
 	CountdownSeconds = 3,
@@ -178,9 +219,10 @@ Config.Round = {
 	KillCreditSeconds = 6, -- a fall counts as a KO for whoever hit the player within this long before
 }
 
--- Studio-only practice (Workspace attribute Names.Solo): sandbags that wander the roofs and count as players.
+-- Studio-only practice (Workspace attribute Names.Solo): sandbags that wander the top they stand on and count as
+-- players.
 Config.Sandbag = {
-	Count = 3,
+	Count = 5,
 	WanderSeconds = 2.5, -- a new spot to walk to this often
 	WalkSpeed = 8,
 }

@@ -1,9 +1,10 @@
 --!strict
--- Builds the arena once on the server: the big trains side by side (boxcars and a locomotive with a round boiler and
--- a cab, all anchored and solid to stand on), the planks between them, and the waiting room floating over the middle
--- (where new characters spawn and the knocked out watch). The sand under
--- the trains is solid, for everyone the same (built here, not by the clients): a fighter who falls off lands on it,
--- already out, and is left behind (FallDrift, Sandbags); the clients draw the rails and scenery sliding over it.
+-- Builds the arena once on the server, from ArenaLayout (Config.Arena): the trains side by side, each car by its kind
+-- (a locomotive with a round boiler and a cab, a low coal tender, boxcars, a flatcar's low deck with crates to climb,
+-- a caboose with a lookout on top), all anchored and solid to stand on; the planks between the trains; the sand; and
+-- the waiting room floating over the middle (where new characters spawn and the knocked out watch). The sand is solid,
+-- for everyone the same: a fighter who falls off lands on it, already out, and is left behind (FallDrift, Sandbags);
+-- the clients draw the rails and scenery sliding over it. Plain blocks for now (the decoration pass comes later).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -17,12 +18,14 @@ local ArenaBuilder = {}
 
 export type Arena = {
 	folder: Folder,
+	layout: ArenaLayout.Layout, -- where everything is
 	spots: { ArenaLayout.Spot }, -- where players appear for a round
 	fallLine: number, -- feet below this have fallen off
 	waitingSpot: CFrame, -- where the knocked out and the waiting stand
 }
 
 local WHEEL_RADIUS = 1.4
+local BOTTOM = WHEEL_RADIUS * 1.4 -- a car body's underside
 
 -- Wheels along one side of a car body (drawn only).
 local function addWheels(parent: Instance, x: number, place: ArenaLayout.CarPlace, halfWidth: number)
@@ -36,38 +39,70 @@ local function addWheels(parent: Instance, x: number, place: ArenaLayout.CarPlac
 	end
 end
 
--- A boxcar: a solid body up to its roof, a darker roof plate on top (the floor players stand on).
-local function addBoxcar(parent: Instance, x: number, place: ArenaLayout.CarPlace)
+-- A car body up to just under `top` and a plate on top (the floor players stand on), as wide as a roof.
+local function addBody(parent: Instance, x: number, place: ArenaLayout.CarPlace, top: number, bodyColor: Color3, topColor: Color3, material: Enum.Material)
 	local a = Config.Arena
-	local bottom = WHEEL_RADIUS * 1.4
-	local body = PartUtil.solidBlock("Body", Vector3.new(a.RoofWidth - 0.6, place.roof - 0.3 - bottom, place.length), a.Colors.Boxcar, Enum.Material.WoodPlanks, parent)
-	body.CFrame = CFrame.new(x, (place.roof - 0.3 + bottom) / 2, place.middle)
-	local roof = PartUtil.solidBlock("Roof", Vector3.new(a.RoofWidth, 0.3, place.length), a.Colors.Roof, Enum.Material.Metal, parent)
-	roof.CFrame = CFrame.new(x, place.roof - 0.15, place.middle)
+	local body = PartUtil.solidBlock("Body", Vector3.new(a.RoofWidth - 0.6, top - 0.3 - BOTTOM, place.length), bodyColor, material, parent)
+	body.CFrame = CFrame.new(x, (top - 0.3 + BOTTOM) / 2, place.middle)
+	local roof = PartUtil.solidBlock("Roof", Vector3.new(a.RoofWidth, 0.3, place.length), topColor, Enum.Material.Metal, parent)
+	roof.CFrame = CFrame.new(x, top - 0.15, place.middle)
 	addWheels(parent, x, place, a.RoofWidth / 2 - 0.3)
 end
 
--- The locomotive: a round boiler in front (its top is a slippery round ridge to fight on), a tall cab behind it
--- (its flat roof is the highest spot), and a chimney.
-local function addLocomotive(parent: Instance, x: number, place: ArenaLayout.CarPlace)
+-- A solid box standing on the car's top: its middle `along` the car.
+local function addBox(parent: Instance, name: string, x: number, place: ArenaLayout.CarPlace, along: number, size: Vector3, color: Color3)
+	local box = PartUtil.solidBlock(name, size, color, Enum.Material.WoodPlanks, parent)
+	box.CFrame = CFrame.new(x, place.roof + size.Y / 2, place.front + place.length * along)
+end
+
+-- The locomotive: a round boiler in front (its top a narrow ridge to fight on), a tall cab behind it (its flat roof
+-- the high spot), and a chimney. Shaped from the same fields ArenaLayout reads: the cab from `roofFrom`, the boiler
+-- over the front share `boiler.to`, `boiler.width` round with its top at `boiler.top`.
+local function addLocomotive(parent: Instance, x: number, place: ArenaLayout.CarPlace, kind: ArenaLayout.Kind, boilerSpec: { to: number, top: number, width: number })
 	local a = Config.Arena
-	local bottom = WHEEL_RADIUS * 1.4
-	local cabLength = place.length * 0.35
-	local boilerLength = place.length - cabLength
-	local boilerDiameter = place.roof - 1.5 - bottom
+	local cabLength = place.length * (1 - (kind.roofFrom or 0))
+	local boilerLength = place.length * boilerSpec.to
+	local boilerDiameter = boilerSpec.width
 	local frame = PartUtil.solidBlock("Frame", Vector3.new(a.RoofWidth - 1.6, 1, place.length), a.Colors.Cab, Enum.Material.Metal, parent)
-	frame.CFrame = CFrame.new(x, bottom + 0.5, place.middle)
+	frame.CFrame = CFrame.new(x, BOTTOM + 0.5, place.middle)
 	local boiler = PartUtil.solidBlock("Boiler", Vector3.new(boilerLength, boilerDiameter, boilerDiameter), a.Colors.Boiler, Enum.Material.Metal, parent)
 	boiler.Shape = Enum.PartType.Cylinder -- along its own X: turned to lie along the track
-	boiler.CFrame = CFrame.new(x, bottom + 1 + boilerDiameter / 2, place.front + boilerLength / 2) * CFrame.Angles(0, math.pi / 2, 0)
-	local cab = PartUtil.solidBlock("Cab", Vector3.new(a.RoofWidth - 0.6, place.roof - 0.3 - bottom, cabLength), a.Colors.Cab, Enum.Material.Metal, parent)
-	cab.CFrame = CFrame.new(x, (place.roof - 0.3 + bottom) / 2, place.back - cabLength / 2)
+	boiler.CFrame = CFrame.new(x, boilerSpec.top - boilerDiameter / 2, place.front + boilerLength / 2) * CFrame.Angles(0, math.pi / 2, 0)
+	local cab = PartUtil.solidBlock("Cab", Vector3.new(a.RoofWidth - 0.6, place.roof - 0.3 - BOTTOM, cabLength), a.Colors.Cab, Enum.Material.Metal, parent)
+	cab.CFrame = CFrame.new(x, (place.roof - 0.3 + BOTTOM) / 2, place.back - cabLength / 2)
 	local cabRoof = PartUtil.solidBlock("CabRoof", Vector3.new(a.RoofWidth, 0.3, cabLength), a.Colors.Roof, Enum.Material.Metal, parent)
 	cabRoof.CFrame = CFrame.new(x, place.roof - 0.15, place.back - cabLength / 2)
-	local chimney = PartUtil.solidBlock("Chimney", Vector3.new(3, 1.6, 1.6), a.Colors.Cab, Enum.Material.Metal, parent)
+	local chimney = PartUtil.ghostBlock("Chimney", Vector3.new(3, 1.6, 1.6), a.Colors.Cab, Enum.Material.Metal, parent)
 	chimney.Shape = Enum.PartType.Cylinder -- along its own X: stood up
-	chimney.CFrame = CFrame.new(x, bottom + 1 + boilerDiameter + 1.2, place.front + 2.5) * CFrame.Angles(0, 0, math.pi / 2)
+	chimney.CFrame = CFrame.new(x, boilerSpec.top + 1.2, place.front + 2.5) * CFrame.Angles(0, 0, math.pi / 2)
 	addWheels(parent, x, place, a.RoofWidth / 2 - 0.8)
+end
+
+-- One car of any kind, at train line x.
+local function addCar(parent: Instance, x: number, place: ArenaLayout.CarPlace)
+	local a = Config.Arena
+	local kind = a.CarKinds[place.kind]
+	local colors = a.Colors
+	if kind.boiler then
+		addLocomotive(parent, x, place, kind, kind.boiler)
+	elseif place.kind == "Tender" then
+		addBody(parent, x, place, place.roof, colors.Tender, colors.Coal, Enum.Material.Metal)
+	elseif place.kind == "Flatcar" then
+		addBody(parent, x, place, place.roof, colors.Flatcar, colors.Flatcar, Enum.Material.WoodPlanks)
+	elseif place.kind == "Caboose" then
+		addBody(parent, x, place, place.roof, colors.Caboose, colors.Roof, Enum.Material.WoodPlanks)
+	else
+		addBody(parent, x, place, place.roof, colors.Boxcar, colors.Roof, Enum.Material.WoodPlanks)
+	end
+	local crates: { ArenaLayout.Box } = kind.crates or {}
+	for _, crate in crates do
+		addBox(parent, "Crate", x, place, crate.along, Vector3.new(crate.width, crate.height, crate.length), colors.Crate)
+	end
+	local cupola = kind.cupola
+	if cupola then
+		local length = place.length * (cupola.to - cupola.from)
+		addBox(parent, "Cupola", x, place, (cupola.from + cupola.to) / 2, Vector3.new(cupola.width, cupola.height, length), colors.Caboose)
+	end
 end
 
 -- The sand: one wide slab under the whole view (Config.Run), its top at Config.Arena.GroundY.
@@ -121,21 +156,16 @@ function ArenaBuilder.build(): Arena
 		old:Destroy()
 	end
 	local folder = PartUtil.folder(Workspace, Names.ArenaFolder)
-	local places = ArenaLayout.carPlaces(a.Cars, a.CarGap)
-	for i = 1, a.Trains do
-		local train = Instance.new("Model")
-		train.Name = "Train" .. i
-		local x = ArenaLayout.trainX(i, a.Trains, a.RoofWidth, a.Gap)
-		for _, place in places do
-			if place.kind == "Locomotive" then
-				addLocomotive(train, x, place)
-			else
-				addBoxcar(train, x, place)
-			end
+	local layout = ArenaLayout.layout(a, Config.Fall.Margin)
+	for i, train in layout.trains do
+		local model = Instance.new("Model")
+		model.Name = "Train" .. i
+		for _, place in train.cars do
+			addCar(model, train.x, place)
 		end
-		train.Parent = folder
+		model.Parent = folder
 	end
-	for _, plank in ArenaLayout.planks(places, a.PlankCars, a.Trains, a.RoofWidth, a.Gap, a.PlankOverlap) do
+	for _, plank in layout.planks do
 		local part = PartUtil.solidBlock("Plank", Vector3.new(plank.length, a.PlankThickness, a.PlankWidth), a.Colors.Plank, Enum.Material.WoodPlanks, folder)
 		part.CFrame = CFrame.new(plank.x, plank.top + a.PlankThickness / 2, plank.z)
 	end
@@ -143,8 +173,9 @@ function ArenaBuilder.build(): Arena
 	local waitingSpot = addWaitingRoom(folder)
 	return {
 		folder = folder,
-		spots = ArenaLayout.spawnSpots(places, a.Trains, a.RoofWidth, a.Gap, 2),
-		fallLine = ArenaLayout.fallLine(places, Config.Fall.Margin),
+		layout = layout,
+		spots = layout.spots,
+		fallLine = layout.fallLine,
 		waitingSpot = waitingSpot,
 	}
 end

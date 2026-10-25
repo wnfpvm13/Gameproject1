@@ -79,8 +79,9 @@ local function shuffled<T>(list: { T }): { T }
 	return copy
 end
 
--- waitingSpot: the middle of the waiting room's floor (where the knocked out and the waiting stand).
-function RoundService.start(spots: { ArenaLayout.Spot }, waitingSpot: CFrame, hooks: Hooks): Service
+-- spots, trains: the spawn spots and how many trains they are on (ArenaLayout); waitingSpot: the middle of the
+-- waiting room's floor (where the knocked out and the waiting stand).
+function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waitingSpot: CFrame, hooks: Hooks): Service
 	local r = Config.Round
 	local alive: { [Model]: Fighter } = {}
 	local lastHit: { [Model]: { swinger: Model, at: number } } = {}
@@ -152,21 +153,23 @@ function RoundService.start(spots: { ArenaLayout.Spot }, waitingSpot: CFrame, ho
 	local function enter(): boolean
 		table.clear(alive)
 		table.clear(lastHit)
-		-- Sandbags first: making them can take frames, and the players are read after it, with nothing yielding between
-		-- reading them and placing them (a player who died or left meanwhile is simply not read).
+		-- Sandbags made first: making them can take frames, and the players are read after it, with nothing yielding
+		-- between reading them and placing them (a player who died or left meanwhile is simply not read).
+		local sandbags = hooks.spawnSandbags(hooks.sandbagCount())
+		-- Players placed first, so they take the middle train's spots (ArenaLayout.preferMiddle) and a few meet there.
 		local fighters: { Fighter } = {}
-		for _, model in hooks.spawnSandbags(hooks.sandbagCount()) do
-			table.insert(fighters, { model = model, player = nil })
-		end
 		local players = readyPlayers()
 		for _, player in players do
 			table.insert(fighters, { model = player.Character :: Model, player = player })
+		end
+		for _, model in sandbags do
+			table.insert(fighters, { model = model, player = nil })
 		end
 		if #players < 1 or #fighters < r.MinPlayers then
 			hooks.clearSandbags()
 			return false
 		end
-		local free = shuffled(spots)
+		local free = ArenaLayout.preferMiddle(spots, trains, shuffled)
 		for i, fighter in fighters do
 			local spot = free[(i - 1) % #free + 1]
 			local at = Vector3.new(spot.x, spot.y + 3.5, spot.z)

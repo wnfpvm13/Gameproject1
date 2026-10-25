@@ -1,79 +1,252 @@
 --!strict
--- Where everything in the arena is, as pure math: each train's middle line, its cars' places along the track, the
--- planks between trains, the spawn spots and the height below which a player has fallen off. Train space and world
--- space share axes (the arena stands at the world origin, rails on Y = 0, -Z ahead). Requires nothing.
+-- Where everything in the arena is, as pure math, from Config.Arena: each train's middle line and its cars' places
+-- along the track (every train has its own cars and stands a little ahead of or behind the others, so different cars
+-- face each other), the surfaces people stand on (roofs, a locomotive's boiler, a flatcar's deck and crates, a
+-- caboose's lookout), the planks between trains (only where two flat tops of the same height face each other wide
+-- enough), the spawn spots, the height below which a fighter has fallen off, and how far a jump carries. Train space
+-- and world space share axes (the arena at the world origin, rails on Y = 0, -Z ahead). Requires nothing.
 
 local ArenaLayout = {}
 
-export type Car = { kind: string, length: number, roof: number }
-export type CarPlace = { kind: string, front: number, back: number, middle: number, length: number, roof: number }
+-- A box standing on a car's deck or roof: its middle at `along` (share of the car's length from the front).
+export type Box = { along: number, width: number, length: number, height: number }
+-- A kind of car (Config.Arena.CarKinds). roof: the main walkable top; roofFrom: it starts this share along the car
+-- (a locomotive's flat cab roof is only its back part); boiler: a round boiler over the front share `to`, its top at
+-- `top`; spawns: spawn spots, as shares along the car; plank: planks may rest on its main top.
+export type Kind = {
+	length: number,
+	roof: number,
+	roofFrom: number?,
+	spawns: { number },
+	plank: boolean,
+	boiler: { to: number, top: number, width: number }?,
+	crates: { Box }?,
+	cupola: { from: number, to: number, width: number, height: number }?,
+}
+export type TrainSpec = { shift: number, cars: { string } }
+export type Spec = {
+	Gap: number,
+	RoofWidth: number,
+	CarGap: number,
+	CarKinds: { [string]: Kind },
+	Trains: { TrainSpec },
+	PlankWidth: number,
+	PlankOverlap: number,
+	PlankEdge: number,
+	PlanksPerGap: number,
+	PlankSpacing: number,
+}
+
+export type CarPlace = { kind: string, train: number, front: number, back: number, middle: number, length: number, roof: number }
+-- A walkable top: its middle (x, z), size across (width) and along the track (length), and height.
+export type Surface = { train: number, kind: string, x: number, z: number, width: number, length: number, top: number, plank: boolean }
 export type Plank = { x: number, z: number, top: number, length: number }
-export type Spot = { x: number, y: number, z: number }
+export type Spot = { x: number, y: number, z: number, train: number }
+export type Train = { x: number, cars: { CarPlace } }
+export type Layout = { trains: { Train }, surfaces: { Surface }, planks: { Plank }, spots: { Spot }, fallLine: number, outerEdge: number }
 
 -- Train i's middle line (X), of `count` trains with roofs `roofWidth` wide and `gap` apart, centred on X = 0.
 function ArenaLayout.trainX(i: number, count: number, roofWidth: number, gap: number): number
 	return (i - (count + 1) / 2) * (roofWidth + gap)
 end
 
--- The cars of a train, front (-Z) to back, `carGap` apart, the whole train centred on Z = 0.
-function ArenaLayout.carPlaces(cars: { Car }, carGap: number): { CarPlace }
+-- A train's cars, front (-Z) to back, `carGap` apart: the whole train centred on Z = `shift`.
+function ArenaLayout.carPlaces(cars: { string }, kinds: { [string]: Kind }, carGap: number, shift: number, train: number): { CarPlace }
 	local total = (#cars - 1) * carGap
-	for _, car in cars do
-		total += car.length
+	for _, name in cars do
+		assert(kinds[name], "[TrainBrawl] no car kind named " .. name .. " in Config.Arena.CarKinds")
+		total += kinds[name].length
 	end
 	local places = {}
-	local z = -total / 2
-	for _, car in cars do
+	local z = shift - total / 2
+	for _, name in cars do
+		local kind = kinds[name]
 		table.insert(places, {
-			kind = car.kind,
+			kind = name,
+			train = train,
 			front = z,
-			back = z + car.length,
-			middle = z + car.length / 2,
-			length = car.length,
-			roof = car.roof,
+			back = z + kind.length,
+			middle = z + kind.length / 2,
+			length = kind.length,
+			roof = kind.roof,
 		})
-		z += car.length + carGap
+		z += kind.length + carGap
 	end
 	return places
 end
 
--- The planks: one across each gap between neighbouring trains, in the middle of each car listed in `plankCars`.
-function ArenaLayout.planks(places: { CarPlace }, plankCars: { number }, count: number, roofWidth: number, gap: number, overlap: number): { Plank }
-	local planks = {}
+-- The walkable tops of one car standing on line x.
+local function carSurfaces(place: CarPlace, kind: Kind, x: number, roofWidth: number): { Surface }
+	local list = {}
+	local from = place.front + place.length * (kind.roofFrom or 0)
+	table.insert(list, {
+		train = place.train,
+		kind = place.kind,
+		x = x,
+		z = (from + place.back) / 2,
+		width = roofWidth,
+		length = place.back - from,
+		top = place.roof,
+		plank = kind.plank,
+	})
+	local boiler = kind.boiler
+	if boiler then
+		local to = place.front + place.length * boiler.to
+		table.insert(list, { train = place.train, kind = place.kind, x = x, z = (place.front + to) / 2, width = boiler.width, length = to - place.front, top = boiler.top, plank = false })
+	end
+	local crates: { Box } = kind.crates or {}
+	for _, crate in crates do
+		table.insert(list, {
+			train = place.train,
+			kind = place.kind,
+			x = x,
+			z = place.front + place.length * crate.along,
+			width = crate.width,
+			length = crate.length,
+			top = place.roof + crate.height,
+			plank = false,
+		})
+	end
+	local cupola = kind.cupola
+	if cupola then
+		local a, b = place.front + place.length * cupola.from, place.front + place.length * cupola.to
+		table.insert(list, { train = place.train, kind = place.kind, x = x, z = (a + b) / 2, width = cupola.width, length = b - a, top = place.roof + cupola.height, plank = false })
+	end
+	return list
+end
+
+-- The planks across the gap between trains `left` and `right`: where two plank tops of the same height face each
+-- other along at least a plank's width (keeping PlankEdge from their ends). The widest goes first; each next one is
+-- the one farthest from those already laid (spread along the trains), at least PlankSpacing away, up to PlanksPerGap.
+local function gapPlanks(spec: Spec, surfaces: { Surface }, left: number, right: number, x: number): { Plank }
+	local candidates = {}
+	for _, a in surfaces do
+		if a.train == left and a.plank then
+			for _, b in surfaces do
+				if b.train == right and b.plank and math.abs(a.top - b.top) < 1e-6 then
+					local lo = math.max(a.z - a.length / 2, b.z - b.length / 2) + spec.PlankEdge
+					local hi = math.min(a.z + a.length / 2, b.z + b.length / 2) - spec.PlankEdge
+					if hi - lo >= spec.PlankWidth then
+						table.insert(candidates, { z = (lo + hi) / 2, size = hi - lo, top = a.top })
+					end
+				end
+			end
+		end
+	end
+	table.sort(candidates, function(p, q)
+		return if p.size ~= q.size then p.size > q.size else p.z < q.z
+	end)
+	local chosen: { Plank } = {}
+	local used: { [number]: boolean } = {}
+	while #chosen < spec.PlanksPerGap do
+		local best, bestAway, bestIndex = nil, -1, 0
+		for index, candidate in candidates do
+			if used[index] then
+				continue
+			end
+			local away = math.huge
+			for _, plank in chosen do
+				away = math.min(away, math.abs(plank.z - candidate.z))
+			end
+			if away >= spec.PlankSpacing and away > bestAway then
+				best, bestAway, bestIndex = candidate, away, index
+			end
+		end
+		if not best then
+			break
+		end
+		used[bestIndex] = true
+		table.insert(chosen, { x = x, z = best.z, top = best.top, length = spec.Gap + spec.PlankOverlap * 2 })
+	end
+	return chosen
+end
+
+-- The whole arena from `spec` (Config.Arena); feet `fallMargin` under the lowest walkable top have fallen off.
+function ArenaLayout.layout(spec: Spec, fallMargin: number): Layout
+	local count = #spec.Trains
+	local trains: { Train } = {}
+	local surfaces: { Surface } = {}
+	local spots: { Spot } = {}
+	for i, train in spec.Trains do
+		local x = ArenaLayout.trainX(i, count, spec.RoofWidth, spec.Gap)
+		local cars = ArenaLayout.carPlaces(train.cars, spec.CarKinds, spec.CarGap, train.shift, i)
+		table.insert(trains, { x = x, cars = cars })
+		for _, place in cars do
+			local kind = spec.CarKinds[place.kind]
+			for _, surface in carSurfaces(place, kind, x, spec.RoofWidth) do
+				table.insert(surfaces, surface)
+			end
+			for _, share in kind.spawns do
+				table.insert(spots, { x = x, y = place.roof, z = place.front + place.length * share, train = i })
+			end
+		end
+	end
+	local planks: { Plank } = {}
 	for i = 1, count - 1 do
-		local x = (ArenaLayout.trainX(i, count, roofWidth, gap) + ArenaLayout.trainX(i + 1, count, roofWidth, gap)) / 2
-		for _, index in plankCars do
-			local place = places[index]
-			if place then
-				table.insert(planks, { x = x, z = place.middle, top = place.roof, length = gap + overlap * 2 })
-			end
+		local x = (trains[i].x + trains[i + 1].x) / 2
+		for _, plank in gapPlanks(spec, surfaces, i, i + 1, x) do
+			table.insert(planks, plank)
 		end
 	end
-	return planks
-end
-
--- Spawn spots on the roofs: `perCar` spread along each car of each train (a little in from the ends).
-function ArenaLayout.spawnSpots(places: { CarPlace }, count: number, roofWidth: number, gap: number, perCar: number): { Spot }
-	local spots = {}
-	for i = 1, count do
-		local x = ArenaLayout.trainX(i, count, roofWidth, gap)
-		for _, place in places do
-			for k = 1, perCar do
-				local z = place.front + place.length * k / (perCar + 1)
-				table.insert(spots, { x = x, y = place.roof, z = z })
-			end
-		end
-	end
-	return spots
-end
-
--- Feet lower than this have fallen off the trains: `margin` under the lowest roof.
-function ArenaLayout.fallLine(places: { CarPlace }, margin: number): number
 	local lowest = math.huge
-	for _, place in places do
-		lowest = math.min(lowest, place.roof)
+	for _, surface in surfaces do
+		lowest = math.min(lowest, surface.top)
 	end
-	return lowest - margin
+	local outer = 0
+	for _, train in trains do
+		outer = math.max(outer, math.abs(train.x) + spec.RoofWidth / 2)
+	end
+	return { trains = trains, surfaces = surfaces, planks = planks, spots = spots, fallLine = lowest - fallMargin, outerEdge = outer }
+end
+
+-- The spawn spots of `trains` trains in the order to hand them out: the middle train's (or two) first, then the trains
+-- next to them, outward, so a few players meet in the middle and more spread out. `shuffle` mixes each train's own
+-- spots and which of two equally far trains goes first; equally far trains then take turns.
+function ArenaLayout.preferMiddle(spots: { Spot }, trains: number, shuffle: <T>({ T }) -> { T }): { Spot }
+	local middle = (trains + 1) / 2
+	local byTrain: { [number]: { Spot } } = {}
+	for _, spot in spots do
+		byTrain[spot.train] = byTrain[spot.train] or {}
+		table.insert(byTrain[spot.train], spot)
+	end
+	-- Trains grouped by how far they are from the middle (twice the distance, a whole number).
+	local groups: { [number]: { number } } = {}
+	local farthest = 0
+	for i = 1, trains do
+		local away = math.round(math.abs(i - middle) * 2)
+		groups[away] = groups[away] or {}
+		table.insert(groups[away], i)
+		farthest = math.max(farthest, away)
+	end
+	local list = {}
+	for away = 0, farthest do
+		local queues = {}
+		for _, i in shuffle(groups[away] or {}) do
+			table.insert(queues, shuffle(byTrain[i] or {}))
+		end
+		local k = 1
+		local added = true
+		while added do
+			added = false
+			for _, queue in queues do
+				if queue[k] then
+					table.insert(list, queue[k])
+					added = true
+				end
+			end
+			k += 1
+		end
+	end
+	return list
+end
+
+-- How far a running jump carries along the ground when it lands `drop` lower than it started (Roblox's character
+-- jump: up to `jumpHeight` at `walkSpeed`, under `gravity`). The plain flight only: a real jump crosses about 4 more
+-- (it can start past the edge and catch the far edge; measured, tests' JUMP_EXTRA).
+function ArenaLayout.jumpReach(walkSpeed: number, jumpHeight: number, gravity: number, drop: number): number
+	local up = math.sqrt(2 * jumpHeight / gravity)
+	local down = math.sqrt(2 * (jumpHeight + drop) / gravity)
+	return walkSpeed * (up + down)
 end
 
 return ArenaLayout

@@ -23,7 +23,7 @@ local Names = require(shared:WaitForChild("Names"))
 
 local remotes = Net.create()
 local arena = ArenaBuilder.build()
-local sandbags = Sandbags.start(arena.fallLine)
+local sandbags = Sandbags.start(arena.fallLine, arena.layout.surfaces)
 local health = FighterHealth.start()
 
 local function equip(model: Model)
@@ -32,7 +32,7 @@ local function equip(model: Model)
 	end
 end
 
-local round = RoundService.start(arena.spots, arena.waitingSpot, {
+local round = RoundService.start(arena.spots, #arena.layout.trains, arena.waitingSpot, {
 	-- The solo-practice switch only works in Studio, so it can never be left on in the published game.
 	sandbagCount = function(): number
 		return if RunService:IsStudio() and Workspace:GetAttribute(Names.Solo) == true then Config.Sandbag.Count else 0

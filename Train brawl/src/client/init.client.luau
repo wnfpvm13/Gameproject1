@@ -42,9 +42,11 @@ local hitRemote = remotes:WaitForChild(Names.HitRemote) :: RemoteEvent
 local feedRemote = remotes:WaitForChild(Names.FeedRemote) :: RemoteEvent
 
 SoundBank.preload()
-local scenery = Scenery.new()
+-- The same arena the server built (ArenaLayout is pure math from the shared Config).
+local layout = ArenaLayout.layout(Config.Arena, Config.Fall.Margin)
+local scenery = Scenery.new(layout)
 local knock = KnockFlight.new()
-local drift = FallDrift.new(ArenaLayout.fallLine(ArenaLayout.carPlaces(Config.Arena.Cars, Config.Arena.CarGap), Config.Fall.Margin))
+local drift = FallDrift.new(layout.fallLine)
 local playerGui = player:WaitForChild("PlayerGui")
 local hud = RoundHud.new(playerGui)
 local spectate = SpectateCam.new()

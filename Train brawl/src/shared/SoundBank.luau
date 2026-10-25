@@ -100,13 +100,19 @@ function SoundBank.preload()
 		return
 	end
 	task.spawn(function()
-		local ids = {}
+		-- As Sound instances: a bare id string is fetched as an image and fails ("Asset type does not match").
+		local sounds = {}
 		for _, entry in Config.Sounds :: any do
-			table.insert(ids, entry.id)
+			local sound = Instance.new("Sound")
+			sound.SoundId = entry.id
+			table.insert(sounds, sound)
 		end
 		pcall(function()
-			ContentProvider:PreloadAsync(ids)
+			ContentProvider:PreloadAsync(sounds)
 		end)
+		for _, sound in sounds do
+			sound:Destroy()
+		end
 	end)
 end
 

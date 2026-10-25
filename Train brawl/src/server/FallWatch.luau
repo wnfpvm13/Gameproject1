@@ -1,6 +1,6 @@
 --!strict
 -- Watches the fighters' feet on the server: whoever drops below the fall line (Config.Fall.Margin under the lowest
--- roof) has missed the train. The fighters come from the round, which drops a fighter once it is out, so each one is
+-- top, a flatcar's deck) has missed the train. The fighters come from the round, which drops a fighter once it is out, so each one is
 -- reported once.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")

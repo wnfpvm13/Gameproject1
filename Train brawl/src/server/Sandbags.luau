@@ -1,7 +1,6 @@
 --!strict
--- Studio practice partners: sandbag characters (default avatars named "샌드백 N") that wander the roofs during a fight
--- and take hits
--- like players. The server owns their physics (SetNetworkOwner(nil)), so it moves them itself with the same rules a
+-- Studio practice partners: sandbag characters (default avatars named "샌드백 N") that wander the top they stand on
+-- during a fight and take hits like players. The server owns their physics (SetNetworkOwner(nil)), so it moves them itself with the same rules a
 -- player's own client follows (BodyMotion): a short hold, stiff while flying, back on their feet after landing
 -- (Config.Knock), and lying down and left behind once below the fall line.
 local Players = game:GetService("Players")
@@ -33,27 +32,42 @@ export type Service = {
 -- stiffSince: launched by a hit at this os.clock(); drifting: below the fall line last frame.
 type Bag = { body: CharacterParts.Body, stiffSince: number?, drifting: boolean, nextWander: number }
 
--- A spot to walk to on the roof of the train the bag is on, near where it stands.
-local function wanderSpot(body: CharacterParts.Body): Vector3
-	local a = Config.Arena
+-- The top the bag stands on: the highest walkable top of the arena (ArenaLayout) under its feet, if any.
+local function surfaceUnder(surfaces: { ArenaLayout.Surface }, body: CharacterParts.Body): ArenaLayout.Surface?
 	local here = body.root.Position
-	local best, bestX = 1, math.huge
-	for i = 1, a.Trains do
-		local x = ArenaLayout.trainX(i, a.Trains, a.RoofWidth, a.Gap)
-		if math.abs(x - here.X) < math.abs(bestX - here.X) then
-			best, bestX = i, x
+	local feet = CharacterParts.feetY(body)
+	local best: ArenaLayout.Surface? = nil
+	for _, surface in surfaces do
+		local inside = math.abs(here.X - surface.x) <= surface.width / 2 and math.abs(here.Z - surface.z) <= surface.length / 2
+		if inside and surface.top <= feet + 0.5 and (not best or surface.top > best.top) then
+			best = surface
 		end
 	end
-	local places = ArenaLayout.carPlaces(a.Cars, a.CarGap)
-	local front, back = places[1].front + 2, places[#places].back - 2
-	local halfWidth = a.RoofWidth / 2 - 1.5
-	local x = ArenaLayout.trainX(best, a.Trains, a.RoofWidth, a.Gap) + (math.random() * 2 - 1) * halfWidth
-	local z = math.clamp(here.Z + (math.random() * 2 - 1) * 8, front, back)
+	return best
+end
+
+-- A spot to walk to near where the bag stands, on the same top (so it never walks off an edge by itself).
+local function wanderSpot(surfaces: { ArenaLayout.Surface }, body: CharacterParts.Body): Vector3?
+	local surface = surfaceUnder(surfaces, body)
+	if not surface then
+		return nil
+	end
+	local here = body.root.Position
+	local halfWidth = math.max(surface.width / 2 - 1.5, 0)
+	local halfLength = math.max(surface.length / 2 - 1.5, 0)
+	local x = surface.x + (math.random() * 2 - 1) * halfWidth
+	local z = math.clamp(here.Z + (math.random() * 2 - 1) * 8, surface.z - halfLength, surface.z + halfLength)
 	return Vector3.new(x, here.Y, z)
 end
 
--- fallLine: feet below it have fallen off (ArenaBuilder).
-function Sandbags.start(fallLine: number): Service
+-- Stops a walk already under way (a MoveTo target lasts until reached or for 8 s, even after the bag was knocked onto
+-- another top, where walking on to the old target could take it over an edge).
+local function stopWalking(body: CharacterParts.Body)
+	body.humanoid:MoveTo(body.root.Position)
+end
+
+-- fallLine: feet below it have fallen off; surfaces: the arena's walkable tops (both from ArenaBuilder's layout).
+function Sandbags.start(fallLine: number, surfaces: { ArenaLayout.Surface }): Service
 	local bags: { [Model]: Bag } = {}
 	local ticking = RunService.Heartbeat:Connect(function()
 		local now = os.clock()
@@ -80,10 +94,16 @@ function Sandbags.start(fallLine: number): Service
 				if BodyMotion.landed(body, now - since) then
 					bag.stiffSince = nil
 					BodyMotion.getUp(body)
+					bag.nextWander = now -- a new spot on the top it landed on
 				end
 			elseif Workspace:GetAttribute(Names.Phase) == "Fight" and now >= bag.nextWander then
 				bag.nextWander = now + Config.Sandbag.WanderSeconds * (0.6 + math.random() * 0.8)
-				body.humanoid:MoveTo(wanderSpot(body))
+				local spot = wanderSpot(surfaces, body)
+				if spot then
+					body.humanoid:MoveTo(spot)
+				else
+					stopWalking(body) -- on a plank, a round boiler's side or the sand: stand still
+				end
 			end
 		end
 	end)
@@ -130,6 +150,8 @@ function Sandbags.start(fallLine: number): Service
 			local function reclaim(root: BasePart)
 				root:SetNetworkOwner(nil) -- the server keeps moving it
 			end
+			stopWalking(bag.body)
+			bag.nextWander = os.clock() + 0.5 -- after a flinch; a launch picks again once it has landed
 			if kind == "light" then
 				-- As a player's client does: the server sends a light hit only after a launch's unhittable moment.
 				bag.stiffSince = nil

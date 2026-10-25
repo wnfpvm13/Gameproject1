@@ -27,7 +27,8 @@ export type View = typeof(setmetatable({} :: Fields, Scenery))
 
 local GAUGE = 3 -- rail distance from a train's middle line
 
-function Scenery.new(): View
+-- layout: the arena (ArenaLayout.layout), for where the trains and their outer edge are.
+function Scenery.new(layout: ArenaLayout.Layout): View
 	local a, r = Config.Arena, Config.Run
 	local old = Workspace:FindFirstChild(Names.SceneryFolder)
 	if old then
@@ -40,8 +41,8 @@ function Scenery.new(): View
 		table.insert(parts, part)
 		table.insert(rest, cframe)
 	end
-	for i = 1, a.Trains do
-		local x = ArenaLayout.trainX(i, a.Trains, a.RoofWidth, a.Gap)
+	for _, train in layout.trains do
+		local x = train.x
 		for _, side in { -1, 1 } do
 			local rail = PartUtil.ghostBlock("Rail", Vector3.new(0.4, 0.4, loop), r.Colors.Rail, Enum.Material.Metal, folder)
 			rail.CFrame = CFrame.new(x + side * GAUGE, -0.2, (r.ViewBehind - r.ViewAhead) / 2)
@@ -55,7 +56,8 @@ function Scenery.new(): View
 	end
 	for k = 1, r.RoadsideProps do
 		local side = if k % 2 == 0 then 1 else -1
-		local x = side * (r.RoadsideNear + ((k * 7) % 9) / 8 * (r.RoadsideFar - r.RoadsideNear))
+		local near = layout.outerEdge + r.RoadsideClearance
+		local x = side * (near + ((k * 7) % 9) / 8 * math.max(r.RoadsideFar - near, 0))
 		local z = -r.ViewAhead + (k - 0.5) * loop / r.RoadsideProps
 		if k % 3 == 0 then
 			local size = 2 + (k % 4)

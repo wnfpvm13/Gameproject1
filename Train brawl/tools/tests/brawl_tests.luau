@@ -17,6 +17,25 @@ local A = Config.Arena
 local GRAVITY = 196.2 -- Roblox default
 local JUMP_HEIGHT = 7.2 -- Roblox default
 local WALK_SPEED = 16 -- Roblox default
+-- How much farther a real running jump crosses than ArenaLayout.jumpReach's plain flight. Measured in Studio
+-- (2026-10-25, default R15 dummy, jump pressed as late as 1.9 past the edge, where it still stands; from about 1.95
+-- it mostly falls first): crossed 12.75 / 13.75 / 14.25 for drops 0 / 5 / 8 (never 13 / 14 / 14.5) against the
+-- formula's 8.67 / 9.98 / 10.63, 3.6 to 4.1 more; 4.25 keeps a little margin.
+local JUMP_EXTRA = 4.25
+
+local SERVER_SIZE = 8 -- planned players per server (docs/DESIGN.md)
+local L = ArenaLayout.layout(A, Config.Fall.Margin)
+
+-- The walkable tops of train i.
+local function topsOf(i: number): { any }
+	local list = {}
+	for _, surface in L.surfaces do
+		if surface.train == i then
+			table.insert(list, surface)
+		end
+	end
+	return list
+end
 
 -- 1. Trains and cars.
 do
@@ -24,45 +43,206 @@ do
 	local x2 = ArenaLayout.trainX(2, 2, 10, 12)
 	check("two trains sit either side of the middle", near(x1, -11) and near(x2, 11))
 	check("one train sits on the middle", near(ArenaLayout.trainX(1, 1, 10, 12), 0))
-	local places = ArenaLayout.carPlaces(A.Cars, A.CarGap)
-	check("every car is placed", #places == #A.Cars)
-	check("the train is centred along the track", near(places[1].front, -places[#places].back))
-	local spaced = true
-	for i = 2, #places do
-		spaced = spaced and near(places[i].front - places[i - 1].back, A.CarGap)
-	end
-	check("cars follow one another a car gap apart", spaced)
-	check("a car's middle is halfway along it", near(places[2].middle, (places[2].front + places[2].back) / 2))
-end
-
--- 2. Planks, spawn spots and the fall line.
-do
-	local places = ArenaLayout.carPlaces(A.Cars, A.CarGap)
-	local planks = ArenaLayout.planks(places, A.PlankCars, A.Trains, A.RoofWidth, A.Gap, A.PlankOverlap)
-	check("a plank across each gap at each plank car", #planks == (A.Trains - 1) * #A.PlankCars)
-	local plank = planks[1]
-	local between = (ArenaLayout.trainX(1, A.Trains, A.RoofWidth, A.Gap) + ArenaLayout.trainX(2, A.Trains, A.RoofWidth, A.Gap)) / 2
-	check("the plank spans the gap and lies on both roofs", near(plank.length, A.Gap + 2 * A.PlankOverlap) and near(plank.x, between))
-	check("the plank sits at its car's roof", near(plank.top, places[A.PlankCars[1]].roof) and near(plank.z, places[A.PlankCars[1]].middle))
-	local spots = ArenaLayout.spawnSpots(places, A.Trains, A.RoofWidth, A.Gap, 2)
-	check("two spawn spots per car per train", #spots == A.Trains * #A.Cars * 2)
-	local onRoofs = true
-	for _, spot in spots do
-		local onAny = false
-		for _, place in places do
-			if spot.z > place.front and spot.z < place.back and near(spot.y, place.roof) then
-				onAny = true
+	check("three trains: one on the middle, one either side", near(ArenaLayout.trainX(1, 3, 10, 12), -22) and near(ArenaLayout.trainX(2, 3, 10, 12), 0) and near(ArenaLayout.trainX(3, 3, 10, 12), 22))
+	check("every train in Config is laid out", #L.trains == #A.Trains)
+	local placed, centred, spaced, halves, kinds, engines = true, true, true, true, true, true
+	local shifts = {}
+	for i, train in L.trains do
+		local spec = A.Trains[i]
+		placed = placed and #train.cars == #spec.cars
+		centred = centred and near((train.cars[1].front + train.cars[#train.cars].back) / 2, spec.shift)
+		for k, place in train.cars do
+			kinds = kinds and A.CarKinds[place.kind] ~= nil and place.kind == spec.cars[k]
+			halves = halves and near(place.middle, (place.front + place.back) / 2)
+			if k > 1 then
+				spaced = spaced and near(place.front - train.cars[k - 1].back, A.CarGap)
 			end
 		end
-		onRoofs = onRoofs and onAny
+		engines = engines and train.cars[1].kind == "Locomotive"
+		shifts[spec.shift] = true
 	end
-	check("every spawn spot is on a roof", onRoofs)
+	local differentShifts = 0
+	for _ in shifts do
+		differentShifts += 1
+	end
+	check("every car of every train is placed, of its own kind", placed and kinds)
+	check("each train is centred on its own shift along the track", centred)
+	check("cars follow one another a car gap apart", spaced)
+	check("a car's middle is halfway along it", halves)
+	check("every train has its locomotive in front", engines)
+	check("the trains stand at different shifts (different cars face each other)", differentShifts == #A.Trains)
+	-- Along one train everyone can get from any car to the next: a step down, or up by less than a jump.
+	local climbable = true
+	for _, train in L.trains do
+		for k = 2, #train.cars do
+			if math.abs(train.cars[k].roof - train.cars[k - 1].roof) > JUMP_HEIGHT - 1.5 then
+				climbable = false
+			end
+		end
+	end
+	check("along a train every car's top is within a jump of the next (flatcars can be climbed out of)", climbable)
+end
+
+-- 2. Planks, spawn spots, jumps and the fall line.
+do
+	local perGap: { [number]: { any } } = {}
+	local across, resting, clear = true, true, true
+	for _, plank in L.planks do
+		local gap = 0
+		for i = 1, #L.trains - 1 do
+			if near(plank.x, (L.trains[i].x + L.trains[i + 1].x) / 2) then
+				gap = i
+			end
+		end
+		across = across and gap > 0 and near(plank.length, A.Gap + 2 * A.PlankOverlap)
+		if gap > 0 then
+			perGap[gap] = perGap[gap] or {}
+			table.insert(perGap[gap], plank)
+			-- Both ends rest on a plank top of the plank's height that runs past it along the track.
+			for _, i in { gap, gap + 1 } do
+				local held = false
+				for _, surface in topsOf(i) do
+					if surface.plank and near(surface.top, plank.top)
+						and plank.z - A.PlankWidth / 2 >= surface.z - surface.length / 2
+						and plank.z + A.PlankWidth / 2 <= surface.z + surface.length / 2 then
+						held = true
+					end
+					-- Nothing higher stands on the plank's end (the part lying on the roof) or a character's width (1) past it.
+					local inward = if i == gap then -1 else 1
+					local edgeX = L.trains[i].x - inward * A.RoofWidth / 2
+					local stepX = edgeX + inward * (A.PlankOverlap + 1)
+					local endFrom, endTo = math.min(edgeX, stepX), math.max(edgeX, stepX)
+					local overlapX = math.min(endTo, surface.x + surface.width / 2) - math.max(endFrom, surface.x - surface.width / 2)
+					local overlapZ = math.min(plank.z + A.PlankWidth / 2, surface.z + surface.length / 2) - math.max(plank.z - A.PlankWidth / 2, surface.z - surface.length / 2)
+					if surface.top > plank.top + 1e-6 and overlapX > 0 and overlapZ > 0 then
+						clear = false
+					end
+				end
+				resting = resting and held
+			end
+		end
+	end
+	check("every plank spans a gap between neighbouring trains", across)
+	check("every plank's ends rest on flat tops of its own height", resting)
+	check("nothing higher stands on a plank's ends or where one steps off them", clear)
+	local everyGap, fewSpread = true, true
+	for i = 1, #L.trains - 1 do
+		local list = perGap[i] or {}
+		everyGap = everyGap and #list >= 1
+		fewSpread = fewSpread and #list <= A.PlanksPerGap
+		for a = 1, #list do
+			for b = a + 1, #list do
+				fewSpread = fewSpread and math.abs(list[a].z - list[b].z) >= A.PlankSpacing
+			end
+		end
+	end
+	check("every gap has a plank (every train can be reached)", everyGap)
+	check("at most PlanksPerGap planks per gap, PlankSpacing apart", fewSpread)
+	-- No jump crosses a gap, even one from the highest top dropping onto the lowest across from it (a top narrower than
+	-- the roof starts further from the edge).
+	local worst, worstWhere = -math.huge, ""
+	for i = 1, #L.trains - 1 do
+		for _, a in topsOf(i) do
+			for _, b in topsOf(i + 1) do
+				local facing = math.min(a.z + a.length / 2, b.z + b.length / 2) - math.max(a.z - a.length / 2, b.z - b.length / 2)
+				if facing > 0 then
+					local distance = A.Gap + (A.RoofWidth - a.width) / 2 + (A.RoofWidth - b.width) / 2
+					local reach = ArenaLayout.jumpReach(WALK_SPEED, JUMP_HEIGHT, GRAVITY, math.abs(a.top - b.top)) + JUMP_EXTRA
+					if reach - distance > worst then
+						worst, worstWhere = reach - distance, string.format("%s %.1f -> %s %.1f: reach %.1f, gap %.1f", a.kind, a.top, b.kind, b.top, reach, distance)
+					end
+				end
+			end
+		end
+	end
+	check("no jump crosses a gap, even dropping from the highest top to the lowest", worst < 0, worstWhere)
+	check("the plain jump flight on the flat is about 8.7 (Roblox's default jump)", near(ArenaLayout.jumpReach(16, 7.2, 196.2, 0), 8.67, 0.05))
+	check("JUMP_EXTRA covers every measured jump (it must not be lowered below them)", ArenaLayout.jumpReach(16, 7.2, 196.2, 0) + JUMP_EXTRA > 12.75
+		and ArenaLayout.jumpReach(16, 7.2, 196.2, 5) + JUMP_EXTRA > 13.75 and ArenaLayout.jumpReach(16, 7.2, 196.2, 8) + JUMP_EXTRA > 14.25)
+	-- Spawn spots: on their train's own flat top, clear of anything higher, enough for a full server and the sandbags.
+	check("enough spawn spots for a full server and the practice sandbags", #L.spots >= SERVER_SIZE + Config.Sandbag.Count, tostring(#L.spots))
+	local onTop, roomy = true, true
+	for _, spot in L.spots do
+		local stands = false
+		for _, surface in topsOf(spot.train) do
+			local dx, dz = math.abs(spot.x - surface.x), math.abs(spot.z - surface.z)
+			if near(surface.top, spot.y) and dx <= surface.width / 2 - 1.5 and dz <= surface.length / 2 - 1.5 then
+				stands = true
+			end
+			if surface.top > spot.y + 1e-6 and dx < surface.width / 2 + 1.5 and dz < surface.length / 2 + 1.5 then
+				roomy = false
+			end
+		end
+		onTop = onTop and stands
+	end
+	check("every spawn spot is on its train's flat top, away from its ends", onTop)
+	check("no spawn spot is in or against something higher", roomy)
+	local apart = true
+	for a = 1, #L.spots do
+		for b = a + 1, #L.spots do
+			local p, q = L.spots[a], L.spots[b]
+			if math.abs(p.x - q.x) < 3 and math.abs(p.z - q.z) < 3 then
+				apart = false
+			end
+		end
+	end
+	check("spawn spots are at least 3 apart (nobody appears inside someone else)", apart)
+	-- preferMiddle with a shuffle that reverses (to see it is used): every spot once, never farther from the middle than a
+	-- later one, and the two trains beside the middle taking turns.
+	local calls = 0
+	local function reverse<T>(list: { T }): { T }
+		calls += 1
+		local copy = {}
+		for k = #list, 1, -1 do
+			table.insert(copy, list[k])
+		end
+		return copy
+	end
+	local mixed = ArenaLayout.preferMiddle(L.spots, #L.trains, reverse)
+	local middle = (#L.trains + 1) / 2
+	local seen, once, outward = {}, #mixed == #L.spots, true
+	for k, spot in mixed do
+		once = once and not seen[spot]
+		seen[spot] = true
+		if k > 1 and math.abs(spot.train - middle) < math.abs(mixed[k - 1].train - middle) - 1e-9 then
+			outward = false
+		end
+	end
+	check("preferMiddle hands out every spot once, the middle train first, then outward", once and outward and mixed[1].train == middle)
+	local outside = {}
+	for _, spot in mixed do
+		if spot.train ~= middle then
+			table.insert(outside, spot.train)
+		end
+	end
+	local alternate = #outside >= 2
+	for k = 2, #outside do
+		alternate = alternate and outside[k] ~= outside[k - 1] -- both sides have the same number of spots here
+	end
+	check("the trains beside the middle take turns all the way", alternate)
+	-- The middle train's spots come out in the reversed order the shuffle returned.
+	local middleSpots = {}
+	for _, spot in L.spots do
+		if spot.train == middle then
+			table.insert(middleSpots, spot)
+		end
+	end
+	local usesShuffle = calls > 0 and #middleSpots > 1
+	for k, spot in middleSpots do
+		usesShuffle = usesShuffle and mixed[#middleSpots - k + 1] == spot
+	end
+	check("preferMiddle hands out what the shuffle returned", usesShuffle)
+	local four = ArenaLayout.preferMiddle({ { x = 0, y = 0, z = 0, train = 1 }, { x = 0, y = 0, z = 0, train = 2 }, { x = 0, y = 0, z = 0, train = 3 }, { x = 0, y = 0, z = 0, train = 4 } }, 4, reverse)
+	local two = (four[1].train == 2 or four[1].train == 3) and (four[2].train == 2 or four[2].train == 3) and four[1].train ~= four[2].train
+	check("with an even number of trains the two middle ones come first", two and #four == 4)
 	local lowest = math.huge
-	for _, car in A.Cars do
-		lowest = math.min(lowest, car.roof)
+	for _, surface in L.surfaces do
+		lowest = math.min(lowest, surface.top)
 	end
-	check("the fall line is the margin under the lowest roof", near(ArenaLayout.fallLine(places, Config.Fall.Margin), lowest - Config.Fall.Margin))
-	check("the sand is under the fall line (whoever lands on it is out)", A.GroundY < ArenaLayout.fallLine(places, Config.Fall.Margin))
+	check("the fall line is the margin under the lowest top", near(L.fallLine, lowest - Config.Fall.Margin))
+	check("the fall line lies between the sand and the lowest deck", A.GroundY < L.fallLine and L.fallLine < lowest)
+	check("the outer edge is the outermost train's roof edge", near(L.outerEdge, math.abs(L.trains[1].x) + A.RoofWidth / 2))
+	check("the roadside props stand beyond the outer edge and before the far line", L.outerEdge + Config.Run.RoadsideClearance < Config.Run.RoadsideFar)
 end
 
 -- 3. The bat's cone and knock.
@@ -116,9 +296,6 @@ end
 
 -- 5. Tuning promises.
 do
-	local jumpTime = 2 * math.sqrt(2 * JUMP_HEIGHT / GRAVITY)
-	local jump = WALK_SPEED * jumpTime
-	check("the gap between trains is wider than a jump (a plank or a hit is needed)", A.Gap > jump + 1, string.format("gap %.1f, jump %.1f", A.Gap, jump))
 	-- Knock reach (the plain flight formula; a lying landing and a short slide add about a fifth, measured in Studio).
 	local h = Config.Hit
 	local max, damage = Config.Health.Max, Config.Health.HitDamage
@@ -131,19 +308,26 @@ do
 	check("the second combo's launch goes off the roof from its middle", second > A.RoofWidth / 2, string.format("%.1f", second))
 	check("a light hit never pushes off the roof from its middle", h.LightEmpty * h.SlideSeconds < A.RoofWidth / 2)
 	check("a smash flies past the other train", BatMath.flightDistance(h.SmashPush, h.SmashLift, GRAVITY) > A.RoofWidth + A.Gap + A.RoofWidth)
-	-- The home run: from a body on a roof (its middle about 3 above), still flying over the roofs when it twinkles out,
-	-- and never up into the stands.
-	local startY, t = 10 + 3, Config.Fall.HomeRunSeconds
-	local yAtTwinkle = startY + h.SmashLift * t - GRAVITY / 2 * t * t
-	local top = startY + h.SmashLift * h.SmashLift / (2 * GRAVITY)
-	check("a home run is still higher than the roofs when it twinkles out", yAtTwinkle - 3 > 10, string.format("%.1f", yAtTwinkle))
+	-- The home run: from a body on any top (its middle about 3 above), still flying over the highest top when it
+	-- twinkles out, and never up into the stands.
+	local lowestTop, highestTop = math.huge, -math.huge
+	for _, surface in L.surfaces do
+		lowestTop = math.min(lowestTop, surface.top)
+		highestTop = math.max(highestTop, surface.top)
+	end
+	local t = Config.Fall.HomeRunSeconds
+	local function heightAt(startY: number, after: number): number
+		return startY + h.SmashLift * after - GRAVITY / 2 * after * after
+	end
+	check("a home run from the lowest deck is still higher than the highest top when it twinkles out", heightAt(lowestTop + 3, t) - 3 > highestTop, string.format("%.1f", heightAt(lowestTop + 3, t)))
 	-- It would reach the sand (its middle about 3 above it) a good moment after the twinkle, so a late network word
 	-- does not show it lying on the sand first.
 	local sandY = A.GroundY + 3
-	local land = (h.SmashLift + math.sqrt(h.SmashLift * h.SmashLift + 2 * GRAVITY * (startY - sandY))) / GRAVITY
+	local land = (h.SmashLift + math.sqrt(h.SmashLift * h.SmashLift + 2 * GRAVITY * (lowestTop + 3 - sandY))) / GRAVITY
 	-- The flight starts after the hold, so it has flown (t - hold) when the server takes it away.
 	check("a home run reaches the sand at least 0.2 s after it twinkles out", land > t - Config.Feedback.HitStopSeconds + 0.2, string.format("%.2f", land))
-	check("a home run's top stays under the stands", top < A.WaitingRoomHeight - 5, string.format("%.1f", top))
+	local top = highestTop + 3 + h.SmashLift * h.SmashLift / (2 * GRAVITY)
+	check("a home run's top stays under the stands, even from the highest top", top < A.WaitingRoomHeight - 5, string.format("%.1f", top))
 	check("a light hit's stun ends before the swinger can swing again (the one hit can answer)", h.LightStun + 0.1 < Config.Bat.Cooldown)
 	check("a launched fighter stays unhittable past lying down", h.LaunchImmune > Config.Knock.MinSeconds + 0.2)
 	check("a combo has time for its hits at the swing rate", h.ComboWindow > (h.LaunchOn - 1) * Config.Bat.Cooldown)

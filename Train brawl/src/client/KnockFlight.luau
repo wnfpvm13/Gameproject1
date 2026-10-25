@@ -1,7 +1,7 @@
 --!strict
 -- The player's own character, hit: a light hit flinches it (BodyMotion.stagger, no swinging for Config.Hit.LightStun);
 -- a launch or smash sends it flying (BodyMotion.launch), back on its feet once it has landed (BodyMotion.landed). The
--- player's client moves its own character, so the server sends the hit here (BatService) instead of applying it.
+-- player's client moves its own character, so the server sends the hit here (WeaponService) instead of applying it.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")

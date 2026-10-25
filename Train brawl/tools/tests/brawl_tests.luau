@@ -191,7 +191,17 @@ do
 	end
 	check("every spawn spot is on its train's flat top, away from its ends", onTop)
 	check("no spawn spot is in or against something higher", roomy)
-	local SPAWN_APART = Config.Bat.Reach + Config.Bat.ReachSlack
+	-- The farthest any weapon reaches at once (a cone's reach, or a slam's spot ahead plus its radius), with the slack.
+	local farthest = 0
+	for _, w in Config.Weapons do
+		if w.reach then
+			farthest = math.max(farthest, w.reach)
+		end
+		if w.style == "slam" and w.ahead and w.radius then
+			farthest = math.max(farthest, w.ahead + w.radius)
+		end
+	end
+	local SPAWN_APART = farthest + Config.Attack.ReachSlack
 	local apart = true
 	for a = 1, #L.spots do
 		for b = a + 1, #L.spots do
@@ -276,30 +286,34 @@ end
 
 -- 4. Hit rules.
 do
-	local rules = { max = 100, damage = 12, window = 1.5, launchOn = 3, immune = 0.9 }
+	local rules = { max = 100, window = 1.5, launchOn = 3, immune = 0.9 }
 	local s = HitRules.new(100)
 	check("a fighter starts at full health", s.health == 100)
-	local k1 = HitRules.hit(s, rules, 0)
-	local k2 = HitRules.hit(s, rules, 0.6)
-	local k3 = HitRules.hit(s, rules, 1.2)
+	local k1 = HitRules.hit(s, rules, 0, 12)
+	local k2 = HitRules.hit(s, rules, 0.6, 12)
+	local k3 = HitRules.hit(s, rules, 1.2, 12)
 	check("the first two hits of a combo are light, the third launches", k1 == "light" and k2 == "light" and k3 == "launch", k1 .. "," .. k2 .. "," .. k3)
 	check("each hit takes its damage", s.health == 64)
-	check("right after a launch the fighter cannot be hit", HitRules.hit(s, rules, 1.5) == "none" and s.health == 64)
-	check("after the moment passes a new combo starts light", HitRules.hit(s, rules, 2.2) == "light")
+	check("right after a launch the fighter cannot be hit", HitRules.hit(s, rules, 1.5, 12) == "none" and s.health == 64)
+	check("after the moment passes a new combo starts light", HitRules.hit(s, rules, 2.2, 12) == "light")
 	local t = HitRules.new(100)
-	HitRules.hit(t, rules, 0)
-	check("hits too far apart do not make a combo", HitRules.hit(t, rules, 2) == "light" and HitRules.hit(t, rules, 4) == "light")
+	HitRules.hit(t, rules, 0, 12)
+	check("hits too far apart do not make a combo", HitRules.hit(t, rules, 2, 12) == "light" and HitRules.hit(t, rules, 4, 12) == "light")
 	local u = HitRules.new(100)
 	local kinds, now = {}, 0
 	for _ = 1, 9 do
-		table.insert(kinds, HitRules.hit(u, rules, now))
+		table.insert(kinds, HitRules.hit(u, rules, now, 12))
 		now += 1 -- past the immune moment, and two hits a combo at most
 	end
 	check("the hit that empties health is a smash (the 9th from full)", kinds[9] == "smash" and kinds[8] ~= "smash" and u.health == 0, table.concat(kinds, ","))
-	check("an emptied fighter takes no more hits", HitRules.hit(u, rules, now + 5) == "none")
+	check("an emptied fighter takes no more hits", HitRules.hit(u, rules, now + 5, 12) == "none")
+	local v = HitRules.new(100)
+	check("a weapon that always launches launches on the first hit", HitRules.hit(v, rules, 0, 16, true) == "launch" and v.health == 84)
+	check("and leaves its fighter unhittable for a moment", HitRules.hit(v, rules, 0.5, 8) == "none")
+	check("each hit takes its own weapon's damage", HitRules.hit(v, rules, 1, 8) == "light" and v.health == 76)
 	check("push scales from full to empty", HitRules.scale(100, 100, 9, 29) == 9 and HitRules.scale(0, 100, 9, 29) == 29 and HitRules.scale(50, 100, 9, 29) == 19)
 	check("push stays in range outside the health range", HitRules.scale(-5, 100, 9, 29) == 29 and HitRules.scale(150, 100, 9, 29) == 9)
-	check("the real numbers empty health on the 9th hit", math.ceil(Config.Health.Max / Config.Health.HitDamage) == 9)
+	check("the real numbers: a bat empties health on the 9th hit, fists on the 13th", math.ceil(Config.Health.Max / Config.Weapons.Bat.damage) == 9 and math.ceil(Config.Health.Max / Config.Weapons.Fist.damage) == 13)
 	local forces = { LightFull = 5, LightEmpty = 15, LaunchFull = 1, LaunchEmpty = 27, LaunchLift = 28, SmashPush = 70, SmashLift = 60 }
 	local sp, sl = HitRules.force("smash", 0, 100, forces)
 	local lp, ll = HitRules.force("launch", 50, 100, forces)
@@ -313,7 +327,8 @@ end
 do
 	-- Knock reach (the plain flight formula; a lying landing and a short slide add about a fifth, measured in Studio).
 	local h = Config.Hit
-	local max, damage = Config.Health.Max, Config.Health.HitDamage
+	-- (The launches were measured with the bat: its damage makes the combos' health.)
+	local max, damage = Config.Health.Max, Config.Weapons.Bat.damage
 	local function launchAt(health: number): number
 		local push, lift = HitRules.force("launch", health, max, h)
 		return BatMath.flightDistance(push, lift, GRAVITY)
@@ -354,15 +369,26 @@ do
 	check("a home run reaches the sand at least 0.2 s after it twinkles out", land > t - Config.Feedback.HitStopSeconds + 0.2, string.format("%.2f", land))
 	local top = highestTop + 3 + h.SmashLift * h.SmashLift / (2 * GRAVITY)
 	check("a home run's top stays under where the stands begin, even from the highest top", top < A.WaitingRoomHeight - A.StandsMargin - 2, string.format("%.1f", top))
-	check("a light hit's stun ends before the swinger can swing again (the one hit can answer)", h.LightStun + 0.1 < Config.Bat.Cooldown)
+	local quickest, comboFits = math.huge, true
+	for _, w in Config.Weapons do
+		quickest = math.min(quickest, w.cooldown)
+		if w.style == "punch" or w.style == "swing" then
+			comboFits = comboFits and h.ComboWindow > (h.LaunchOn - 1) * w.cooldown
+		end
+	end
+	check("a light hit's stun ends before any weapon can attack again (the one hit can answer)", h.LightStun + 0.1 < quickest)
 	check("a launched fighter stays unhittable past lying down", h.LaunchImmune > Config.Knock.MinSeconds + 0.2)
-	check("a combo has time for its hits at the swing rate", h.ComboWindow > (h.LaunchOn - 1) * Config.Bat.Cooldown)
+	check("a combo has time for its hits with every punching or swinging weapon", comboFits)
 	check("a plank is wider than a character and narrower than a roof", A.PlankWidth > 2.5 and A.PlankWidth < A.RoofWidth)
 	check("the car gap is well under a character's thickness (about 1: nobody slips through)", A.CarGap <= 0.5)
-	check("the bat lands within the drawn swing", Config.Bat.HitAt < Config.Bat.SwingSeconds)
+	local within = true
+	for _, w in Config.Weapons do
+		within = within and w.hitAt < w.seconds and w.seconds <= w.cooldown + 0.3
+	end
+	check("every attack lands within its drawn move, and the move ends about when the next may start", within)
 	check("a swing pressed before the hit showed is taken, a swing while flying is not", Config.Knock.SwingGrace > 0 and Config.Knock.SwingGrace < Config.Knock.MinSeconds)
-	check("the server's slack keeps its reach above the client's", Config.Bat.ReachSlack > 0 and Config.Bat.CooldownSlack < Config.Bat.Cooldown)
-	check("the server's network slack stays small (it shows as hits from too far)", Config.Bat.ReachSlack <= 2)
+	check("the server's slack keeps its reach above the client's", Config.Attack.ReachSlack > 0 and Config.Attack.CooldownSlack < quickest)
+	check("the server's network slack stays small (it shows as hits from too far)", Config.Attack.ReachSlack <= 2)
 	check("the waiting room's walls are higher than a jump off someone's head", A.WaitingRoomWall > JUMP_HEIGHT + 5.5)
 	check("the fall plays while the waiting room is far above", Config.Arena.WaitingRoomHeight > 40)
 end
@@ -435,6 +461,81 @@ do
 	check("the canyon is beyond the roadside props and poles", nearest > Config.Run.RoadsideFar and nearest > L.outerEdge + Config.Run.PoleDistance)
 	check("a canyon stretch is long enough to show and shorter than the loop", c.SegmentMin > 10 and c.SegmentMax < c.Ahead + c.Behind)
 	check("the floor window is smaller than the waiting room", A.WaitingRoomWindow < A.WaitingRoomSize - 4)
+end
+
+-- 7. Weapons (stage 4b): fists by default, weapons from crates, every hit pushed by health.
+do
+	local W, h = Config.Weapons, Config.Hit
+	local styles = { punch = true, swing = true, slam = true, throw = true }
+	local shaped, lasting = true, true
+	for name, w in W do
+		shaped = shaped and styles[w.style] == true and w.damage > 0 and w.push > 0 and w.label ~= ""
+		if w.style == "punch" or w.style == "swing" then
+			shaped = shaped and w.reach ~= nil and w.halfAngle ~= nil
+		elseif w.style == "slam" then
+			shaped = shaped and w.radius ~= nil and w.ahead ~= nil
+		else
+			shaped = shaped and w.radius ~= nil and w.throwSpeed ~= nil and w.throwLift ~= nil and w.fuse ~= nil
+		end
+		if name ~= "Fist" then
+			lasting = lasting and (w.weight or 0) > 0 and (w.uses ~= nil or w.heldSeconds ~= nil)
+		end
+	end
+	check("every weapon has what its style needs", shaped)
+	check("every weapon but the fists comes in crates and runs out", lasting)
+	check("bare fists never come in a crate and never run out", W.Fist and (W.Fist.weight or 0) == 0 and W.Fist.uses == nil and W.Fist.heldSeconds == nil)
+	check("fists reach less than the bat", W.Fist.reach ~= nil and W.Bat.reach ~= nil and W.Fist.reach < W.Bat.reach)
+	-- No single hit of any weapon carries a full-health fighter off a roof from its middle (the owner's choice: weapons
+	-- push by health too). A launch travelled up to 1.32 times the plain flight (measured: 11.02 against 8.33), so the
+	-- check takes 1.5 times.
+	local safe, worst = true, ""
+	for name, w in W do
+		local health = Config.Health.Max - w.damage
+		local travel
+		if w.launch then
+			local push, lift = HitRules.force("launch", health, Config.Health.Max, h)
+			travel = BatMath.flightDistance(push * w.push * 1.5, lift, GRAVITY)
+		else
+			local push = HitRules.force("light", health, Config.Health.Max, h)
+			travel = push * w.push * h.SlideSeconds * 1.5 -- a light push carries on a little (measured 1.2 to 2)
+		end
+		if travel >= A.RoofWidth / 2 then
+			safe, worst = false, string.format("%s %.1f", name, travel)
+		end
+	end
+	check("no single hit of any weapon throws a full-health fighter off from a roof's middle", safe, worst)
+	check("a held gold bar is pushed less and walks slower", W.GoldBar.resist ~= nil and W.GoldBar.resist < 1 and W.GoldBar.slow ~= nil and W.GoldBar.slow > 0 and W.GoldBar.slow < 1)
+	local stick = W.Dynamite
+	check("a thrown stick lands beyond its own blast", BatMath.flightDistance(stick.throwSpeed or 0, stick.throwLift or 0, GRAVITY) > (stick.radius or 0))
+	check("a stick's fuse outlasts its flight across a gap (time to run)", (stick.fuse or 0) > 2 * (stick.throwLift or 0) / GRAVITY + 0.8)
+	-- Picking a crate's weapon.
+	check("a crate never holds bare fists", WeaponRules.pick(W, 0) ~= "Fist" and WeaponRules.pick(W, 0.999) ~= "Fist")
+	local counts: { [string]: number } = {}
+	for k = 0, 999 do
+		local picked = WeaponRules.pick(W, k / 1000)
+		if picked then
+			counts[picked] = (counts[picked] or 0) + 1
+		end
+	end
+	local total = 0
+	for name, w in W do
+		total += w.weight or 0
+	end
+	local fair = true
+	for name, w in W do
+		local expected = 1000 * (w.weight or 0) / total
+		fair = fair and math.abs((counts[name] or 0) - expected) <= 2
+	end
+	check("crates hold each weapon as often as its weight says", fair)
+	check("with no weights nothing is picked", WeaponRules.pick({ Fist = W.Fist }, 0.5) == nil)
+	check("a weapon name is read back, anything else is bare fists", WeaponRules.named(W, "Hammer") == "Hammer" and WeaponRules.named(W, "Nope") == "Fist" and WeaponRules.named(W, nil) == "Fist")
+	check("an area hit reaches within its radius and height only", WeaponRules.inArea(0, 0, 0, 3, 1, 4, 5, 5) and not WeaponRules.inArea(0, 0, 0, 4, 0, 4, 5, 5) and not WeaponRules.inArea(0, 0, 0, 1, 6, 0, 5, 5))
+	local ax, ay, az = WeaponRules.arc(1, 2, 3, 1, 0, 10, 20, GRAVITY, 0)
+	local bx, by, _ = WeaponRules.arc(0, 0, 0, 1, 0, 10, 20, GRAVITY, 20 / GRAVITY)
+	check("a throw starts at the hand and tops out where the lift runs out", ax == 1 and ay == 2 and az == 3 and near(bx, 10 * 20 / GRAVITY) and near(by, 20 * 20 / GRAVITY / 2))
+	local d = Config.Drops
+	check("crates: one for every three fighters, at least one, at most MaxOnMap", WeaponRules.cratesFor(1, d.MaxOnMap) == 1 and WeaponRules.cratesFor(3, d.MaxOnMap) == 1 and WeaponRules.cratesFor(4, d.MaxOnMap) == math.min(2, d.MaxOnMap) and WeaponRules.cratesFor(30, d.MaxOnMap) == d.MaxOnMap)
+	check("a crate lands before the next is due and lies a while", d.FallSeconds < d.Every and d.LifeSeconds > d.FallSeconds and d.FirstAfter < Config.Round.MaxSeconds)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

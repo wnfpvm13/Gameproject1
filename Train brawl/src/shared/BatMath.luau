@@ -1,5 +1,5 @@
 --!strict
--- The bat as pure math: whether a target stands in the cone a swing covers, and the knock it gets. Positions and
+-- Attacks as pure math: whether a target stands in the cone a punch or swing covers, and the knock it gets. Positions and
 -- directions are plain numbers (X and Z along the ground, Y up). Requires nothing.
 
 local BatMath = {}

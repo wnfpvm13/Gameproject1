@@ -19,6 +19,30 @@ type CarKind = {
 	cupola: { from: number, to: number, width: number, height: number }?,
 }
 
+-- A weapon: the shape WeaponRules.Weapon reads (written out again here, as Config requires nothing; keep them the same).
+type Weapon = {
+	style: string,
+	damage: number,
+	push: number,
+	launch: boolean?,
+	reach: number?,
+	halfAngle: number?,
+	radius: number?,
+	ahead: number?,
+	throwSpeed: number?,
+	throwLift: number?,
+	fuse: number?,
+	cooldown: number,
+	hitAt: number,
+	seconds: number,
+	uses: number?,
+	heldSeconds: number?,
+	resist: number?,
+	slow: number?,
+	weight: number?,
+	label: string,
+}
+
 -- The arena: big trains side by side on parallel tracks. They stand still in the world; the scenery scrolls past
 -- (Config.Run), so everything players stand on keeps still for physics.
 Config.Arena = {
@@ -44,7 +68,7 @@ Config.Arena = {
 	StackPipe = 0.62, -- a chimney's pipe, as a share of its flared top's width
 	-- The kinds of car (ArenaLayout.Kind): length, walkable roof height, spawn spots (shares along the car), whether
 	-- planks may rest on the roof, and their extra tops. Flatcars are low decks to drop into and climb out of (the
-	-- crates are steps; the bat does not care about them); a caboose's lookout and a locomotive's chimney top are the
+	-- crates are steps; attacks do not care about them); a caboose's lookout and a locomotive's chimney top are the
 	-- high perches (the chimney's the highest).
 	CarKinds = {
 		-- A round boiler in front (its top a narrow ridge) and the cab's flat roof over the back 35%. The chimney on the
@@ -205,24 +229,110 @@ Config.Decor = {
 	Flags = { Color3.fromRGB(214, 64, 52), Color3.fromRGB(246, 226, 188), Color3.fromRGB(58, 110, 178), Color3.fromRGB(236, 184, 56) },
 }
 
--- The bat: a swing hits whoever stands in a cone in front of the swinger, once per swing.
-Config.Bat = {
-	-- From the swinger's middle to the target's, along the ground. As the hit lands, the drawn bat's tip passes about
-	-- 4.2 in front of the middle at shoulder height (measured in Studio, 2026-10-24) and a body is about 1 thick, so
-	-- the hits match the picture with a little to spare.
-	Reach = 5.5,
-	-- Extra reach the server allows for the network delay (a target running at 16 moves about 1.6 in 0.1 s). The
-	-- server takes up to Reach + ReachSlack = 7 for a target standing still, so keep it small.
+-- Attacks with any weapon: what the server allows for the network.
+Config.Attack = {
+	-- Extra reach the server allows for the network delay (a target running at 16 moves about 1.6 in 0.1 s). With the
+	-- bat the server takes up to 5.5 + 1.5 = 7 for a target standing still, so keep it small.
 	ReachSlack = 1.5,
-	HeightReach = 5, -- the target's middle within this much higher or lower
-	HalfAngle = 70, -- degrees each side of where the swinger faces
-	Cooldown = 0.55,
-	CooldownSlack = 0.1, -- the server takes a swing this much early (clock and network jitter)
-	SwingSeconds = 0.32, -- the drawn swing
-	HitAt = 0.12, -- seconds into the swing when it lands
-	Length = 4.5, -- a big cartoon bat, so the reach shows
+	HeightReach = 5, -- the target's middle within this much higher or lower (cones and areas alike)
+	CooldownSlack = 0.1, -- the server takes an attack this much early (clock and network jitter)
+}
+
+-- The bat's look (WeaponGear): a big cartoon bat, so its reach shows.
+Config.Bat = {
+	Length = 4.5,
 	Thickness = 0.55,
 	Color = Color3.fromRGB(196, 150, 90),
+}
+
+-- The weapons (owner 2026-10-25: "기본은 맨주먹으로 하자. 그리고 다른 무기들을 추가한다"). Everyone fights with bare fists;
+-- weapons come in crates dropped onto the trains (Config.Drops) and last for their uses or their seconds held, then it
+-- is fists again (WeaponService). Every hit goes through the health rules (HitRules): damage replaces a fist's, push
+-- multiplies the push health gives (so a weapon throws a full-health fighter no farther off than health allows: no
+-- single hit carries one off a roof from its middle, tests), launch makes even a first hit a launch. style: how it
+-- attacks and is drawn (punch, swing: a cone of reach and halfAngle; slam: an area of radius just ahead; throw: a lit
+-- stick that bursts after its fuse). hitAt: seconds after pressing when it lands; seconds: the drawn attack. weight:
+-- how often a crate holds it. label: its name on screen.
+Config.Weapons = {
+	-- A quick jab: short reach, light damage, a little push (13 punches empty health).
+	-- (Its cooldown leaves a punched fighter, stunned Config.Hit.LightStun, a moment to answer before the next punch.)
+	Fist = { style = "punch", damage = 8, push = 0.8, reach = 4, halfAngle = 60, cooldown = 0.45, hitAt = 0.1, seconds = 0.26, label = "맨주먹" },
+	-- The old bat: as the whole game used before the weapons (reach measured: the drawn tip passes 4.2 ahead as it hits).
+	Bat = {
+		style = "swing",
+		damage = 12,
+		push = 1,
+		reach = 5.5,
+		halfAngle = 70,
+		cooldown = 0.55,
+		hitAt = 0.12,
+		seconds = 0.32,
+		uses = 15,
+		weight = 3,
+		label = "방망이",
+	},
+	-- Raised high (a long wind-up everyone sees), slammed down: everyone around the spot just ahead flies, away from the
+	-- one who slammed.
+	Hammer = {
+		style = "slam",
+		damage = 16,
+		push = 1.25,
+		launch = true,
+		radius = 6.5,
+		ahead = 3,
+		cooldown = 1.1,
+		hitAt = 0.45,
+		seconds = 0.75,
+		uses = 3,
+		weight = 2,
+		label = "망치",
+	},
+	-- Thrown in an arc; a red ring shows where it comes down; it bursts after its fuse, throwing everyone around out.
+	Dynamite = {
+		style = "throw",
+		damage = 18,
+		push = 1.35,
+		launch = true,
+		radius = 8,
+		throwSpeed = 36,
+		throwLift = 36,
+		fuse = 1.6,
+		cooldown = 0.9,
+		hitAt = 0.18,
+		seconds = 0.45,
+		uses = 1,
+		weight = 2,
+		label = "다이너마이트",
+	},
+	-- Heavy: while it is held its holder is pushed half as far but walks slower; a slow, hard swing.
+	GoldBar = {
+		style = "swing",
+		damage = 15,
+		push = 1.15,
+		reach = 5,
+		halfAngle = 65,
+		cooldown = 0.7,
+		hitAt = 0.2,
+		seconds = 0.45,
+		heldSeconds = 15,
+		resist = 0.5,
+		slow = 0.75,
+		weight = 1.5,
+		label = "금괴",
+	},
+} :: { [string]: Weapon }
+
+-- The weapon crates (WeaponDrops): the first some seconds into a fight, then one every few seconds while fewer are on
+-- the map than one for every three fighters left (at most MaxOnMap). Each floats down FallSeconds from FallHeight with
+-- a ring marking where it lands; a crate nobody takes goes away after LifeSeconds.
+Config.Drops = {
+	FirstAfter = 15,
+	Every = 15,
+	MaxOnMap = 2,
+	FallSeconds = 3,
+	FallHeight = 40,
+	LifeSeconds = 25,
+	PickupReach = 3.5, -- a fighter this close (along the ground) takes it
 }
 
 -- Health and what a hit does (the rules are in HitRules; Smash Legends-style): health drops with every hit, and the
@@ -233,8 +343,7 @@ Config.Bat = {
 -- went 6.2, 24.4 went 10.3, 28 went 10.6, 15.4 went 4.3 to 5.4, 29.2 went 11.0, landing lying and sliding a little) and
 -- 1.2 to 2 studs from a light hit (the light pushes stayed as they were when the roofs grew: planks are still 4 wide).
 Config.Health = {
-	Max = 100,
-	HitDamage = 12, -- the 9th hit from full empties it
+	Max = 100, -- each weapon's damage is its own (Config.Weapons)
 	LowFraction = 0.3, -- at or under this share the bar goes red and blinks
 }
 
@@ -294,6 +403,14 @@ Config.Feedback = {
 -- Music plays in the Music group (the on-screen button mutes it), the rest in Effects.
 Config.Sounds = {
 	Swing = { id = "rbxassetid://9120972321", volume = 0.5 }, -- Wood Whoosh Slicing Air Quick Swings 4
+	Punch = { id = "rbxassetid://9120728815", volume = 0.45, seconds = 0.6 }, -- Whoosh Heavy Punches 1
+	PunchHit = { id = "rbxassetid://9113564874", volume = 0.8, seconds = 0.8 }, -- Boxing Hits 6
+	HammerHit = { id = "rbxassetid://9114757272", volume = 0.9, seconds = 1.2 }, -- Hammer Tire Exterior Sledgehammer Impacts 1
+	GoldHit = { id = "rbxassetid://9116554603", volume = 0.8, seconds = 1.2 }, -- Metal Crown Kings Headgear Hit Clang 1
+	Blast = { id = "rbxassetid://9120769331", volume = 1, seconds = 2.5 }, -- Wind Whoosh Sonic Boom Low End Impact 1
+	Fuse = { id = "rbxassetid://9119380593", volume = 0.5, seconds = 1.6 }, -- Soldering From Sparklers 1 (a fizzing fuse)
+	Parachute = { id = "rbxassetid://9117235033", volume = 0.5, seconds = 2 }, -- Parachute Blossom 9
+	CrateLand = { id = "rbxassetid://9113466920", volume = 0.7, seconds = 1.5 }, -- Board Drops Wood Impacts Wobble 3
 	HitLight = { id = "rbxassetid://9119330371", volume = 0.9 }, -- Soccer Ball Tackle 4 (a deep thump)
 	HitLaunch = { id = "rbxassetid://9125380595", volume = 0.9, seconds = 1.2 }, -- Baseball Wood Bat Power Whack 1
 	HomeRun = { id = "rbxassetid://9125380872", volume = 1, seconds = 2 }, -- Baseball Wood Bat Power Whack 5

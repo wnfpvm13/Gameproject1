@@ -1,7 +1,9 @@
 --!strict
--- How hits feel on this client: a whoosh when a bat swings, and for a hit a thump at the victim, a short white flash
--- on them and, when the victim is the player, a little camera shake. A launch adds a heavier whack, a home run (the
--- smash that empties health) the bat's crack and a cheer (its flight is HomeRunShow's). The player's own swing shows
+-- How hits feel on this client: a whoosh when someone attacks (a punch's or a swing's), and for a hit a thump at the
+-- victim (each weapon's own: a punch, a bat, a hammer's slam, a gold bar's clang; a dynamite blast is heard from
+-- ExplosionShow), a short white flash on them and, when the victim is the player, a little camera shake. A launch
+-- adds a heavier whack, a home run (the smash that empties health) the bat's crack and a cheer (its flight is
+-- HomeRunShow's). The player's own swing shows
 -- its hits at once (predict), and the server's word for the same hit then shows only what it adds; a fighter just
 -- launched cannot be hit for a moment (Config.Hit.LaunchImmune), so no hit is predicted on it then. Sounds:
 -- Config.Sounds through SoundBank.
@@ -32,36 +34,45 @@ local function flash(model: Model)
 	Debris:AddItem(highlight, Config.Feedback.FlashSeconds)
 end
 
--- The plain hit: a thump and a flash.
-local function show(victim: Model)
+-- Each weapon's thump when it lands (none for a blast: its boom is the sound).
+local THUMPS: { [string]: string? } = { Fist = "PunchHit", Bat = "HitLight", Hammer = "HammerHit", GoldBar = "GoldHit" }
+-- Each weapon's whoosh when it is used.
+local WHOOSHES: { [string]: string? } = { Fist = "Punch", Bat = "Swing", Hammer = "Swing", GoldBar = "Swing", Dynamite = "Punch" }
+
+-- The plain hit: the weapon's thump and a flash.
+local function show(victim: Model, weapon: string)
 	local body = CharacterParts.body(victim)
 	if body then
-		SoundBank.play("HitLight", body.root)
+		local thump = THUMPS[weapon]
+		if thump then
+			SoundBank.play(thump, body.root)
+		end
 		flash(victim)
 	end
 end
 
--- A bat swings (any character).
-function HitFeedback.swing(model: Model)
+-- Someone attacks with `weapon` (any character).
+function HitFeedback.swing(model: Model, weapon: string)
 	local body = CharacterParts.body(model)
-	if body then
-		SoundBank.play("Swing", body.root)
+	local whoosh = WHOOSHES[weapon]
+	if body and whoosh then
+		SoundBank.play(whoosh, body.root)
 	end
 end
 
--- The player's own swing hit this victim, as this client saw it.
-function HitFeedback.predict(victim: Model)
+-- The player's own attack with `weapon` hit this victim, as this client saw it.
+function HitFeedback.predict(victim: Model, weapon: string)
 	local endsAt = unhittable[victim]
 	if endsAt and os.clock() < endsAt then
 		return -- just launched: the server will not take this hit
 	end
 	predicted[victim] = os.clock()
-	show(victim)
+	show(victim, weapon)
 end
 
--- The server's word on a hit. mine: the swinger is the player; me: the victim is the player; kind: "light",
--- "launch" or "smash".
-function HitFeedback.hit(victim: Model, mine: boolean, me: boolean, kind: string)
+-- The server's word on a hit. mine: the attacker is the player; me: the victim is the player; kind: "light",
+-- "launch" or "smash"; weapon: what hit.
+function HitFeedback.hit(victim: Model, mine: boolean, me: boolean, kind: string, weapon: string)
 	if kind == "launch" then
 		unhittable[victim] = os.clock() + Config.Hit.LaunchImmune
 	end
@@ -72,7 +83,7 @@ function HitFeedback.hit(victim: Model, mine: boolean, me: boolean, kind: string
 		predicted[victim] = nil
 	end
 	if not (seen and os.clock() - seen < Config.Knock.PredictForget) then
-		show(victim)
+		show(victim, weapon)
 	end
 	local body = CharacterParts.body(victim)
 	if body and kind == "launch" then

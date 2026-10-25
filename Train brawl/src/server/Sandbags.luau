@@ -125,7 +125,7 @@ function Sandbags.start(fallLine: number, surfaces: { ArenaLayout.Surface }): Se
 				model.Parent = parent
 				local body = CharacterParts.body(model)
 				if body then
-					-- The bat first: welding it on changes the assembly, which puts ownership back on automatic.
+					-- The weapon first: welding it on changes the assembly, which puts ownership back on automatic.
 					equip(model)
 					body.root:SetNetworkOwner(nil) -- the server moves and knocks it
 					bags[model] = { body = body, stiffSince = nil, drifting = false, nextWander = 0 }

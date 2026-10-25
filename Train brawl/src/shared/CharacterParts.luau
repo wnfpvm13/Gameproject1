@@ -1,6 +1,6 @@
 --!strict
 -- Finding the parts of a character (players' and sandbags', R15 or R6) that the brawl needs: its root and Humanoid,
--- the hand that holds the bat, the shoulder joint that swings it, and how high its feet are. Requires nothing.
+-- the hand that holds a weapon, the shoulder joint that swings it, and how high its feet are. Requires nothing.
 
 local CharacterParts = {}
 
@@ -20,13 +20,13 @@ function CharacterParts.body(model: Model?): Body?
 	return nil
 end
 
--- The hand (R15) or arm (R6) that holds the bat.
-function CharacterParts.batHand(model: Model): BasePart?
+-- The hand (R15) or arm (R6) that holds a weapon.
+function CharacterParts.weaponHand(model: Model): BasePart?
 	local hand = model:FindFirstChild("RightHand") or model:FindFirstChild("Right Arm")
 	return if hand and hand:IsA("BasePart") then hand else nil
 end
 
--- The right shoulder joint, which swings the bat: a Motor6D on older rigs, an AnimationConstraint on characters with
+-- The right shoulder joint, which swings a weapon or a punch: a Motor6D on older rigs, an AnimationConstraint on characters with
 -- Roblox's newer avatar joints (both have Transform).
 function CharacterParts.shoulder(model: Model): Joint?
 	local upper = model:FindFirstChild("RightUpperArm")

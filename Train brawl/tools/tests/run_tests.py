@@ -1,4 +1,4 @@
-"""Runs the tests that need no Studio: the arena and bat math with the Luau CLI (`luau` on PATH) + the dependency check.
+"""Runs the tests that need no Studio: the arena, attack and weapon math with the Luau CLI (`luau` on PATH) + the dependency check.
 
   python -I tools/tests/run_tests.py
 
@@ -22,6 +22,7 @@ MODULES = [
     ("BatMath", "src/shared/BatMath.luau"),
     ("HitRules", "src/shared/HitRules.luau"),
     ("CanyonLayout", "src/shared/CanyonLayout.luau"),
+    ("WeaponRules", "src/shared/WeaponRules.luau"),
 ]
 PRELUDE = (
     "Color3 = { fromRGB = function(r, g, b) return { r = r, g = g, b = b } end }\n"

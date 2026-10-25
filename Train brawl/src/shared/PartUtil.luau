@@ -27,8 +27,8 @@ function PartUtil.ghostBlock(name: string, size: Vector3, color: Color3, materia
 end
 
 -- A drawn-only piece of dressing (see ghost) at `cframe`, casting no shadow (the many small pieces would only cost
--- shadow-map time). shape: Block when nil, Cylinder (round about its own X) or Ball.
-function PartUtil.decor(name: string, size: Vector3, cframe: CFrame, color: Color3, material: Enum.Material, parent: Instance, shape: Enum.PartType?): Part
+-- shadow-map time). shape: Block when nil, Cylinder (round about its own X) or Ball. parent: nil leaves it unparented.
+function PartUtil.decor(name: string, size: Vector3, cframe: CFrame, color: Color3, material: Enum.Material, parent: Instance?, shape: Enum.PartType?): Part
 	local part = Instance.new("Part")
 	part.Name = name
 	part.Shape = shape or Enum.PartType.Block

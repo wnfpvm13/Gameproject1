@@ -1,15 +1,16 @@
 --!strict
 -- What a hit does to a fighter, as pure rules (Smash Legends-style; the numbers come in from Config.Health and
--- Config.Hit). Health drops by the hit's damage, and the hit that empties it is a smash (a certain ring-out).
--- Otherwise the hits on one fighter within `window` seconds of the first make a combo: the `launchOn`-th one launches
--- (flying, lying down) and ends the combo, the ones before are light (a flinch). Right after a launch the fighter
+-- Config.Hit). Health drops by the hit's damage (each weapon's own), and the hit that empties it is a smash (a certain
+-- ring-out). Otherwise the hits on one fighter within `window` seconds of the first make a combo: the `launchOn`-th one
+-- launches (flying, lying down) and ends the combo, the ones before are light (a flinch); a weapon that always launches
+-- (a hammer, a dynamite blast) launches on any hit. Right after a launch the fighter
 -- cannot be hit for `immune` seconds. How hard a hit pushes grows as health drops (force, scale). Requires nothing.
 
 local HitRules = {}
 
 export type Kind = string -- "none" | "light" | "launch" | "smash"
 export type State = { health: number, combo: number, comboStart: number, immuneUntil: number }
-export type Rules = { max: number, damage: number, window: number, launchOn: number, immune: number }
+export type Rules = { max: number, window: number, launchOn: number, immune: number }
 -- The pushes (along the ground) and lifts of Config.Hit.
 export type Forces = {
 	LightFull: number,
@@ -25,12 +26,13 @@ function HitRules.new(max: number): State
 	return { health = max, combo = 0, comboStart = -math.huge, immuneUntil = -math.huge }
 end
 
--- A hit at time `now`: updates `state` and says what kind of hit it was ("none" while unhittable).
-function HitRules.hit(state: State, rules: Rules, now: number): Kind
+-- A hit of `damage` at time `now` (launch: it launches whatever the combo): updates `state` and says what kind of hit
+-- it was ("none" while unhittable).
+function HitRules.hit(state: State, rules: Rules, now: number, damage: number, launch: boolean?): Kind
 	if now < state.immuneUntil or state.health <= 0 then
 		return "none"
 	end
-	state.health = math.max(0, state.health - rules.damage)
+	state.health = math.max(0, state.health - damage)
 	if state.health <= 0 then
 		state.combo = 0
 		return "smash"
@@ -40,7 +42,7 @@ function HitRules.hit(state: State, rules: Rules, now: number): Kind
 		state.comboStart = now
 	end
 	state.combo += 1
-	if state.combo >= rules.launchOn then
+	if launch or state.combo >= rules.launchOn then
 		state.combo = 0
 		state.comboStart = -math.huge
 		state.immuneUntil = now + rules.immune

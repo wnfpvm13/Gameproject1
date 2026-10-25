@@ -1,8 +1,8 @@
 --!strict
 -- Where everything in the arena is, as pure math, from Config.Arena: each train's middle line and its cars' places
 -- along the track (every train has its own cars and stands a little ahead of or behind the others, so different cars
--- face each other), the surfaces people stand on (roofs, a locomotive's boiler, a flatcar's deck and crates, a
--- caboose's lookout), the planks between trains (only where two flat tops of the same height face each other wide
+-- face each other), the surfaces people stand on (roofs, a locomotive's boiler and chimney top, a flatcar's deck and
+-- crates, a caboose's lookout), the planks between trains (only where two flat tops of the same height face each other wide
 -- enough), the spawn spots, the height below which a fighter has fallen off, and how far a jump carries. Train space
 -- and world space share axes (the arena at the world origin, rails on Y = 0, -Z ahead). Requires nothing.
 
@@ -12,7 +12,8 @@ local ArenaLayout = {}
 export type Box = { along: number, width: number, length: number, height: number }
 -- A kind of car (Config.Arena.CarKinds). roof: the main walkable top; roofFrom: it starts this share along the car
 -- (a locomotive's flat cab roof is only its back part); boiler: a round boiler over the front share `to`, its top at
--- `top`; spawns: spawn spots, as shares along the car; plank: planks may rest on its main top.
+-- `top`; stack: a solid chimney on the boiler, `width` round with its middle `along` the car, its flat top `height`
+-- over the boiler's; spawns: spawn spots, as shares along the car; plank: planks may rest on its main top.
 export type Kind = {
 	length: number,
 	roof: number,
@@ -20,6 +21,7 @@ export type Kind = {
 	spawns: { number },
 	plank: boolean,
 	boiler: { to: number, top: number, width: number }?,
+	stack: { along: number, width: number, height: number }?,
 	crates: { Box }?,
 	cupola: { from: number, to: number, width: number, height: number }?,
 }
@@ -93,6 +95,12 @@ local function carSurfaces(place: CarPlace, kind: Kind, x: number, roofWidth: nu
 	if boiler then
 		local to = place.front + place.length * boiler.to
 		table.insert(list, { train = place.train, kind = place.kind, x = x, z = (place.front + to) / 2, width = boiler.width, length = to - place.front, top = boiler.top, plank = false })
+		local stack = kind.stack
+		if stack then
+			-- Round, taken as the square around it (like the boiler).
+			local z = place.front + place.length * stack.along
+			table.insert(list, { train = place.train, kind = place.kind, x = x, z = z, width = stack.width, length = stack.width, top = boiler.top + stack.height, plank = false })
+		end
 	end
 	local crates: { Box } = kind.crates or {}
 	for _, crate in crates do

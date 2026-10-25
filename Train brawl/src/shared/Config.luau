@@ -14,6 +14,7 @@ type CarKind = {
 	spawns: { number },
 	plank: boolean,
 	boiler: { to: number, top: number, width: number }?,
+	stack: { along: number, width: number, height: number }?,
 	crates: { { along: number, width: number, length: number, height: number } }?,
 	cupola: { from: number, to: number, width: number, height: number }?,
 }
@@ -29,12 +30,29 @@ Config.Arena = {
 	Gap = 15,
 	RoofWidth = 10, -- every car is this wide
 	CarGap = 0.5, -- between two cars of a train (well under a character's thickness, so nobody slips through)
+	BodyInset = 0.3, -- a car body is this much narrower than its roof on each side (the roof overhangs it)
+	BodyBottom = 1.96, -- a car body's underside: the wheels and trucks show below it (drawn on the clients)
+	Gauge = 3, -- each rail this far either side of a train's middle line
+	-- A locomotive's solid frame under the boiler is this wide: all of it under the boiler (no ledge sticks out beside
+	-- it) and inside the drawn driving wheels (tests).
+	LocomotiveFrame = 5,
+	StackPipe = 0.62, -- a chimney's pipe, as a share of its flared top's width
 	-- The kinds of car (ArenaLayout.Kind): length, walkable roof height, spawn spots (shares along the car), whether
 	-- planks may rest on the roof, and their extra tops. Flatcars are low decks to drop into and climb out of (the
-	-- crates are steps; the bat does not care about them), a caboose's lookout is the highest perch.
+	-- crates are steps; the bat does not care about them); a caboose's lookout and a locomotive's chimney top are the
+	-- high perches (the chimney's the highest).
 	CarKinds = {
-		-- A round boiler in front (its top a narrow ridge) and the cab's flat roof over the back 35%.
-		Locomotive = { length = 18, roof = 11.5, roofFrom = 0.65, spawns = { 0.82 }, plank = false, boiler = { to = 0.65, top = 11, width = 8 } },
+		-- A round boiler in front (its top a narrow ridge) and the cab's flat roof over the back 35%. The chimney on the
+		-- boiler is solid, its flared top a small round perch (a drawn-only chimney would be walked through).
+		Locomotive = {
+			length = 18,
+			roof = 11.5,
+			roofFrom = 0.65,
+			spawns = { 0.82 },
+			plank = false,
+			boiler = { to = 0.65, top = 11, width = 8 },
+			stack = { along = 0.12, width = 3.2, height = 3.5 },
+		},
 		Tender = { length = 10, roof = 8, spawns = { 0.5 }, plank = true }, -- the coal car behind a locomotive: low and flat
 		Boxcar = { length = 20, roof = 10, spawns = { 0.3, 0.7 }, plank = true },
 		Flatcar = {
@@ -67,6 +85,10 @@ Config.Arena = {
 	WaitingRoomHeight = 70, -- the waiting room (and the stands for the knocked out) floats this high over the middle
 	WaitingRoomSize = 36,
 	WaitingRoomWall = 14, -- glass walls higher than a jump off someone's head
+	WaitingRoomWindow = 12, -- a glass square in the middle of its floor, to look down on the trains through
+	-- A body higher than this under the waiting room has reached the stands (the home-run show and flight stop there);
+	-- a home run's top stays under it (tests).
+	StandsMargin = 8,
 	Colors = {
 		Boxcar = Color3.fromRGB(150, 58, 40),
 		Tender = Color3.fromRGB(58, 52, 50),
@@ -80,6 +102,7 @@ Config.Arena = {
 		Wheel = Color3.fromRGB(140, 40, 30),
 		Plank = Color3.fromRGB(150, 110, 66),
 		Room = Color3.fromRGB(210, 196, 170),
+		Glass = Color3.fromRGB(196, 222, 232),
 	},
 }
 
@@ -89,16 +112,88 @@ Config.Run = {
 	ViewAhead = 260, -- the scenery is laid out this far ahead of the middle and this far behind
 	ViewBehind = 160,
 	SleeperSpacing = 3,
+	GroundTile = 100, -- the running ground's tiles are about this long (drawn on the clients over the server's sand)
 	RoadsideProps = 20,
 	RoadsideClearance = 7, -- props stand at least this far beyond the outermost train's edge
 	RoadsideFar = 60,
+	-- Telegraph poles along one side (Side -1 = left), Distance beyond the outermost train's edge, every Spacing.
+	PoleSide = -1,
+	PoleDistance = 14,
+	PoleSpacing = 42,
+	PoleHeight = 14,
 	Colors = {
 		Sand = Color3.fromRGB(214, 176, 120),
 		Rail = Color3.fromRGB(92, 88, 86),
 		Sleeper = Color3.fromRGB(96, 66, 44),
 		Cactus = Color3.fromRGB(86, 120, 64),
 		Rock = Color3.fromRGB(150, 116, 86),
+		Ballast = Color3.fromRGB(128, 112, 96),
+		Pole = Color3.fromRGB(104, 78, 56),
+		Wire = Color3.fromRGB(40, 38, 38),
 	},
+}
+
+-- The canyon the trains run through (drawn on the clients, Canyon): sandstone walls either side in stepped layers,
+-- sliding past like the rest of the scenery. Laid out far ahead and behind, so their wrap-around happens deep in the
+-- haze (Lighting's Atmosphere); the sand reaches under all of it (ArenaBuilder).
+Config.Canyon = {
+	-- The walls' nearest face from the middle line, and up to InnerVary farther. A home run flies about 66 sideways
+	-- before it twinkles out, so even from the outermost roof it stays clear of the walls, their foot slopes
+	-- (TalusWidth), the ribs of rock standing out of them (RibOut) and the rock spires in front (SpireOut) (tests).
+	Inner = 125,
+	InnerVary = 20,
+	Depth = 80, -- how far out the walls go
+	TalusWidth = 12, -- the rubble slope at a wall's foot
+	RibOut = 6, -- a rib of rock stands at most this far out of its wall
+	SpireOut = 16, -- a rock spire stands at most this far in front of its wall
+	Ahead = 700,
+	Behind = 500,
+	SegmentMin = 40, -- each stretch of wall is this long
+	SegmentMax = 90,
+	HeightMin = 50,
+	HeightMax = 100,
+	Colors = {
+		Color3.fromRGB(176, 92, 60), -- the layers, from the foot up
+		Color3.fromRGB(204, 130, 86),
+		Color3.fromRGB(160, 82, 56),
+		Color3.fromRGB(222, 164, 112),
+	},
+}
+
+-- The drawn-only dressing on the clients (CarDecor, LocomotiveDecor, Stands): nothing of it collides, casts a shadow
+-- or is seen by raycasts, so it never changes where anyone can stand.
+Config.Decor = {
+	Lettering = "CANYON LINE", -- painted on the boxcars' and the caboose's sides
+	DriverRadius = 1.8, -- a locomotive's big driving wheels (two pairs); the coupling rods circle with them
+	TruckWheelRadius = 0.95, -- the other cars' wheels, two pairs under each end, under the body's underside
+	CrankRadius = 0.7,
+	-- Chimney smoke: it leaves fast upward and fades while the run's wind bends it back, so it is gone above the
+	-- roofs behind the locomotive instead of hiding them.
+	SmokeRate = 30, -- puffs per second from each chimney
+	SmokeSpeed = 15,
+	SmokeSeconds = 1.6,
+	SmokeWind = 18, -- backward pull (studs/s²)
+	Colors = {
+		Iron = Color3.fromRGB(48, 46, 48), -- trucks, straps, couplers, rods
+		Trim = Color3.fromRGB(226, 208, 170), -- window frames, lettering
+		Window = Color3.fromRGB(36, 42, 50),
+		Brass = Color3.fromRGB(198, 158, 76),
+		Lamp = Color3.fromRGB(255, 228, 156),
+		Marker = Color3.fromRGB(232, 64, 44),
+		Wood = Color3.fromRGB(112, 78, 50), -- walkways, stakes, posts, the stands' frame
+		Smoke = Color3.fromRGB(110, 104, 100),
+		SmokeFade = Color3.fromRGB(196, 190, 184),
+		Rope = Color3.fromRGB(150, 124, 84),
+	},
+	-- The four hot-air balloons that hold the stands up: each envelope's colour and its stripes'.
+	Balloons = {
+		{ Color3.fromRGB(214, 64, 52), Color3.fromRGB(246, 226, 188) },
+		{ Color3.fromRGB(58, 110, 178), Color3.fromRGB(246, 226, 188) },
+		{ Color3.fromRGB(236, 184, 56), Color3.fromRGB(200, 70, 48) },
+		{ Color3.fromRGB(72, 140, 92), Color3.fromRGB(246, 226, 188) },
+	},
+	BalloonRadius = 7,
+	Flags = { Color3.fromRGB(214, 64, 52), Color3.fromRGB(246, 226, 188), Color3.fromRGB(58, 110, 178), Color3.fromRGB(236, 184, 56) },
 }
 
 -- The bat: a swing hits whoever stands in a cone in front of the swinger, once per swing.
@@ -152,7 +247,7 @@ Config.Hit = {
 	LaunchImmune = 0.9, -- a launched fighter cannot be hit for this long (flight, getting up and a moment more)
 	-- Smash, the home run: high into the sky and away. With this lift a body is still in the air (higher than the
 	-- highest top) when Config.Fall.HomeRunSeconds ends and it twinkles out - hit on the lowest deck it would reach the
-	-- sand about 0.23 s later - and its top (about 50, 53 from the lookout) stays under the stands (70) (tests).
+	-- sand about 0.23 s later - and its top (about 50, 54 from a chimney top) stays under the stands (70) (tests).
 	SmashPush = 60,
 	SmashLift = 120,
 }

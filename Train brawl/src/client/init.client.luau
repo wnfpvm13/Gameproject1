@@ -1,5 +1,7 @@
 --!strict
--- Train brawl client entry point: only wiring. The scenery slides past (Scenery); the mouse is locked with a shoulder
+-- Train brawl client entry point: only wiring. The trackside and the canyon slide past (Scenery, Canyon), the cars,
+-- locomotives (their rods turning, chimneys smoking) and the stands are dressed (CarDecor, LocomotiveDecor, Stands:
+-- drawn only, on top of what the server built); the mouse is locked with a shoulder
 -- camera unless the player shows the cursor (AimLock); the swing control (SwingInput) starts the player's own swing
 -- (OwnSwing: drawn at once by SwingPose and HitFeedback, judged by the server; a mouse click swings only while the
 -- mouse is locked); every character's swings are drawn from their Names.SwingAt; a hit from the server flinches or
@@ -21,6 +23,10 @@ local PartUtil = require(shared:WaitForChild("PartUtil"))
 local ArenaLayout = require(shared:WaitForChild("ArenaLayout"))
 local SoundBank = require(shared:WaitForChild("SoundBank"))
 local Scenery = require(script:WaitForChild("Scenery"))
+local Canyon = require(script:WaitForChild("Canyon"))
+local CarDecor = require(script:WaitForChild("CarDecor"))
+local LocomotiveDecor = require(script:WaitForChild("LocomotiveDecor"))
+local Stands = require(script:WaitForChild("Stands"))
 local SwingInput = require(script:WaitForChild("SwingInput"))
 local SwingPose = require(script:WaitForChild("SwingPose"))
 local OwnSwing = require(script:WaitForChild("OwnSwing"))
@@ -45,6 +51,10 @@ SoundBank.preload()
 -- The same arena the server built (ArenaLayout is pure math from the shared Config).
 local layout = ArenaLayout.layout(Config.Arena, Config.Fall.Margin)
 local scenery = Scenery.new(layout)
+local canyon = Canyon.new()
+CarDecor.build(layout)
+local locomotives = LocomotiveDecor.new(layout)
+Stands.build()
 local knock = KnockFlight.new()
 local drift = FallDrift.new(layout.fallLine)
 local playerGui = player:WaitForChild("PlayerGui")
@@ -144,13 +154,15 @@ feedRemote.OnClientEvent:Connect(function(victim: unknown, by: unknown, how: unk
 end)
 
 RunService.RenderStepped:Connect(function(dt: number)
+	local list = fighters()
 	scenery:update(dt)
+	canyon:update(dt)
+	locomotives:update(dt, list)
 	knock:update()
 	local character = player.Character
 	drift:update(character, knock:launched())
 	local state = if character then character:GetAttribute(Names.Alive) else nil
 	local alive = state == true
-	local list = fighters()
 	spectate:update(Workspace:GetAttribute(Names.Phase) == "Fight" and not alive and not drift:active() and not knock:launched(), character, list)
 	bars:update(list, character, os.clock())
 	feed:update()

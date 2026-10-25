@@ -8,6 +8,10 @@ return {
 	FeedRemote = "Feed", -- server -> every client: who knocked whom out and how ("homerun" or "fall")
 	ArenaFolder = "TrainBrawlArena",
 	SceneryFolder = "TrainBrawlScenery",
+	CanyonFolder = "TrainBrawlCanyon",
+	CarDecorFolder = "TrainBrawlCarDecor",
+	LocomotiveDecorFolder = "TrainBrawlLocomotiveDecor",
+	StandsFolder = "TrainBrawlStands",
 	WaitingRoom = "WaitingRoom",
 	BatPart = "Bat",
 	SandbagTag = "TrainBrawlSandbag",

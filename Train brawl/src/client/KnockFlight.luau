@@ -58,7 +58,7 @@ function KnockFlight.update(self: Flight)
 	end
 	local elapsed = os.clock() - since
 	-- Taken to the stands mid-flight (a home run): stop there instead of sliding on with the flight's speed.
-	local inStands = body.root.Position.Y > Config.Arena.WaitingRoomHeight - 8
+	local inStands = body.root.Position.Y > Config.Arena.WaitingRoomHeight - Config.Arena.StandsMargin
 	if inStands then
 		body.root.AssemblyLinearVelocity = Vector3.zero
 	end

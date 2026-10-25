@@ -19,8 +19,8 @@ local HomeRunShow = {}
 
 local GOLD = Config.Feedback.Gold
 local LATE_SECONDS = 0.6 -- twinkle anyway this long after the flight should have ended
--- A body this high is in the stands (a home-run flight tops out near 50; the stands: Config.Arena.WaitingRoomHeight).
-local STANDS_Y = Config.Arena.WaitingRoomHeight - 8
+-- A body this high is in the stands (a home-run flight tops out about 50, 54 from a chimney top: tests).
+local STANDS_Y = Config.Arena.WaitingRoomHeight - Config.Arena.StandsMargin
 
 -- An invisible anchor at `at` holding a billboard of big text; it rises a little and fades over `seconds`.
 local function billboard(at: Vector3, text: string, color: Color3, size: number, seconds: number)

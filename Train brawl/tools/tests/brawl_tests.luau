@@ -327,7 +327,7 @@ do
 	-- The flight starts after the hold, so it has flown (t - hold) when the server takes it away.
 	check("a home run reaches the sand at least 0.2 s after it twinkles out", land > t - Config.Feedback.HitStopSeconds + 0.2, string.format("%.2f", land))
 	local top = highestTop + 3 + h.SmashLift * h.SmashLift / (2 * GRAVITY)
-	check("a home run's top stays under the stands, even from the highest top", top < A.WaitingRoomHeight - 5, string.format("%.1f", top))
+	check("a home run's top stays under where the stands begin, even from the highest top", top < A.WaitingRoomHeight - A.StandsMargin - 2, string.format("%.1f", top))
 	check("a light hit's stun ends before the swinger can swing again (the one hit can answer)", h.LightStun + 0.1 < Config.Bat.Cooldown)
 	check("a launched fighter stays unhittable past lying down", h.LaunchImmune > Config.Knock.MinSeconds + 0.2)
 	check("a combo has time for its hits at the swing rate", h.ComboWindow > (h.LaunchOn - 1) * Config.Bat.Cooldown)
@@ -339,6 +339,72 @@ do
 	check("the server's network slack stays small (it shows as hits from too far)", Config.Bat.ReachSlack <= 2)
 	check("the waiting room's walls are higher than a jump off someone's head", A.WaitingRoomWall > JUMP_HEIGHT + 5.5)
 	check("the fall plays while the waiting room is far above", Config.Arena.WaitingRoomHeight > 40)
+end
+
+-- 6. Decoration promises (stage 3): the chimney is a perch on its boiler, the drawn wheels fit, the canyon stays clear
+-- of a home run's flight and reaches past the trackside.
+do
+	local engine = A.CarKinds.Locomotive
+	local boiler, stack = engine.boiler, engine.stack
+	check("the locomotive has a boiler and a chimney on it", boiler ~= nil and stack ~= nil)
+	if boiler and stack then
+		local found, onBoiler = 0, true
+		for _, train in L.trains do
+			for _, place in train.cars do
+				if place.kind == "Locomotive" then
+					local z = place.front + place.length * stack.along
+					local boilerEnd = place.front + place.length * boiler.to
+					onBoiler = onBoiler and z - stack.width / 2 >= place.front and z + stack.width / 2 <= boilerEnd
+					for _, surface in L.surfaces do
+						if surface.train == place.train and near(surface.z, z) and near(surface.top, boiler.top + stack.height) then
+							found += 1
+						end
+					end
+				end
+			end
+		end
+		check("every chimney top is a walkable top of its own train", found == #L.trains, tostring(found))
+		check("every chimney stands on its boiler", onBoiler)
+		check("a chimney top is within a jump of the boiler (a perch, not a wall)", stack.height < JUMP_HEIGHT - 1.5)
+		check("the chimney is narrower than the boiler's ridge", stack.width < boiler.width)
+		-- The drawn driving wheels stand on the rails, under the round boiler where it is at the rails.
+		local boilerMiddle = boiler.top - boiler.width / 2
+		local underBoiler = boilerMiddle - math.sqrt((boiler.width / 2) ^ 2 - A.Gauge ^ 2)
+		check("the drawn driving wheels fit under the boiler", Config.Decor.DriverRadius * 2 < underBoiler, string.format("%.2f", underBoiler))
+	end
+	check("the rails are inside a car body (the wheels under it)", A.Gauge + 0.5 < A.RoofWidth / 2 - A.BodyInset)
+	check("the trucks' wheels fit under a car body", A.BodyBottom >= 2 * Config.Decor.TruckWheelRadius)
+	-- The locomotive's solid frame: all of it under the boiler (nothing sticks out beside it to land on above the fall
+	-- line) and inside the drawn driving wheels (their tyres 0.3 thick on the rails), so they show.
+	if boiler then
+		check("the locomotive frame stays under the boiler", A.LocomotiveFrame / 2 < boiler.width / 2)
+	end
+	check("the locomotive frame stays inside the driving wheels", A.LocomotiveFrame / 2 < A.Gauge - 0.15)
+	check("a chimney's pipe is narrower than its top", A.StackPipe > 0 and A.StackPipe < 1)
+	local c, h = Config.Canyon, Config.Hit
+	-- A home run's sideways flight until it twinkles out, from the outermost roof edge, against every piece the clients
+	-- draw (CanyonLayout, turned spires by their corners).
+	local reach = L.outerEdge + h.SmashPush * Config.Fall.HomeRunSeconds
+	local pieces = CanyonLayout.pieces(c, A.GroundY)
+	local nearest, farthest, overhang, kinds = math.huge, 0, 0, {}
+	for _, piece in pieces do
+		local near, far = CanyonLayout.span(piece)
+		nearest = math.min(nearest, near)
+		farthest = math.max(farthest, far)
+		overhang = math.max(overhang, CanyonLayout.overhang(piece))
+		kinds[piece.kind] = true
+	end
+	check("the canyon has walls, slopes, ribs and spires", kinds.Wall and kinds.Talus and kinds.Rib and kinds.Spire or false)
+	check("a home run never flies into the canyon (every piece)", reach + 5 < nearest, string.format("%.1f vs %.1f", reach, nearest))
+	check("no canyon piece comes nearer than its Config limits say", nearest >= c.Inner - math.max(c.TalusWidth, c.RibOut, c.SpireOut) - 1e-6, string.format("%.1f", nearest))
+	local half, ahead, behind = CanyonLayout.ground(c)
+	check("the sand reaches under the canyon across the track", farthest < half, string.format("%.1f vs %.1f", farthest, half))
+	check("the sand reaches past a canyon stretch wrapped at either end", overhang < ahead - c.Ahead and overhang < behind - c.Behind, string.format("%.1f", overhang))
+	check("the sand is one part (2048 at most each way)", half * 2 <= 2048 and ahead + behind <= 2048)
+	check("the canyon reaches past the trackside scenery both ways", c.Ahead > Config.Run.ViewAhead and c.Behind > Config.Run.ViewBehind)
+	check("the canyon is beyond the roadside props and poles", nearest > Config.Run.RoadsideFar and nearest > L.outerEdge + Config.Run.PoleDistance)
+	check("a canyon stretch is long enough to show and shorter than the loop", c.SegmentMin > 10 and c.SegmentMax < c.Ahead + c.Behind)
+	check("the floor window is smaller than the waiting room", A.WaitingRoomWindow < A.WaitingRoomSize - 4)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

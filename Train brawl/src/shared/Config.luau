@@ -26,16 +26,21 @@ Config.Arena = {
 	-- lowest across from it, so crossing takes a plank or a big hit. Measured in Studio (2026-10-25, default R15, jump
 	-- pressed as late as 1.9 past the edge, where it still stands): a jump crossed 12.75 on the flat, 13.75 dropping 5,
 	-- 14.25 dropping 8, never 13 / 14 / 14.5 or 15 — the first 12 was crossed from a roof down onto a flatcar (tests:
-	-- JUMP_EXTRA).
+	-- JUMP_EXTRA). Still enough with the trains 1.5 times bigger: facing wide tops still drop at most 5 across a gap (a
+	-- boxcar or caboose roof 15 to a flatcar deck 10, as before), the biggest drop (9, from a lookout) starts well in
+	-- from the edge (tests).
 	Gap = 15,
-	RoofWidth = 10, -- every car is this wide
+	-- Every car is this wide. The trains were made 1.5 times bigger (owner 2026-10-25, "the map feels small"): widths,
+	-- lengths and the drawn details grew 1.5 times (Config.Decor.DetailScale), the heights only by about 5 (a jump does
+	-- not grow, so neighbouring tops and the tops standing on them stay within one; tests).
+	RoofWidth = 15,
 	CarGap = 0.5, -- between two cars of a train (well under a character's thickness, so nobody slips through)
-	BodyInset = 0.3, -- a car body is this much narrower than its roof on each side (the roof overhangs it)
-	BodyBottom = 1.96, -- a car body's underside: the wheels and trucks show below it (drawn on the clients)
-	Gauge = 3, -- each rail this far either side of a train's middle line
+	BodyInset = 0.45, -- a car body is this much narrower than its roof on each side (the roof overhangs it)
+	BodyBottom = 2.9, -- a car body's underside: the wheels and trucks show below it (drawn on the clients)
+	Gauge = 4.5, -- each rail this far either side of a train's middle line
 	-- A locomotive's solid frame under the boiler is this wide: all of it under the boiler (no ledge sticks out beside
 	-- it) and inside the drawn driving wheels (tests).
-	LocomotiveFrame = 5,
+	LocomotiveFrame = 7.5,
 	StackPipe = 0.62, -- a chimney's pipe, as a share of its flared top's width
 	-- The kinds of car (ArenaLayout.Kind): length, walkable roof height, spawn spots (shares along the car), whether
 	-- planks may rest on the roof, and their extra tops. Flatcars are low decks to drop into and climb out of (the
@@ -45,44 +50,45 @@ Config.Arena = {
 		-- A round boiler in front (its top a narrow ridge) and the cab's flat roof over the back 35%. The chimney on the
 		-- boiler is solid, its flared top a small round perch (a drawn-only chimney would be walked through).
 		Locomotive = {
-			length = 18,
-			roof = 11.5,
+			length = 27,
+			roof = 16,
 			roofFrom = 0.65,
 			spawns = { 0.82 },
 			plank = false,
-			boiler = { to = 0.65, top = 11, width = 8 },
-			stack = { along = 0.12, width = 3.2, height = 3.5 },
+			boiler = { to = 0.65, top = 15.5, width = 12 },
+			stack = { along = 0.12, width = 4.8, height = 4.5 },
 		},
-		Tender = { length = 10, roof = 8, spawns = { 0.5 }, plank = true }, -- the coal car behind a locomotive: low and flat
-		Boxcar = { length = 20, roof = 10, spawns = { 0.3, 0.7 }, plank = true },
+		Tender = { length = 15, roof = 12.5, spawns = { 0.5 }, plank = true }, -- the coal car behind a locomotive: low and flat
+		Boxcar = { length = 30, roof = 15, spawns = { 0.3, 0.7 }, plank = true },
 		Flatcar = {
-			length = 18,
-			roof = 5,
+			length = 27,
+			roof = 10,
 			spawns = { 0.25 },
 			plank = true,
-			crates = { { along = 0.62, width = 4, length = 4, height = 2.5 }, { along = 0.86, width = 5, length = 3, height = 4.5 } },
+			-- Steps up to a neighbour's roof (their heights stay jump-sized; only their footprint grew).
+			crates = { { along = 0.62, width = 6, length = 6, height = 2.5 }, { along = 0.86, width = 7.5, length = 4.5, height = 4.5 } },
 		},
-		Caboose = { length = 14, roof = 10, spawns = { 0.3 }, plank = true, cupola = { from = 0.55, to = 0.9, width = 6, height = 3 } },
+		Caboose = { length = 21, roof = 15, spawns = { 0.3 }, plank = true, cupola = { from = 0.55, to = 0.9, width = 9, height = 4 } },
 	} :: { [string]: CarKind },
 	-- The trains, left to right: their cars front to back, and how far each stands back (+Z) or ahead (-Z), so that
 	-- different cars face each other. The middle one is the main stage (spawns fill it first).
 	Trains = {
-		{ shift = 3, cars = { "Locomotive", "Tender", "Boxcar", "Flatcar" } },
+		{ shift = 4.5, cars = { "Locomotive", "Tender", "Boxcar", "Flatcar" } },
 		{ shift = 0, cars = { "Locomotive", "Tender", "Boxcar", "Caboose" } },
-		{ shift = -3, cars = { "Locomotive", "Tender", "Flatcar", "Boxcar" } },
+		{ shift = -4.5, cars = { "Locomotive", "Tender", "Flatcar", "Boxcar" } },
 	},
 	-- Planks across a gap only where two flat tops of the same height face each other along at least PlankWidth
 	-- (PlankEdge in from their ends), the widest first, at most PlanksPerGap per gap, PlankSpacing apart.
 	PlankWidth = 4,
 	PlankThickness = 0.4,
-	PlankOverlap = 1, -- how far a plank lies on each roof
+	PlankOverlap = 1.5, -- how far a plank lies on each roof
 	PlankEdge = 0.5,
 	PlanksPerGap = 2,
-	PlankSpacing = 8,
+	PlankSpacing = 12,
 	-- The sand's top, under the rail tops (y 0). It is solid: a fighter who falls off lands on it and is left behind
 	-- (the fall line is above it, so landing there is always out).
 	GroundY = -1,
-	WaitingRoomHeight = 70, -- the waiting room (and the stands for the knocked out) floats this high over the middle
+	WaitingRoomHeight = 80, -- the waiting room (and the stands for the knocked out) floats this high over the middle
 	WaitingRoomSize = 36,
 	WaitingRoomWall = 14, -- glass walls higher than a jump off someone's head
 	WaitingRoomWindow = 12, -- a glass square in the middle of its floor, to look down on the trains through
@@ -115,7 +121,7 @@ Config.Run = {
 	GroundTile = 100, -- the running ground's tiles are about this long (drawn on the clients over the server's sand)
 	RoadsideProps = 20,
 	RoadsideClearance = 7, -- props stand at least this far beyond the outermost train's edge
-	RoadsideFar = 60,
+	RoadsideFar = 75,
 	-- Telegraph poles along one side (Side -1 = left), Distance beyond the outermost train's edge, every Spacing.
 	PoleSide = -1,
 	PoleDistance = 14,
@@ -140,7 +146,7 @@ Config.Canyon = {
 	-- The walls' nearest face from the middle line, and up to InnerVary farther. A home run flies about 66 sideways
 	-- before it twinkles out, so even from the outermost roof it stays clear of the walls, their foot slopes
 	-- (TalusWidth), the ribs of rock standing out of them (RibOut) and the rock spires in front (SpireOut) (tests).
-	Inner = 125,
+	Inner = 135,
 	InnerVary = 20,
 	Depth = 80, -- how far out the walls go
 	TalusWidth = 12, -- the rubble slope at a wall's foot
@@ -164,9 +170,12 @@ Config.Canyon = {
 -- or is seen by raycasts, so it never changes where anyone can stand.
 Config.Decor = {
 	Lettering = "CANYON LINE", -- painted on the boxcars' and the caboose's sides
-	DriverRadius = 1.8, -- a locomotive's big driving wheels (two pairs); the coupling rods circle with them
-	TruckWheelRadius = 0.95, -- the other cars' wheels, two pairs under each end, under the body's underside
-	CrankRadius = 0.7,
+	-- The fixed sizes of the drawn details were first chosen for 10-wide cars; they are multiplied by this (thin parts'
+	-- thickness, ladders and other people-sized things are not).
+	DetailScale = 1.5,
+	DriverRadius = 2.6, -- a locomotive's big driving wheels (two pairs, under the boiler); the coupling rods circle with them
+	TruckWheelRadius = 1.4, -- the other cars' wheels, two pairs under each end, under the body's underside
+	CrankRadius = 1,
 	-- Chimney smoke: it leaves fast upward and fades while the run's wind bends it back, so it is gone above the
 	-- roofs behind the locomotive instead of hiding them.
 	SmokeRate = 30, -- puffs per second from each chimney
@@ -220,8 +229,9 @@ Config.Bat = {
 -- lower it is the farther a hit pushes. The first hits of a combo are light (a flinch and a short push, no lying
 -- down, over before the swinger's next swing, so the one hit can answer); the hit that ends a combo launches (flying,
 -- lying down) and leaves its fighter unhittable for a moment; the hit that empties health is a smash (a certain
--- ring-out). Falling off is out at any health. A body travels about 0.35 to 0.42 x the launch push (measured: push 18
--- went 6.2, 24.4 went 10.3, 28 went 10.6, landing lying and sliding a little) and 1.2 to 2 studs from a light hit.
+-- ring-out). Falling off is out at any health. A body travels about 0.28 to 0.42 x the launch push (measured: push 18
+-- went 6.2, 24.4 went 10.3, 28 went 10.6, 15.4 went 4.3 to 5.4, 29.2 went 11.0, landing lying and sliding a little) and
+-- 1.2 to 2 studs from a light hit (the light pushes stayed as they were when the roofs grew: planks are still 4 wide).
 Config.Health = {
 	Max = 100,
 	HitDamage = 12, -- the 9th hit from full empties it
@@ -239,15 +249,16 @@ Config.Hit = {
 	LightFull = 5.5,
 	LightEmpty = 14,
 	-- Launch: push from LaunchFull (at full health) to LaunchEmpty (at none), lift LaunchLift. A launch ends a combo,
-	-- so the first one comes at 64 health: measured 3.6 studs; the second at 28: 6.9 (2026-10-25). The two light hits
-	-- before it push too: taken all the same way from the middle of a roof, a first combo can carry a fighter off.
-	LaunchFull = 1,
-	LaunchEmpty = 27,
+	-- so the first one comes at 64 health: measured 4.3 to 5.4 studs; the second at 28: 11.0 (2026-10-25, with the
+	-- 15-wide roofs: 7.5 from the middle to an edge; on 10-wide roofs two thirds of these pushes went 3.6 and 6.9). The two light
+	-- hits before it push too: taken all the same way from the middle of a roof, a first combo can carry a fighter off.
+	LaunchFull = 1.5,
+	LaunchEmpty = 40,
 	LaunchLift = 28,
 	LaunchImmune = 0.9, -- a launched fighter cannot be hit for this long (flight, getting up and a moment more)
 	-- Smash, the home run: high into the sky and away. With this lift a body is still in the air (higher than the
 	-- highest top) when Config.Fall.HomeRunSeconds ends and it twinkles out - hit on the lowest deck it would reach the
-	-- sand about 0.23 s later - and its top (about 50, 54 from a chimney top) stays under the stands (70) (tests).
+	-- sand about 0.27 s later - and its top (about 55, 60 from a chimney top) stays under the stands (80) (tests).
 	SmashPush = 60,
 	SmashLift = 120,
 }

@@ -36,7 +36,9 @@ export type Decor = typeof(setmetatable({} :: Fields, LocomotiveDecor))
 
 local DRIVERS = { 0.37, 0.59 } -- the driving wheels' axles, as shares along the locomotive
 local LEADING = { 0.07, 0.2 } -- the small leading wheels'
-local LEADING_RADIUS = 0.9
+-- The details' fixed sizes grow with the cars.
+local DETAIL = Config.Decor.DetailScale
+local LEADING_RADIUS = 0.9 * DETAIL
 local SMOKE_TEXTURE = "rbxasset://textures/particles/smoke_main.dds"
 
 local METAL = Enum.Material.Metal
@@ -104,38 +106,47 @@ local function dress(parent: Instance, x: number, place: ArenaLayout.CarPlace, k
 		local wheelX = x + side * a.Gauge
 		local phase = if side == 1 then 0 else math.pi / 2
 		for _, z in driverZ do
-			piece(parent, "Tyre", Vector3.new(0.3, r * 2, r * 2), CFrame.new(wheelX, r, z), colors.Iron, METAL, CYLINDER)
-			piece(parent, "Driver", Vector3.new(0.45, r * 2 - 0.6, r * 2 - 0.6), CFrame.new(wheelX, r, z), red, METAL, CYLINDER)
-			piece(parent, "Hub", Vector3.new(0.6, 0.8, 0.8), CFrame.new(wheelX, r, z), colors.Iron, METAL, CYLINDER)
-			local pinRest = CFrame.new(wheelX + side * 0.45, r + d.CrankRadius, z)
-			table.insert(cranks, { part = piece(parent, "CrankPin", Vector3.new(0.3, 0.45, 0.45), pinRest, colors.Brass, METAL, CYLINDER), rest = pinRest, phase = phase })
+			piece(parent, "Tyre", Vector3.new(0.3 * DETAIL, r * 2, r * 2), CFrame.new(wheelX, r, z), colors.Iron, METAL, CYLINDER)
+			piece(parent, "Driver", Vector3.new(0.45 * DETAIL, r * 1.67, r * 1.67), CFrame.new(wheelX, r, z), red, METAL, CYLINDER)
+			piece(parent, "Hub", Vector3.new(0.6 * DETAIL, 0.8 * DETAIL, 0.8 * DETAIL), CFrame.new(wheelX, r, z), colors.Iron, METAL, CYLINDER)
+			local pinRest = CFrame.new(wheelX + side * 0.45 * DETAIL, r + d.CrankRadius, z)
+			local pinSize = Vector3.new(0.3 * DETAIL, 0.45 * DETAIL, 0.45 * DETAIL)
+			table.insert(cranks, { part = piece(parent, "CrankPin", pinSize, pinRest, colors.Brass, METAL, CYLINDER), rest = pinRest, phase = phase })
 		end
-		local rodRest = CFrame.new(wheelX + side * 0.6, r + d.CrankRadius, (driverZ[1] + driverZ[2]) / 2)
-		local rod = piece(parent, "CouplingRod", Vector3.new(0.2, 0.36, driverZ[2] - driverZ[1] + 0.8), rodRest, colors.Iron)
+		local rodRest = CFrame.new(wheelX + side * 0.6 * DETAIL, r + d.CrankRadius, (driverZ[1] + driverZ[2]) / 2)
+		local rod = piece(parent, "CouplingRod", Vector3.new(0.2 * DETAIL, 0.36 * DETAIL, driverZ[2] - driverZ[1] + 0.8 * DETAIL), rodRest, colors.Iron)
 		table.insert(cranks, { part = rod, rest = rodRest, phase = phase })
 		-- Leading wheels in their little truck, and the steam cylinder above them.
 		for _, share in LEADING do
-			piece(parent, "LeadingWheel", Vector3.new(0.35, LEADING_RADIUS * 2, LEADING_RADIUS * 2), CFrame.new(wheelX, LEADING_RADIUS, front + place.length * share), red, METAL, CYLINDER)
+			piece(parent, "LeadingWheel", Vector3.new(0.35 * DETAIL, LEADING_RADIUS * 2, LEADING_RADIUS * 2), CFrame.new(wheelX, LEADING_RADIUS, front + place.length * share), red, METAL, CYLINDER)
 		end
 		local leadingMiddle = front + place.length * (LEADING[1] + LEADING[2]) / 2
-		piece(parent, "LeadingTruck", Vector3.new(0.3, 0.5, 3.2), CFrame.new(x + side * (a.Gauge + 0.4), LEADING_RADIUS + 0.05, leadingMiddle), colors.Iron)
-		piece(parent, "SteamCylinder", Vector3.new(2.6, 1.5, 1.5), CFrame.new(x + side * (a.Gauge + 0.55), 2.6, leadingMiddle + 0.4) * ALONG_TRACK, colors.Iron, METAL, CYLINDER)
+		piece(parent, "LeadingTruck", Vector3.new(0.3 * DETAIL, 0.5 * DETAIL, 3.2 * DETAIL), CFrame.new(x + side * (a.Gauge + 0.4 * DETAIL), LEADING_RADIUS + 0.05, leadingMiddle), colors.Iron)
+		local cylinder = Vector3.new(2.6 * DETAIL, 1.5 * DETAIL, 1.5 * DETAIL)
+		local cylinderAt = CFrame.new(x + side * (a.Gauge + 0.55 * DETAIL), LEADING_RADIUS * 2 + 0.8 * DETAIL, leadingMiddle + 0.4 * DETAIL)
+		piece(parent, "SteamCylinder", cylinder, cylinderAt * ALONG_TRACK, colors.Iron, METAL, CYLINDER)
 		-- A running board along the boiler's side (its inner edge inside the boiler) and a handrail higher up.
-		local boardY = boilerY - 1.8
-		local boardIn = math.sqrt(radius * radius - 1.8 * 1.8) - 0.12
-		piece(parent, "RunningBoard", Vector3.new(1.2, 0.15, boilerEnd - front - 1.2), CFrame.new(x + side * (boardIn + 0.6), boardY, (front + boilerEnd) / 2), colors.Iron)
-		local railY = boilerY + 2.4
-		piece(parent, "Handrail", Vector3.new(0.1, 0.1, boilerEnd - front - 2.7), CFrame.new(x + side * (math.sqrt(radius * radius - 2.4 * 2.4) + 0.15), railY, (front + 1.5 + boilerEnd - 1.2) / 2), colors.Brass)
+		local boardDrop, railRise = radius * 0.45, radius * 0.6
+		local boardY = boilerY - boardDrop
+		local boardIn = math.sqrt(radius * radius - boardDrop * boardDrop) - 0.12
+		local boardWidth = 1.2 * DETAIL
+		piece(parent, "RunningBoard", Vector3.new(boardWidth, 0.15 * DETAIL, boilerEnd - front - boardWidth), CFrame.new(x + side * (boardIn + boardWidth / 2), boardY, (front + boilerEnd) / 2), colors.Iron)
+		local railY = boilerY + railRise
+		local railX = x + side * (math.sqrt(radius * radius - railRise * railRise) + 0.15 * DETAIL)
+		piece(parent, "Handrail", Vector3.new(0.1 * DETAIL, 0.1 * DETAIL, boilerEnd - front - 2.7 * DETAIL), CFrame.new(railX, railY, (front + boilerEnd + 0.3 * DETAIL) / 2), colors.Brass)
 		-- The cab: two side windows in cream frames, the number under them, a front window beside the boiler.
-		for _, dz in { 1.6, 4.4 } do
-			local z = cabFront + dz
+		local cabLength = place.back - cabFront
+		for _, share in { 0.25, 0.7 } do
+			local z = cabFront + cabLength * share
 			local faceX = x + side * (a.RoofWidth / 2 - a.BodyInset)
-			piece(parent, "WindowFrame", Vector3.new(0.08, 2.4, 2), CFrame.new(faceX + side * 0.04, place.roof - 2.6, z), colors.Trim, Enum.Material.Wood)
-			piece(parent, "Window", Vector3.new(0.1, 2, 1.6), CFrame.new(faceX + side * 0.06, place.roof - 2.6, z), colors.Window, Enum.Material.Glass)
+			piece(parent, "WindowFrame", Vector3.new(0.08, 2.4 * DETAIL, 2 * DETAIL), CFrame.new(faceX + side * 0.04, place.roof - 2.6 * DETAIL, z), colors.Trim, Enum.Material.Wood)
+			piece(parent, "Window", Vector3.new(0.1, 2 * DETAIL, 1.6 * DETAIL), CFrame.new(faceX + side * 0.06, place.roof - 2.6 * DETAIL, z), colors.Window, Enum.Material.Glass)
 		end
-		local plateAt = CFrame.new(x + side * (a.RoofWidth / 2 - a.BodyInset + 0.03), place.roof - 5.3, cabFront + 3)
-		PartUtil.letterPlate(parent, Vector3.new(0.04, 1.2, 3.2), plateAt, if side == 1 then Enum.NormalId.Right else Enum.NormalId.Left, "No. " .. number, colors.Brass)
-		piece(parent, "Window", Vector3.new(1.2, 1.5, 0.1), CFrame.new(x + side * 3.9, place.roof - 2.1, cabFront - 0.05), colors.Window, Enum.Material.Glass)
+		local plateAt = CFrame.new(x + side * (a.RoofWidth / 2 - a.BodyInset + 0.03), place.roof - 5.3 * DETAIL, cabFront + cabLength * 0.48)
+		PartUtil.letterPlate(parent, Vector3.new(0.04, 1.2 * DETAIL, 3.2 * DETAIL), plateAt, if side == 1 then Enum.NormalId.Right else Enum.NormalId.Left, "No. " .. number, colors.Brass)
+		-- Out beside the boiler and high, so the boiler's round top does not hide it.
+		local frontWindowX = x + side * (a.RoofWidth / 2 - a.BodyInset - 0.7 * DETAIL)
+		piece(parent, "Window", Vector3.new(DETAIL, 1.5 * DETAIL, 0.1), CFrame.new(frontWindowX, place.roof - 1.6 * DETAIL, cabFront - 0.05), colors.Window, Enum.Material.Glass)
 	end
 
 	-- The front: smokebox (a darker band of the boiler), its door with a hinge and handle, the headlamp, the buffer
@@ -144,13 +155,14 @@ local function dress(parent: Instance, x: number, place: ArenaLayout.CarPlace, k
 	local smokeboxLength = if stack then place.length * stack.along * 2 else 3 -- reaches past the chimney
 	piece(parent, "Smokebox", Vector3.new(smokeboxLength, boiler.width + 0.1, boiler.width + 0.1), CFrame.new(x, boilerY, front + smokeboxLength / 2) * ALONG_TRACK, colors.Iron, METAL, CYLINDER)
 	piece(parent, "SmokeboxDoor", Vector3.new(0.25, boiler.width * 0.7, boiler.width * 0.7), CFrame.new(x, boilerY, front - 0.12) * ALONG_TRACK, colors.Iron:Lerp(Color3.new(0, 0, 0), 0.3), METAL, CYLINDER)
-	piece(parent, "DoorHandle", Vector3.new(0.35, 0.9, 0.9), CFrame.new(x, boilerY, front - 0.3) * ALONG_TRACK, colors.Brass, METAL, CYLINDER)
-	piece(parent, "DoorHinge", Vector3.new(2.8, 0.2, 0.08), CFrame.new(x + 1, boilerY, front - 0.27), colors.Iron)
-	local lampY = boiler.top - 0.9
-	piece(parent, "Headlamp", Vector3.new(1.6, 1.5, 1.5), CFrame.new(x, lampY, front - 0.5), colors.Iron)
-	piece(parent, "LampGlass", Vector3.new(0.12, 1.1, 1.1), CFrame.new(x, lampY, front - 1.31) * ALONG_TRACK, colors.Lamp, Enum.Material.Neon, CYLINDER)
-	piece(parent, "BufferBeam", Vector3.new(a.RoofWidth - 1.6, 0.9, 0.4), CFrame.new(x, a.BodyBottom + 0.25, front - 0.2), red)
-	PartUtil.decorWedge("Cowcatcher", Vector3.new(7, 1.6, 2.4), CFrame.new(x, 0.85, front - 1.3), red, METAL, parent)
+	piece(parent, "DoorHandle", Vector3.new(0.35 * DETAIL, 0.9 * DETAIL, 0.9 * DETAIL), CFrame.new(x, boilerY, front - 0.3 * DETAIL) * ALONG_TRACK, colors.Brass, METAL, CYLINDER)
+	piece(parent, "DoorHinge", Vector3.new(2.8 * DETAIL, 0.2 * DETAIL, 0.08), CFrame.new(x + DETAIL, boilerY, front - 0.27), colors.Iron)
+	local lampY = boiler.top - 0.9 * DETAIL
+	piece(parent, "Headlamp", Vector3.new(1.6 * DETAIL, 1.5 * DETAIL, 1.5 * DETAIL), CFrame.new(x, lampY, front - 0.5 * DETAIL), colors.Iron)
+	local glassAt = CFrame.new(x, lampY, front - 1.31 * DETAIL)
+	piece(parent, "LampGlass", Vector3.new(0.12 * DETAIL, 1.1 * DETAIL, 1.1 * DETAIL), glassAt * ALONG_TRACK, colors.Lamp, Enum.Material.Neon, CYLINDER)
+	piece(parent, "BufferBeam", Vector3.new(a.RoofWidth - 1.6 * DETAIL, 0.9 * DETAIL, 0.4 * DETAIL), CFrame.new(x, a.BodyBottom + 0.25 * DETAIL, front - 0.2 * DETAIL), red)
+	PartUtil.decorWedge("Cowcatcher", Vector3.new(7 * DETAIL, 1.6 * DETAIL, 2.4 * DETAIL), CFrame.new(x, 0.85 * DETAIL, front - 1.3 * DETAIL), red, METAL, parent)
 
 	-- Along the boiler: brass bands (clear of the chimney and dome) and the steam dome, low on the ridge.
 	for _, share in { 0.38, 0.73, 0.97 } do
@@ -158,16 +170,16 @@ local function dress(parent: Instance, x: number, place: ArenaLayout.CarPlace, k
 		piece(parent, "Band", Vector3.new(0.3, boiler.width + 0.12, boiler.width + 0.12), CFrame.new(x, boilerY, z) * ALONG_TRACK, colors.Brass, METAL, CYLINDER)
 	end
 	local domeZ = front + (boilerEnd - front) * 0.56
-	piece(parent, "Dome", Vector3.new(1.2, 2.4, 2.4), CFrame.new(x, boiler.top - 0.1, domeZ) * STOOD_UP, colors.Brass, METAL, CYLINDER)
-	piece(parent, "DomeCap", Vector3.new(0.25, 2.7, 2.7), CFrame.new(x, boiler.top + 0.6, domeZ) * STOOD_UP, colors.Brass, METAL, CYLINDER)
-	piece(parent, "Whistle", Vector3.new(0.6, 0.35, 0.35), CFrame.new(x + 2.5, place.roof + 0.3, cabFront + 0.4) * STOOD_UP, colors.Brass, METAL, CYLINDER)
+	piece(parent, "Dome", Vector3.new(1.2, 2.4 * DETAIL, 2.4 * DETAIL), CFrame.new(x, boiler.top - 0.1, domeZ) * STOOD_UP, colors.Brass, METAL, CYLINDER)
+	piece(parent, "DomeCap", Vector3.new(0.25, 2.7 * DETAIL, 2.7 * DETAIL), CFrame.new(x, boiler.top + 0.6, domeZ) * STOOD_UP, colors.Brass, METAL, CYLINDER)
+	piece(parent, "Whistle", Vector3.new(0.6 * DETAIL, 0.35 * DETAIL, 0.35 * DETAIL), CFrame.new(x + 2.5 * DETAIL, place.roof + 0.3 * DETAIL, cabFront + 0.4 * DETAIL) * STOOD_UP, colors.Brass, METAL, CYLINDER)
 
 	-- The chimney (solid, the server's): a collar where it meets the boiler, a rim flush with its top, and the smoke.
 	if stack then
 		local z = front + place.length * stack.along
 		local top = boiler.top + stack.height
-		local collar = stack.width * a.StackPipe + 0.5
-		piece(parent, "StackCollar", Vector3.new(0.5, collar, collar), CFrame.new(x, boiler.top + 0.1, z) * STOOD_UP, colors.Brass, METAL, CYLINDER)
+		local collar = stack.width * a.StackPipe + 0.5 * DETAIL
+		piece(parent, "StackCollar", Vector3.new(0.5 * DETAIL, collar, collar), CFrame.new(x, boiler.top + 0.1, z) * STOOD_UP, colors.Brass, METAL, CYLINDER)
 		piece(parent, "StackRim", Vector3.new(0.25, stack.width + 0.12, stack.width + 0.12), CFrame.new(x, top - 0.125, z) * STOOD_UP, colors.Iron, METAL, CYLINDER)
 		table.insert(chimneys, { emitter = smoke(parent, Vector3.new(x, top + 0.2, z)), top = Vector3.new(x, top, z), reach = stack.width / 2 + 0.5 })
 	end

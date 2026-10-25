@@ -27,7 +27,7 @@ export type Arena = {
 	waitingSpot: CFrame, -- where the knocked out and the waiting stand
 }
 
-local STACK_CAP = 1.3 -- the chimney's flared top, its height
+local STACK_CAP = 0.37 -- the chimney's flared top, as a share of the chimney's height over the boiler
 
 -- A car body from Config.Arena.BodyBottom up to just under `top` and a plate on top (the floor players stand on), as
 -- wide as a roof.
@@ -68,13 +68,14 @@ local function addLocomotive(parent: Instance, x: number, place: ArenaLayout.Car
 		-- A pipe from inside the boiler up to a flared cap, both round about their own X, stood up.
 		local z = place.front + place.length * stack.along
 		local top = boilerSpec.top + stack.height
+		local capHeight = stack.height * STACK_CAP
 		local pipeBottom = boilerSpec.top - 1
-		local pipe = PartUtil.solidBlock("Stack", Vector3.new(top - STACK_CAP - pipeBottom, stack.width * a.StackPipe, stack.width * a.StackPipe), a.Colors.Cab, Enum.Material.Metal, parent)
+		local pipe = PartUtil.solidBlock("Stack", Vector3.new(top - capHeight - pipeBottom, stack.width * a.StackPipe, stack.width * a.StackPipe), a.Colors.Cab, Enum.Material.Metal, parent)
 		pipe.Shape = Enum.PartType.Cylinder
-		pipe.CFrame = CFrame.new(x, (pipeBottom + top - STACK_CAP) / 2, z) * CFrame.Angles(0, 0, math.pi / 2)
-		local cap = PartUtil.solidBlock("StackCap", Vector3.new(STACK_CAP, stack.width, stack.width), a.Colors.Cab, Enum.Material.Metal, parent)
+		pipe.CFrame = CFrame.new(x, (pipeBottom + top - capHeight) / 2, z) * CFrame.Angles(0, 0, math.pi / 2)
+		local cap = PartUtil.solidBlock("StackCap", Vector3.new(capHeight, stack.width, stack.width), a.Colors.Cab, Enum.Material.Metal, parent)
 		cap.Shape = Enum.PartType.Cylinder
-		cap.CFrame = CFrame.new(x, top - STACK_CAP / 2, z) * CFrame.Angles(0, 0, math.pi / 2)
+		cap.CFrame = CFrame.new(x, top - capHeight / 2, z) * CFrame.Angles(0, 0, math.pi / 2)
 	end
 end
 

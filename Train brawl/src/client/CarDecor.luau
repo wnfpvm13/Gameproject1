@@ -19,6 +19,8 @@ local ArenaLayout = require(shared:WaitForChild("ArenaLayout"))
 local CarDecor = {}
 
 local BLACK = Color3.new(0, 0, 0)
+-- The details' fixed sizes grow with the cars (people, and so ladders, do not).
+local DETAIL = Config.Decor.DetailScale
 
 local METAL = Enum.Material.Metal
 local WOOD = Enum.Material.Wood
@@ -47,22 +49,26 @@ local function runningGear(parent: Instance, x: number, place: ArenaLayout.CarPl
 	local a, colors = Config.Arena, Config.Decor.Colors
 	local halfWidth = a.RoofWidth / 2 - a.BodyInset
 	local wheel = Config.Decor.TruckWheelRadius
-	local trucks: { number } = if place.length <= 12 then { 0.25, 0.75 } else { 0.2, 0.8 }
+	local trucks: { number } = if place.length <= 12 * DETAIL then { 0.25, 0.75 } else { 0.2, 0.8 }
 	for _, share in trucks do
 		local z = along(place, share)
-		piece(parent, "Bolster", Vector3.new(a.Gauge * 2 + 0.6, 0.5, 0.8), CFrame.new(x, a.BodyBottom - 0.25, z), colors.Iron)
+		-- From the side frames' tops up to the body's underside.
+		local frameTop = wheel + 0.1 + 0.35 * DETAIL
+		local bolsterHeight = a.BodyBottom - frameTop + 0.05
+		piece(parent, "Bolster", Vector3.new((a.Gauge + 0.45 * DETAIL) * 2, bolsterHeight, 0.8 * DETAIL), CFrame.new(x, a.BodyBottom - bolsterHeight / 2, z), colors.Iron)
 		for _, side in { -1, 1 } do
-			piece(parent, "TruckFrame", Vector3.new(0.35, 0.7, 3.6), CFrame.new(x + side * (a.Gauge + 0.45), wheel + 0.1, z), colors.Iron)
-			for _, dz in { -1.15, 1.15 } do
-				piece(parent, "Wheel", Vector3.new(0.4, wheel * 2, wheel * 2), CFrame.new(x + side * a.Gauge, wheel, z + dz), a.Colors.Wheel, METAL, CYLINDER)
+			piece(parent, "TruckFrame", Vector3.new(0.35 * DETAIL, 0.7 * DETAIL, 3.8 * wheel), CFrame.new(x + side * (a.Gauge + 0.45 * DETAIL), wheel + 0.1, z), colors.Iron)
+			for _, dz in { -1.2 * wheel, 1.2 * wheel } do
+				piece(parent, "Wheel", Vector3.new(0.4 * DETAIL, wheel * 2, wheel * 2), CFrame.new(x + side * a.Gauge, wheel, z + dz), a.Colors.Wheel, METAL, CYLINDER)
 			end
 		end
 	end
 	for _, side in { -1, 1 } do
-		piece(parent, "Sill", Vector3.new(0.16, 0.4, place.length), CFrame.new(x + side * (halfWidth + 0.08), a.BodyBottom + 0.2, place.middle), colors.Iron)
+		piece(parent, "Sill", Vector3.new(0.16, 0.4 * DETAIL, place.length), CFrame.new(x + side * (halfWidth + 0.08), a.BodyBottom + 0.2 * DETAIL, place.middle), colors.Iron)
 	end
-	piece(parent, "Coupler", Vector3.new(0.7, 0.45, 0.5), CFrame.new(x, a.BodyBottom + 0.4, place.front - 0.12), colors.Iron)
-	piece(parent, "Coupler", Vector3.new(0.7, 0.45, 0.5), CFrame.new(x, a.BodyBottom + 0.4, place.back + 0.12), colors.Iron)
+	local coupler = Vector3.new(0.7 * DETAIL, 0.45 * DETAIL, 0.5)
+	piece(parent, "Coupler", coupler, CFrame.new(x, a.BodyBottom + 0.4 * DETAIL, place.front - 0.12), colors.Iron)
+	piece(parent, "Coupler", coupler, CFrame.new(x, a.BodyBottom + 0.4 * DETAIL, place.back + 0.12), colors.Iron)
 end
 
 -- A ladder up one side of a car, its rails `z` and `z + 1.2` along the track.
@@ -87,16 +93,17 @@ local function boxcar(parent: Instance, x: number, place: ArenaLayout.CarPlace, 
 	local bodyTop = top - 0.3
 	local height = bodyTop - a.BodyBottom
 	local door = a.Colors.Boxcar:Lerp(BLACK, 0.22)
-	local frontPanel, backPanel = place.middle - 2.75, place.middle + 2.75
+	local doorWidth = place.length * 0.26
+	local frontPanel, backPanel = place.middle - doorWidth / 2 - 0.15, place.middle + doorWidth / 2 + 0.15
 	for _, side in { -1, 1 } do
 		local face = x + side * halfWidth
 		-- The sliding door on its rails (the rails run over the back panel, where it slides open to), and its handle.
 		local doorBottom, doorTop = a.BodyBottom + 0.5, bodyTop - 0.7
-		piece(parent, "Door", Vector3.new(0.12, doorTop - doorBottom, 5.2), CFrame.new(face + side * 0.06, (doorBottom + doorTop) / 2, place.middle), door, WOOD)
+		piece(parent, "Door", Vector3.new(0.12, doorTop - doorBottom, doorWidth), CFrame.new(face + side * 0.06, (doorBottom + doorTop) / 2, place.middle), door, WOOD)
 		for _, railY in { doorTop + 0.15, doorBottom - 0.1 } do
-			piece(parent, "DoorRail", Vector3.new(0.14, 0.22, 11), CFrame.new(face + side * 0.13, railY, place.middle + 2.5), colors.Iron)
+			piece(parent, "DoorRail", Vector3.new(0.14, 0.22 * DETAIL, doorWidth * 2.1), CFrame.new(face + side * 0.13, railY, place.middle + doorWidth * 0.48), colors.Iron)
 		end
-		piece(parent, "Handle", Vector3.new(0.1, 1.4, 0.18), CFrame.new(face + side * 0.17, (doorBottom + doorTop) / 2, place.middle + 2.2), colors.Iron)
+		piece(parent, "Handle", Vector3.new(0.1, 1.4 * DETAIL, 0.18 * DETAIL), CFrame.new(face + side * 0.17, (doorBottom + doorTop) / 2, place.middle + doorWidth * 0.42), colors.Iron)
 		-- Posts at the ends and beside the door, a brace across each panel.
 		for _, z in { place.front + 0.15, frontPanel, backPanel, place.back - 0.15 } do
 			piece(parent, "Post", Vector3.new(0.1, height, 0.3), CFrame.new(face + side * 0.05, a.BodyBottom + height / 2, z), door, WOOD)
@@ -105,17 +112,18 @@ local function boxcar(parent: Instance, x: number, place: ArenaLayout.CarPlace, 
 		PartUtil.decorBar("Brace", Vector3.new(face + side * 0.08, low, place.front + 0.3), Vector3.new(face + side * 0.08, high, frontPanel - 0.15), 0.22, door, WOOD, parent)
 		PartUtil.decorBar("Brace", Vector3.new(face + side * 0.08, low, place.back - 0.3), Vector3.new(face + side * 0.08, high, backPanel + 0.15), 0.22, door, WOOD, parent)
 		ladder(parent, x, side, place.back - 1.65, top)
-		lettering(parent, x, side, bodyTop - 1.5, (place.front + frontPanel) / 2 + 0.3, Vector2.new(6, 1.5), Config.Decor.Lettering)
-		lettering(parent, x, side, bodyTop - 1.4, (backPanel + place.back) / 2 - 0.6, Vector2.new(3.6, 1.1), "No. " .. number)
+		local panel = frontPanel - place.front
+		lettering(parent, x, side, bodyTop - 1.5 * DETAIL, (place.front + frontPanel) / 2 + 0.3, Vector2.new(math.min(panel - 1.5, 6 * DETAIL), 1.5 * DETAIL), Config.Decor.Lettering)
+		lettering(parent, x, side, bodyTop - 1.4 * DETAIL, (backPanel + place.back) / 2 - 0.6 * DETAIL, Vector2.new(3.6 * DETAIL, 1.1 * DETAIL), "No. " .. number)
 	end
 	-- On the roof: seams across it and a walkway along the middle (a few hundredths high: under the feet).
-	local seam = 2.5
+	local seam = 2.5 * DETAIL
 	local z = place.front + seam
 	while z < place.back - 0.5 do
 		piece(parent, "RoofSeam", Vector3.new(a.RoofWidth - 0.2, 0.05, 0.18), CFrame.new(x, top + 0.025, z), a.Colors.Roof:Lerp(BLACK, 0.3))
 		z += seam
 	end
-	piece(parent, "Walkway", Vector3.new(1.6, 0.06, place.length - 0.6), CFrame.new(x, top + 0.03, place.middle), colors.Wood, WOOD)
+	piece(parent, "Walkway", Vector3.new(1.6 * DETAIL, 0.06, place.length - 0.6), CFrame.new(x, top + 0.03, place.middle), colors.Wood, WOOD)
 end
 
 local function tender(parent: Instance, x: number, place: ArenaLayout.CarPlace, number: number)
@@ -124,30 +132,42 @@ local function tender(parent: Instance, x: number, place: ArenaLayout.CarPlace, 
 	local top = place.roof
 	-- Coal: flat lumps lying on the top (sticking up a few tenths), and a low rim around it.
 	for k = 1, 9 do
-		local lx = x + (((k * 37) % 7) / 6 - 0.5) * 6.5
-		local lz = place.front + 1.2 + ((k * 53) % 9) / 8 * (place.length - 4)
-		piece(parent, "Coal", Vector3.new(1.7, 0.5, 1.4), CFrame.new(lx, top - 0.05, lz) * CFrame.Angles(0.12 * (k % 3 - 1), k * 1.3, 0.1), a.Colors.Coal, Enum.Material.Slate)
+		local lx = x + (((k * 37) % 7) / 6 - 0.5) * a.RoofWidth * 0.65
+		local lz = place.front + 1.2 * DETAIL + ((k * 53) % 9) / 8 * (place.length - 4 * DETAIL)
+		piece(parent, "Coal", Vector3.new(1.7 * DETAIL, 0.5, 1.4 * DETAIL), CFrame.new(lx, top - 0.05, lz) * CFrame.Angles(0.12 * (k % 3 - 1), k * 1.3, 0.1), a.Colors.Coal, Enum.Material.Slate)
 	end
 	for _, side in { -1, 1 } do
 		piece(parent, "Rim", Vector3.new(0.25, 0.35, place.length), CFrame.new(x + side * (a.RoofWidth / 2 - 0.125), top + 0.175, place.middle), a.Colors.Tender)
-		piece(parent, "Lining", Vector3.new(0.06, 0.14, place.length - 0.6), CFrame.new(x + side * (halfWidth + 0.03), top - 1.3, place.middle), colors.Trim)
-		lettering(parent, x, side, (a.BodyBottom + top) / 2 - 0.4, place.middle, Vector2.new(4.4, 1.3), "No. " .. number)
+		piece(parent, "Lining", Vector3.new(0.06, 0.14, place.length - 0.6), CFrame.new(x + side * (halfWidth + 0.03), top - 1.3 * DETAIL, place.middle), colors.Trim)
+		lettering(parent, x, side, (a.BodyBottom + top) / 2 - 0.4 * DETAIL, place.middle, Vector2.new(4.4 * DETAIL, 1.3 * DETAIL), "No. " .. number)
 	end
 	for _, z in { place.front + 0.125, place.back - 0.125 } do
 		piece(parent, "Rim", Vector3.new(a.RoofWidth, 0.35, 0.25), CFrame.new(x, top + 0.175, z), a.Colors.Tender)
 	end
-	piece(parent, "WaterHatch", Vector3.new(0.25, 1.8, 1.8), CFrame.new(x, top + 0.12, place.back - 1.5) * CFrame.Angles(0, 0, math.pi / 2), colors.Iron, METAL, CYLINDER)
+	piece(parent, "WaterHatch", Vector3.new(0.25, 1.8 * DETAIL, 1.8 * DETAIL), CFrame.new(x, top + 0.12, place.back - 1.5 * DETAIL) * CFrame.Angles(0, 0, math.pi / 2), colors.Iron, METAL, CYLINDER)
 end
 
-local function flatcar(parent: Instance, x: number, place: ArenaLayout.CarPlace, kind: ArenaLayout.Kind)
+local function flatcar(parent: Instance, x: number, place: ArenaLayout.CarPlace, kind: ArenaLayout.Kind, number: number)
 	local a, colors = Config.Arena, Config.Decor.Colors
+	local halfWidth = a.RoofWidth / 2 - a.BodyInset
 	local top = place.roof
+	-- The tall side under the deck: boards (darker strips along it) and the car's number, so it does not read as a box.
+	local board = a.Colors.Flatcar:Lerp(BLACK, 0.3)
+	local bodyTop = top - 0.3
+	for _, side in { -1, 1 } do
+		local face = x + side * halfWidth
+		for _, share in { 0.18, 0.82 } do
+			local y = a.BodyBottom + (bodyTop - a.BodyBottom) * share
+			piece(parent, "Board", Vector3.new(0.08, 0.14 * DETAIL, place.length - 0.4), CFrame.new(face + side * 0.04, y, place.middle), board, WOOD)
+		end
+		lettering(parent, x, side, (a.BodyBottom + bodyTop) / 2, place.middle, Vector2.new(4.4 * DETAIL, 1.3 * DETAIL), "No. " .. number)
+	end
 	for _, side in { -1, 1 } do
 		piece(parent, "DeckEdge", Vector3.new(0.3, 0.06, place.length), CFrame.new(x + side * (a.RoofWidth / 2 - 0.15), top + 0.03, place.middle), colors.Wood, WOOD)
 		local z = place.front + 1.5
 		while z < place.back - 1 do
 			piece(parent, "Stake", Vector3.new(0.3, 1.1, 0.3), CFrame.new(x + side * (a.RoofWidth / 2 - 0.2), top + 0.45, z), colors.Wood, WOOD)
-			z += 3
+			z += 3 * DETAIL
 		end
 	end
 	-- Each crate: a cross of battens on its two sides facing across the track and a rope strap over it.
@@ -174,13 +194,13 @@ local function caboose(parent: Instance, x: number, place: ArenaLayout.CarPlace,
 		local face = x + side * halfWidth
 		for _, share in { 0.16, 0.38, 0.72 } do
 			local z = along(place, share)
-			piece(parent, "WindowFrame", Vector3.new(0.08, 2.1, 1.8), CFrame.new(face + side * 0.04, top - 2.9, z), colors.Trim, WOOD)
-			piece(parent, "Window", Vector3.new(0.1, 1.7, 1.4), CFrame.new(face + side * 0.06, top - 2.9, z), colors.Window, Enum.Material.Glass)
+			piece(parent, "WindowFrame", Vector3.new(0.08, 2.1 * DETAIL, 1.8 * DETAIL), CFrame.new(face + side * 0.04, top - 2.9 * DETAIL, z), colors.Trim, WOOD)
+			piece(parent, "Window", Vector3.new(0.1, 1.7 * DETAIL, 1.4 * DETAIL), CFrame.new(face + side * 0.06, top - 2.9 * DETAIL, z), colors.Window, Enum.Material.Glass)
 		end
 		ladder(parent, x, side, place.front + 0.45, top)
-		lettering(parent, x, side, a.BodyBottom + 1.5, place.middle, Vector2.new(7, 1.2), Config.Decor.Lettering)
+		lettering(parent, x, side, a.BodyBottom + 1.5 * DETAIL, place.middle, Vector2.new(7 * DETAIL, 1.2 * DETAIL), Config.Decor.Lettering)
 		-- Red marker lamps at the back corners.
-		piece(parent, "MarkerLamp", Vector3.new(0.5, 0.7, 0.35), CFrame.new(x + side * 4.1, top - 1.6, place.back + 0.17), colors.Marker, Enum.Material.Neon)
+		piece(parent, "MarkerLamp", Vector3.new(0.5 * DETAIL, 0.7 * DETAIL, 0.35), CFrame.new(x + side * (halfWidth - 0.6 * DETAIL), top - 1.6 * DETAIL, place.back + 0.17), colors.Marker, Enum.Material.Neon)
 	end
 	local cupola = kind.cupola
 	if cupola then
@@ -190,12 +210,12 @@ local function caboose(parent: Instance, x: number, place: ArenaLayout.CarPlace,
 		for _, side in { -1, 1 } do
 			for _, share in { 0.3, 0.7 } do
 				local z = from + length * share
-				piece(parent, "WindowFrame", Vector3.new(0.06, 1.4, 1.7), CFrame.new(x + side * (cupola.width / 2 + 0.03), top + 1.6, z), colors.Trim, WOOD)
-				piece(parent, "Window", Vector3.new(0.08, 1.1, 1.4), CFrame.new(x + side * (cupola.width / 2 + 0.05), top + 1.6, z), colors.Window, Enum.Material.Glass)
+				piece(parent, "WindowFrame", Vector3.new(0.06, 1.4 * DETAIL, 1.7 * DETAIL), CFrame.new(x + side * (cupola.width / 2 + 0.03), top + cupola.height * 0.55, z), colors.Trim, WOOD)
+				piece(parent, "Window", Vector3.new(0.08, 1.1 * DETAIL, 1.4 * DETAIL), CFrame.new(x + side * (cupola.width / 2 + 0.05), top + cupola.height * 0.55, z), colors.Window, Enum.Material.Glass)
 			end
 		end
 		for _, z in { from - 0.04, to + 0.04 } do
-			piece(parent, "Window", Vector3.new(1.8, 1.1, 0.08), CFrame.new(x, top + 1.6, z), colors.Window, Enum.Material.Glass)
+			piece(parent, "Window", Vector3.new(1.8 * DETAIL, 1.1 * DETAIL, 0.08), CFrame.new(x, top + cupola.height * 0.55, z), colors.Window, Enum.Material.Glass)
 		end
 		-- An overhanging cap whose top is the lookout's own (nothing sticks up from where people stand).
 		piece(parent, "CupolaCap", Vector3.new(cupola.width + 0.6, 0.25, length + 0.6), CFrame.new(x, cupolaTop - 0.125, middle), a.Colors.Roof)
@@ -229,7 +249,7 @@ function CarDecor.build(layout: ArenaLayout.Layout): Folder
 			if place.kind == "Tender" then
 				tender(folder, train.x, place, number)
 			elseif place.kind == "Flatcar" then
-				flatcar(folder, train.x, place, kind)
+				flatcar(folder, train.x, place, kind, number)
 			elseif place.kind == "Caboose" then
 				caboose(folder, train.x, place, kind)
 			else

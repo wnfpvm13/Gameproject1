@@ -81,6 +81,20 @@ do
 		end
 	end
 	check("along a train every car's top is within a jump of the next (flatcars can be climbed out of)", climbable)
+	local stepUp = true
+	for _, kind in A.CarKinds do
+		local crates: { any } = kind.crates or {}
+		for _, crate in crates do
+			stepUp = stepUp and crate.height < JUMP_HEIGHT - 1.5
+		end
+		if kind.cupola then
+			stepUp = stepUp and kind.cupola.height < JUMP_HEIGHT - 1.5
+		end
+		if kind.boiler then
+			stepUp = stepUp and math.abs(kind.roof - kind.boiler.top) < JUMP_HEIGHT - 1.5
+		end
+	end
+	check("every top standing on a car (crates, lookout, boiler) is within a jump of the one below", stepUp)
 end
 
 -- 2. Planks, spawn spots, jumps and the fall line.
@@ -177,16 +191,17 @@ do
 	end
 	check("every spawn spot is on its train's flat top, away from its ends", onTop)
 	check("no spawn spot is in or against something higher", roomy)
+	local SPAWN_APART = Config.Bat.Reach + Config.Bat.ReachSlack
 	local apart = true
 	for a = 1, #L.spots do
 		for b = a + 1, #L.spots do
 			local p, q = L.spots[a], L.spots[b]
-			if math.abs(p.x - q.x) < 3 and math.abs(p.z - q.z) < 3 then
+			if math.sqrt((p.x - q.x) ^ 2 + (p.z - q.z) ^ 2) <= SPAWN_APART then
 				apart = false
 			end
 		end
 	end
-	check("spawn spots are at least 3 apart (nobody appears inside someone else)", apart)
+	check("spawn spots are farther apart than a swing reaches on the server (nobody starts within a hit)", apart)
 	-- preferMiddle with a shuffle that reverses (to see it is used): every spot once, never farther from the middle than a
 	-- later one, and the two trains beside the middle taking turns.
 	local calls = 0
@@ -305,6 +320,17 @@ do
 	end
 	local first, second = launchAt(max - h.LaunchOn * damage), launchAt(max - 2 * h.LaunchOn * damage)
 	check("the first combo's launch lands on the roof from its middle", first < A.RoofWidth / 2, string.format("%.1f", first))
+	-- The launches as measured in Studio (2026-10-25, a server-physics sandbag on a 15-wide roof): the travel includes
+	-- landing and sliding, so it is longer than the formula's. A tuning change to these pushes must be measured again.
+	local MEASURED = { { health = 64, push = 15.4, lift = 28, travel = 5.38 }, { health = 28, push = 29.2, lift = 28, travel = 11.02 } }
+	local same = true
+	for _, m in MEASURED do
+		local push, lift = HitRules.force("launch", m.health, max, h)
+		same = same and near(push, m.push, 0.05) and near(lift, m.lift)
+	end
+	check("the launch pushes are the ones measured in Studio (measure again after a change)", same)
+	check("measured: the first combo's launch stays on the roof from its middle", MEASURED[1].travel < A.RoofWidth / 2)
+	check("measured: the second combo's launch goes off the roof from its middle", MEASURED[2].travel > A.RoofWidth / 2)
 	check("the second combo's launch goes off the roof from its middle", second > A.RoofWidth / 2, string.format("%.1f", second))
 	check("a light hit never pushes off the roof from its middle", h.LightEmpty * h.SlideSeconds < A.RoofWidth / 2)
 	check("a smash flies past the other train", BatMath.flightDistance(h.SmashPush, h.SmashLift, GRAVITY) > A.RoofWidth + A.Gap + A.RoofWidth)
@@ -366,6 +392,10 @@ do
 		check("every chimney top is a walkable top of its own train", found == #L.trains, tostring(found))
 		check("every chimney stands on its boiler", onBoiler)
 		check("a chimney top is within a jump of the boiler (a perch, not a wall)", stack.height < JUMP_HEIGHT - 1.5)
+		-- The drawn driving wheels' tyres, at their inner face, stay under the round boiler.
+		local tyreInner = A.Gauge - 0.15 * Config.Decor.DetailScale
+		local overTyre = boiler.top - boiler.width / 2 - math.sqrt((boiler.width / 2) ^ 2 - tyreInner ^ 2)
+		check("the drawn driving wheels' tyres stay under the boiler", Config.Decor.DriverRadius * 2 < overTyre, string.format("%.2f", overTyre))
 		check("the chimney is narrower than the boiler's ridge", stack.width < boiler.width)
 		-- The drawn driving wheels stand on the rails, under the round boiler where it is at the rails.
 		local boilerMiddle = boiler.top - boiler.width / 2

@@ -198,6 +198,29 @@ return {
 	ESTIMATE_SECONDS = 15,
 	ESTIMATE_MAX = 999999,
 	ESTIMATE_MIN_PLAYERS = 2,
+	-- 머리 위 스무고개 (bundle 9c, owner 2026-10-25: instead of the banned-word talk). Everyone on the ground gets a
+	-- different word of one topic (ChosungBank, TWENTY_MIN_LETTERS letters or more) over their head; TWENTY_INTRO_SECONDS
+	-- to look, then in a random order each one asks the others for TWENTY_TURN_SECONDS and may type one answer of
+	-- TWENTY_ANSWER_MAX letters at most (its verdict shows TWENTY_VERDICT_SECONDS). Over once TWENTY_SHARE of the players
+	-- (rounded up) are right, or after TWENTY_TRIES rounds (one answer a turn); whoever is not right flies.
+	TWENTY_MIN_PLAYERS = 2,
+	TWENTY_MIN_LETTERS = 2, -- (one letter, like 배 or 자, hides in too many chat lines: writing it would fly people)
+	TWENTY_INTRO_SECONDS = 5,
+	TWENTY_TURN_SECONDS = 12,
+	TWENTY_VERDICT_SECONDS = 1.5,
+	TWENTY_TRIES = 3,
+	TWENTY_SHARE = 0.3,
+	TWENTY_ANSWER_MAX = 12,
+	-- Writing someone else's word flies you only when it is written as a word of its own, maybe with one of these
+	-- particles or endings after it (사과가, 사과야, 택배 기사는); inside a longer word it does not ("나라면" is not 라면,
+	-- "배우고" is not 배우). Review 2026-10-25: the plain inside-match flew people for everyday lines.
+	TWENTY_PARTICLES = { "이", "가", "은", "는", "을", "를", "의", "도", "만", "에", "에서", "에게", "한테", "께", "로", "으로",
+		"와", "과", "랑", "이랑", "하고", "요", "야", "이야", "아", "이요", "예요", "에요", "이에요", "인가", "인가요", "인데",
+		"이지", "지", "죠", "이죠", "다", "이다", "임", "냐", "이냐", "니", "이니", "나", "이나", "라", "이라", "라고", "이라고",
+		"네", "이네", "잖아", "이잖아", "처럼", "보다", "부터", "까지", "들" },
+	-- Words left out of 스무고개: an everyday word is spelled the same (사자 "let's buy", 판다 "sells", 화가 나, 배우다,
+	-- 유도 질문, 인도 = sidewalk), so writing it innocently would fly someone.
+	TWENTY_SKIP_WORDS = { "사자", "판다", "화가", "배우", "유도", "인도" },
 	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
 	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
 	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
@@ -214,6 +237,8 @@ return {
 	TEST_FINAL_FAIL_CHANCE = 0.4,
 
 	-- Banned words (docs/DESIGN_V3.md §6; bundle 5a, the banned-word talk of bundle 6a): one each, only during the talk.
+	-- Owner 2026-10-25: 머리 위 스무고개 replaces the talk; its code stays (TALK_GAME_ON brings it back, tests use it).
+	TALK_GAME_ON = false,
 	HABIT_WORD_CHANCE = 0.3, -- per player: chance that a word is a speech habit (진짜, 대박 ...) instead of a noun
 	TALK_SECONDS = 60, -- the talk itself (judged)
 	TALK_MIN_PLAYERS = 2,
@@ -536,6 +561,29 @@ return {
 		ESTIMATE_NONE = "%s 안 냄",
 		ESTIMATE_RESULT = "정답 %d · %s 날아가요",
 		ESTIMATE_NOBODY = "정답 %d · 모두 딱 맞혔어요 · 아무도 안 날아가요",
+		-- Bundle 9c (owner 2026-10-25).
+		TWENTY_TITLE = "머리 위 스무고개",
+		TWENTY_BRIEF = "질문해서 내 머리 위 단어를 맞혀요 · 남의 단어를 채팅에 쓰면 날아가요",
+		TWENTY_INTRO = "내 단어는 나만 몰라요 · 차례마다 %d초 동안 물어보고 한 번 맞혀요",
+		TWENTY_TURN = "%s 님 차례 · 질문에 답해 주세요",
+		TWENTY_MY_TURN = "내 차례! 물어보고 정답을 쳐요",
+		TWENTY_INFO = "주제: %s · %d/%d바퀴 · 맞힌 사람 %d/%d명",
+		TWENTY_NO_LEAK = "남의 단어를 채팅에 쓰면 날아가요",
+		TWENTY_ONE_TRY = "이번 차례에 한 번만 낼 수 있어요",
+		TWENTY_HINT = "내 단어는?",
+		TWENTY_SEND = "정답!",
+		TWENTY_SENT = "'%s' 냈어요",
+		TWENTY_RIGHT = "⭕ %s 님 정답! %s",
+		TWENTY_WRONG = "❌ %s 님 땡",
+		TWENTY_TIMEOUT = "⏰ %s 님 시간 끝",
+		TWENTY_LEAK = "%s 님이 남의 단어를 채팅에 써서 날아가요",
+		TWENTY_LEAK_MINE = "💥 남의 단어를 써서 날아가요 · 내 단어: %s",
+		TWENTY_RESULT = "못 맞힌 %s 날아가요",
+		TWENTY_NOBODY = "날아갈 사람이 없어요",
+		TWENTY_RESULT_TITLE = "머리 위 스무고개 · 주제: %s",
+		TWENTY_RIGHT_LIST = "맞힘: %s",
+		TWENTY_LEAKED = "%s 💥(채팅)",
+		TWENTY_MY_WORD = "내 단어: %s",
 		TALK_BRIEF = "남의 머리 위 금칙어를 말하게 해요 · 내 금칙어를 말하면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		TALK_SOON = "곧 시작",
 		TALK_PREP = "금칙어를 나눠 주는 중 · 내 머리 위 단어는 나만 몰라요",
@@ -753,12 +801,16 @@ local function keep(code: number): boolean
 		or (code >= 0x30 and code <= 0x39)
 end
 
-function Judge.normalizeChat(text: string): string
-	-- Full-width digits (０-９) count like ASCII ones (read as Sino-Korean below).
+-- Full-width digits (０-９) count like ASCII ones (read as Sino-Korean in normalize).
+local function prepare(text: string): string
 	local s = string.gsub(text, "\239\188[\144-\153]", function(digit: string): string
 		return string.char(string.byte(digit, 3) - 0x90 + 0x30)
 	end)
-	s = Judge.normalize(s)
+	return Judge.normalize(s)
+end
+
+function Judge.normalizeChat(text: string): string
+	local s = prepare(text)
 	local out = {}
 	local ok = pcall(function()
 		for _, code in utf8.codes(s) do
@@ -771,6 +823,31 @@ function Judge.normalizeChat(text: string): string
 		return (string.gsub(s, "[%s%p]", "")) -- not valid UTF-8: the ASCII rule at least
 	end
 	return table.concat(out)
+end
+
+-- A chat line's words (머리 위 스무고개, bundle 9c): the runs of the letters normalizeChat keeps; anything else (spaces,
+-- marks, emoji, invisible characters) ends a word. "사과, 배!" -> { "사과", "배" }; not valid UTF-8 -> none.
+function Judge.chatWords(text: string): { string }
+	local s = prepare(text)
+	local words: { string } = {}
+	local current: { string } = {}
+	local ok = pcall(function()
+		for _, code in utf8.codes(s) do
+			if keep(code) then
+				table.insert(current, utf8.char(code))
+			elseif #current > 0 then
+				table.insert(words, table.concat(current))
+				current = {}
+			end
+		end
+	end)
+	if not ok then
+		return {}
+	end
+	if #current > 0 then
+		table.insert(words, table.concat(current))
+	end
+	return words
 end
 
 -- Whether `text` (a chat message) holds `word` or one of its aliases.
@@ -1263,6 +1340,9 @@ local earsPending = 0 -- ear judgments pressed in the talk whose lever has not l
 -- order the waits end in must not decide who falls "at once").
 local heldFails: { Player } = {}
 local holdingLate = false -- the settle stage waits for the last transcripts: hits are held until it closes (6e)
+-- A mission's words over the heads (머리 위 스무고개, bundle 9c) are up, and the running mission's chat watcher.
+local headsUp = false
+local missionChat: ((Player, string) -> ())? = nil
 
 -- Alive participants and the presenter are heard by everyone; players who are out and spectators only by each other.
 local function refreshSpeakers()
@@ -1338,7 +1418,7 @@ local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: bo
 	noteDecision()
 	refreshSpeakers()
 	Match.broadcast()
-	if talkOn() then
+	if talkOn() or headsUp then
 		WordService.sendAll() -- who is out now sees every word, their own too
 	end
 end
@@ -1489,6 +1569,29 @@ local function setFloor(player: Player?)
 	ChatGate.setFloor(player)
 end
 
+-- A mission's words over the heads (머리 위 스무고개, bundle 9c; nil: they go): the owners see theirs once `known`. While
+-- they are up the chat rules are on (no one outside the game can tell a player their word, and a line holding a
+-- player's word never reaches them, ChatGate).
+local function setHeads(words: { [Player]: string }?, known: { [Player]: boolean }?)
+	if talkOn() then
+		return -- (the talk's words; never both)
+	end
+	if words then
+		WordService.place(words, known or {})
+		if not headsUp then
+			headsUp = true
+			ChatGate.setGuard(true)
+		end
+	elseif headsUp then
+		headsUp = false
+		WordService.clear()
+		ChatGate.setGuard(false)
+	else
+		return
+	end
+	WordService.sendAll()
+end
+
 -- The talk's prep stage: words for everyone alive (not inside the topic), shown, chat rules on; then the talk itself.
 local function setTalkStage(stage: string, topic: string?)
 	if stage == "prep" then
@@ -1611,6 +1714,10 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 		end,
 		score = function(player: Player, amount: number)
 			Scores.add(player, amount)
+		end,
+		heads = setHeads,
+		chat = function(handler: ((Player, string) -> ())?)
+			missionChat = handler
 		end,
 	}
 end
@@ -1735,6 +1842,8 @@ local function playMain(myRound: number)
 			end
 			setFloor(nil) -- (whatever the mission did: the bells close, everyone has their voice back)
 			BellService.close()
+			missionChat = nil
+			setHeads(nil) -- (a mission's words go with it, also when it was cancelled or broke)
 			settleTalk() -- (a banned-word talk ends with its settle stage, also when it was cancelled or broke)
 			recap = recapText()
 			if didPlay then
@@ -1849,6 +1958,8 @@ local function cleanup()
 	BellService.close()
 	RescueService.endRound() -- (before the presenter goes: their rescue banner is cleared)
 	PresenterService.endRound()
+	missionChat = nil
+	setHeads(nil)
 	ChatGate.setGuard(false)
 	JudgeService.setOpen(false)
 	openVoices()
@@ -2101,6 +2212,10 @@ local function caught(player: Player, wordText: string)
 end
 
 local function onChat(player: Player, text: string)
+	local watcher = missionChat
+	if watcher then
+		watcher(player, text) -- (decides at once, as the line arrived; it never yields and defers any launch)
+	end
 	if not judgingOpen(player) or judgmentOpen(player) then
 		return -- (a hit of theirs still open: this one is merged into it, §4)
 	end
@@ -2195,7 +2310,7 @@ function RoundService.start()
 		talkStart = onTalkStart,
 	})
 	RescueService.start(onRescueResolved)
-	ChatGate.start(onChat)
+	ChatGate.start(onChat, WordService.hides)
 	JudgeService.start(onSpeechHit)
 	MissionRunner.start()
 	BellService.start(SeatService.isFlying)
@@ -2945,6 +3060,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Balance = {
@@ -2953,6 +3071,7 @@ local Balance = {
 	brief = Config.TEXT.BALANCE_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.BALANCE_BELL_SECONDS + Config.BALANCE_TALKERS * Config.BALANCE_TALK_CHAT_SECONDS
 		+ Config.BALANCE_PICK_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BALANCE_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
@@ -3091,6 +3210,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "BannedTalk"; s.Source = [==
 -- others say their word; the system judges (chat, speech) and the presenter flings what it missed. The settle stage
 -- (late results, rescues, then the words go) is RoundService's: it runs after every talk, also a cancelled or broken
 -- one, so no word or chat rule is left behind.
+-- Owner 2026-10-25: 머리 위 스무고개 (Twenty) replaces it; it is off unless Config.TALK_GAME_ON (the tests turn it on).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -3124,6 +3244,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local BannedTalk = {
@@ -3134,13 +3257,14 @@ local BannedTalk = {
 	-- rescue still waiting).
 	expectedSeconds = Config.TALK_REROLL_SECONDS + Config.TALK_SECONDS + Config.SETTLE_MAX + Config.RESCUE_SECONDS
 		+ Config.LEVER_SECONDS + Config.SETTLE_SLACK, -- (the settle stage's longest wait, RoundService.settleTalk)
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TALK_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
 function BannedTalk.available(final: boolean): boolean
-	return not final and Match.voiceJudging and #TalkTopics > 0
+	return not final and Config.TALK_GAME_ON and Match.voiceJudging and #TalkTopics > 0
 end
 
 function BannedTalk.run(ctx: Ctx): boolean?
@@ -3204,6 +3328,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local BombPass = {
@@ -3211,6 +3338,7 @@ local BombPass = {
 	title = Config.TEXT.BOMB_TITLE,
 	brief = Config.TEXT.BOMB_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.BOMB_MAX_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BOMB_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
@@ -3358,6 +3486,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Bottle = {
@@ -3366,6 +3497,7 @@ local Bottle = {
 	brief = string.format(Config.TEXT.BOTTLE_BRIEF, #Config.BOTTLE_ZONES), -- (the briefing before it)
 	expectedSeconds = #Config.BOTTLE_ZONES * (Config.BOTTLE_LEAD_SECONDS + Config.BOTTLE_THROW_SECONDS
 		+ Config.TIMING_GRACE + Config.BOTTLE_SHOW_SECONDS) + Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BOTTLE_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
@@ -3555,6 +3687,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Crocodile = {
@@ -3563,6 +3698,7 @@ local Crocodile = {
 	brief = Config.TEXT.CROC_BRIEF, -- (the briefing before it)
 	-- The longest run (capped in `run`): CROC_TEETH turns at the last moment, then the result.
 	expectedSeconds = Config.CROC_TEETH * Config.CROC_TURN_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.CROC_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
@@ -3712,6 +3848,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Duel = {
@@ -3720,6 +3859,7 @@ local Duel = {
 	brief = Config.TEXT.DUEL_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.DUEL_READY_MAX + Config.DUEL_WINDOW + Config.TIMING_PING_CAP + Config.TIMING_GRACE
 		+ Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.DUEL_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
@@ -3935,6 +4075,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Estimate = {
@@ -3942,6 +4085,7 @@ local Estimate = {
 	title = Config.TEXT.ESTIMATE_TITLE,
 	brief = Config.TEXT.ESTIMATE_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.ESTIMATE_INTRO_SECONDS + Config.ESTIMATE_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.ESTIMATE_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
@@ -4118,6 +4262,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Liar = {
@@ -4128,6 +4275,7 @@ local Liar = {
 	expectedSeconds = Config.LIAR_READ_SECONDS + Config.LIAR_BELL_SECONDS
 		+ Config.MAX_PLAYERS * Config.LIAR_CLUE_CHAT_SECONDS + Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS
 		+ Config.LIAR_GUESS_SECONDS + Config.LEVER_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.LIAR_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
@@ -4391,6 +4539,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Nunchi = {
@@ -4398,6 +4549,7 @@ local Nunchi = {
 	title = Config.TEXT.NUNCHI_TITLE,
 	brief = Config.TEXT.NUNCHI_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.NUNCHI_MAX_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.NUNCHI_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
@@ -4581,6 +4733,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local OXQuiz = {
@@ -4589,6 +4744,7 @@ local OXQuiz = {
 	brief = string.format(Config.TEXT.OX_BRIEF, Config.OX_QUESTIONS), -- (the briefing before it)
 	expectedSeconds = Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
 		+ Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
@@ -4793,6 +4949,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local OneWord = {
@@ -4804,6 +4963,7 @@ local OneWord = {
 	expectedSeconds = Config.BELL_ORDER_SECONDS
 		+ Config.ONE_WORD_MAX_PERFORMERS * (2 * Config.ONE_WORD_PREP_SECONDS + Config.ONE_WORD_CHAT_SECONDS)
 		+ Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS + Config.ONE_WORD_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.ONE_WORD_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
@@ -5140,6 +5300,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Quiz = {
@@ -5147,6 +5310,7 @@ local Quiz = {
 	title = Config.TEXT.QUIZ_TITLE,
 	brief = Config.TEXT.QUIZ_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.QUIZ_REVEAL_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = nil :: number?, -- the basic mission: no limit (§5)
 	minPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
@@ -5259,6 +5423,7 @@ local BellQuiz = {
 	-- last moment).
 	expectedSeconds = Config.BELL_QUIZ_QUESTIONS * (Config.BELL_TRIES
 		* (Config.BELL_WAIT_SECONDS + Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS) + Config.QUIZ_REVEAL_SECONDS),
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BELL_QUIZ_MIN_PLAYERS :: number?,
 	needsPresenter = true :: boolean?,
@@ -5361,6 +5526,7 @@ local ChosungQuiz = {
 	title = Config.TEXT.CHOSUNG_TITLE,
 	brief = Config.TEXT.CHOSUNG_BRIEF, -- (the briefing before it)
 	expectedSeconds = Quiz.expectedSeconds,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
@@ -5517,6 +5683,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local RedLight = {
@@ -5524,6 +5693,7 @@ local RedLight = {
 	title = Config.TEXT.REDLIGHT_TITLE,
 	brief = Config.TEXT.REDLIGHT_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.REDLIGHT_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.REDLIGHT_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
@@ -5746,6 +5916,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Roulette = {
@@ -5753,6 +5926,7 @@ local Roulette = {
 	title = Config.TEXT.ROULETTE_TITLE,
 	brief = Config.TEXT.ROULETTE_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.ROULETTE_SPIN_SECONDS + Config.ROULETTE_REVEAL_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.ROULETTE_PER_ROUND :: number?,
 	minPlayers = Config.ROULETTE_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
@@ -5829,6 +6003,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local TestMission = {
@@ -5836,6 +6013,7 @@ local TestMission = {
 	title = Config.TEXT.TEST_MISSION_TITLE,
 	brief = Config.TEXT.TEST_MISSION_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.TEST_MISSION_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = nil :: number?, -- like the quiz: no limit
 	minPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
@@ -5905,6 +6083,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local TimeGuess = {
@@ -5913,6 +6094,7 @@ local TimeGuess = {
 	brief = string.format(Config.TEXT.TIMEGUESS_BRIEF, Config.TIMEGUESS_VISIBLE_SECONDS), -- (the briefing before it)
 	expectedSeconds = Config.TIMEGUESS_READ_SECONDS + Config.TIMEGUESS_MAX + Config.TIMEGUESS_LATE + Config.TIMING_GRACE
 		+ Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TIMEGUESS_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
@@ -6041,6 +6223,398 @@ function TimeGuess.run(ctx: Ctx): boolean?
 end
 
 return TimeGuess
+]====]; s.Parent = n4 end
+do local s = Instance.new("ModuleScript"); s.Name = "Twenty"; s.Source = [====[--!strict
+-- 머리 위 스무고개 (bundle 9c, owner 2026-10-25: instead of the banned-word talk). Everyone on the ground gets a
+-- different word of one topic (ChosungBank, TWENTY_MIN_LETTERS letters or more, none inside another, not one of
+-- TWENTY_SKIP_WORDS) over their head: they see everyone's but their own, and the topic. In a random order each one has
+-- TWENTY_TURN_SECONDS to ask the others about their word (voice or chat; the others answer) and may type one answer in
+-- the card any time in it (the turn ends with it). A right answer is safe and the owner sees their word from then on.
+-- After each round (everyone had the same turns, owner: "각자 물어보는 시간이 끝나면"): once TWENTY_SHARE of those who
+-- began (rounded up, at least one) are right, or after TWENTY_TRIES rounds, the result shows (everyone sees their own
+-- word) and then everyone still here who is not right flies. Writing someone else's hidden word in chat as a word of
+-- its own (TWENTY_PARTICLES may follow) flies the writer at once (also one who is already right), judged as the line
+-- arrives (lines arriving together fly together, so one launch deciding the round cannot drop the others), and the
+-- writer is told their own word on their own (the card steps aside while they fly); any line holding a word never
+-- reaches that word's owner (RoundService's chat rule while words are up). Only
+-- right / wrong and the bank's words travel and show, never what a player typed (no free text to filter). A verdict
+-- shows on the card only (no toast: in the middle of a small screen a toast covers the words over the heads, Studio
+-- check 2026-10-25).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Judge = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Judge"))
+local Match = require(script.Parent.Parent:WaitForChild("Match"))
+local Net = require(script.Parent.Parent:WaitForChild("Net"))
+local ChosungBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("ChosungBank"))
+
+-- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
+type Ctx = {
+	final: boolean,
+	players: () -> { Player },
+	rng: Random,
+	fail: (players: { Player }, key: string, subjective: boolean?) -> (),
+	show: (text: string) -> (),
+	cancelled: () -> boolean,
+	stopped: () -> boolean,
+	wait: (seconds: number) -> boolean,
+	reveal: (seconds: number) -> (),
+	flying: (player: Player) -> boolean,
+	answers: (answered: { Player }, missed: { Player }) -> (),
+	screen: (payload: { [string]: any }?) -> (),
+	ask: (payload: { [string]: any }, choices: number, seconds: number, from: { Player }) -> { [Player]: number },
+	canFling: (player: Player) -> boolean,
+	presenterPick: (options: { { id: string, title: string, recommended: boolean } }, seconds: number, kind: string?) -> string?,
+	lever: () -> (),
+	talk: (stage: string, topic: string?) -> (),
+	presenterReroll: (seconds: number) -> boolean,
+	bell: (from: { Player }, seconds: number, firstOnly: boolean,
+		enough: (({ Player }, { [Player]: number }, { { player: Player, at: number } }) -> boolean)?, repeatEvery: number?,
+		quiet: boolean?)
+		-> ({ Player }, { [Player]: number }, { { player: Player, at: number } }),
+	screenTo: (player: Player, payload: { [string]: any }?) -> (),
+	floor: (player: Player?) -> (),
+	presenterVerdict: (answer: string, seconds: number) -> string?,
+	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
+}
+
+local Twenty = {
+	id = "twenty",
+	title = Config.TEXT.TWENTY_TITLE,
+	brief = Config.TEXT.TWENTY_BRIEF, -- (the briefing before it)
+	-- (the longest run with MAX_PLAYERS: every turn used to the end; expectedFor counts the players there are)
+	expectedSeconds = 0,
+	expectedFor = nil :: ((players: number) -> number)?,
+	maxPerRound = Config.GAME_PER_ROUND :: number?,
+	minPlayers = Config.TWENTY_MIN_PLAYERS :: number?,
+	needsPresenter = nil :: boolean?,
+}
+
+-- The longest run with `players` on the ground: the look at the words, every turn to its end with its verdict, the
+-- result.
+local function longest(players: number): number
+	return Config.TWENTY_INTRO_SECONDS + Config.TWENTY_TRIES * players
+		* (Config.TWENTY_TURN_SECONDS + Config.TWENTY_VERDICT_SECONDS) + Config.MINIGAME_RESULT_SECONDS
+end
+Twenty.expectedFor = longest
+Twenty.expectedSeconds = longest(Config.MAX_PLAYERS)
+
+function Twenty.available(final: boolean): boolean
+	return not final and #ChosungBank > 0
+end
+
+-- How many right answers end the game for `players` who began: TWENTY_SHARE rounded up, at least one.
+function Twenty.needed(players: number): number
+	return math.max(1, math.ceil(players * Config.TWENTY_SHARE - 1e-9))
+end
+
+-- Whether `typed` is `word`: the same letters, whatever spaces or marks are around them (택배기사 = 택배 기사).
+function Twenty.isRight(typed: string, word: string): boolean
+	local guess = Judge.normalizeChat(typed)
+	return guess ~= "" and guess == Judge.normalizeChat(word)
+end
+
+-- A topic and `count` different words of it (pure, for the tests): words of TWENTY_MIN_LETTERS letters or more, not
+-- in TWENTY_SKIP_WORDS, none inside another, spaces aside (연필 / 색연필 never play together), at random. nil when no
+-- topic has enough.
+function Twenty.draw(rng: Random, count: number): (string?, { string })
+	local topics = {}
+	for _, entry in ChosungBank do
+		table.insert(topics, entry)
+	end
+	while #topics > 0 do
+		local entry = table.remove(topics, rng:NextInteger(1, #topics)) :: typeof(ChosungBank[1])
+		local pool = {}
+		for _, word in entry.words do
+			if (utf8.len(Judge.normalizeChat(word)) or 0) >= Config.TWENTY_MIN_LETTERS
+				and not table.find(Config.TWENTY_SKIP_WORDS, word) then
+				table.insert(pool, word)
+			end
+		end
+		local picked: { string } = {}
+		while #pool > 0 and #picked < count do
+			local word = table.remove(pool, rng:NextInteger(1, #pool)) :: string
+			local clash = false
+			for _, other in picked do
+				local a, b = Judge.normalizeChat(word), Judge.normalizeChat(other)
+				clash = clash or string.find(a, b, 1, true) ~= nil or string.find(b, a, 1, true) ~= nil
+			end
+			if not clash then
+				table.insert(picked, word)
+			end
+		end
+		if #picked == count then
+			return entry.category, picked
+		end
+	end
+	return nil, {}
+end
+
+local particles: { [string]: boolean } = {}
+for _, ending in Config.TWENTY_PARTICLES do
+	particles[ending] = true
+end
+
+-- Whether chat line `text` writes `word` as a word of its own: its words in a row (spaces and marks aside) are the
+-- word, maybe with a particle or ending after it (사과가, 택배 기사는). Inside a longer word it is not ("나라면" does not
+-- write 라면, "배우고" not 배우). Pure, for the tests.
+function Twenty.writes(text: string, word: string): boolean
+	local parts = Judge.chatWords(word)
+	local target = table.concat(parts)
+	if target == "" then
+		return false
+	end
+	local words = Judge.chatWords(text)
+	for i = 1, #words do
+		for span = 1, math.min(#parts, #words - i + 1) do -- (택배 기사 may be written 택배기사)
+			local joined = table.concat(words, "", i, i + span - 1)
+			if joined == target or (string.sub(joined, 1, #target) == target and particles[string.sub(joined, #target + 1)])
+			then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- Whether `text` (a chat line of `sender`'s) writes another player's word in `hidden` (the words their owners do not
+-- see yet). Pure, for the tests.
+function Twenty.leaks(text: string, sender: Player, hidden: { [Player]: string }): boolean
+	for other, word in hidden do
+		if other ~= sender and Twenty.writes(text, word) then
+			return true
+		end
+	end
+	return false
+end
+
+local function idsOf(list: { Player }): { number }
+	local ids = {}
+	for _, player in list do
+		table.insert(ids, player.UserId)
+	end
+	return ids
+end
+
+-- Returns false when too few are on the ground or no topic has enough words.
+function Twenty.run(ctx: Ctx): boolean?
+	local order = {}
+	for _, player in ctx.players() do
+		if not ctx.flying(player) then
+			table.insert(order, player)
+		end
+	end
+	if #order < Config.TWENTY_MIN_PLAYERS then
+		return false
+	end
+	local topic, words = Twenty.draw(ctx.rng, #order)
+	if not topic then
+		return false
+	end
+	for i = #order, 2, -1 do -- (who asks first: at random)
+		local j = ctx.rng:NextInteger(1, i)
+		order[i], order[j] = order[j], order[i]
+	end
+	local wordOf: { [Player]: string } = {}
+	for i, player in order do
+		wordOf[player] = words[i]
+	end
+	local need = Twenty.needed(#order)
+	local right: { [Player]: boolean } = {}
+	local leaked: { [Player]: boolean } = {} -- wrote someone else's word: flew, out of this game
+	local tried: { [Player]: boolean } = {} -- typed an answer or wrote in chat (not away)
+	local known: { [Player]: boolean } = {} -- see their own word: right or leaked
+	local ids = idsOf(order)
+
+	local function here(player: Player): boolean
+		return table.find(ctx.players(), player) ~= nil
+	end
+	local function rightCount(): number
+		local count = 0
+		for _ in right do
+			count += 1
+		end
+		return count
+	end
+	local function rightIds(): { number }
+		local list = {}
+		for _, player in order do
+			if right[player] then
+				table.insert(list, player.UserId)
+			end
+		end
+		return list
+	end
+	-- Still guessing: here, not right, not out of this game.
+	local function guessing(player: Player): boolean
+		return here(player) and not right[player] and not leaked[player]
+	end
+	-- Nobody is guessing any more (all right, gone or out of this game): no more turns.
+	local function nobodyGuessing(): boolean
+		for _, player in order do
+			if guessing(player) then
+				return false
+			end
+		end
+		return true
+	end
+	local function screen(stage: string, round: number, extra: { [string]: any }?): { [string]: any }
+		local payload: { [string]: any } = { kind = "twenty", stage = stage, topic = topic, ids = ids, round = round,
+			rounds = Config.TWENTY_TRIES, need = need, right = rightIds() }
+		local more: { [string]: any } = extra or {}
+		for key, value in more do
+			payload[key] = value
+		end
+		return payload
+	end
+
+	local ended = false
+	-- Writers judged but not launched yet: launched together right after the lines that came in the same moment.
+	local pending: { Player } = {}
+	local function launchWriters()
+		local list = pending
+		pending = {}
+		local names = {}
+		for _, player in list do
+			known[player] = true
+			table.insert(names, player.DisplayName)
+		end
+		if not ended then
+			ctx.heads(wordOf, known)
+		end
+		ctx.fail(list, "twenty")
+		ctx.show(string.format(Config.TEXT.TWENTY_LEAK, table.concat(names, ", ")))
+		-- (last, so it is the toast they see while flying; also when the launch decided the round)
+		for _, player in list do
+			if player.Parent ~= nil then
+				Net.to(player, "Notice", { text = string.format(Config.TEXT.TWENTY_LEAK_MINE, wordOf[player]) })
+			end
+		end
+	end
+	ctx.heads(wordOf, known)
+	-- A chat line, as it arrives (inside the delivery decision: decide now, never yield). Whose words are still hidden
+	-- counts as at that moment; the launch follows right after.
+	ctx.chat(function(sender: Player, text: string)
+		if not wordOf[sender] or leaked[sender] or ctx.flying(sender) then
+			return
+		end
+		tried[sender] = true
+		local hidden = {}
+		for other, word in wordOf do
+			if here(other) and not known[other] then
+				hidden[other] = word
+			end
+		end
+		if Twenty.leaks(text, sender, hidden) then
+			leaked[sender] = true
+			table.insert(pending, sender)
+			if #pending == 1 then
+				task.defer(launchWriters)
+			end
+		end
+	end)
+	-- (the card says what to do; no toast while everyone reads the words over the heads)
+	ctx.screen(screen("intro", 1, { endsAt = Match.now() + Config.TWENTY_INTRO_SECONDS }))
+	if not ctx.wait(Config.TWENTY_INTRO_SECONDS) then
+		return nil
+	end
+	for round = 1, Config.TWENTY_TRIES do
+		for index, player in order do
+			if nobodyGuessing() then
+				break
+			end
+			if guessing(player) and not ctx.flying(player) then
+				local typed = ctx.askText(screen("ask", round, { asker = index }), Config.TWENTY_TURN_SECONDS, { player })
+				if ctx.cancelled() then
+					return nil
+				end
+				local guess = typed[player]
+				if guess then
+					tried[player] = true
+				end
+				if guessing(player) then -- (one who left or wrote a word meanwhile gets no verdict)
+					local verdict
+					if guess and Twenty.isRight(guess, wordOf[player]) then
+						right[player] = true
+						known[player] = true
+						ctx.heads(wordOf, known)
+						verdict = "right"
+					else
+						verdict = if guess then "wrong" else "none"
+					end
+					ctx.screen(screen("verdict", round, { asker = index, verdict = verdict,
+						word = if verdict == "right" then wordOf[player] else nil }))
+					if not ctx.wait(Config.TWENTY_VERDICT_SECONDS) then
+						return nil
+					end
+				end
+			end
+		end
+		-- (checked once everyone had this round's turn)
+		if rightCount() >= need or nobodyGuessing() then
+			break
+		end
+	end
+
+	-- The result first (everyone sees their own word, also one who went out writing a word: to whoever is still in the
+	-- server), then everyone still here and on the ground who is not right flies (one who wrote a word already flew).
+	local function losersNow(): { Player }
+		local list = {}
+		for _, player in order do
+			if here(player) and not right[player] and not leaked[player] and not ctx.flying(player) then
+				table.insert(list, player)
+			end
+		end
+		return list
+	end
+	local losers, names, active, leakers = losersNow(), {}, {}, {}
+	for _, player in losers do
+		table.insert(names, player.DisplayName)
+	end
+	for _, player in order do
+		if here(player) and (tried[player] or right[player]) then
+			table.insert(active, player)
+		end
+		if leaked[player] then
+			table.insert(leakers, player)
+		end
+	end
+	for player in wordOf do
+		known[player] = true
+	end
+	ctx.heads(wordOf, known)
+	local result = { kind = "twentyResult", topic = topic, ids = ids, right = rightIds(), losers = idsOf(losers),
+		leaked = idsOf(leakers) }
+	ctx.screen(result)
+	for _, player in order do
+		if player.Parent ~= nil then
+			local own = table.clone(result)
+			own.myWord = wordOf[player]
+			ctx.screenTo(player, own)
+		end
+	end
+	ctx.show(if #losers > 0 then string.format(Config.TEXT.TWENTY_RESULT, table.concat(names, ", "))
+		else Config.TEXT.TWENTY_NOBODY)
+	ctx.reveal(Config.MINIGAME_RESULT_SECONDS)
+	ended = true
+	-- (asking by voice is playing too, so no one is counted as away here; who typed or chatted is counted as there)
+	ctx.answers(active, {})
+	local flying = {} -- (those of the shown list still here and on the ground)
+	for _, player in losersNow() do
+		if table.find(losers, player) then
+			table.insert(flying, player)
+		end
+	end
+	ctx.fail(flying, "twenty")
+	ctx.chat(nil)
+	ctx.heads(nil)
+	return nil
+end
+
+return Twenty
 ]====]; s.Parent = n4 end
 n4.Parent = n2
 local n5 = Instance.new("Folder"); n5.Name = "services"
@@ -6259,7 +6833,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "ChatGate"; s.Source = [====
 -- and whispers are off (the /w command and the whisper channels), so nobody can tell a player their word. While
 -- someone has the floor (bundle 6b, any game), alive participants receive only that player's messages. Every
 -- message an alive participant sends is handed on once (by MessageId) for judging. The delivery callback runs for each
--- receiver and must never yield: it decides, and judges each message once without yielding.
+-- receiver and must never yield: it decides, and judges each message once without yielding. Bundle 9c: during a
+-- guarded round a message holding a word hidden from its receiver (the word over their own head) is not delivered to
+-- them (the rule comes from RoundService: `hides`).
 local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
 
@@ -6273,6 +6849,9 @@ local guarded = false
 local floorHolder: Player? = nil -- has the floor now: alive participants receive only their messages
 local seen: { [string]: boolean } = {} -- MessageIds already handed on (cleared each round)
 local onMessage: (Player, string) -> () = function(_player, _text) end
+local hides: (Player, string) -> boolean = function(_receiver, _text)
+	return false
+end
 
 local function playerOf(source: Instance?): Player?
 	local untyped: any = source
@@ -6289,8 +6868,8 @@ local function isWhisper(channel: Instance): boolean
 	return string.sub(channel.Name, 1, 10) == "RBXWhisper"
 end
 
--- The delivery rule for one message to one receiver (pure, so it can be tested without TextChatService).
-function ChatGate.shouldDeliver(channel: Instance, sender: Player?, receiver: Player?): boolean
+-- The delivery rule for one message (its `text`) to one receiver (pure, so it can be tested without TextChatService).
+function ChatGate.shouldDeliver(channel: Instance, sender: Player?, receiver: Player?, text: string?): boolean
 	if sender == nil or receiver == nil or sender == receiver then
 		return true
 	end
@@ -6299,6 +6878,12 @@ function ChatGate.shouldDeliver(channel: Instance, sender: Player?, receiver: Pl
 	end
 	if not guarded then
 		return true
+	end
+	if text then
+		local ok, hidden = pcall(hides, receiver, text)
+		if not ok or hidden then
+			return false -- (their own word, which they must not see yet; a check that broke keeps the line from them)
+		end
 	end
 	if isWhisper(channel) then
 		return false
@@ -6330,7 +6915,7 @@ local function watch(channel: Instance)
 	textChannel.ShouldDeliverCallback = function(message: TextChatMessage, target: TextSource): boolean
 		local sender = playerOf(message.TextSource)
 		ChatGate.received(message.MessageId, sender, message.Text)
-		return ChatGate.shouldDeliver(textChannel, sender, playerOf(target))
+		return ChatGate.shouldDeliver(textChannel, sender, playerOf(target), message.Text)
 	end
 end
 
@@ -6342,9 +6927,13 @@ local function setWhisperCommand(on: boolean)
 	end
 end
 
--- handle(player, text): an alive participant wrote `text` during a guarded round.
-function ChatGate.start(handle: (Player, string) -> ())
+-- handle(player, text): an alive participant wrote `text` during a guarded round. hidesWord(receiver, text): `text`
+-- holds a word `receiver` must not see (never yields).
+function ChatGate.start(handle: (Player, string) -> (), hidesWord: ((Player, string) -> boolean)?)
 	onMessage = handle
+	if hidesWord then
+		hides = hidesWord
+	end
 	task.spawn(function()
 		-- The channels are made at run time (TextChatService): look until they are there, however late.
 		local channels = TextChatService:FindFirstChild("TextChannels")
@@ -6890,8 +7479,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionRunner"; s.Source = 
 -- Bundle 4: the quiz (also the final), the roulette, "say what you like" (4b, bells since 6b); bundle 6a: the
 -- banned-word talk (only while speech judging is on); bundle 6b: the bell quiz (only with a presenter); bundle 6c:
 -- crocodile teeth, the bomb, nunchi; bundle 6d: the balance game, red light, the liar; bundle 8b: 숫자 맞추기, 총잡이
--- 결투, 물병 세우기; bundle 8c: the 초성 quiz (Quiz.chosung), the O/X quiz, the number quiz; and the Studio-only test
--- mission.
+-- 결투, 물병 세우기; bundle 8c: the 초성 quiz (Quiz.chosung), the O/X quiz, the number quiz; bundle 9c: 머리 위
+-- 스무고개 instead of the banned-word talk (its code stays, off: Config.TALK_GAME_ON); and the Studio-only test mission.
+-- A question may also take a short text instead of a choice (askText: 스무고개's answer).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -6915,6 +7505,7 @@ local Duel = require(missionFolder:WaitForChild("Duel"))
 local Bottle = require(missionFolder:WaitForChild("Bottle"))
 local OXQuiz = require(missionFolder:WaitForChild("OXQuiz"))
 local Estimate = require(missionFolder:WaitForChild("Estimate"))
+local Twenty = require(missionFolder:WaitForChild("Twenty"))
 
 local MissionRunner = {}
 
@@ -6956,6 +7547,14 @@ export type Ctx = {
 	-- The presenter judges an answer (the bell quiz): "right", "wrong", or nil (none in time, no presenter, over).
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (), -- session points (a right bell-quiz answer)
+	-- 머리 위 스무고개 (bundle 9c): the words over the players' heads (`words`; nil: they go). An owner sees their own
+	-- word only once they are in `known`. While words are up, chat is guarded and a line holding a word never reaches
+	-- that word's owner. RoundService takes them down after every mission too.
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	-- The alive participants' chat lines while the mission runs and words are up (nil: no more). Called inside the
+	-- delivery decision, as the line arrives: the handler decides at once, must not yield, and defers what follows (a
+	-- launch).
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 -- What a mission gets: the same, with fail/show that do nothing once cancelled, and wait().
@@ -6995,6 +7594,10 @@ export type MissionCtx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	-- Like ask, but each of `from` sends one short text (at most TWENTY_ANSWER_MAX letters) instead of a choice.
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 export type Mission = {
@@ -7002,6 +7605,7 @@ export type Mission = {
 	title: string, -- shown in the presenter's menu
 	brief: string?, -- its one-line rule for the briefing before it (owner 2026-10-24)
 	expectedSeconds: number, -- for the time budget, without the launches afterwards
+	expectedFor: ((players: number) -> number)?, -- the same for this many alive players, when it depends on them
 	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
 	minPlayers: number?, -- alive participants it needs (nil = any)
 	needsPresenter: boolean?, -- offered only while someone presents (the one-word mission)
@@ -7012,20 +7616,23 @@ export type Mission = {
 -- An entry of a presenter's menu.
 export type Option = { id: string, title: string, recommended: boolean }
 
-local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, Crocodile, BombPass, Nunchi, Balance,
-	RedLight, Liar, TimeGuess, Duel, Bottle, Quiz.chosung, OXQuiz, Estimate, TestMission }
+local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, Twenty, BannedTalk, Crocodile, BombPass, Nunchi,
+	Balance, RedLight, Liar, TimeGuess, Duel, Bottle, Quiz.chosung, OXQuiz, Estimate, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
 local privateScreens: { [Player]: { [string]: any } } = {} -- one player's own screen instead (the liar game)
--- The open question: its number, who may answer, how many choices, until when (server time), the answers so far.
+-- The open question: its number, who may answer, how many choices, until when (server time), the answers so far (a
+-- text question: the texts instead).
 type Question = { id: number, from: { [Player]: boolean }, choices: number, endsAt: number, answers: { [Player]: number },
-	changeable: boolean }
+	changeable: boolean, text: boolean, texts: { [Player]: string } }
 local question: Question? = nil
 local questions = 0 -- question numbers so far (an answer sent for an older question never counts for a newer one)
 
-local function fits(mission: Mission, secondsLeft: number): boolean
-	return mission.expectedSeconds + Config.FLING_RETURN_SECONDS <= secondsLeft
+local function fits(mission: Mission, secondsLeft: number, alive: number): boolean
+	local byPlayers = mission.expectedFor
+	local expected = if byPlayers then byPlayers(alive) else mission.expectedSeconds
+	return expected + Config.FLING_RETURN_SECONDS <= secondsLeft
 end
 
 -- A new round: nothing played yet.
@@ -7040,7 +7647,7 @@ function MissionRunner.candidates(secondsLeft: number, alive: number, presenter:
 	local list = {}
 	for _, mission in MISSIONS do
 		local count = played[mission.id] or 0
-		if mission.available(false) and fits(mission, secondsLeft) and (mission.maxPerRound == nil or count < mission.maxPerRound)
+		if mission.available(false) and fits(mission, secondsLeft, alive) and (mission.maxPerRound == nil or count < mission.maxPerRound)
 			and alive >= (mission.minPlayers or 0) and (presenter or not mission.needsPresenter) then
 			table.insert(list, mission)
 		end
@@ -7157,6 +7764,46 @@ local function waitOrCancel(ctx: Ctx, seconds: number, done: (() -> boolean)?, s
 	return not stopNow()
 end
 
+-- Shows `payload` (with `endsAt` and the question number `id` added) and collects one answer from each of `from` for
+-- `seconds`, or until all of them still alive and on the ground answered, or until the mission is cancelled: a choice
+-- 1..`choices`, or with `text` a short text (MissionRunner.start checks what comes in).
+local function openQuestion(ctx: Ctx, payload: { [string]: any }, choices: number, seconds: number, from: { Player },
+	text: boolean): Question
+	questions += 1
+	-- (`payload.changeable`: an answer may be changed until the time is up, so it never ends early)
+	local open: Question = { id = questions, from = {}, choices = choices, endsAt = Match.now() + seconds, answers = {},
+		changeable = payload.changeable == true, text = text, texts = {} }
+	for _, player in from do
+		open.from[player] = true
+	end
+	question = open
+	local shown = table.clone(payload)
+	-- (`shownEndsAt`: what the clients see instead of the real end, kept on the server — the bomb's bang)
+	shown.endsAt = payload.shownEndsAt or open.endsAt
+	shown.shownEndsAt = nil
+	shown.id = open.id
+	if not ctx.cancelled() then
+		setScreen(shown)
+	end
+	waitOrCancel(ctx, seconds, function()
+		if open.changeable then
+			return false
+		end
+		local alive = ctx.players()
+		for player in open.from do
+			local answered = open.answers[player] ~= nil or open.texts[player] ~= nil
+			if not answered and table.find(alive, player) and not ctx.flying(player) then
+				return false -- (someone who left, went out or flies meanwhile is not waited for)
+			end
+		end
+		return true
+	end)
+	if question == open then
+		question = nil
+	end
+	return open
+end
+
 local function missionCtx(ctx: Ctx): MissionCtx
 	return {
 		final = ctx.final,
@@ -7176,38 +7823,26 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			end
 		end,
 		ask = function(payload: { [string]: any }, choices: number, seconds: number, from: { Player }): { [Player]: number }
-			questions += 1
-			-- (`payload.changeable`: an answer may be changed until the time is up, so it never ends early)
-			local open: Question = { id = questions, from = {}, choices = choices, endsAt = Match.now() + seconds, answers = {},
-				changeable = payload.changeable == true }
-			for _, player in from do
-				open.from[player] = true
+			return openQuestion(ctx, payload, choices, seconds, from, false).answers
+		end,
+		askText = function(payload: { [string]: any }, seconds: number, from: { Player }): { [Player]: string }
+			return openQuestion(ctx, payload, 0, seconds, from, true).texts
+		end,
+		heads = function(words: { [Player]: string }?, known: { [Player]: boolean }?)
+			if words == nil or not ctx.cancelled() then -- (taking them down always works)
+				ctx.heads(words, known)
 			end
-			question = open
-			local shown = table.clone(payload)
-			-- (`shownEndsAt`: what the clients see instead of the real end, kept on the server — the bomb's bang)
-			shown.endsAt = payload.shownEndsAt or open.endsAt
-			shown.shownEndsAt = nil
-			shown.id = open.id
-			if not ctx.cancelled() then
-				setScreen(shown)
-			end
-			waitOrCancel(ctx, seconds, function()
-				if open.changeable then
-					return false
-				end
-				local alive = ctx.players()
-				for player in open.from do
-					if not open.answers[player] and table.find(alive, player) and not ctx.flying(player) then
-						return false -- (someone who left, went out or flies meanwhile is not waited for)
+		end,
+		chat = function(handler: ((Player, string) -> ())?)
+			if handler then
+				ctx.chat(function(player: Player, text: string)
+					if not ctx.cancelled() then
+						handler(player, text)
 					end
-				end
-				return true
-			end)
-			if question == open then
-				question = nil
+				end)
+			else
+				ctx.chat(nil)
 			end
-			return open.answers
 		end,
 		fail = function(players: { Player }, key: string, subjective: boolean?)
 			if not ctx.cancelled() then
@@ -7312,7 +7947,7 @@ function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player
 	(Mission, { [string]: number })
 	questions += 1
 	local open: Question = { id = questions, from = {}, choices = #ballot, endsAt = Match.now() + Config.NEXT_VOTE_SECONDS,
-		answers = {}, changeable = false }
+		answers = {}, changeable = false, text = false, texts = {} }
 	for _, player in voters do
 		open.from[player] = true
 	end
@@ -7391,21 +8026,30 @@ function MissionRunner.brief(mission: Mission, game: number, games: number, reca
 	return not stop()
 end
 
--- Answers to the open question: its number, a whole number in 1..choices, from someone asked, before the end; the
--- first one counts (the last one for a question whose answers may change).
+-- Answers to the open question: its number, a whole number in 1..choices (a text question: a text of one to
+-- TWENTY_ANSWER_MAX letters), from someone asked, before the end; the first one counts (the last one for a question
+-- whose answers may change).
 function MissionRunner.start()
 	Net.listen("MissionAnswer", function(player, id, choice)
 		local open = question
-		if not open or id ~= open.id or not open.from[player] or typeof(choice) ~= "number" then
+		if not open or id ~= open.id or not open.from[player] then
 			return
 		end
-		if open.answers[player] and not open.changeable then
+		if (open.answers[player] or open.texts[player]) and not open.changeable then
 			return
 		end
 		if Match.now() > open.endsAt then
 			return
 		end
-		if choice % 1 == 0 and choice >= 1 and choice <= open.choices then
+		if open.text then
+			if typeof(choice) ~= "string" or #choice > 4 * Config.TWENTY_ANSWER_MAX then
+				return
+			end
+			local letters = utf8.len(choice) -- (nil: not UTF-8)
+			if letters and letters >= 1 and letters <= Config.TWENTY_ANSWER_MAX then
+				open.texts[player] = choice
+			end
+		elseif typeof(choice) == "number" and choice % 1 == 0 and choice >= 1 and choice <= open.choices then
 			open.answers[player] = choice
 		end
 	end)
@@ -9080,7 +9724,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "WordService"; s.Source = [=
 -- everyone's words, except an alive participant's own (shown as hidden; shown in the solo speech test build,
 -- Config.SHOW_OWN_WORD). Words exist only during the banned-word talk
 -- (bundle 6a: RoundService assigns them in its prep stage and clears them after it); this module only keeps them in
--- Match.participants.
+-- Match.participants. Bundle 9c (머리 위 스무고개): a mission may put up its own words instead (`place`), each owner
+-- seeing theirs once it is known to them; and while any word is hidden from its owner, a chat line holding it must not
+-- reach them (`hides`, for the chat gate).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -9093,6 +9739,8 @@ local WordBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChi
 local WordService = {}
 
 local DRAW_TRIES = 20 -- words tried before giving up on one that avoids the screen texts
+
+local shownToOwner: { [Player]: boolean } = {} -- a mission's words their owners may see (스무고개: right, or out of it)
 
 -- The words in play except `player`'s own (theirs is being replaced).
 local function takenBy(except: Player?): { string }
@@ -9138,6 +9786,7 @@ end
 -- The talk's prep stage: one word for each alive participant, none inside `avoid` (the topic) when that can be done
 -- (any old words are dropped). They count from `startJudging` on.
 function WordService.assign(rng: Random, avoid: { string }?)
+	table.clear(shownToOwner)
 	for _, p in Match.participants do
 		table.clear(p.words)
 	end
@@ -9185,11 +9834,44 @@ function WordService.replace(player: Player, avoid: { string }?, rng: Random): b
 	return true
 end
 
--- Everyone's words go (after the talk, between rounds).
+-- A mission's own words over the heads (머리 위 스무고개, bundle 9c): `words` by player (any other word goes); an owner
+-- sees theirs only once they are in `known`. They are never judged (only the talk judges words).
+function WordService.place(words: { [Player]: string }, known: { [Player]: boolean })
+	for player, p in Match.participants do
+		table.clear(p.words)
+		local text = words[player]
+		if text then
+			table.insert(p.words, { text = text, aliases = {}, effectiveAt = math.huge })
+		end
+	end
+	shownToOwner = table.clone(known)
+end
+
+-- Everyone's words go (after the talk or a mission's words, between rounds).
 function WordService.clear()
 	for _, p in Match.participants do
 		table.clear(p.words)
 	end
+	table.clear(shownToOwner)
+end
+
+-- Whether `player`'s own words are hidden from them now: alive and playing, not the result, not known to them.
+local function hiddenFromOwner(player: Player, p: Match.Participant): boolean
+	return p.alive and Match.phase ~= "Result" and #p.words > 0 and not Config.SHOW_OWN_WORD and not shownToOwner[player]
+end
+
+-- Whether a chat line `text` holds a word hidden from `receiver` (their own): then it must not reach them.
+function WordService.hides(receiver: Player, text: string): boolean
+	local p = Match.participants[receiver]
+	if not p or not hiddenFromOwner(receiver, p) then
+		return false
+	end
+	for _, word in p.words do
+		if Judge.chatHit(word.text, text, word.aliases) then
+			return true
+		end
+	end
+	return false
 end
 
 -- What `viewer` sees: { [userId] = { words = {...} | nil (own, while playing), count = n } }.
@@ -9200,8 +9882,7 @@ function WordService.payloadFor(viewer: Player)
 		for _, word in p.words do
 			table.insert(visible, word.text)
 		end
-		local hidden = player == viewer and p.alive and Match.phase ~= "Result" and #visible > 0 -- (no word: nothing to hide)
-			and not Config.SHOW_OWN_WORD
+		local hidden = player == viewer and hiddenFromOwner(player, p) -- (no word: nothing to hide)
 		result[tostring(player.UserId)] = { words = if hidden then nil else visible, count = #visible }
 	end
 	return result
@@ -9261,6 +9942,9 @@ local bellOpen = false -- the server has my seat bell open (bundle 6b)
 local bellWindow = 0 -- the open window's number (sent back with my ring)
 local bellRung = false -- I rang it this time (one ring each time it opens)
 local bellRepeating = false -- the open window takes every press (red light): the button stays
+-- A press now would lose (총잡이 결투's "ready…", 무궁화's red light): the bell button does not invite it (owner
+-- 2026-10-25).
+local bellTrap = false
 local menuId = 0 -- the presenter menu now open (sent back with my pick)
 
 -- Seated players cannot jump out or reset during a round.
@@ -9325,6 +10009,14 @@ local function nameOf(userId: number?): string
 	return if other then other.DisplayName else "?"
 end
 
+-- The seat bell and the bell button: open, and inviting a press (not while a press would lose).
+local function refreshBell()
+	local canRing = bellOpen and not bellRung and State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
+	Bell.set(canRing)
+	BellButton.set(State.inRound() and State.meAlive() and not State.mePresenting() and os.clock() >= myFlightEndsAt,
+		canRing, not bellTrap)
+end
+
 local function refresh()
 	local round = State.round
 	local me = State.myId()
@@ -9365,10 +10057,7 @@ local function refresh()
 		end
 	end
 	PresenterPanel.setWords(rows, wordMode, round.serverKind == "public")
-	local canRing = bellOpen and not bellRung and State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
-	Bell.set(canRing)
-	BellButton.set(State.inRound() and State.meAlive() and not State.mePresenting() and os.clock() >= myFlightEndsAt,
-		canRing)
+	refreshBell()
 	refreshVoice()
 	applySeatLock()
 end
@@ -9567,6 +10256,8 @@ end
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	lastMission = payload
 	BellButton.setIcon(if payload.kind == "duel" then "gun" else "bell")
+	bellTrap = (payload.kind == "duel" and payload.stage ~= "fire") or (payload.kind == "redLight" and payload.light == "red")
+	refreshBell()
 	othersLaunchHideUntil = 0
 	bottlesFor(payload)
 	showMission()
@@ -11392,7 +12083,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "BellButton"; s.Source = [==
 -- asks the server to ring it — at the touch or click itself (bundle 8b: Activated fires on release, a phone would
 -- always be a tap late against the E key in the timing games; Activated is kept for gamepads, but not for the same
 -- press). While it is not open the picture rests a little faded and a press only wiggles it (no ding: it must not
--- sound like a real ring). Until the picture has loaded, a "🔔" stands in for it.
+-- sound like a real ring). Until the picture has loaded, a "🔔" stands in for it. Owner 2026-10-25 (bundle 9c): while
+-- a press would lose (총잡이 결투's "ready…", 무궁화's red light) the bell stays open but does not invite a press: it
+-- rests faded and still.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
@@ -11409,6 +12102,7 @@ local button: ImageButton
 local breath: UIScale
 local breathing: Tween? = nil
 local live = false
+local inviting = false
 
 local function wiggle()
 	button.Rotation = -16
@@ -11467,20 +12161,23 @@ function BellButton.build(onRing: () -> ())
 	button.Parent = Style.gui()
 end
 
--- `visible`: I play (seated, on the ground); `canRing`: my seat bell is open and I have not rung it yet.
-function BellButton.set(visible: boolean, canRing: boolean)
+-- `visible`: I play (seated, on the ground); `canRing`: my seat bell is open and I have not rung it yet; `invite`: a
+-- press now is welcome (false while it would lose: then the open bell looks like a closed one, but a press still rings).
+function BellButton.set(visible: boolean, canRing: boolean, invite: boolean)
 	button.Visible = visible
-	if canRing == live then
+	local look = canRing and invite
+	if canRing == live and look == inviting then
 		return
 	end
 	live = canRing
-	button.ImageTransparency = if canRing then 0 else RESTING
+	inviting = look
+	button.ImageTransparency = if look then 0 else RESTING
 	if breathing then
 		breathing:Cancel()
 		breathing = nil
 	end
 	breath.Scale = 1
-	if canRing then
+	if look then
 		local tween = TweenService:Create(breath, TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
 			{ Scale = BREATH })
 		tween:Play()
@@ -11700,6 +12397,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [
 --     I rang; who stood);
 --   - bundle 8c (owner 2026-10-24): the 초성 quiz and the O/X quiz on the quiz's own screen (O/X: then everyone's
 --     wrong count), the number quiz (a box for a whole number and "send"; then everyone's number and the answer);
+--   - bundle 9c (owner 2026-10-25): 머리 위 스무고개 (the topic, whose turn, the round and how many are right; on my
+--     turn the same box takes my answer as text; each answer's verdict; at the end who was right, who flies and my
+--     own word);
 --   - between games (owner 2026-10-24): what the last game did with the vote for the next one (or "the presenter is
 --     picking"), then the next game's briefing: its name, its one-line rule, 3-2-1; at the end the round's result
 --     with its awards (the longest flight, the most games without losing a life);
@@ -11764,13 +12464,13 @@ local needle: Frame
 local arrow: TextLabel
 local coin: TextLabel
 local ringPills: { Frame } = {}
-local numberRow: Frame -- 숫자 근사 퀴즈: the box for a whole number and its "send" button
-local numberBox: TextBox
+local answerRow: Frame -- the answer box and its "send" button: 숫자 근사's whole number, 스무고개's answer (text)
+local answerBox: TextBox
 local sendButton: TextButton
 local bar: Frame -- 물병 세우기's power bar, its green zone and the marker
 local zone: Frame
 local marker: Frame
-local onAnswer: (number, number) -> () = function(_id, _choice) end
+local onAnswer: (number, number | string) -> () = function(_id, _choice) end
 
 local state = {
 	kind = "none",
@@ -11779,6 +12479,7 @@ local state = {
 	question = "",
 	id = 0, -- the open question's number (sent back with the answer)
 	myPick = nil :: number?,
+	sentText = "", -- 스무고개: the answer I sent this turn (shown back to me only)
 	myId = 0,
 	voteIds = {} :: { number }, -- a vote's candidates (my own name cannot be picked)
 	myTurn = false, -- crocodile teeth: my turn now
@@ -11877,14 +12578,21 @@ local function rimSpots(count: number): ({ { centre: Vector2, inward: Vector2 } 
 	return spots, gap
 end
 
--- Lets go of the number box (a phone keyboard closes with it).
+-- `text` cut to `letters` letters (스무고개's answer box).
+local function clip(text: string, letters: number): string
+	local ok, cut = pcall(utf8.offset, text, letters + 1)
+	return if ok and cut then string.sub(text, 1, cut - 1) else text
+end
+
+-- Lets go of the answer box (a phone keyboard closes with it).
 local function dropFocus()
-	if numberBox and numberBox:IsFocused() then
-		numberBox:ReleaseFocus()
+	if answerBox and answerBox:IsFocused() then
+		answerBox:ReleaseFocus()
 	end
 end
 
-function MissionPanel.build(onPick: (number, number) -> ())
+-- onPick(questionId, choice): I pressed an answer button (or sent a number or a text).
+function MissionPanel.build(onPick: (number, number | string) -> ())
 	onAnswer = onPick
 	card = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 16)
 	card.Name = "MissionCard"
@@ -12056,54 +12764,73 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	coin.LayoutOrder = 6
 	Style.round(coin, COIN_SIZE)
 
-	-- 숫자 근사 퀴즈 (bundle 8c): a box for digits only and a "send" button; the number goes as the answer.
-	numberRow = Instance.new("Frame")
-	numberRow.BackgroundTransparency = 1
-	numberRow.Size = UDim2.new(1, 0, 0, 44)
-	numberRow.LayoutOrder = 3
-	numberRow.Visible = false
-	numberRow.Parent = card
-	numberBox = Instance.new("TextBox")
-	numberBox.Size = UDim2.new(0.7, -8, 1, 0)
-	numberBox.BackgroundColor3 = Color3.new(1, 1, 1)
-	numberBox.BackgroundTransparency = 0.1
-	numberBox.FontFace = Style.BOLD
-	numberBox.TextSize = 22
-	numberBox.TextColor3 = Style.INK
-	numberBox.PlaceholderText = TEXT.ESTIMATE_HINT
-	numberBox.PlaceholderColor3 = Style.FAINT
-	numberBox.ClearTextOnFocus = false
-	numberBox.Text = ""
-	Style.round(numberBox, 10)
-	numberBox.Parent = numberRow
-	numberBox:GetPropertyChangedSignal("Text"):Connect(function()
-		local digits = string.sub(string.gsub(numberBox.Text, "%D", ""), 1, ESTIMATE_DIGITS)
-		if digits ~= numberBox.Text then
-			numberBox.Text = digits
+	-- 숫자 근사 퀴즈 (bundle 8c): a box for digits only and a "send" button; the number goes as the answer. 머리 위 스무고개
+	-- (bundle 9c): the same box takes a short text on my turn.
+	answerRow = Instance.new("Frame")
+	answerRow.BackgroundTransparency = 1
+	answerRow.Size = UDim2.new(1, 0, 0, 44)
+	answerRow.LayoutOrder = 3
+	answerRow.Visible = false
+	answerRow.Parent = card
+	answerBox = Instance.new("TextBox")
+	answerBox.Size = UDim2.new(0.7, -8, 1, 0)
+	answerBox.BackgroundColor3 = Color3.new(1, 1, 1)
+	answerBox.BackgroundTransparency = 0.1
+	answerBox.FontFace = Style.BOLD
+	answerBox.TextSize = 22
+	answerBox.TextColor3 = Style.INK
+	answerBox.PlaceholderText = TEXT.ESTIMATE_HINT
+	answerBox.PlaceholderColor3 = Style.FAINT
+	answerBox.ClearTextOnFocus = false
+	answerBox.Text = ""
+	Style.round(answerBox, 10)
+	answerBox.Parent = answerRow
+	answerBox:GetPropertyChangedSignal("Text"):Connect(function()
+		local text = answerBox.Text
+		local fixed = if state.kind == "twenty" then clip(text, Config.TWENTY_ANSWER_MAX)
+			else string.sub(string.gsub(text, "%D", ""), 1, ESTIMATE_DIGITS)
+		if fixed ~= text then
+			answerBox.Text = fixed
 		end
 	end)
 	sendButton = Style.button(Style.BOLD, 20)
 	sendButton.Size = UDim2.fromScale(0.3, 1)
 	sendButton.Position = UDim2.fromScale(0.7, 0)
 	sendButton.Text = TEXT.ESTIMATE_SEND
-	sendButton.Parent = numberRow
+	sendButton.Parent = answerRow
+	-- (the box and the button rest once sent)
+	local function sent(line: string)
+		answerBox.TextEditable = false
+		sendButton.AutoButtonColor = false
+		sendButton.TextColor3 = Style.FAINT
+		sendButton.BackgroundColor3 = Style.KEY_OFF
+		note.Text = line
+		dropFocus()
+	end
 	local function send()
-		local value = tonumber(numberBox.Text)
 		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt
-		if state.kind == "estimate" and state.canAnswer and open and not state.myPick and value and value >= 1
-			and value <= Config.ESTIMATE_MAX and value % 1 == 0 then
-			state.myPick = value
-			onAnswer(state.id, value)
-			numberBox.TextEditable = false
-			sendButton.AutoButtonColor = false
-			sendButton.TextColor3 = Style.FAINT
-			sendButton.BackgroundColor3 = Style.KEY_OFF
-			note.Text = string.format(TEXT.ESTIMATE_SENT, value)
-			dropFocus()
+		if not (state.canAnswer and open and not state.myPick) then
+			return
+		end
+		if state.kind == "estimate" then
+			local value = tonumber(answerBox.Text)
+			if value and value >= 1 and value <= Config.ESTIMATE_MAX and value % 1 == 0 then
+				state.myPick = value
+				onAnswer(state.id, value)
+				sent(string.format(TEXT.ESTIMATE_SENT, value))
+			end
+		elseif state.kind == "twenty" then
+			local typed = string.match(answerBox.Text, "^%s*(.-)%s*$") or ""
+			if typed ~= "" then
+				state.myPick = 1
+				state.sentText = typed
+				onAnswer(state.id, typed)
+				sent(string.format(TEXT.TWENTY_SENT, typed))
+			end
 		end
 	end
 	sendButton.Activated:Connect(send)
-	numberBox.FocusLost:Connect(function(enter: boolean)
+	answerBox.FocusLost:Connect(function(enter: boolean)
 		if enter then
 			send()
 		end
@@ -12199,7 +12926,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local newQuestion = if quizLike then payload.question ~= state.question
 		elseif kind == "vote" or kind == "balance" or kind == "liarGuess" or kind == "nextVote" then
 			payload.id ~= nil and payload.id ~= state.id
-		elseif kind == "estimate" then (payload.id or 0) ~= state.id or state.kind ~= "estimate"
+		elseif kind == "estimate" or kind == "twenty" then (payload.id or 0) ~= state.id or state.kind ~= kind
 		else true
 	if newQuestion then
 		state.myPick = nil -- a new question (a quiz comes twice: before and once the buttons work), a new vote, or none
@@ -12218,10 +12945,15 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local timing = kind == "timeGuess" or kind == "timeGuessResult" or kind == "duel" or kind == "duelResult"
 		or kind == "bottle" or kind == "bottleThrow" or kind == "bottleResult"
 	local quizKinds = kind == "estimate" or kind == "estimateResult" or kind == "oxResult"
-	numberRow.Visible = kind == "estimate"
-	if kind ~= "estimate" then
+	local twenty = kind == "twenty" or kind == "twentyResult"
+	-- (스무고개: the box only on my own turn)
+	local myTurn = kind == "twenty" and payload.stage == "ask" and (payload.ids or {})[payload.asker or 0] == myId
+	answerRow.Visible = kind == "estimate" or myTurn
+	if not answerRow.Visible then
 		dropFocus() -- (the box is gone: no phone keyboard left over)
 	end
+	answerBox.PlaceholderText = if kind == "twenty" then TEXT.TWENTY_HINT else TEXT.ESTIMATE_HINT
+	sendButton.Text = if kind == "twenty" then TEXT.TWENTY_SEND else TEXT.ESTIMATE_SEND
 	title.TextColor3 = Style.INK -- (the duel turns it red at "fire!")
 	for _, b in buttons do
 		buttonIcon(b, nil) -- (only the bomb's pass button has a picture)
@@ -12243,20 +12975,22 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	}
 	-- (the awards and the timing games' results take two lines: many names)
 	note.Size = UDim2.new(1, 0, 0, if kind == "roundResult" or kind == "timeGuessResult" or kind == "duelResult"
-		or kind == "bottleThrow" or kind == "bottleResult" or kind == "oxResult" or kind == "estimateResult" then 46 else 22)
+		or kind == "bottleThrow" or kind == "bottleResult" or kind == "oxResult" or kind == "estimateResult" or twenty
+		then 46 else 22)
 	state.shown = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
-		or kind == "talk" or bells or games or between or timing or quizKinds
+		or kind == "talk" or bells or games or between or timing or quizKinds or twenty
 	card.Visible = state.shown and not state.hidden
 	answerGrid.Visible = quizLike or kind == "vote" or kind == "bomb" or (kind == "balance" and payload.stage == "pick")
 		or kind == "liarGuess" or kind == "nextVote"
 	teethGrid.Visible = kind == "croc" or kind == "crocResult"
 	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
-		or games or between or timing or quizKinds
+		or games or between or timing or quizKinds or twenty
 	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc"
 		or kind == "nunchi" or kind == "balance" or kind == "redLight" or kind == "liar" or kind == "liarGuess"
 		or kind == "nextVote" or kind == "brief" or kind == "timeGuess" or kind == "bottle" or kind == "estimate"
+		or kind == "twenty"
 	note.Visible = kind == "oneWord" or kind == "bellQuiz" or kind == "bomb" or kind == "nunchi" or kind == "nunchiResult"
-		or between or timing or quizKinds
+		or between or timing or quizKinds or twenty
 		or kind == "balance" or kind == "balanceResult" or kind == "redLight" or kind == "redLightResult" or kind == "liar"
 	card.BackgroundColor3 = if kind == "redLight" then (if payload.light == "red" then RED_LIGHT else GREEN_LIGHT)
 		else Style.PAPER
@@ -12370,11 +13104,11 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	elseif kind == "estimate" then
 		title.Text = payload.question or ""
 		if newQuestion then -- (a new number question: an empty box)
-			numberBox.Text = ""
+			answerBox.Text = ""
 		end
 		-- (only while the question is open to me: before that, after sending, or flying, the box and the button rest)
 		local open = canAnswer and payload.id ~= nil and not state.myPick
-		numberBox.TextEditable = open
+		answerBox.TextEditable = open
 		sendButton.AutoButtonColor = open
 		sendButton.TextColor3 = if open then Style.INK else Style.FAINT
 		sendButton.BackgroundColor3 = if open then Style.KEY else Style.KEY_OFF
@@ -12382,6 +13116,62 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			dropFocus()
 		end
 		note.Text = if state.myPick then string.format(TEXT.ESTIMATE_SENT, state.myPick) else TEXT.ESTIMATE_START
+	elseif kind == "twenty" then
+		local asker = names[payload.asker or 0] or "?"
+		local info = string.format(TEXT.TWENTY_INFO, payload.topic or "", payload.round or 1, payload.rounds or 1,
+			#(payload.right or {}), payload.need or 1)
+		if newQuestion then -- (a new turn: an empty box)
+			answerBox.Text = ""
+			state.sentText = ""
+		end
+		if payload.stage == "intro" then
+			title.Text = string.format(TEXT.TWENTY_INTRO, Config.TWENTY_TURN_SECONDS)
+			note.Text = info .. "\n" .. TEXT.TWENTY_NO_LEAK
+		elseif payload.stage == "ask" then
+			title.Text = if myTurn then TEXT.TWENTY_MY_TURN else string.format(TEXT.TWENTY_TURN, asker)
+			local line = if not myTurn then TEXT.TWENTY_NO_LEAK
+				elseif state.myPick then string.format(TEXT.TWENTY_SENT, state.sentText)
+				else TEXT.TWENTY_ONE_TRY
+			note.Text = info .. "\n" .. line
+			local open = myTurn and canAnswer and payload.id ~= nil and not state.myPick
+			answerBox.TextEditable = open
+			sendButton.AutoButtonColor = open
+			sendButton.TextColor3 = if open then Style.INK else Style.FAINT
+			sendButton.BackgroundColor3 = if open then Style.KEY else Style.KEY_OFF
+			if not open then
+				dropFocus()
+			end
+		else
+			title.Text = if payload.verdict == "right" then string.format(TEXT.TWENTY_RIGHT, asker, payload.word or "")
+				elseif payload.verdict == "wrong" then string.format(TEXT.TWENTY_WRONG, asker)
+				else string.format(TEXT.TWENTY_TIMEOUT, asker)
+			note.Text = info
+		end
+	elseif kind == "twentyResult" then
+		title.Text = string.format(TEXT.TWENTY_RESULT_TITLE, payload.topic or "")
+		local ids, right, losers = payload.ids or {}, payload.right or {}, payload.losers or {}
+		local leaked = payload.leaked or {}
+		local rightNames, flown = {}, {}
+		for i, name in names do
+			if table.find(right, ids[i]) then
+				table.insert(rightNames, name)
+			end
+			if table.find(leaked, ids[i]) then
+				table.insert(flown, string.format(TEXT.TWENTY_LEAKED, name))
+			elseif table.find(losers, ids[i]) then
+				table.insert(flown, name .. " 💥")
+			end
+		end
+		local parts = {}
+		if #rightNames > 0 then
+			table.insert(parts, string.format(TEXT.TWENTY_RIGHT_LIST, table.concat(rightNames, ", ")))
+		end
+		if #flown > 0 then
+			table.insert(parts, table.concat(flown, ", "))
+		end
+		local mine = if typeof(payload.myWord) == "string" then string.format(TEXT.TWENTY_MY_WORD, payload.myWord) .. "\n"
+			else ""
+		note.Text = mine .. table.concat(parts, " · ")
 	elseif kind == "estimateResult" then
 		title.Text = payload.question or ""
 		local guesses, losers, ids, parts = payload.guesses or {}, payload.losers or {}, payload.ids or {}, {}
@@ -12624,7 +13414,7 @@ function MissionPanel.tick(now: number)
 	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" or state.kind == "oneWordBell"
 		or state.kind == "bellQuiz" or state.kind == "croc" or state.kind == "bomb" or state.kind == "nunchi"
 		or state.kind == "balance" or state.kind == "redLight" or state.kind == "liar" or state.kind == "liarGuess"
-		or state.kind == "nextVote" or state.kind == "brief" or state.kind == "estimate" then
+		or state.kind == "nextVote" or state.kind == "brief" or state.kind == "estimate" or state.kind == "twenty" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""

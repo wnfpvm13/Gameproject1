@@ -22,6 +22,9 @@
 --     I rang; who stood);
 --   - bundle 8c (owner 2026-10-24): the 초성 quiz and the O/X quiz on the quiz's own screen (O/X: then everyone's
 --     wrong count), the number quiz (a box for a whole number and "send"; then everyone's number and the answer);
+--   - bundle 9c (owner 2026-10-25): 머리 위 스무고개 (the topic, whose turn, the round and how many are right; on my
+--     turn the same box takes my answer as text; each answer's verdict; at the end who was right, who flies and my
+--     own word);
 --   - between games (owner 2026-10-24): what the last game did with the vote for the next one (or "the presenter is
 --     picking"), then the next game's briefing: its name, its one-line rule, 3-2-1; at the end the round's result
 --     with its awards (the longest flight, the most games without losing a life);
@@ -86,13 +89,13 @@ local needle: Frame
 local arrow: TextLabel
 local coin: TextLabel
 local ringPills: { Frame } = {}
-local numberRow: Frame -- 숫자 근사 퀴즈: the box for a whole number and its "send" button
-local numberBox: TextBox
+local answerRow: Frame -- the answer box and its "send" button: 숫자 근사's whole number, 스무고개's answer (text)
+local answerBox: TextBox
 local sendButton: TextButton
 local bar: Frame -- 물병 세우기's power bar, its green zone and the marker
 local zone: Frame
 local marker: Frame
-local onAnswer: (number, number) -> () = function(_id, _choice) end
+local onAnswer: (number, number | string) -> () = function(_id, _choice) end
 
 local state = {
 	kind = "none",
@@ -101,6 +104,7 @@ local state = {
 	question = "",
 	id = 0, -- the open question's number (sent back with the answer)
 	myPick = nil :: number?,
+	sentText = "", -- 스무고개: the answer I sent this turn (shown back to me only)
 	myId = 0,
 	voteIds = {} :: { number }, -- a vote's candidates (my own name cannot be picked)
 	myTurn = false, -- crocodile teeth: my turn now
@@ -199,14 +203,21 @@ local function rimSpots(count: number): ({ { centre: Vector2, inward: Vector2 } 
 	return spots, gap
 end
 
--- Lets go of the number box (a phone keyboard closes with it).
+-- `text` cut to `letters` letters (스무고개's answer box).
+local function clip(text: string, letters: number): string
+	local ok, cut = pcall(utf8.offset, text, letters + 1)
+	return if ok and cut then string.sub(text, 1, cut - 1) else text
+end
+
+-- Lets go of the answer box (a phone keyboard closes with it).
 local function dropFocus()
-	if numberBox and numberBox:IsFocused() then
-		numberBox:ReleaseFocus()
+	if answerBox and answerBox:IsFocused() then
+		answerBox:ReleaseFocus()
 	end
 end
 
-function MissionPanel.build(onPick: (number, number) -> ())
+-- onPick(questionId, choice): I pressed an answer button (or sent a number or a text).
+function MissionPanel.build(onPick: (number, number | string) -> ())
 	onAnswer = onPick
 	card = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 16)
 	card.Name = "MissionCard"
@@ -378,54 +389,73 @@ function MissionPanel.build(onPick: (number, number) -> ())
 	coin.LayoutOrder = 6
 	Style.round(coin, COIN_SIZE)
 
-	-- 숫자 근사 퀴즈 (bundle 8c): a box for digits only and a "send" button; the number goes as the answer.
-	numberRow = Instance.new("Frame")
-	numberRow.BackgroundTransparency = 1
-	numberRow.Size = UDim2.new(1, 0, 0, 44)
-	numberRow.LayoutOrder = 3
-	numberRow.Visible = false
-	numberRow.Parent = card
-	numberBox = Instance.new("TextBox")
-	numberBox.Size = UDim2.new(0.7, -8, 1, 0)
-	numberBox.BackgroundColor3 = Color3.new(1, 1, 1)
-	numberBox.BackgroundTransparency = 0.1
-	numberBox.FontFace = Style.BOLD
-	numberBox.TextSize = 22
-	numberBox.TextColor3 = Style.INK
-	numberBox.PlaceholderText = TEXT.ESTIMATE_HINT
-	numberBox.PlaceholderColor3 = Style.FAINT
-	numberBox.ClearTextOnFocus = false
-	numberBox.Text = ""
-	Style.round(numberBox, 10)
-	numberBox.Parent = numberRow
-	numberBox:GetPropertyChangedSignal("Text"):Connect(function()
-		local digits = string.sub(string.gsub(numberBox.Text, "%D", ""), 1, ESTIMATE_DIGITS)
-		if digits ~= numberBox.Text then
-			numberBox.Text = digits
+	-- 숫자 근사 퀴즈 (bundle 8c): a box for digits only and a "send" button; the number goes as the answer. 머리 위 스무고개
+	-- (bundle 9c): the same box takes a short text on my turn.
+	answerRow = Instance.new("Frame")
+	answerRow.BackgroundTransparency = 1
+	answerRow.Size = UDim2.new(1, 0, 0, 44)
+	answerRow.LayoutOrder = 3
+	answerRow.Visible = false
+	answerRow.Parent = card
+	answerBox = Instance.new("TextBox")
+	answerBox.Size = UDim2.new(0.7, -8, 1, 0)
+	answerBox.BackgroundColor3 = Color3.new(1, 1, 1)
+	answerBox.BackgroundTransparency = 0.1
+	answerBox.FontFace = Style.BOLD
+	answerBox.TextSize = 22
+	answerBox.TextColor3 = Style.INK
+	answerBox.PlaceholderText = TEXT.ESTIMATE_HINT
+	answerBox.PlaceholderColor3 = Style.FAINT
+	answerBox.ClearTextOnFocus = false
+	answerBox.Text = ""
+	Style.round(answerBox, 10)
+	answerBox.Parent = answerRow
+	answerBox:GetPropertyChangedSignal("Text"):Connect(function()
+		local text = answerBox.Text
+		local fixed = if state.kind == "twenty" then clip(text, Config.TWENTY_ANSWER_MAX)
+			else string.sub(string.gsub(text, "%D", ""), 1, ESTIMATE_DIGITS)
+		if fixed ~= text then
+			answerBox.Text = fixed
 		end
 	end)
 	sendButton = Style.button(Style.BOLD, 20)
 	sendButton.Size = UDim2.fromScale(0.3, 1)
 	sendButton.Position = UDim2.fromScale(0.7, 0)
 	sendButton.Text = TEXT.ESTIMATE_SEND
-	sendButton.Parent = numberRow
+	sendButton.Parent = answerRow
+	-- (the box and the button rest once sent)
+	local function sent(line: string)
+		answerBox.TextEditable = false
+		sendButton.AutoButtonColor = false
+		sendButton.TextColor3 = Style.FAINT
+		sendButton.BackgroundColor3 = Style.KEY_OFF
+		note.Text = line
+		dropFocus()
+	end
 	local function send()
-		local value = tonumber(numberBox.Text)
 		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt
-		if state.kind == "estimate" and state.canAnswer and open and not state.myPick and value and value >= 1
-			and value <= Config.ESTIMATE_MAX and value % 1 == 0 then
-			state.myPick = value
-			onAnswer(state.id, value)
-			numberBox.TextEditable = false
-			sendButton.AutoButtonColor = false
-			sendButton.TextColor3 = Style.FAINT
-			sendButton.BackgroundColor3 = Style.KEY_OFF
-			note.Text = string.format(TEXT.ESTIMATE_SENT, value)
-			dropFocus()
+		if not (state.canAnswer and open and not state.myPick) then
+			return
+		end
+		if state.kind == "estimate" then
+			local value = tonumber(answerBox.Text)
+			if value and value >= 1 and value <= Config.ESTIMATE_MAX and value % 1 == 0 then
+				state.myPick = value
+				onAnswer(state.id, value)
+				sent(string.format(TEXT.ESTIMATE_SENT, value))
+			end
+		elseif state.kind == "twenty" then
+			local typed = string.match(answerBox.Text, "^%s*(.-)%s*$") or ""
+			if typed ~= "" then
+				state.myPick = 1
+				state.sentText = typed
+				onAnswer(state.id, typed)
+				sent(string.format(TEXT.TWENTY_SENT, typed))
+			end
 		end
 	end
 	sendButton.Activated:Connect(send)
-	numberBox.FocusLost:Connect(function(enter: boolean)
+	answerBox.FocusLost:Connect(function(enter: boolean)
 		if enter then
 			send()
 		end
@@ -521,7 +551,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local newQuestion = if quizLike then payload.question ~= state.question
 		elseif kind == "vote" or kind == "balance" or kind == "liarGuess" or kind == "nextVote" then
 			payload.id ~= nil and payload.id ~= state.id
-		elseif kind == "estimate" then (payload.id or 0) ~= state.id or state.kind ~= "estimate"
+		elseif kind == "estimate" or kind == "twenty" then (payload.id or 0) ~= state.id or state.kind ~= kind
 		else true
 	if newQuestion then
 		state.myPick = nil -- a new question (a quiz comes twice: before and once the buttons work), a new vote, or none
@@ -540,10 +570,15 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local timing = kind == "timeGuess" or kind == "timeGuessResult" or kind == "duel" or kind == "duelResult"
 		or kind == "bottle" or kind == "bottleThrow" or kind == "bottleResult"
 	local quizKinds = kind == "estimate" or kind == "estimateResult" or kind == "oxResult"
-	numberRow.Visible = kind == "estimate"
-	if kind ~= "estimate" then
+	local twenty = kind == "twenty" or kind == "twentyResult"
+	-- (스무고개: the box only on my own turn)
+	local myTurn = kind == "twenty" and payload.stage == "ask" and (payload.ids or {})[payload.asker or 0] == myId
+	answerRow.Visible = kind == "estimate" or myTurn
+	if not answerRow.Visible then
 		dropFocus() -- (the box is gone: no phone keyboard left over)
 	end
+	answerBox.PlaceholderText = if kind == "twenty" then TEXT.TWENTY_HINT else TEXT.ESTIMATE_HINT
+	sendButton.Text = if kind == "twenty" then TEXT.TWENTY_SEND else TEXT.ESTIMATE_SEND
 	title.TextColor3 = Style.INK -- (the duel turns it red at "fire!")
 	for _, b in buttons do
 		buttonIcon(b, nil) -- (only the bomb's pass button has a picture)
@@ -565,20 +600,22 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	}
 	-- (the awards and the timing games' results take two lines: many names)
 	note.Size = UDim2.new(1, 0, 0, if kind == "roundResult" or kind == "timeGuessResult" or kind == "duelResult"
-		or kind == "bottleThrow" or kind == "bottleResult" or kind == "oxResult" or kind == "estimateResult" then 46 else 22)
+		or kind == "bottleThrow" or kind == "bottleResult" or kind == "oxResult" or kind == "estimateResult" or twenty
+		then 46 else 22)
 	state.shown = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
-		or kind == "talk" or bells or games or between or timing or quizKinds
+		or kind == "talk" or bells or games or between or timing or quizKinds or twenty
 	card.Visible = state.shown and not state.hidden
 	answerGrid.Visible = quizLike or kind == "vote" or kind == "bomb" or (kind == "balance" and payload.stage == "pick")
 		or kind == "liarGuess" or kind == "nextVote"
 	teethGrid.Visible = kind == "croc" or kind == "crocResult"
 	title.Visible = quizLike or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote" or kind == "talk" or bells
-		or games or between or timing or quizKinds
+		or games or between or timing or quizKinds or twenty
 	timer.Visible = quizLike or kind == "oneWord" or kind == "vote" or bells or kind == "croc"
 		or kind == "nunchi" or kind == "balance" or kind == "redLight" or kind == "liar" or kind == "liarGuess"
 		or kind == "nextVote" or kind == "brief" or kind == "timeGuess" or kind == "bottle" or kind == "estimate"
+		or kind == "twenty"
 	note.Visible = kind == "oneWord" or kind == "bellQuiz" or kind == "bomb" or kind == "nunchi" or kind == "nunchiResult"
-		or between or timing or quizKinds
+		or between or timing or quizKinds or twenty
 		or kind == "balance" or kind == "balanceResult" or kind == "redLight" or kind == "redLightResult" or kind == "liar"
 	card.BackgroundColor3 = if kind == "redLight" then (if payload.light == "red" then RED_LIGHT else GREEN_LIGHT)
 		else Style.PAPER
@@ -692,11 +729,11 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	elseif kind == "estimate" then
 		title.Text = payload.question or ""
 		if newQuestion then -- (a new number question: an empty box)
-			numberBox.Text = ""
+			answerBox.Text = ""
 		end
 		-- (only while the question is open to me: before that, after sending, or flying, the box and the button rest)
 		local open = canAnswer and payload.id ~= nil and not state.myPick
-		numberBox.TextEditable = open
+		answerBox.TextEditable = open
 		sendButton.AutoButtonColor = open
 		sendButton.TextColor3 = if open then Style.INK else Style.FAINT
 		sendButton.BackgroundColor3 = if open then Style.KEY else Style.KEY_OFF
@@ -704,6 +741,62 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			dropFocus()
 		end
 		note.Text = if state.myPick then string.format(TEXT.ESTIMATE_SENT, state.myPick) else TEXT.ESTIMATE_START
+	elseif kind == "twenty" then
+		local asker = names[payload.asker or 0] or "?"
+		local info = string.format(TEXT.TWENTY_INFO, payload.topic or "", payload.round or 1, payload.rounds or 1,
+			#(payload.right or {}), payload.need or 1)
+		if newQuestion then -- (a new turn: an empty box)
+			answerBox.Text = ""
+			state.sentText = ""
+		end
+		if payload.stage == "intro" then
+			title.Text = string.format(TEXT.TWENTY_INTRO, Config.TWENTY_TURN_SECONDS)
+			note.Text = info .. "\n" .. TEXT.TWENTY_NO_LEAK
+		elseif payload.stage == "ask" then
+			title.Text = if myTurn then TEXT.TWENTY_MY_TURN else string.format(TEXT.TWENTY_TURN, asker)
+			local line = if not myTurn then TEXT.TWENTY_NO_LEAK
+				elseif state.myPick then string.format(TEXT.TWENTY_SENT, state.sentText)
+				else TEXT.TWENTY_ONE_TRY
+			note.Text = info .. "\n" .. line
+			local open = myTurn and canAnswer and payload.id ~= nil and not state.myPick
+			answerBox.TextEditable = open
+			sendButton.AutoButtonColor = open
+			sendButton.TextColor3 = if open then Style.INK else Style.FAINT
+			sendButton.BackgroundColor3 = if open then Style.KEY else Style.KEY_OFF
+			if not open then
+				dropFocus()
+			end
+		else
+			title.Text = if payload.verdict == "right" then string.format(TEXT.TWENTY_RIGHT, asker, payload.word or "")
+				elseif payload.verdict == "wrong" then string.format(TEXT.TWENTY_WRONG, asker)
+				else string.format(TEXT.TWENTY_TIMEOUT, asker)
+			note.Text = info
+		end
+	elseif kind == "twentyResult" then
+		title.Text = string.format(TEXT.TWENTY_RESULT_TITLE, payload.topic or "")
+		local ids, right, losers = payload.ids or {}, payload.right or {}, payload.losers or {}
+		local leaked = payload.leaked or {}
+		local rightNames, flown = {}, {}
+		for i, name in names do
+			if table.find(right, ids[i]) then
+				table.insert(rightNames, name)
+			end
+			if table.find(leaked, ids[i]) then
+				table.insert(flown, string.format(TEXT.TWENTY_LEAKED, name))
+			elseif table.find(losers, ids[i]) then
+				table.insert(flown, name .. " 💥")
+			end
+		end
+		local parts = {}
+		if #rightNames > 0 then
+			table.insert(parts, string.format(TEXT.TWENTY_RIGHT_LIST, table.concat(rightNames, ", ")))
+		end
+		if #flown > 0 then
+			table.insert(parts, table.concat(flown, ", "))
+		end
+		local mine = if typeof(payload.myWord) == "string" then string.format(TEXT.TWENTY_MY_WORD, payload.myWord) .. "\n"
+			else ""
+		note.Text = mine .. table.concat(parts, " · ")
 	elseif kind == "estimateResult" then
 		title.Text = payload.question or ""
 		local guesses, losers, ids, parts = payload.guesses or {}, payload.losers or {}, payload.ids or {}, {}
@@ -946,7 +1039,7 @@ function MissionPanel.tick(now: number)
 	elseif state.kind == "quiz" or state.kind == "vote" or state.kind == "oneWord" or state.kind == "oneWordBell"
 		or state.kind == "bellQuiz" or state.kind == "croc" or state.kind == "bomb" or state.kind == "nunchi"
 		or state.kind == "balance" or state.kind == "redLight" or state.kind == "liar" or state.kind == "liarGuess"
-		or state.kind == "nextVote" or state.kind == "brief" or state.kind == "estimate" then
+		or state.kind == "nextVote" or state.kind == "brief" or state.kind == "estimate" or state.kind == "twenty" then
 		timer.Text = if state.endsAt > 0 then tostring(math.max(0, math.ceil(state.endsAt - now))) else ""
 	elseif state.kind == "roulette" then
 		timer.Text = ""

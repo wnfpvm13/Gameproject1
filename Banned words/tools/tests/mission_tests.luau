@@ -53,7 +53,7 @@ end
 -- A ctx like RoundService's: `alive` are the players, `flyingSet` cannot answer; fails, answers and shows are recorded.
 local function fakeCtx(alive, final, flyingSet)
 	local record = { fails = {}, answered = nil, missed = nil, shows = {}, cancel = false, bellCalls = {}, floors = {},
-		verdicts = {}, scores = {} }
+		verdicts = {}, scores = {}, heads = {}, chatHandler = nil }
 	record.ctx = {
 		final = final,
 		players = function() return alive end,
@@ -103,6 +103,13 @@ local function fakeCtx(alive, final, flyingSet)
 		end,
 		score = function(player, amount)
 			table.insert(record.scores, { player = player, amount = amount })
+		end,
+		-- Bundle 9c: the words over the heads (each call recorded) and the chat watcher (a test calls it).
+		heads = function(words, known)
+			table.insert(record.heads, { words = words and table.clone(words), known = known and table.clone(known) })
+		end,
+		chat = function(handler)
+			record.chatHandler = handler
 		end,
 	}
 	return record
@@ -342,9 +349,11 @@ do
 	at(now + 30)
 	local afterRoulette = menuIds()
 	check("3d the menu order: games not played yet first (list order), played ones after; the roulette once a round",
-		fresh == "quiz,roulette,croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle,chosung,oxQuiz,estimate"
-		and afterQuiz == "roulette,croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle,chosung,oxQuiz,estimate,quiz"
-		and afterRoulette == "croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle,chosung,oxQuiz,estimate,quiz",
+		fresh == "quiz,roulette,twenty,croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle,chosung,oxQuiz,estimate"
+		and afterQuiz
+			== "roulette,twenty,croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle,chosung,oxQuiz,estimate,quiz"
+		and afterRoulette
+			== "twenty,croc,bomb,nunchi,balance,redLight,liar,timeGuess,duel,bottle,chosung,oxQuiz,estimate,quiz",
 		fresh .. " | " .. afterQuiz .. " | " .. afterRoulette)
 	MissionRunner.beginRound()
 	local small = MissionRunner.candidates(300, 1, false)
@@ -392,14 +401,17 @@ do
 	end
 	local offWithout = listed("bannedTalk")
 	Match.voiceJudging = true
+	local offShipped = listed("bannedTalk") -- (owner 2026-10-25: 머리 위 스무고개 replaces it)
+	Config.TALK_GAME_ON = true
 	local onWith = listed("bannedTalk")
 	local inFinal = false
 	for _, m in { MissionRunner.finalMission() } do
 		inFinal = inFinal or m.id == "bannedTalk"
 	end
+	Config.TALK_GAME_ON = false
 	Match.voiceJudging = false
-	check("3i the banned-word talk is offered only while speech judging is on (never in the final)", not offWithout and onWith
-		and not inFinal)
+	check("3i the banned-word talk is off in the shipped game (TALK_GAME_ON); on, only while speech judging is on (never"
+		.. " in the final)", not offWithout and not offShipped and onWith and not inFinal)
 end
 
 ---------------------------------------------------------------- 4. the real bank
@@ -1455,7 +1467,7 @@ do
 	check("15i a briefing cut short by the end of the main game says so", b2 == false)
 	local everyBrief = true
 	for _, mission in { Quiz, Quiz.bell, Roulette, OneWord, Crocodile, BombPass, Nunchi, Balance, RedLight, Liar,
-		require(node("BannedTalk")), require(node("TestMission")) } do
+		require(node("BannedTalk")), require(node("TestMission")), require(node("Twenty")) } do
 		everyBrief = everyBrief and typeof(mission.brief) == "string" and mission.brief ~= ""
 	end
 	check("15j every game has a one-line rule for its briefing", everyBrief)
@@ -2019,6 +2031,318 @@ do
 	workspaceAttributes.BW_TestMission = nil
 	check("17o the Studio practice mission plays only with BW_TestMission (an owner's playtest never meets it)",
 		not off and on)
+end
+
+---------------------------------------------------------------- 18. 머리 위 스무고개 (bundle 9c, owner 2026-10-25)
+local Twenty = require(node("Twenty"))
+local Judge = require(node("Judge"))
+-- The latest "twenty" screen of `stage` since `since`, and who asks in it.
+local function twentyScreen(since, stage)
+	for i = #NetStub.sent, 1, -1 do
+		local m = NetStub.sent[i]
+		if m.at < since then
+			break
+		end
+		if m.name == "Mission" and m.to == nil and m.payload.kind == "twenty" and m.payload.stage == stage then
+			return m.payload
+		end
+	end
+	return nil
+end
+local function askerOf(screen, players)
+	local userId = screen and screen.ids[screen.asker]
+	for _, player in players do
+		if player.UserId == userId then
+			return player
+		end
+	end
+	return nil
+end
+local function lastHeads(record)
+	return record.heads[#record.heads]
+end
+do
+	-- The words: as many as asked, all of one topic, two letters or more, none inside another; the right count.
+	local rng = Random.new(99)
+	local good = true
+	for _ = 1, 200 do
+		local count = rng:NextInteger(2, Config.MAX_PLAYERS)
+		local topic, words = Twenty.draw(rng, count)
+		local entry = nil
+		for _, e in ChosungBank do
+			if e.category == topic then
+				entry = e
+			end
+		end
+		good = good and entry ~= nil and #words == count
+		for i, word in words do
+			good = good and table.find(entry and entry.words or {}, word) ~= nil
+				and (utf8.len(Judge.normalizeChat(word)) or 0) >= Config.TWENTY_MIN_LETTERS
+			for j = i + 1, #words do
+				good = good and not Judge.overlaps(word, words[j])
+			end
+		end
+	end
+	local none = select(1, Twenty.draw(rng, 40)) == nil
+	check("18a 스무고개 words: one topic, all different, two letters or more, none inside another (연필 / 색연필); too many"
+		.. " for any topic: none", good and none)
+	check("18b the end: 30% of those who began, rounded up (2-3: 1, 4-6: 2, 7-10: 3)", Twenty.needed(2) == 1
+		and Twenty.needed(3) == 1 and Twenty.needed(4) == 2 and Twenty.needed(6) == 2 and Twenty.needed(7) == 3
+		and Twenty.needed(10) == 3)
+	check("18c an answer is right with the same letters (spaces and marks aside), nothing else counts",
+		Twenty.isRight("택배기사", "택배 기사") and Twenty.isRight(" 사과! ", "사과") and not Twenty.isRight("사", "사과")
+		and not Twenty.isRight("", "사과") and not Twenty.isRight("사과나무", "사과"))
+	local a, b = table.unpack(newPlayers(2))
+	check("18d writing a hidden word of someone else is a leak; one's own, a known one or none is not",
+		Twenty.leaks("이거 사과 아님?", a, { [b] = "사과" }) and not Twenty.leaks("사과?", a, { [a] = "사과" })
+		and not Twenty.leaks("사과", a, {}) and not Twenty.leaks("동물이에요?", a, { [b] = "사과" }))
+	check("18q a word counts written as a word of its own, maybe with a particle, never inside a longer word (review"
+		.. " 2026-10-25: 나라면, 배우고, 나의 자리)", Twenty.writes("사과가 맞아", "사과") and Twenty.writes("그거 사과야?", "사과")
+		and Twenty.writes("힌트: 사과!", "사과") and Twenty.writes("택배 기사는", "택배 기사")
+		and Twenty.writes("택배기사", "택배 기사") and Twenty.writes("ㅋㅋ 라면", "라면") and not Twenty.writes("나라면 먹어", "라면")
+		and not Twenty.writes("이거 배우고 싶다", "배우") and not Twenty.writes("나의 자리", "의자")
+		and not Twenty.writes("사과나무", "사과") and not Twenty.writes("사 과", "사과") and not Twenty.writes("", "사과"))
+	local skipped = true
+	local rng2 = Random.new(5)
+	for _ = 1, 300 do
+		local _, drawn = Twenty.draw(rng2, Config.MAX_PLAYERS)
+		for _, word in drawn do
+			skipped = skipped and not table.find(Config.TWENTY_SKIP_WORDS, word)
+		end
+	end
+	check("18r words with an everyday double (사자, 판다, 화가 ...) never play", skipped)
+end
+do
+	-- A game of three: a wrong answer, a right one, the third one's turn still comes (the round ends first, owner rule);
+	-- then one right (30% of three) ends it: the result shows first, then the ones never right fly.
+	local ps = newPlayers(3)
+	local since = now
+	local record = fakeCtx(ps, false, nil)
+	local run = start(Twenty, record)
+	local first = lastHeads(record)
+	local intro = twentyScreen(since, "intro")
+	local own = first and first.words or {}
+	local hidden = first ~= nil and first.known ~= nil and next(first.known) == nil
+	at(now + Config.TWENTY_INTRO_SECONDS + 0.2)
+	local ask1 = twentyScreen(since, "ask")
+	local p1 = askerOf(ask1, ps)
+	answer(p1, "틀린 답")
+	at(now + 0.3)
+	local wrong = twentyScreen(since, "verdict")
+	at(now + Config.TWENTY_VERDICT_SECONDS + 0.2)
+	local ask2 = twentyScreen(now - 0.5, "ask")
+	local p2 = askerOf(ask2, ps)
+	answer(p2, own[p2])
+	at(now + 0.3)
+	local right = twentyScreen(now - 0.5, "verdict")
+	at(now + Config.TWENTY_VERDICT_SECONDS + 0.2)
+	local ask3 = twentyScreen(now - 0.5, "ask")
+	local p3turn = askerOf(ask3, ps)
+	answer(p3turn, "또 틀림")
+	at(now + 0.3 + Config.TWENTY_VERDICT_SECONDS + 0.3)
+	local result = lastScreenOf(since, "twentyResult")
+	local shownAt = now
+	local beforeReveal = #record.fails
+	local mine = {}
+	for _, m in NetStub.sent do
+		if m.at >= since and m.name == "Mission" and m.to and m.payload.kind == "twentyResult" then
+			mine[m.to] = m.payload.myWord
+		end
+	end
+	local p3 = nil
+	for _, p in ps do
+		if p ~= p1 and p ~= p2 then
+			p3 = p
+		end
+	end
+	local fail = record.fails[1]
+	check("18e each one a different word, hidden from them; the topic and the order on screen; the asker's turn takes text",
+		intro ~= nil and intro.topic ~= nil and #intro.ids == 3 and hidden and own[ps[1]] ~= own[ps[2]]
+		and own[ps[2]] ~= own[ps[3]] and ask1 ~= nil and ask1.id ~= nil and ask1.need == 1 and p1 ~= nil)
+	check("18f a wrong answer: ❌ on the card (no toast) and the next one asks (the typed text never shows)",
+		wrong ~= nil and wrong.verdict == "wrong" and wrong.word == nil and p2 ~= nil and p2 ~= p1
+		and table.find(record.shows, string.format(Config.TEXT.TWENTY_WRONG, p1.DisplayName)) == nil)
+	at(now + Config.MINIGAME_RESULT_SECONDS + 0.5) -- (the result stays, then the launches and the words go)
+	fail = record.fails[1]
+	local after = record.heads[#record.heads - 1] -- (the last call takes the words down)
+	check("18g a right answer: ⭕ with the word, its owner sees it; the round's last turn still comes; then the result"
+		.. " shows and only after it the rest flies once", right ~= nil and right.verdict == "right" and right.word == own[p2]
+		and p3turn == p3 and result ~= nil and #result.right == 1 and result.right[1] == p2.UserId and #result.losers == 2
+		and beforeReveal == 0 and fail ~= nil and fail.key == "twenty" and fail.at >= shownAt + Config.MINIGAME_RESULT_SECONDS - 0.5
+		and #fail.players == 2 and has(fail.players, p1) and has(fail.players, p3) and #record.fails == 1)
+	check("18h at the end everyone sees their own word (on their own result too); then the words and the watcher go",
+		run.done and after ~= nil and after.known ~= nil and after.known[ps[1]] and after.known[ps[2]] and after.known[ps[3]]
+		and mine[ps[1]] == own[ps[1]] and mine[p3] == own[p3] and lastHeads(record).words == nil
+		and record.chatHandler == nil and has(record.answered, p1) and has(record.answered, p2)
+		and has(record.answered, p3) and #record.missed == 0)
+end
+do
+	-- A leak: writing someone else's word flies the writer at once (also one already right), the owner's word stays
+	-- hidden from its owner; one's own word, a flying writer or a known word is nothing. Nobody right: TWENTY_TRIES
+	-- rounds of turns, then everyone not right flies (the writer not again).
+	local ps = newPlayers(3)
+	local flying = {}
+	local record = fakeCtx(ps, false, flying)
+	local since = now
+	local run = start(Twenty, record)
+	local own = lastHeads(record).words
+	local chat = record.chatHandler
+	chat(ps[1], "내 단어 " .. own[ps[1]] .. "?") -- (their own: they do not know it)
+	flying[ps[2]] = true
+	chat(ps[2], own[ps[3]]) -- (flying: takes no penalty)
+	flying[ps[2]] = nil
+	local quiet = #record.fails == 0
+	chat(ps[1], "힌트 " .. own[ps[2]])
+	chat(ps[1], own[ps[3]]) -- (out of this game already, even before the launch)
+	at(now + 0.01) -- (the launch comes right after the line)
+	local leak = record.fails[1]
+	local heads = lastHeads(record)
+	check("18i writing another's hidden word flies the writer at once and they see their own word; their own word, a"
+		.. " flying writer, or a second line after it costs nothing", quiet and leak ~= nil and #leak.players == 1
+		and leak.players[1] == ps[1] and leak.key == "twenty" and heads.known[ps[1]] == true and not heads.known[ps[2]]
+		and #record.fails == 1 and table.find(record.shows, string.format(Config.TEXT.TWENTY_LEAK, ps[1].DisplayName)) ~= nil)
+	-- nobody answers: the writer's turns are skipped, the others' run out
+	local turns = 0
+	local skipped = true
+	local seen = {}
+	at(now + Config.TWENTY_INTRO_SECONDS + 0.1)
+	for _ = 1, 2 * Config.TWENTY_TRIES do
+		local ask = twentyScreen(now - 0.2, "ask")
+		if ask and not seen[ask.id] then
+			seen[ask.id] = true
+			turns += 1
+			skipped = skipped and askerOf(ask, ps) ~= ps[1]
+		end
+		at(now + Config.TWENTY_TURN_SECONDS + Config.TWENTY_VERDICT_SECONDS)
+	end
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	local final = record.fails[2]
+	local shown = lastScreenOf(since, "twentyResult")
+	check("18j nobody right: TWENTY_TRIES turns each (none for the writer), then everyone not right flies, the writer not"
+		.. " again (shown apart)", run.done and turns == 2 * Config.TWENTY_TRIES and skipped and final ~= nil
+		and #final.players == 2 and not has(final.players, ps[1]) and has(final.players, ps[2]) and has(final.players, ps[3])
+		and shown ~= nil and #shown.leaked == 1 and shown.leaked[1] == ps[1].UserId and #shown.losers == 2)
+	local alone = fakeCtx({ ps[1] }, false, nil)
+	check("18k too few on the ground: nothing to play", Twenty.run(alone.ctx) == false and #alone.heads == 0)
+end
+do
+	-- Text answers through the answer remote: only on a text question, one to TWENTY_ANSWER_MAX letters, the first
+	-- counts; a choice question takes no text.
+	local ps = newPlayers(2)
+	local record = fakeCtx(ps, false, nil)
+	local since = now
+	start(Twenty, record)
+	at(now + Config.TWENTY_INTRO_SECONDS + 0.2)
+	local ask = twentyScreen(since, "ask")
+	local asker = askerOf(ask, ps)
+	local other = if asker == ps[1] then ps[2] else ps[1]
+	answer(other, "남의 차례") -- (not theirs to answer)
+	answer(asker, 7) -- (a number on a text question)
+	answer(asker, string.rep("가", Config.TWENTY_ANSWER_MAX + 1)) -- (too long)
+	at(now + 0.3)
+	local stillOpen = twentyScreen(since, "verdict") == nil
+	answer(asker, string.rep("가", Config.TWENTY_ANSWER_MAX))
+	answer(asker, lastHeads(record).words[asker]) -- (a second answer: not counted)
+	at(now + 0.3)
+	local verdict = twentyScreen(since, "verdict")
+	check("18l a text question takes one text (1 to TWENTY_ANSWER_MAX letters) from the one asked, the first one counts",
+		stillOpen and verdict ~= nil and verdict.verdict == "wrong")
+	at(now + 200)
+	local quiz = fakeCtx(newPlayers(2), false, nil)
+	QuizBank.main = { q("글자 답", "가", "나", "다", "라") }
+	local qsince = now
+	start(Quiz, quiz)
+	at(now + Config.QUIZ_INTRO_SECONDS + 0.2)
+	for _, p in quiz.ctx.players() do
+		answer(p, "가")
+	end
+	at(now + Config.QUIZ_SECONDS + Config.QUIZ_REVEAL_SECONDS + 1)
+	QuizBank.main = realMain
+	local wrongAll = quiz.fails[1] ~= nil and #quiz.fails[1].players == 2
+	check("18m a choice question takes no text (both count as no answer)", wrongAll and qsince < now)
+	-- The time budget counts the players there are: two fit where ten do not.
+	MissionRunner.beginRound()
+	local function listed(seconds, alive)
+		for _, m in MissionRunner.candidates(seconds, alive, false) do
+			if m.id == "twenty" then
+				return true
+			end
+		end
+		return false
+	end
+	local two = Twenty.expectedFor and Twenty.expectedFor(2) or 0
+	check("18n the time budget counts the players: fits with two, not with ten in the same time",
+		listed(two + Config.FLING_RETURN_SECONDS, 2) and not listed(two + Config.FLING_RETURN_SECONDS, 10)
+		and not listed(two + Config.FLING_RETURN_SECONDS - 1, 2))
+end
+
+do
+	-- Four players need two right: the first right one does not end it and gets no more turns; it ends after the
+	-- round in which the second one got it.
+	local ps = newPlayers(4)
+	local record = fakeCtx(ps, false, nil)
+	local since = now
+	local run = start(Twenty, record)
+	local own = lastHeads(record).words
+	at(now + Config.TWENTY_INTRO_SECONDS + 0.2)
+	local askers, rounds, seenIds = {}, {}, {}
+	local firstRight, secondRight = nil, nil
+	for _ = 1, 8 do
+		local ask = twentyScreen(since, "ask")
+		if not ask or seenIds[ask.id] then
+			break
+		end
+		seenIds[ask.id] = true
+		local who = askerOf(ask, ps)
+		table.insert(askers, who)
+		table.insert(rounds, ask.round)
+		if ask.round == 1 and not firstRight then
+			firstRight = who
+			answer(who, own[who])
+		elseif ask.round == 2 and not secondRight then
+			secondRight = who
+			answer(who, own[who])
+		else
+			answer(who, "모름")
+		end
+		at(now + 0.3 + Config.TWENTY_VERDICT_SECONDS + 0.3)
+	end
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	local rightAgain = false
+	for i, who in askers do
+		rightAgain = rightAgain or (rounds[i] == 2 and who == firstRight)
+	end
+	local result = lastScreenOf(since, "twentyResult")
+	local fail = record.fails[1]
+	check("18o four need two: the first right gets no more turns, the game ends after the round of the second one",
+		run.done and #askers == 7 and rounds[4] == 1 and rounds[5] == 2 and rounds[7] == 2 and not rightAgain
+		and result ~= nil and #result.right == 2 and fail ~= nil and #fail.players == 2 and not has(fail.players, firstRight)
+		and not has(fail.players, secondRight))
+end
+do
+	-- Two lines writing each other's word, arriving together: both count as they arrived (review 2026-10-25), and with
+	-- nobody left guessing the game ends.
+	local ps = newPlayers(3)
+	local record = fakeCtx(ps, false, nil)
+	start(Twenty, record)
+	local own = lastHeads(record).words
+	local chat = record.chatHandler
+	chat(ps[1], own[ps[2]])
+	chat(ps[2], own[ps[1]])
+	at(now + 0.01)
+	local first = record.fails[1]
+	local second = record.fails[2]
+	local told = {}
+	for _, m in NetStub.sent do
+		if m.name == "Notice" and m.to and own[m.to] and m.payload.text == string.format(Config.TEXT.TWENTY_LEAK_MINE, own[m.to]) then
+			told[m.to] = true
+		end
+	end
+	check("18p two leaks arriving together both count (each judged as it arrived) and fly in one launch (one deciding the"
+		.. " round cannot drop the other); each writer is told their own word", first ~= nil and second == nil
+		and #first.players == 2 and has(first.players, ps[1]) and has(first.players, ps[2]) and told[ps[1]] and told[ps[2]]
+		and not told[ps[3]])
+	at(now + 200)
 end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

@@ -38,6 +38,9 @@ local bellOpen = false -- the server has my seat bell open (bundle 6b)
 local bellWindow = 0 -- the open window's number (sent back with my ring)
 local bellRung = false -- I rang it this time (one ring each time it opens)
 local bellRepeating = false -- the open window takes every press (red light): the button stays
+-- A press now would lose (총잡이 결투's "ready…", 무궁화's red light): the bell button does not invite it (owner
+-- 2026-10-25).
+local bellTrap = false
 local menuId = 0 -- the presenter menu now open (sent back with my pick)
 
 -- Seated players cannot jump out or reset during a round.
@@ -102,6 +105,14 @@ local function nameOf(userId: number?): string
 	return if other then other.DisplayName else "?"
 end
 
+-- The seat bell and the bell button: open, and inviting a press (not while a press would lose).
+local function refreshBell()
+	local canRing = bellOpen and not bellRung and State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
+	Bell.set(canRing)
+	BellButton.set(State.inRound() and State.meAlive() and not State.mePresenting() and os.clock() >= myFlightEndsAt,
+		canRing, not bellTrap)
+end
+
 local function refresh()
 	local round = State.round
 	local me = State.myId()
@@ -142,10 +153,7 @@ local function refresh()
 		end
 	end
 	PresenterPanel.setWords(rows, wordMode, round.serverKind == "public")
-	local canRing = bellOpen and not bellRung and State.inRound() and State.meAlive() and os.clock() >= myFlightEndsAt
-	Bell.set(canRing)
-	BellButton.set(State.inRound() and State.meAlive() and not State.mePresenting() and os.clock() >= myFlightEndsAt,
-		canRing)
+	refreshBell()
 	refreshVoice()
 	applySeatLock()
 end
@@ -344,6 +352,8 @@ end
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	lastMission = payload
 	BellButton.setIcon(if payload.kind == "duel" then "gun" else "bell")
+	bellTrap = (payload.kind == "duel" and payload.stage ~= "fire") or (payload.kind == "redLight" and payload.light == "red")
+	refreshBell()
 	othersLaunchHideUntil = 0
 	bottlesFor(payload)
 	showMission()

@@ -56,12 +56,16 @@ local function keep(code: number): boolean
 		or (code >= 0x30 and code <= 0x39)
 end
 
-function Judge.normalizeChat(text: string): string
-	-- Full-width digits (０-９) count like ASCII ones (read as Sino-Korean below).
+-- Full-width digits (０-９) count like ASCII ones (read as Sino-Korean in normalize).
+local function prepare(text: string): string
 	local s = string.gsub(text, "\239\188[\144-\153]", function(digit: string): string
 		return string.char(string.byte(digit, 3) - 0x90 + 0x30)
 	end)
-	s = Judge.normalize(s)
+	return Judge.normalize(s)
+end
+
+function Judge.normalizeChat(text: string): string
+	local s = prepare(text)
 	local out = {}
 	local ok = pcall(function()
 		for _, code in utf8.codes(s) do
@@ -74,6 +78,31 @@ function Judge.normalizeChat(text: string): string
 		return (string.gsub(s, "[%s%p]", "")) -- not valid UTF-8: the ASCII rule at least
 	end
 	return table.concat(out)
+end
+
+-- A chat line's words (머리 위 스무고개, bundle 9c): the runs of the letters normalizeChat keeps; anything else (spaces,
+-- marks, emoji, invisible characters) ends a word. "사과, 배!" -> { "사과", "배" }; not valid UTF-8 -> none.
+function Judge.chatWords(text: string): { string }
+	local s = prepare(text)
+	local words: { string } = {}
+	local current: { string } = {}
+	local ok = pcall(function()
+		for _, code in utf8.codes(s) do
+			if keep(code) then
+				table.insert(current, utf8.char(code))
+			elseif #current > 0 then
+				table.insert(words, table.concat(current))
+				current = {}
+			end
+		end
+	end)
+	if not ok then
+		return {}
+	end
+	if #current > 0 then
+		table.insert(words, table.concat(current))
+	end
+	return words
 end
 
 -- Whether `text` (a chat message) holds `word` or one of its aliases.

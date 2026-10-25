@@ -47,6 +47,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Quiz = {
@@ -54,6 +57,7 @@ local Quiz = {
 	title = Config.TEXT.QUIZ_TITLE,
 	brief = Config.TEXT.QUIZ_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.QUIZ_REVEAL_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = nil :: number?, -- the basic mission: no limit (§5)
 	minPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
@@ -166,6 +170,7 @@ local BellQuiz = {
 	-- last moment).
 	expectedSeconds = Config.BELL_QUIZ_QUESTIONS * (Config.BELL_TRIES
 		* (Config.BELL_WAIT_SECONDS + Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS) + Config.QUIZ_REVEAL_SECONDS),
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BELL_QUIZ_MIN_PLAYERS :: number?,
 	needsPresenter = true :: boolean?,
@@ -268,6 +273,7 @@ local ChosungQuiz = {
 	title = Config.TEXT.CHOSUNG_TITLE,
 	brief = Config.TEXT.CHOSUNG_BRIEF, -- (the briefing before it)
 	expectedSeconds = Quiz.expectedSeconds,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,

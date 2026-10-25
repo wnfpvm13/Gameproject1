@@ -36,6 +36,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local TestMission = {
@@ -43,6 +46,7 @@ local TestMission = {
 	title = Config.TEXT.TEST_MISSION_TITLE,
 	brief = Config.TEXT.TEST_MISSION_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.TEST_MISSION_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = nil :: number?, -- like the quiz: no limit
 	minPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,

@@ -14,7 +14,8 @@ the REAL module sources from src/ + the test file. The modules run unchanged; on
           whole rounds, joining by chat, the presenter, the banned-word talk (words, chat judging, rescues, ear)
   mission Config, Match, QuizBank, Quiz, Roulette, VoteRules, OneWord(+Topics), TestMission, MissionRunner (+ a fake
           ctx): the quiz (answers, fails,
-          the AFK report, no repeats, no words in play, the final bank), the roulette, the menu order, the real bank
+          the AFK report, no repeats, no words in play, the final bank), the roulette, the menu order, the real bank,
+          and every minigame since (bundle 9c: 머리 위 스무고개 — its words, text answers, chat leaks, the end)
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
   install tools/install_game.luau (what goes into Studio) carries every src/ file as it is now (rebuild it with
           `python -I tools/install_game.py` after a change, review 2026-10-24)
@@ -56,6 +57,8 @@ ROUND_MODULES = [
     ("Balance", "src/server/missions/Balance.luau"),
     ("RedLight", "src/server/missions/RedLight.luau"),
     ("Liar", "src/server/missions/Liar.luau"),
+    ("ChosungBank", "src/server/content/ChosungBank.luau"),
+    ("Twenty", "src/server/missions/Twenty.luau"),
     ("MissionRunner", "src/server/services/MissionRunner.luau"),
     ("ChatService", "src/server/services/ChatService.luau"),
     ("PresenterService", "src/server/services/PresenterService.luau"),
@@ -95,6 +98,8 @@ MISSION_MODULES = [
     ("TimeGuess", "src/server/missions/TimeGuess.luau"),
     ("Duel", "src/server/missions/Duel.luau"),
     ("Bottle", "src/server/missions/Bottle.luau"),
+    ("Judge", "src/shared/Judge.luau"),
+    ("Twenty", "src/server/missions/Twenty.luau"),
     ("MissionRunner", "src/server/services/MissionRunner.luau"),
 ]
 

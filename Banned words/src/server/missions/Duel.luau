@@ -42,6 +42,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Duel = {
@@ -50,6 +53,7 @@ local Duel = {
 	brief = Config.TEXT.DUEL_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.DUEL_READY_MAX + Config.DUEL_WINDOW + Config.TIMING_PING_CAP + Config.TIMING_GRACE
 		+ Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.DUEL_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,

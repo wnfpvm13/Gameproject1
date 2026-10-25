@@ -34,6 +34,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Roulette = {
@@ -41,6 +44,7 @@ local Roulette = {
 	title = Config.TEXT.ROULETTE_TITLE,
 	brief = Config.TEXT.ROULETTE_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.ROULETTE_SPIN_SECONDS + Config.ROULETTE_REVEAL_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.ROULETTE_PER_ROUND :: number?,
 	minPlayers = Config.ROULETTE_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,

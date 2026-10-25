@@ -185,6 +185,29 @@ return {
 	ESTIMATE_SECONDS = 15,
 	ESTIMATE_MAX = 999999,
 	ESTIMATE_MIN_PLAYERS = 2,
+	-- 머리 위 스무고개 (bundle 9c, owner 2026-10-25: instead of the banned-word talk). Everyone on the ground gets a
+	-- different word of one topic (ChosungBank, TWENTY_MIN_LETTERS letters or more) over their head; TWENTY_INTRO_SECONDS
+	-- to look, then in a random order each one asks the others for TWENTY_TURN_SECONDS and may type one answer of
+	-- TWENTY_ANSWER_MAX letters at most (its verdict shows TWENTY_VERDICT_SECONDS). Over once TWENTY_SHARE of the players
+	-- (rounded up) are right, or after TWENTY_TRIES rounds (one answer a turn); whoever is not right flies.
+	TWENTY_MIN_PLAYERS = 2,
+	TWENTY_MIN_LETTERS = 2, -- (one letter, like 배 or 자, hides in too many chat lines: writing it would fly people)
+	TWENTY_INTRO_SECONDS = 5,
+	TWENTY_TURN_SECONDS = 12,
+	TWENTY_VERDICT_SECONDS = 1.5,
+	TWENTY_TRIES = 3,
+	TWENTY_SHARE = 0.3,
+	TWENTY_ANSWER_MAX = 12,
+	-- Writing someone else's word flies you only when it is written as a word of its own, maybe with one of these
+	-- particles or endings after it (사과가, 사과야, 택배 기사는); inside a longer word it does not ("나라면" is not 라면,
+	-- "배우고" is not 배우). Review 2026-10-25: the plain inside-match flew people for everyday lines.
+	TWENTY_PARTICLES = { "이", "가", "은", "는", "을", "를", "의", "도", "만", "에", "에서", "에게", "한테", "께", "로", "으로",
+		"와", "과", "랑", "이랑", "하고", "요", "야", "이야", "아", "이요", "예요", "에요", "이에요", "인가", "인가요", "인데",
+		"이지", "지", "죠", "이죠", "다", "이다", "임", "냐", "이냐", "니", "이니", "나", "이나", "라", "이라", "라고", "이라고",
+		"네", "이네", "잖아", "이잖아", "처럼", "보다", "부터", "까지", "들" },
+	-- Words left out of 스무고개: an everyday word is spelled the same (사자 "let's buy", 판다 "sells", 화가 나, 배우다,
+	-- 유도 질문, 인도 = sidewalk), so writing it innocently would fly someone.
+	TWENTY_SKIP_WORDS = { "사자", "판다", "화가", "배우", "유도", "인도" },
 	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
 	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
 	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
@@ -201,6 +224,8 @@ return {
 	TEST_FINAL_FAIL_CHANCE = 0.4,
 
 	-- Banned words (docs/DESIGN_V3.md §6; bundle 5a, the banned-word talk of bundle 6a): one each, only during the talk.
+	-- Owner 2026-10-25: 머리 위 스무고개 replaces the talk; its code stays (TALK_GAME_ON brings it back, tests use it).
+	TALK_GAME_ON = false,
 	HABIT_WORD_CHANCE = 0.3, -- per player: chance that a word is a speech habit (진짜, 대박 ...) instead of a noun
 	TALK_SECONDS = 60, -- the talk itself (judged)
 	TALK_MIN_PLAYERS = 2,
@@ -523,6 +548,29 @@ return {
 		ESTIMATE_NONE = "%s 안 냄",
 		ESTIMATE_RESULT = "정답 %d · %s 날아가요",
 		ESTIMATE_NOBODY = "정답 %d · 모두 딱 맞혔어요 · 아무도 안 날아가요",
+		-- Bundle 9c (owner 2026-10-25).
+		TWENTY_TITLE = "머리 위 스무고개",
+		TWENTY_BRIEF = "질문해서 내 머리 위 단어를 맞혀요 · 남의 단어를 채팅에 쓰면 날아가요",
+		TWENTY_INTRO = "내 단어는 나만 몰라요 · 차례마다 %d초 동안 물어보고 한 번 맞혀요",
+		TWENTY_TURN = "%s 님 차례 · 질문에 답해 주세요",
+		TWENTY_MY_TURN = "내 차례! 물어보고 정답을 쳐요",
+		TWENTY_INFO = "주제: %s · %d/%d바퀴 · 맞힌 사람 %d/%d명",
+		TWENTY_NO_LEAK = "남의 단어를 채팅에 쓰면 날아가요",
+		TWENTY_ONE_TRY = "이번 차례에 한 번만 낼 수 있어요",
+		TWENTY_HINT = "내 단어는?",
+		TWENTY_SEND = "정답!",
+		TWENTY_SENT = "'%s' 냈어요",
+		TWENTY_RIGHT = "⭕ %s 님 정답! %s",
+		TWENTY_WRONG = "❌ %s 님 땡",
+		TWENTY_TIMEOUT = "⏰ %s 님 시간 끝",
+		TWENTY_LEAK = "%s 님이 남의 단어를 채팅에 써서 날아가요",
+		TWENTY_LEAK_MINE = "💥 남의 단어를 써서 날아가요 · 내 단어: %s",
+		TWENTY_RESULT = "못 맞힌 %s 날아가요",
+		TWENTY_NOBODY = "날아갈 사람이 없어요",
+		TWENTY_RESULT_TITLE = "머리 위 스무고개 · 주제: %s",
+		TWENTY_RIGHT_LIST = "맞힘: %s",
+		TWENTY_LEAKED = "%s 💥(채팅)",
+		TWENTY_MY_WORD = "내 단어: %s",
 		TALK_BRIEF = "남의 머리 위 금칙어를 말하게 해요 · 내 금칙어를 말하면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		TALK_SOON = "곧 시작",
 		TALK_PREP = "금칙어를 나눠 주는 중 · 내 머리 위 단어는 나만 몰라요",

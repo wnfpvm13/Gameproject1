@@ -10,6 +10,9 @@ local Config = require(node("Config"))
 -- The shipped Config has speech judging on (the friend beta, owner 2026-10-24); these rounds start without it and
 -- turn it on the Studio way (workspace attribute BW_VoiceJudging) for the banned-word talk (section 13).
 Config.VOICE_JUDGING = false
+-- Since bundle 9c the shipped game plays 머리 위 스무고개 instead of the talk (Config.TALK_GAME_ON off); its code stays and
+-- is still tested here (section 13); 스무고개 itself is switched on only in section 17.
+Config.TALK_GAME_ON = true
 local Match = require(node("Match"))
 local LifeService = require(node("LifeService"))
 local Timeline = require(node("Timeline"))
@@ -327,6 +330,17 @@ loaders.Duel = function() return never("duel") end
 loaders.Bottle = function() return never("bottle") end
 loaders.OXQuiz = function() return never("oxQuiz") end
 loaders.Estimate = function() return never("estimate") end
+-- The real 머리 위 스무고개, offered only while `twentyOn` (section 17).
+local twentyOn = false
+local realTwenty = loaders.Twenty
+loaders.Twenty = function()
+	local twenty = realTwenty()
+	local available = twenty.available
+	twenty.available = function(final)
+		return twentyOn and available(final)
+	end
+	return twenty
+end
 
 local function advanceUntil(cond, limit)
 	local deadline = now + limit
@@ -2203,6 +2217,98 @@ do
 		and burst == 0 and after == 1)
 	playerList = {}
 	at(now + 1)
+end
+
+---------------------------------------------------------------- 17. 머리 위 스무고개 (bundle 9c): its words and chat rules
+do
+	Config.TALK_GAME_ON = false
+	twentyOn = true
+	Scripted.off = true
+	local ps = newPlayers(3)
+	local spectator = newPlayers(1)[1]
+	local since = now
+	begin(ps, 10, nil, nil)
+	playerList = { ps[1], ps[2], ps[3], spectator }
+	advanceUntil(function() return lastSent("Mission", since, nil, "twenty") ~= nil end, 30)
+	local view = lastWordsTo(ps[1], since)
+	local screen = lastSent("Mission", since, nil, "twenty")
+	local w1, w2, w3 = wordOf(ps[1]), wordOf(ps[2]), wordOf(ps[3])
+	check("17a 스무고개 (the only game here): a different word for each, their own hidden, the topic on screen",
+		screen ~= nil and screen.payload.topic ~= nil and w1 ~= nil and w2 ~= nil and w3 ~= nil and w1 ~= w2 and w2 ~= w3
+		and view ~= nil and view[tostring(ps[1].UserId)].words == nil and view[tostring(ps[2].UserId)].words[1] == w2)
+	check("17b while its words are up: chat guarded, whispers off, and a line holding a player's word never reaches them",
+		ChatGate.shouldDeliver(general, spectator, ps[2]) == false and ChatGate.shouldDeliver(whisper, ps[2], ps[3]) == false
+		and ChatGate.shouldDeliver(general, ps[1], ps[2], "이거 " .. w2 .. " 맞지?") == false
+		and ChatGate.shouldDeliver(general, ps[1], ps[3], "이거 " .. w2 .. " 맞지?") == true
+		and ChatGate.shouldDeliver(general, ps[1], ps[2], "동물이야?") == true)
+	local leakAt = now
+	say(ps[1], "힌트: " .. w2)
+	at(now + 0.2)
+	local seesOwn = lastWordsTo(ps[1], leakAt)
+	check("17c writing another player's word in chat flies the writer at once (a life); they see their own word then",
+		Match.participants[ps[1]].lives == Config.LIVES - 1 and #lifeLost(leakAt, "fail") == 1 and seesOwn ~= nil
+		and seesOwn[tostring(ps[1].UserId)].words ~= nil)
+	-- A right answer ends it (one of three is 30% rounded up).
+	local asker, askId = nil, nil
+	advanceUntil(function()
+		local m = lastSent("Mission", leakAt, nil, "twenty")
+		if m and m.payload.stage == "ask" and m.payload.id then
+			local userId = m.payload.ids[m.payload.asker]
+			for _, p in ps do
+				if p.UserId == userId then
+					asker, askId = p, m.payload.id
+				end
+			end
+		end
+		return asker ~= nil
+	end, 60)
+	local answerAt = now
+	if asker then
+		NetStub.listeners.MissionAnswer(asker, askId, wordOf(asker))
+	end
+	advanceUntil(function() return lastSent("Mission", answerAt, nil, "twentyResult") ~= nil end, 40)
+	twentyOn = false -- (no second game of it: the final comes next)
+	local third = if asker == ps[2] then ps[3] else ps[2]
+	advanceUntil(function() return Match.participants[third].lives < Config.LIVES end, 10)
+	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
+	check("17d a right answer ends it: the one not right flies, the writer not again; then no words and no chat rules",
+		asker ~= nil and asker ~= ps[1] and Match.participants[third].lives == Config.LIVES - 1
+		and Match.participants[asker].lives == Config.LIVES and Match.participants[ps[1]].lives == Config.LIVES - 1
+		and wordOf(ps[2]) == nil and ChatGate.shouldDeliver(general, spectator, ps[2]) == true
+		and fakeWhisperCommand.Enabled == true)
+	local afterAt = now
+	say(ps[2], w3)
+	at(now + 0.2)
+	check("17e after it a chat line judges nothing", #lifeLost(afterAt, "fail") == 0)
+	Scripted.off = false
+	Config.TALK_GAME_ON = true
+	finish(since)
+end
+-- 17F: a leak that takes the last life of one of two decides the round in the middle of the game: the words and the
+-- chat rules go all the same.
+do
+	Config.TALK_GAME_ON = false
+	twentyOn = true
+	Scripted.off = true
+	local ps = newPlayers(2)
+	local spectator = newPlayers(1)[1]
+	local since = now
+	begin(ps, 10, nil, nil)
+	playerList = { ps[1], ps[2], spectator }
+	advanceUntil(function() return lastSent("Mission", since, nil, "twenty") ~= nil end, 30)
+	local up = wordOf(ps[2]) ~= nil
+	Match.participants[ps[1]].lives = 1
+	local leakAt = now
+	say(ps[1], wordOf(ps[2]))
+	advanceUntil(function() return Match.phase == "Result" end, 30)
+	twentyOn = false
+	check("17f a leak deciding the round mid-game: the game stops at once (no result of it), the words and the chat rules"
+		.. " go", up and Match.phase == "Result" and lastSent("Mission", leakAt, nil, "twentyResult") == nil
+		and now - leakAt < Config.FLING_RETURN_SECONDS + 5 and wordOf(ps[2]) == nil
+		and ChatGate.shouldDeliver(general, spectator, ps[2]) == true and fakeWhisperCommand.Enabled == true)
+	Scripted.off = false
+	Config.TALK_GAME_ON = true
+	finish(since)
 end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

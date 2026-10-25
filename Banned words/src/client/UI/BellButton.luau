@@ -5,7 +5,9 @@
 -- asks the server to ring it — at the touch or click itself (bundle 8b: Activated fires on release, a phone would
 -- always be a tap late against the E key in the timing games; Activated is kept for gamepads, but not for the same
 -- press). While it is not open the picture rests a little faded and a press only wiggles it (no ding: it must not
--- sound like a real ring). Until the picture has loaded, a "🔔" stands in for it.
+-- sound like a real ring). Until the picture has loaded, a "🔔" stands in for it. Owner 2026-10-25 (bundle 9c): while
+-- a press would lose (총잡이 결투's "ready…", 무궁화's red light) the bell stays open but does not invite a press: it
+-- rests faded and still.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
@@ -22,6 +24,7 @@ local button: ImageButton
 local breath: UIScale
 local breathing: Tween? = nil
 local live = false
+local inviting = false
 
 local function wiggle()
 	button.Rotation = -16
@@ -80,20 +83,23 @@ function BellButton.build(onRing: () -> ())
 	button.Parent = Style.gui()
 end
 
--- `visible`: I play (seated, on the ground); `canRing`: my seat bell is open and I have not rung it yet.
-function BellButton.set(visible: boolean, canRing: boolean)
+-- `visible`: I play (seated, on the ground); `canRing`: my seat bell is open and I have not rung it yet; `invite`: a
+-- press now is welcome (false while it would lose: then the open bell looks like a closed one, but a press still rings).
+function BellButton.set(visible: boolean, canRing: boolean, invite: boolean)
 	button.Visible = visible
-	if canRing == live then
+	local look = canRing and invite
+	if canRing == live and look == inviting then
 		return
 	end
 	live = canRing
-	button.ImageTransparency = if canRing then 0 else RESTING
+	inviting = look
+	button.ImageTransparency = if look then 0 else RESTING
 	if breathing then
 		breathing:Cancel()
 		breathing = nil
 	end
 	breath.Scale = 1
-	if canRing then
+	if look then
 		local tween = TweenService:Create(breath, TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
 			{ Scale = BREATH })
 		tween:Play()

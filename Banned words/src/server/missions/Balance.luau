@@ -37,6 +37,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Balance = {
@@ -45,6 +48,7 @@ local Balance = {
 	brief = Config.TEXT.BALANCE_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.BALANCE_BELL_SECONDS + Config.BALANCE_TALKERS * Config.BALANCE_TALK_CHAT_SECONDS
 		+ Config.BALANCE_PICK_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BALANCE_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,

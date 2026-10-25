@@ -37,6 +37,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Crocodile = {
@@ -45,6 +48,7 @@ local Crocodile = {
 	brief = Config.TEXT.CROC_BRIEF, -- (the briefing before it)
 	-- The longest run (capped in `run`): CROC_TEETH turns at the last moment, then the result.
 	expectedSeconds = Config.CROC_TEETH * Config.CROC_TURN_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.CROC_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,

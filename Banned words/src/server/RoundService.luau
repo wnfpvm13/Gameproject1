@@ -58,6 +58,9 @@ local earsPending = 0 -- ear judgments pressed in the talk whose lever has not l
 -- order the waits end in must not decide who falls "at once").
 local heldFails: { Player } = {}
 local holdingLate = false -- the settle stage waits for the last transcripts: hits are held until it closes (6e)
+-- A mission's words over the heads (머리 위 스무고개, bundle 9c) are up, and the running mission's chat watcher.
+local headsUp = false
+local missionChat: ((Player, string) -> ())? = nil
 
 -- Alive participants and the presenter are heard by everyone; players who are out and spectators only by each other.
 local function refreshSpeakers()
@@ -133,7 +136,7 @@ local function tell(outcomes: { LifeService.Outcome }, reason: Reason, final: bo
 	noteDecision()
 	refreshSpeakers()
 	Match.broadcast()
-	if talkOn() then
+	if talkOn() or headsUp then
 		WordService.sendAll() -- who is out now sees every word, their own too
 	end
 end
@@ -284,6 +287,29 @@ local function setFloor(player: Player?)
 	ChatGate.setFloor(player)
 end
 
+-- A mission's words over the heads (머리 위 스무고개, bundle 9c; nil: they go): the owners see theirs once `known`. While
+-- they are up the chat rules are on (no one outside the game can tell a player their word, and a line holding a
+-- player's word never reaches them, ChatGate).
+local function setHeads(words: { [Player]: string }?, known: { [Player]: boolean }?)
+	if talkOn() then
+		return -- (the talk's words; never both)
+	end
+	if words then
+		WordService.place(words, known or {})
+		if not headsUp then
+			headsUp = true
+			ChatGate.setGuard(true)
+		end
+	elseif headsUp then
+		headsUp = false
+		WordService.clear()
+		ChatGate.setGuard(false)
+	else
+		return
+	end
+	WordService.sendAll()
+end
+
 -- The talk's prep stage: words for everyone alive (not inside the topic), shown, chat rules on; then the talk itself.
 local function setTalkStage(stage: string, topic: string?)
 	if stage == "prep" then
@@ -406,6 +432,10 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 		end,
 		score = function(player: Player, amount: number)
 			Scores.add(player, amount)
+		end,
+		heads = setHeads,
+		chat = function(handler: ((Player, string) -> ())?)
+			missionChat = handler
 		end,
 	}
 end
@@ -530,6 +560,8 @@ local function playMain(myRound: number)
 			end
 			setFloor(nil) -- (whatever the mission did: the bells close, everyone has their voice back)
 			BellService.close()
+			missionChat = nil
+			setHeads(nil) -- (a mission's words go with it, also when it was cancelled or broke)
 			settleTalk() -- (a banned-word talk ends with its settle stage, also when it was cancelled or broke)
 			recap = recapText()
 			if didPlay then
@@ -644,6 +676,8 @@ local function cleanup()
 	BellService.close()
 	RescueService.endRound() -- (before the presenter goes: their rescue banner is cleared)
 	PresenterService.endRound()
+	missionChat = nil
+	setHeads(nil)
 	ChatGate.setGuard(false)
 	JudgeService.setOpen(false)
 	openVoices()
@@ -896,6 +930,10 @@ local function caught(player: Player, wordText: string)
 end
 
 local function onChat(player: Player, text: string)
+	local watcher = missionChat
+	if watcher then
+		watcher(player, text) -- (decides at once, as the line arrived; it never yields and defers any launch)
+	end
 	if not judgingOpen(player) or judgmentOpen(player) then
 		return -- (a hit of theirs still open: this one is merged into it, §4)
 	end
@@ -990,7 +1028,7 @@ function RoundService.start()
 		talkStart = onTalkStart,
 	})
 	RescueService.start(onRescueResolved)
-	ChatGate.start(onChat)
+	ChatGate.start(onChat, WordService.hides)
 	JudgeService.start(onSpeechHit)
 	MissionRunner.start()
 	BellService.start(SeatService.isFlying)

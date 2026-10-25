@@ -6,7 +6,9 @@
 -- everyone's words, except an alive participant's own (shown as hidden; shown in the solo speech test build,
 -- Config.SHOW_OWN_WORD). Words exist only during the banned-word talk
 -- (bundle 6a: RoundService assigns them in its prep stage and clears them after it); this module only keeps them in
--- Match.participants.
+-- Match.participants. Bundle 9c (머리 위 스무고개): a mission may put up its own words instead (`place`), each owner
+-- seeing theirs once it is known to them; and while any word is hidden from its owner, a chat line holding it must not
+-- reach them (`hides`, for the chat gate).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -19,6 +21,8 @@ local WordBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChi
 local WordService = {}
 
 local DRAW_TRIES = 20 -- words tried before giving up on one that avoids the screen texts
+
+local shownToOwner: { [Player]: boolean } = {} -- a mission's words their owners may see (스무고개: right, or out of it)
 
 -- The words in play except `player`'s own (theirs is being replaced).
 local function takenBy(except: Player?): { string }
@@ -64,6 +68,7 @@ end
 -- The talk's prep stage: one word for each alive participant, none inside `avoid` (the topic) when that can be done
 -- (any old words are dropped). They count from `startJudging` on.
 function WordService.assign(rng: Random, avoid: { string }?)
+	table.clear(shownToOwner)
 	for _, p in Match.participants do
 		table.clear(p.words)
 	end
@@ -111,11 +116,44 @@ function WordService.replace(player: Player, avoid: { string }?, rng: Random): b
 	return true
 end
 
--- Everyone's words go (after the talk, between rounds).
+-- A mission's own words over the heads (머리 위 스무고개, bundle 9c): `words` by player (any other word goes); an owner
+-- sees theirs only once they are in `known`. They are never judged (only the talk judges words).
+function WordService.place(words: { [Player]: string }, known: { [Player]: boolean })
+	for player, p in Match.participants do
+		table.clear(p.words)
+		local text = words[player]
+		if text then
+			table.insert(p.words, { text = text, aliases = {}, effectiveAt = math.huge })
+		end
+	end
+	shownToOwner = table.clone(known)
+end
+
+-- Everyone's words go (after the talk or a mission's words, between rounds).
 function WordService.clear()
 	for _, p in Match.participants do
 		table.clear(p.words)
 	end
+	table.clear(shownToOwner)
+end
+
+-- Whether `player`'s own words are hidden from them now: alive and playing, not the result, not known to them.
+local function hiddenFromOwner(player: Player, p: Match.Participant): boolean
+	return p.alive and Match.phase ~= "Result" and #p.words > 0 and not Config.SHOW_OWN_WORD and not shownToOwner[player]
+end
+
+-- Whether a chat line `text` holds a word hidden from `receiver` (their own): then it must not reach them.
+function WordService.hides(receiver: Player, text: string): boolean
+	local p = Match.participants[receiver]
+	if not p or not hiddenFromOwner(receiver, p) then
+		return false
+	end
+	for _, word in p.words do
+		if Judge.chatHit(word.text, text, word.aliases) then
+			return true
+		end
+	end
+	return false
 end
 
 -- What `viewer` sees: { [userId] = { words = {...} | nil (own, while playing), count = n } }.
@@ -126,8 +164,7 @@ function WordService.payloadFor(viewer: Player)
 		for _, word in p.words do
 			table.insert(visible, word.text)
 		end
-		local hidden = player == viewer and p.alive and Match.phase ~= "Result" and #visible > 0 -- (no word: nothing to hide)
-			and not Config.SHOW_OWN_WORD
+		local hidden = player == viewer and hiddenFromOwner(player, p) -- (no word: nothing to hide)
 		result[tostring(player.UserId)] = { words = if hidden then nil else visible, count = #visible }
 	end
 	return result

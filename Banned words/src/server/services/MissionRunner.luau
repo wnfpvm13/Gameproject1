@@ -13,8 +13,9 @@
 -- Bundle 4: the quiz (also the final), the roulette, "say what you like" (4b, bells since 6b); bundle 6a: the
 -- banned-word talk (only while speech judging is on); bundle 6b: the bell quiz (only with a presenter); bundle 6c:
 -- crocodile teeth, the bomb, nunchi; bundle 6d: the balance game, red light, the liar; bundle 8b: 숫자 맞추기, 총잡이
--- 결투, 물병 세우기; bundle 8c: the 초성 quiz (Quiz.chosung), the O/X quiz, the number quiz; and the Studio-only test
--- mission.
+-- 결투, 물병 세우기; bundle 8c: the 초성 quiz (Quiz.chosung), the O/X quiz, the number quiz; bundle 9c: 머리 위
+-- 스무고개 instead of the banned-word talk (its code stays, off: Config.TALK_GAME_ON); and the Studio-only test mission.
+-- A question may also take a short text instead of a choice (askText: 스무고개's answer).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -38,6 +39,7 @@ local Duel = require(missionFolder:WaitForChild("Duel"))
 local Bottle = require(missionFolder:WaitForChild("Bottle"))
 local OXQuiz = require(missionFolder:WaitForChild("OXQuiz"))
 local Estimate = require(missionFolder:WaitForChild("Estimate"))
+local Twenty = require(missionFolder:WaitForChild("Twenty"))
 
 local MissionRunner = {}
 
@@ -79,6 +81,14 @@ export type Ctx = {
 	-- The presenter judges an answer (the bell quiz): "right", "wrong", or nil (none in time, no presenter, over).
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (), -- session points (a right bell-quiz answer)
+	-- 머리 위 스무고개 (bundle 9c): the words over the players' heads (`words`; nil: they go). An owner sees their own
+	-- word only once they are in `known`. While words are up, chat is guarded and a line holding a word never reaches
+	-- that word's owner. RoundService takes them down after every mission too.
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	-- The alive participants' chat lines while the mission runs and words are up (nil: no more). Called inside the
+	-- delivery decision, as the line arrives: the handler decides at once, must not yield, and defers what follows (a
+	-- launch).
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 -- What a mission gets: the same, with fail/show that do nothing once cancelled, and wait().
@@ -118,6 +128,10 @@ export type MissionCtx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	-- Like ask, but each of `from` sends one short text (at most TWENTY_ANSWER_MAX letters) instead of a choice.
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 export type Mission = {
@@ -125,6 +139,7 @@ export type Mission = {
 	title: string, -- shown in the presenter's menu
 	brief: string?, -- its one-line rule for the briefing before it (owner 2026-10-24)
 	expectedSeconds: number, -- for the time budget, without the launches afterwards
+	expectedFor: ((players: number) -> number)?, -- the same for this many alive players, when it depends on them
 	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
 	minPlayers: number?, -- alive participants it needs (nil = any)
 	needsPresenter: boolean?, -- offered only while someone presents (the one-word mission)
@@ -135,20 +150,23 @@ export type Mission = {
 -- An entry of a presenter's menu.
 export type Option = { id: string, title: string, recommended: boolean }
 
-local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, BannedTalk, Crocodile, BombPass, Nunchi, Balance,
-	RedLight, Liar, TimeGuess, Duel, Bottle, Quiz.chosung, OXQuiz, Estimate, TestMission }
+local MISSIONS: { Mission } = { Quiz, Quiz.bell, Roulette, OneWord, Twenty, BannedTalk, Crocodile, BombPass, Nunchi,
+	Balance, RedLight, Liar, TimeGuess, Duel, Bottle, Quiz.chosung, OXQuiz, Estimate, TestMission }
 
 local played: { [string]: number } = {} -- main-game runs this round, per mission id
 local screenNow: { [string]: any }? = nil -- what the running mission shows (sent again on Sync)
 local privateScreens: { [Player]: { [string]: any } } = {} -- one player's own screen instead (the liar game)
--- The open question: its number, who may answer, how many choices, until when (server time), the answers so far.
+-- The open question: its number, who may answer, how many choices, until when (server time), the answers so far (a
+-- text question: the texts instead).
 type Question = { id: number, from: { [Player]: boolean }, choices: number, endsAt: number, answers: { [Player]: number },
-	changeable: boolean }
+	changeable: boolean, text: boolean, texts: { [Player]: string } }
 local question: Question? = nil
 local questions = 0 -- question numbers so far (an answer sent for an older question never counts for a newer one)
 
-local function fits(mission: Mission, secondsLeft: number): boolean
-	return mission.expectedSeconds + Config.FLING_RETURN_SECONDS <= secondsLeft
+local function fits(mission: Mission, secondsLeft: number, alive: number): boolean
+	local byPlayers = mission.expectedFor
+	local expected = if byPlayers then byPlayers(alive) else mission.expectedSeconds
+	return expected + Config.FLING_RETURN_SECONDS <= secondsLeft
 end
 
 -- A new round: nothing played yet.
@@ -163,7 +181,7 @@ function MissionRunner.candidates(secondsLeft: number, alive: number, presenter:
 	local list = {}
 	for _, mission in MISSIONS do
 		local count = played[mission.id] or 0
-		if mission.available(false) and fits(mission, secondsLeft) and (mission.maxPerRound == nil or count < mission.maxPerRound)
+		if mission.available(false) and fits(mission, secondsLeft, alive) and (mission.maxPerRound == nil or count < mission.maxPerRound)
 			and alive >= (mission.minPlayers or 0) and (presenter or not mission.needsPresenter) then
 			table.insert(list, mission)
 		end
@@ -280,6 +298,46 @@ local function waitOrCancel(ctx: Ctx, seconds: number, done: (() -> boolean)?, s
 	return not stopNow()
 end
 
+-- Shows `payload` (with `endsAt` and the question number `id` added) and collects one answer from each of `from` for
+-- `seconds`, or until all of them still alive and on the ground answered, or until the mission is cancelled: a choice
+-- 1..`choices`, or with `text` a short text (MissionRunner.start checks what comes in).
+local function openQuestion(ctx: Ctx, payload: { [string]: any }, choices: number, seconds: number, from: { Player },
+	text: boolean): Question
+	questions += 1
+	-- (`payload.changeable`: an answer may be changed until the time is up, so it never ends early)
+	local open: Question = { id = questions, from = {}, choices = choices, endsAt = Match.now() + seconds, answers = {},
+		changeable = payload.changeable == true, text = text, texts = {} }
+	for _, player in from do
+		open.from[player] = true
+	end
+	question = open
+	local shown = table.clone(payload)
+	-- (`shownEndsAt`: what the clients see instead of the real end, kept on the server — the bomb's bang)
+	shown.endsAt = payload.shownEndsAt or open.endsAt
+	shown.shownEndsAt = nil
+	shown.id = open.id
+	if not ctx.cancelled() then
+		setScreen(shown)
+	end
+	waitOrCancel(ctx, seconds, function()
+		if open.changeable then
+			return false
+		end
+		local alive = ctx.players()
+		for player in open.from do
+			local answered = open.answers[player] ~= nil or open.texts[player] ~= nil
+			if not answered and table.find(alive, player) and not ctx.flying(player) then
+				return false -- (someone who left, went out or flies meanwhile is not waited for)
+			end
+		end
+		return true
+	end)
+	if question == open then
+		question = nil
+	end
+	return open
+end
+
 local function missionCtx(ctx: Ctx): MissionCtx
 	return {
 		final = ctx.final,
@@ -299,38 +357,26 @@ local function missionCtx(ctx: Ctx): MissionCtx
 			end
 		end,
 		ask = function(payload: { [string]: any }, choices: number, seconds: number, from: { Player }): { [Player]: number }
-			questions += 1
-			-- (`payload.changeable`: an answer may be changed until the time is up, so it never ends early)
-			local open: Question = { id = questions, from = {}, choices = choices, endsAt = Match.now() + seconds, answers = {},
-				changeable = payload.changeable == true }
-			for _, player in from do
-				open.from[player] = true
+			return openQuestion(ctx, payload, choices, seconds, from, false).answers
+		end,
+		askText = function(payload: { [string]: any }, seconds: number, from: { Player }): { [Player]: string }
+			return openQuestion(ctx, payload, 0, seconds, from, true).texts
+		end,
+		heads = function(words: { [Player]: string }?, known: { [Player]: boolean }?)
+			if words == nil or not ctx.cancelled() then -- (taking them down always works)
+				ctx.heads(words, known)
 			end
-			question = open
-			local shown = table.clone(payload)
-			-- (`shownEndsAt`: what the clients see instead of the real end, kept on the server — the bomb's bang)
-			shown.endsAt = payload.shownEndsAt or open.endsAt
-			shown.shownEndsAt = nil
-			shown.id = open.id
-			if not ctx.cancelled() then
-				setScreen(shown)
-			end
-			waitOrCancel(ctx, seconds, function()
-				if open.changeable then
-					return false
-				end
-				local alive = ctx.players()
-				for player in open.from do
-					if not open.answers[player] and table.find(alive, player) and not ctx.flying(player) then
-						return false -- (someone who left, went out or flies meanwhile is not waited for)
+		end,
+		chat = function(handler: ((Player, string) -> ())?)
+			if handler then
+				ctx.chat(function(player: Player, text: string)
+					if not ctx.cancelled() then
+						handler(player, text)
 					end
-				end
-				return true
-			end)
-			if question == open then
-				question = nil
+				end)
+			else
+				ctx.chat(nil)
 			end
-			return open.answers
 		end,
 		fail = function(players: { Player }, key: string, subjective: boolean?)
 			if not ctx.cancelled() then
@@ -435,7 +481,7 @@ function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player
 	(Mission, { [string]: number })
 	questions += 1
 	local open: Question = { id = questions, from = {}, choices = #ballot, endsAt = Match.now() + Config.NEXT_VOTE_SECONDS,
-		answers = {}, changeable = false }
+		answers = {}, changeable = false, text = false, texts = {} }
 	for _, player in voters do
 		open.from[player] = true
 	end
@@ -514,21 +560,30 @@ function MissionRunner.brief(mission: Mission, game: number, games: number, reca
 	return not stop()
 end
 
--- Answers to the open question: its number, a whole number in 1..choices, from someone asked, before the end; the
--- first one counts (the last one for a question whose answers may change).
+-- Answers to the open question: its number, a whole number in 1..choices (a text question: a text of one to
+-- TWENTY_ANSWER_MAX letters), from someone asked, before the end; the first one counts (the last one for a question
+-- whose answers may change).
 function MissionRunner.start()
 	Net.listen("MissionAnswer", function(player, id, choice)
 		local open = question
-		if not open or id ~= open.id or not open.from[player] or typeof(choice) ~= "number" then
+		if not open or id ~= open.id or not open.from[player] then
 			return
 		end
-		if open.answers[player] and not open.changeable then
+		if (open.answers[player] or open.texts[player]) and not open.changeable then
 			return
 		end
 		if Match.now() > open.endsAt then
 			return
 		end
-		if choice % 1 == 0 and choice >= 1 and choice <= open.choices then
+		if open.text then
+			if typeof(choice) ~= "string" or #choice > 4 * Config.TWENTY_ANSWER_MAX then
+				return
+			end
+			local letters = utf8.len(choice) -- (nil: not UTF-8)
+			if letters and letters >= 1 and letters <= Config.TWENTY_ANSWER_MAX then
+				open.texts[player] = choice
+			end
+		elseif typeof(choice) == "number" and choice % 1 == 0 and choice >= 1 and choice <= open.choices then
 			open.answers[player] = choice
 		end
 	end)

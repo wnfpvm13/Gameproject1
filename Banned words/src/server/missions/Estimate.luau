@@ -39,6 +39,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Estimate = {
@@ -46,6 +49,7 @@ local Estimate = {
 	title = Config.TEXT.ESTIMATE_TITLE,
 	brief = Config.TEXT.ESTIMATE_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.ESTIMATE_INTRO_SECONDS + Config.ESTIMATE_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.ESTIMATE_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,

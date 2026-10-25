@@ -5,7 +5,9 @@
 -- and whispers are off (the /w command and the whisper channels), so nobody can tell a player their word. While
 -- someone has the floor (bundle 6b, any game), alive participants receive only that player's messages. Every
 -- message an alive participant sends is handed on once (by MessageId) for judging. The delivery callback runs for each
--- receiver and must never yield: it decides, and judges each message once without yielding.
+-- receiver and must never yield: it decides, and judges each message once without yielding. Bundle 9c: during a
+-- guarded round a message holding a word hidden from its receiver (the word over their own head) is not delivered to
+-- them (the rule comes from RoundService: `hides`).
 local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
 
@@ -19,6 +21,9 @@ local guarded = false
 local floorHolder: Player? = nil -- has the floor now: alive participants receive only their messages
 local seen: { [string]: boolean } = {} -- MessageIds already handed on (cleared each round)
 local onMessage: (Player, string) -> () = function(_player, _text) end
+local hides: (Player, string) -> boolean = function(_receiver, _text)
+	return false
+end
 
 local function playerOf(source: Instance?): Player?
 	local untyped: any = source
@@ -35,8 +40,8 @@ local function isWhisper(channel: Instance): boolean
 	return string.sub(channel.Name, 1, 10) == "RBXWhisper"
 end
 
--- The delivery rule for one message to one receiver (pure, so it can be tested without TextChatService).
-function ChatGate.shouldDeliver(channel: Instance, sender: Player?, receiver: Player?): boolean
+-- The delivery rule for one message (its `text`) to one receiver (pure, so it can be tested without TextChatService).
+function ChatGate.shouldDeliver(channel: Instance, sender: Player?, receiver: Player?, text: string?): boolean
 	if sender == nil or receiver == nil or sender == receiver then
 		return true
 	end
@@ -45,6 +50,12 @@ function ChatGate.shouldDeliver(channel: Instance, sender: Player?, receiver: Pl
 	end
 	if not guarded then
 		return true
+	end
+	if text then
+		local ok, hidden = pcall(hides, receiver, text)
+		if not ok or hidden then
+			return false -- (their own word, which they must not see yet; a check that broke keeps the line from them)
+		end
 	end
 	if isWhisper(channel) then
 		return false
@@ -76,7 +87,7 @@ local function watch(channel: Instance)
 	textChannel.ShouldDeliverCallback = function(message: TextChatMessage, target: TextSource): boolean
 		local sender = playerOf(message.TextSource)
 		ChatGate.received(message.MessageId, sender, message.Text)
-		return ChatGate.shouldDeliver(textChannel, sender, playerOf(target))
+		return ChatGate.shouldDeliver(textChannel, sender, playerOf(target), message.Text)
 	end
 end
 
@@ -88,9 +99,13 @@ local function setWhisperCommand(on: boolean)
 	end
 end
 
--- handle(player, text): an alive participant wrote `text` during a guarded round.
-function ChatGate.start(handle: (Player, string) -> ())
+-- handle(player, text): an alive participant wrote `text` during a guarded round. hidesWord(receiver, text): `text`
+-- holds a word `receiver` must not see (never yields).
+function ChatGate.start(handle: (Player, string) -> (), hidesWord: ((Player, string) -> boolean)?)
 	onMessage = handle
+	if hidesWord then
+		hides = hidesWord
+	end
 	task.spawn(function()
 		-- The channels are made at run time (TextChatService): look until they are there, however late.
 		local channels = TextChatService:FindFirstChild("TextChannels")

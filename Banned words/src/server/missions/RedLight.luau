@@ -38,6 +38,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local RedLight = {
@@ -45,6 +48,7 @@ local RedLight = {
 	title = Config.TEXT.REDLIGHT_TITLE,
 	brief = Config.TEXT.REDLIGHT_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.REDLIGHT_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.REDLIGHT_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,

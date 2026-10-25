@@ -45,6 +45,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local Liar = {
@@ -55,6 +58,7 @@ local Liar = {
 	expectedSeconds = Config.LIAR_READ_SECONDS + Config.LIAR_BELL_SECONDS
 		+ Config.MAX_PLAYERS * Config.LIAR_CLUE_CHAT_SECONDS + Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS
 		+ Config.LIAR_GUESS_SECONDS + Config.LEVER_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.LIAR_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,

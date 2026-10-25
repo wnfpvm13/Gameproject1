@@ -6,6 +6,7 @@
 -- others say their word; the system judges (chat, speech) and the presenter flings what it missed. The settle stage
 -- (late results, rescues, then the words go) is RoundService's: it runs after every talk, also a cancelled or broken
 -- one, so no word or chat rule is left behind.
+-- Owner 2026-10-25: 머리 위 스무고개 (Twenty) replaces it; it is off unless Config.TALK_GAME_ON (the tests turn it on).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -39,6 +40,9 @@ type Ctx = {
 	floor: (player: Player?) -> (),
 	presenterVerdict: (answer: string, seconds: number) -> string?,
 	score: (player: Player, amount: number) -> (),
+	askText: (payload: { [string]: any }, seconds: number, from: { Player }) -> { [Player]: string },
+	heads: (words: { [Player]: string }?, known: { [Player]: boolean }?) -> (),
+	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
 local BannedTalk = {
@@ -49,13 +53,14 @@ local BannedTalk = {
 	-- rescue still waiting).
 	expectedSeconds = Config.TALK_REROLL_SECONDS + Config.TALK_SECONDS + Config.SETTLE_MAX + Config.RESCUE_SECONDS
 		+ Config.LEVER_SECONDS + Config.SETTLE_SLACK, -- (the settle stage's longest wait, RoundService.settleTalk)
+	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TALK_MIN_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
 function BannedTalk.available(final: boolean): boolean
-	return not final and Match.voiceJudging and #TalkTopics > 0
+	return not final and Config.TALK_GAME_ON and Match.voiceJudging and #TalkTopics > 0
 end
 
 function BannedTalk.run(ctx: Ctx): boolean?

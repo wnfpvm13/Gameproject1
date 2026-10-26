@@ -129,9 +129,7 @@ local function pickTopic(ctx: Ctx, given: { [string]: boolean }): string?
 		return nil
 	end
 	if #fresh == 0 then
-		for _, topic in free do
-			heard[topic] = nil
-		end
+		table.clear(heard) -- (a new cycle for everything; this game's own topics stay out through `given`)
 		fresh = free
 	end
 	local topic = fresh[ctx.rng:NextInteger(1, #fresh)]

@@ -72,8 +72,15 @@ function BellButton.build(onRing: () -> ())
 	key.Text = "E"
 	key.ZIndex = 5
 	Style.round(key, 8)
-	key.Visible = UserInputService.KeyboardEnabled
 	key.Parent = button
+	local function showKey()
+		local last = UserInputService:GetLastInputType()
+		local pad = string.find(last.Name, "Gamepad") ~= nil
+		key.Text = if pad then "X" else "E"
+		key.Visible = pad or (UserInputService.KeyboardEnabled and last ~= Enum.UserInputType.Touch)
+	end
+	showKey()
+	UserInputService.LastInputTypeChanged:Connect(showKey)
 	local function press()
 		wiggle()
 		if live then

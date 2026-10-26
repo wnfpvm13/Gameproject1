@@ -5,6 +5,7 @@ local Players = game:GetService("Players")
 local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SocialService = game:GetService("SocialService")
 local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 
@@ -29,6 +30,7 @@ local ReactionBar = require(UI:WaitForChild("ReactionBar"))
 local PresenterPanel = require(UI:WaitForChild("PresenterPanel"))
 local MissionPanel = require(UI:WaitForChild("MissionPanel"))
 local BellButton = require(UI:WaitForChild("BellButton"))
+local InviteButton = require(UI:WaitForChild("InviteButton"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
@@ -129,6 +131,8 @@ local function refresh()
 		maxLives = round.maxLives,
 		presenter = if State.inRound() then round.presenter else nil,
 	}))
+	-- (no round is being played and too few are ready: invite friends)
+	InviteButton.set(not State.inRound() and not presenting and (round.readyCount or 0) < Config.INVITE_BELOW)
 	local seated = (State.inRound() and State.meAlive()) or os.clock() < myFlightEndsAt
 	ShowCamera.set(if presenting then "presenter" elseif seated then "show" else nil, round.total)
 	ReactionBar.setVisible(not (State.inRound() and State.meAlive()) and not presenting)
@@ -202,6 +206,19 @@ local function ringMyBell()
 end
 Bell.start(ringMyBell)
 BellButton.build(ringMyBell)
+-- Roblox's invite prompt, where this player may send invites (it differs by platform and account).
+InviteButton.build(function()
+	task.spawn(function()
+		local ok, can = pcall(function()
+			return SocialService:CanSendGameInviteAsync(player)
+		end)
+		if ok and can then
+			pcall(function()
+				SocialService:PromptGameInvite(player)
+			end)
+		end
+	end)
+end)
 Fx.init()
 FlatVoice.start()
 GetUp.start()
@@ -516,6 +533,7 @@ remotes.Fling.OnClientEvent:Connect(function(info)
 	if info.userId == State.myId() then
 		flyingUntil(os.clock() + Config.FLING_RETURN_SECONDS + 0.5) -- (first: the round camera must be on before it shakes)
 	end
+	ShowCamera.widen(Config.FLING_RETURN_SECONDS + 0.5) -- (the whole row while anyone flies)
 	Fx.fling(info)
 	-- (shake and flash: not with the device's reduced motion setting)
 	if not GuiService.ReducedMotionEnabled then

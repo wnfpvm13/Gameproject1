@@ -2,6 +2,7 @@
 -- Status board at the top centre: phase + message, timer, my lives (hearts) and survivors. Kept short (64 px) so the
 -- chair row under it stays visible.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Hearts = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hearts"))
@@ -28,14 +29,15 @@ function Hud.build()
 	top.AnchorPoint = Vector2.new(0.5, 0)
 	top.Position = UDim2.new(0.5, 0, 0, 8)
 	top.Size = UDim2.new(0.5, 0, 0, 64)
-	-- (at most the screen less 250 px each side: on a small PC window Roblox's player list sits at the top right,
-	-- review 2026-10-25)
+	-- (at most the screen less 250 px each side where Roblox's player list sits open at the top right — a small PC window,
+	-- review 2026-10-25; a phone keeps it folded, so the board keeps its width there)
 	local limit = Instance.new("UISizeConstraint")
 	limit.MinSize = Vector2.new(320, 0)
 	limit.Parent = top
 	local function fit()
 		local camera = workspace.CurrentCamera
-		local width = if camera then camera.ViewportSize.X - 500 else 580
+		local phone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		local width = if not camera then 580 elseif phone then camera.ViewportSize.X * 0.6 else camera.ViewportSize.X - 500
 		limit.MaxSize = Vector2.new(math.clamp(width, 320, 580), 200)
 	end
 	fit()

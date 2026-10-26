@@ -48,6 +48,7 @@ return {
 	-- Missions (docs/DESIGN_V3.md §5; bundle 4a, owner 2026-10-23). The quiz: everyone alive answers at once (four
 	-- choices); a wrong answer or none is a fail. The final asks harder questions the same way. The roulette picks one
 	-- alive player (once a round).
+	QUIZ_SHUFFLE = true, -- the quiz's choices in a new order each time (not choices that are numbers; tests turn it off)
 	QUIZ_INTRO_SECONDS = 2, -- the question shows before the buttons work
 	QUIZ_SECONDS = 10, -- answer time
 	QUIZ_REVEAL_SECONDS = 3, -- the right answer stays on screen
@@ -191,7 +192,6 @@ return {
 	-- TWENTY_ANSWER_MAX letters at most (its verdict shows TWENTY_VERDICT_SECONDS). Over once TWENTY_SHARE of the players
 	-- (rounded up) are right, or after TWENTY_TRIES rounds (one answer a turn); whoever is not right flies.
 	TWENTY_MIN_PLAYERS = 2,
-	QUIZ_SHUFFLE = true, -- the quiz's choices in a new order each time (not choices that are numbers; tests turn it off)
 	TWENTY_MAX_PLAYERS = 6, -- offered only with this many alive or fewer (owner 2026-10-26: ten could take ~7 minutes)
 	TWENTY_MIN_LETTERS = 2, -- (one letter, like 배 or 자, hides in too many chat lines: writing it would fly people)
 	TWENTY_INTRO_SECONDS = 5,
@@ -306,6 +306,7 @@ return {
 	-- The show camera frames a round of few players closer (client ShowCamera, review 2026-10-25): the seated chairs plus
 	-- SHOW_MARGIN studs on each side, at least SHOW_MIN_HALF_WIDTH (whole row: the map's HalfWidth), FOV not under
 	-- SHOW_MIN_FOV; the tops of the head tags (SHOW_KEEP_HEIGHT studs over the seats) keep their height on screen.
+	INVITE_BELOW = 4, -- the "친구 초대" button shows between rounds while fewer than this are ready (client)
 	NOTICE_KEEP_SECONDS = 1.5, -- a life-loss toast within this of a moment's line shows that line above it (client)
 	SHOW_MARGIN = 8,
 	SHOW_MIN_HALF_WIDTH = 22,
@@ -378,6 +379,7 @@ return {
 		READY = "준비 완료!",
 		READY_COUNT = "준비 완료! (준비 %d명)",
 		READY_NEXT_ROUND = "준비 완료! 다음 판부터 같이 해요",
+		INVITE = "친구 초대",
 		HEADSET_TIP = "헤드셋을 쓰면 더 잘 들려요", -- speakers feed others' voices back into the mic
 		NO_VOICE_WATCH = "관람석에서 구경할 수 있어요",
 		CHAT_CHECKING = "계정 확인 중…",
@@ -637,7 +639,8 @@ return {
 	SOUND_WIN = "rbxassetid://1839997889", -- Organ Fanfare (APM game show toolkit, 3 s): the round's winners
 	SOUND_TICK = "rbxassetid://1839998128", -- Coconut Clock (APM game show toolkit, ticking): while the bomb goes round
 	SOUND_ROLL = "rbxassetid://1839997904", -- Roll Reveal (APM game show toolkit, drum roll with a crash): the roulette
-	SOUND_ROLL_CRASH_AT = 6.0, -- seconds into SOUND_ROLL where the crash is (it starts so the crash meets the pick; by ear)
+	SOUND_ROLL_CRASH_AT = 2.25, -- seconds into SOUND_ROLL where the crash is (measured 2026-10-26 with an AudioAnalyzer:
+	-- the loudest hit after the roll); it starts so the crash meets the pick
 	SOUND_WHISTLE = "rbxassetid://9118114334", -- Referee Whistle Interior Gymnasium 1 (SFX): 무궁화's red light
 	SOUND_VOLUME = 0.5, -- these game sounds, under the voices
 }

@@ -17,6 +17,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 
@@ -28,6 +29,8 @@ local DEFAULT_FOV = 70
 
 local mode: Mode? = nil
 local seatedCount = 0 -- participants this round (they sit in the middle chairs); 0 = frame the whole row
+local wideUntil = 0 -- os.clock() until which the whole row is framed (someone flies: review 2026-10-26, the close frame
+-- cut flights to the side and landings outside the pool)
 local bound: Camera? = nil -- the camera the change listeners below watch
 local connections: { RBXScriptConnection } = {}
 
@@ -86,10 +89,13 @@ local function fitRow(marker: BasePart, chairs: Instance, camera: Camera): (CFra
 	local maxFov = (marker:GetAttribute("MaxFov") or 70) :: number
 	local depth, seatY = rowDepth(marker, chairs)
 	local wide = math.clamp(fovFor(rowHalf, depth, camera), (marker:GetAttribute("MinFov") or 40) :: number, maxFov)
-	if seatedCount <= 0 then
+	if seatedCount <= 0 or os.clock() < wideUntil then
 		return marker.CFrame, wide
 	end
 	local halfWidth = math.clamp(seatedReach(marker, chairs) + Config.SHOW_MARGIN, Config.SHOW_MIN_HALF_WIDTH, rowHalf)
+	if halfWidth >= rowHalf then
+		return marker.CFrame, wide -- (many players: exactly the wide view, also on a narrow phone)
+	end
 	local close = math.min(math.max(fovFor(halfWidth, depth, camera), Config.SHOW_MIN_FOV), wide)
 	if close >= wide - 0.5 then
 		return marker.CFrame, wide
@@ -272,6 +278,28 @@ function ShowCamera.shake(strength: number, seconds: number)
 		end
 		local amount = strength * (1 - t)
 		camera.CFrame = at * CFrame.new((math.random() * 2 - 1) * amount, (math.random() * 2 - 1) * amount, 0)
+	end)
+end
+
+-- Someone flies: the whole row for `seconds` (the blast hides the cut), then the close frame comes back smoothly.
+local widenings = 0
+function ShowCamera.widen(seconds: number)
+	wideUntil = math.max(wideUntil, os.clock() + seconds)
+	widenings += 1
+	local mine = widenings
+	if mode == "show" then
+		place()
+	end
+	task.delay(seconds + 0.05, function()
+		local camera = workspace.CurrentCamera
+		if mine ~= widenings or mode ~= "show" or not camera or os.clock() < wideUntil then
+			return
+		end
+		local at, fov = rig(camera)
+		if at then
+			TweenService:Create(camera, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+				{ CFrame = at, FieldOfView = fov }):Play()
+		end
 	end)
 end
 

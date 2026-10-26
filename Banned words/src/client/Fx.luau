@@ -105,11 +105,15 @@ function Fx.cue(name: string, seconds: number?)
 		return
 	end
 	if name == "roll" and seconds then
-		local copy = template:Clone()
-		copy.TimePosition = math.max(0, Config.SOUND_ROLL_CRASH_AT - seconds)
-		copy.Parent = SoundService
-		copy:Play()
-		Debris:AddItem(copy, 12)
+		-- (started so its crash lands on the pick: later for a long spin, part-way in for a short one)
+		local wait = math.max(0, seconds - Config.SOUND_ROLL_CRASH_AT)
+		task.delay(wait, function()
+			local copy = template:Clone()
+			copy.TimePosition = math.max(0, Config.SOUND_ROLL_CRASH_AT - seconds)
+			copy.Parent = SoundService
+			copy:Play()
+			Debris:AddItem(copy, 12)
+		end)
 		return
 	end
 	playCopy(template)

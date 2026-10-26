@@ -77,7 +77,7 @@ local function longest(players: number): number
 		* (Config.TWENTY_TURN_SECONDS + Config.TWENTY_VERDICT_SECONDS) + Config.MINIGAME_RESULT_SECONDS
 end
 Twenty.expectedFor = longest
-Twenty.expectedSeconds = longest(Config.MAX_PLAYERS)
+Twenty.expectedSeconds = longest(Config.TWENTY_MAX_PLAYERS) -- (expectedFor counts the players there are)
 
 function Twenty.available(final: boolean): boolean
 	return not final and #ChosungBank > 0

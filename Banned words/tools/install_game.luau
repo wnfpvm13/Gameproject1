@@ -61,6 +61,7 @@ return {
 	-- Missions (docs/DESIGN_V3.md §5; bundle 4a, owner 2026-10-23). The quiz: everyone alive answers at once (four
 	-- choices); a wrong answer or none is a fail. The final asks harder questions the same way. The roulette picks one
 	-- alive player (once a round).
+	QUIZ_SHUFFLE = true, -- the quiz's choices in a new order each time (not choices that are numbers; tests turn it off)
 	QUIZ_INTRO_SECONDS = 2, -- the question shows before the buttons work
 	QUIZ_SECONDS = 10, -- answer time
 	QUIZ_REVEAL_SECONDS = 3, -- the right answer stays on screen
@@ -204,7 +205,6 @@ return {
 	-- TWENTY_ANSWER_MAX letters at most (its verdict shows TWENTY_VERDICT_SECONDS). Over once TWENTY_SHARE of the players
 	-- (rounded up) are right, or after TWENTY_TRIES rounds (one answer a turn); whoever is not right flies.
 	TWENTY_MIN_PLAYERS = 2,
-	QUIZ_SHUFFLE = true, -- the quiz's choices in a new order each time (not choices that are numbers; tests turn it off)
 	TWENTY_MAX_PLAYERS = 6, -- offered only with this many alive or fewer (owner 2026-10-26: ten could take ~7 minutes)
 	TWENTY_MIN_LETTERS = 2, -- (one letter, like 배 or 자, hides in too many chat lines: writing it would fly people)
 	TWENTY_INTRO_SECONDS = 5,
@@ -319,6 +319,7 @@ return {
 	-- The show camera frames a round of few players closer (client ShowCamera, review 2026-10-25): the seated chairs plus
 	-- SHOW_MARGIN studs on each side, at least SHOW_MIN_HALF_WIDTH (whole row: the map's HalfWidth), FOV not under
 	-- SHOW_MIN_FOV; the tops of the head tags (SHOW_KEEP_HEIGHT studs over the seats) keep their height on screen.
+	INVITE_BELOW = 4, -- the "친구 초대" button shows between rounds while fewer than this are ready (client)
 	NOTICE_KEEP_SECONDS = 1.5, -- a life-loss toast within this of a moment's line shows that line above it (client)
 	SHOW_MARGIN = 8,
 	SHOW_MIN_HALF_WIDTH = 22,
@@ -391,6 +392,7 @@ return {
 		READY = "준비 완료!",
 		READY_COUNT = "준비 완료! (준비 %d명)",
 		READY_NEXT_ROUND = "준비 완료! 다음 판부터 같이 해요",
+		INVITE = "친구 초대",
 		HEADSET_TIP = "헤드셋을 쓰면 더 잘 들려요", -- speakers feed others' voices back into the mic
 		NO_VOICE_WATCH = "관람석에서 구경할 수 있어요",
 		CHAT_CHECKING = "계정 확인 중…",
@@ -650,7 +652,8 @@ return {
 	SOUND_WIN = "rbxassetid://1839997889", -- Organ Fanfare (APM game show toolkit, 3 s): the round's winners
 	SOUND_TICK = "rbxassetid://1839998128", -- Coconut Clock (APM game show toolkit, ticking): while the bomb goes round
 	SOUND_ROLL = "rbxassetid://1839997904", -- Roll Reveal (APM game show toolkit, drum roll with a crash): the roulette
-	SOUND_ROLL_CRASH_AT = 6.0, -- seconds into SOUND_ROLL where the crash is (it starts so the crash meets the pick; by ear)
+	SOUND_ROLL_CRASH_AT = 2.25, -- seconds into SOUND_ROLL where the crash is (measured 2026-10-26 with an AudioAnalyzer:
+	-- the loudest hit after the roll); it starts so the crash meets the pick
 	SOUND_WHISTLE = "rbxassetid://9118114334", -- Referee Whistle Interior Gymnasium 1 (SFX): 무궁화's red light
 	SOUND_VOLUME = 0.5, -- these game sounds, under the voices
 }
@@ -2885,7 +2888,7 @@ QuizBank.main = {
 	{ q = "볼링에서 스트라이크를 세 번 연속하면 부르는 말은?", choices = { "터키", "더블", "스페어", "거터" }, answer = 1 },
 	{ q = "주사위에서 마주 보는 두 면의 눈을 더하면?", choices = { "5", "6", "7", "8" }, answer = 3 },
 	{ q = "체스판은 모두 몇 칸일까?", choices = { "36칸", "49칸", "64칸", "81칸" }, answer = 3 },
-	{ q = "조커를 뺀 카드 한 벌은 모두 몇 장?", choices = { "48장", "50장", "52장", "54장" }, answer = 3 },
+	{ q = "조커를 뺀 트럼프 카드 한 벌은 모두 몇 장?", choices = { "48장", "50장", "52장", "54장" }, answer = 3 },
 	{ q = "윷놀이에서 윷가락 넷이 다 엎어지면?", choices = { "도", "모", "개", "윷" }, answer = 2 },
 	{ q = "바둑판의 가로줄은 몇 줄일까?", choices = { "15줄", "17줄", "19줄", "21줄" }, answer = 3 },
 	{ q = "공기놀이에 보통 쓰는 공깃돌 수는?", choices = { "3개", "4개", "5개", "7개" }, answer = 3 },
@@ -2999,24 +3002,23 @@ do local s = Instance.new("ModuleScript"); s.Name = "WordAliases"; s.Source = [=
 -- Other ways players write a ChosungBank word (bundle 10, review 2026-10-25: "돈까스" for 돈가스 was a wrong answer).
 -- 머리 위 스무고개 takes them as the right answer and as writing the word in chat; WordService keeps a chat line holding
 -- one from the word's owner. Data only: word -> its other forms (spaces and marks never matter, Judge.normalizeChat).
--- No one-letter forms: the chat rule looks for them inside any line.
+-- No one-letter forms, and none inside everyday words: the chat rule looks for them inside any line (review
+-- 2026-10-26: 버거 hid "너무 버거워", 거북 "자세가 거북해"); none that also means another word in play (바이크 is a
+-- bicycle too) or a name (크루즈).
 local WordAliases: { [string]: { string } } = {
 	["돈가스"] = { "돈까스" },
 	["짜장면"] = { "자장면" },
-	["햄버거"] = { "버거" },
 	["순두부"] = { "순두부찌개" },
 	["튀르키예"] = { "터키" },
 	["호주"] = { "오스트레일리아" },
-	["거북이"] = { "거북" },
 	["경찰관"] = { "경찰" },
 	["소방관"] = { "소방수" },
 	["복싱"] = { "권투" },
 	["헬리콥터"] = { "헬기" },
 	["지하철"] = { "전철" },
 	["구급차"] = { "앰뷸런스" },
-	["오토바이"] = { "바이크" },
-	["유람선"] = { "크루즈" },
-	["공책"] = { "노트" },
+	["요리사"] = { "셰프" },
+	["조종사"] = { "파일럿" },
 	["크레파스"] = { "크레용" },
 	["스테이플러"] = { "호치키스" },
 }
@@ -5210,9 +5212,7 @@ local function pickTopic(ctx: Ctx, given: { [string]: boolean }): string?
 		return nil
 	end
 	if #fresh == 0 then
-		for _, topic in free do
-			heard[topic] = nil
-		end
+		table.clear(heard) -- (a new cycle for everything; this game's own topics stay out through `given`)
 		fresh = free
 	end
 	local topic = fresh[ctx.rng:NextInteger(1, #fresh)]
@@ -6534,7 +6534,7 @@ local function longest(players: number): number
 		* (Config.TWENTY_TURN_SECONDS + Config.TWENTY_VERDICT_SECONDS) + Config.MINIGAME_RESULT_SECONDS
 end
 Twenty.expectedFor = longest
-Twenty.expectedSeconds = longest(Config.MAX_PLAYERS)
+Twenty.expectedSeconds = longest(Config.TWENTY_MAX_PLAYERS) -- (expectedFor counts the players there are)
 
 function Twenty.available(final: boolean): boolean
 	return not final and #ChosungBank > 0
@@ -10176,6 +10176,7 @@ local Players = game:GetService("Players")
 local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SocialService = game:GetService("SocialService")
 local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 
@@ -10200,6 +10201,7 @@ local ReactionBar = require(UI:WaitForChild("ReactionBar"))
 local PresenterPanel = require(UI:WaitForChild("PresenterPanel"))
 local MissionPanel = require(UI:WaitForChild("MissionPanel"))
 local BellButton = require(UI:WaitForChild("BellButton"))
+local InviteButton = require(UI:WaitForChild("InviteButton"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
@@ -10300,6 +10302,8 @@ local function refresh()
 		maxLives = round.maxLives,
 		presenter = if State.inRound() then round.presenter else nil,
 	}))
+	-- (no round is being played and too few are ready: invite friends)
+	InviteButton.set(not State.inRound() and not presenting and (round.readyCount or 0) < Config.INVITE_BELOW)
 	local seated = (State.inRound() and State.meAlive()) or os.clock() < myFlightEndsAt
 	ShowCamera.set(if presenting then "presenter" elseif seated then "show" else nil, round.total)
 	ReactionBar.setVisible(not (State.inRound() and State.meAlive()) and not presenting)
@@ -10373,6 +10377,19 @@ local function ringMyBell()
 end
 Bell.start(ringMyBell)
 BellButton.build(ringMyBell)
+-- Roblox's invite prompt, where this player may send invites (it differs by platform and account).
+InviteButton.build(function()
+	task.spawn(function()
+		local ok, can = pcall(function()
+			return SocialService:CanSendGameInviteAsync(player)
+		end)
+		if ok and can then
+			pcall(function()
+				SocialService:PromptGameInvite(player)
+			end)
+		end
+	end)
+end)
 Fx.init()
 FlatVoice.start()
 GetUp.start()
@@ -10687,6 +10704,7 @@ remotes.Fling.OnClientEvent:Connect(function(info)
 	if info.userId == State.myId() then
 		flyingUntil(os.clock() + Config.FLING_RETURN_SECONDS + 0.5) -- (first: the round camera must be on before it shakes)
 	end
+	ShowCamera.widen(Config.FLING_RETURN_SECONDS + 0.5) -- (the whole row while anyone flies)
 	Fx.fling(info)
 	-- (shake and flash: not with the device's reduced motion setting)
 	if not GuiService.ReducedMotionEnabled then
@@ -11469,11 +11487,15 @@ function Fx.cue(name: string, seconds: number?)
 		return
 	end
 	if name == "roll" and seconds then
-		local copy = template:Clone()
-		copy.TimePosition = math.max(0, Config.SOUND_ROLL_CRASH_AT - seconds)
-		copy.Parent = SoundService
-		copy:Play()
-		Debris:AddItem(copy, 12)
+		-- (started so its crash lands on the pick: later for a long spin, part-way in for a short one)
+		local wait = math.max(0, seconds - Config.SOUND_ROLL_CRASH_AT)
+		task.delay(wait, function()
+			local copy = template:Clone()
+			copy.TimePosition = math.max(0, Config.SOUND_ROLL_CRASH_AT - seconds)
+			copy.Parent = SoundService
+			copy:Play()
+			Debris:AddItem(copy, 12)
+		end)
 		return
 	end
 	playCopy(template)
@@ -11900,6 +11922,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "ShowCamera"; s.Source = [==
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 
@@ -11911,6 +11934,8 @@ local DEFAULT_FOV = 70
 
 local mode: Mode? = nil
 local seatedCount = 0 -- participants this round (they sit in the middle chairs); 0 = frame the whole row
+local wideUntil = 0 -- os.clock() until which the whole row is framed (someone flies: review 2026-10-26, the close frame
+-- cut flights to the side and landings outside the pool)
 local bound: Camera? = nil -- the camera the change listeners below watch
 local connections: { RBXScriptConnection } = {}
 
@@ -11969,10 +11994,13 @@ local function fitRow(marker: BasePart, chairs: Instance, camera: Camera): (CFra
 	local maxFov = (marker:GetAttribute("MaxFov") or 70) :: number
 	local depth, seatY = rowDepth(marker, chairs)
 	local wide = math.clamp(fovFor(rowHalf, depth, camera), (marker:GetAttribute("MinFov") or 40) :: number, maxFov)
-	if seatedCount <= 0 then
+	if seatedCount <= 0 or os.clock() < wideUntil then
 		return marker.CFrame, wide
 	end
 	local halfWidth = math.clamp(seatedReach(marker, chairs) + Config.SHOW_MARGIN, Config.SHOW_MIN_HALF_WIDTH, rowHalf)
+	if halfWidth >= rowHalf then
+		return marker.CFrame, wide -- (many players: exactly the wide view, also on a narrow phone)
+	end
 	local close = math.min(math.max(fovFor(halfWidth, depth, camera), Config.SHOW_MIN_FOV), wide)
 	if close >= wide - 0.5 then
 		return marker.CFrame, wide
@@ -12155,6 +12183,28 @@ function ShowCamera.shake(strength: number, seconds: number)
 		end
 		local amount = strength * (1 - t)
 		camera.CFrame = at * CFrame.new((math.random() * 2 - 1) * amount, (math.random() * 2 - 1) * amount, 0)
+	end)
+end
+
+-- Someone flies: the whole row for `seconds` (the blast hides the cut), then the close frame comes back smoothly.
+local widenings = 0
+function ShowCamera.widen(seconds: number)
+	wideUntil = math.max(wideUntil, os.clock() + seconds)
+	widenings += 1
+	local mine = widenings
+	if mode == "show" then
+		place()
+	end
+	task.delay(seconds + 0.05, function()
+		local camera = workspace.CurrentCamera
+		if mine ~= widenings or mode ~= "show" or not camera or os.clock() < wideUntil then
+			return
+		end
+		local at, fov = rig(camera)
+		if at then
+			TweenService:Create(camera, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+				{ CFrame = at, FieldOfView = fov }):Play()
+		end
 	end)
 end
 
@@ -12588,8 +12638,15 @@ function BellButton.build(onRing: () -> ())
 	key.Text = "E"
 	key.ZIndex = 5
 	Style.round(key, 8)
-	key.Visible = UserInputService.KeyboardEnabled
 	key.Parent = button
+	local function showKey()
+		local last = UserInputService:GetLastInputType()
+		local pad = string.find(last.Name, "Gamepad") ~= nil
+		key.Text = if pad then "X" else "E"
+		key.Visible = pad or (UserInputService.KeyboardEnabled and last ~= Enum.UserInputType.Touch)
+	end
+	showKey()
+	UserInputService.LastInputTypeChanged:Connect(showKey)
 	local function press()
 		wiggle()
 		if live then
@@ -12650,6 +12707,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "Hud"; s.Source = [====[--!s
 -- Status board at the top centre: phase + message, timer, my lives (hearts) and survivors. Kept short (64 px) so the
 -- chair row under it stays visible.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Hearts = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hearts"))
@@ -12676,14 +12734,15 @@ function Hud.build()
 	top.AnchorPoint = Vector2.new(0.5, 0)
 	top.Position = UDim2.new(0.5, 0, 0, 8)
 	top.Size = UDim2.new(0.5, 0, 0, 64)
-	-- (at most the screen less 250 px each side: on a small PC window Roblox's player list sits at the top right,
-	-- review 2026-10-25)
+	-- (at most the screen less 250 px each side where Roblox's player list sits open at the top right — a small PC window,
+	-- review 2026-10-25; a phone keeps it folded, so the board keeps its width there)
 	local limit = Instance.new("UISizeConstraint")
 	limit.MinSize = Vector2.new(320, 0)
 	limit.Parent = top
 	local function fit()
 		local camera = workspace.CurrentCamera
-		local width = if camera then camera.ViewportSize.X - 500 else 580
+		local phone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		local width = if not camera then 580 elseif phone then camera.ViewportSize.X * 0.6 else camera.ViewportSize.X - 500
 		limit.MaxSize = Vector2.new(math.clamp(width, 320, 580), 200)
 	end
 	fit()
@@ -12748,6 +12807,39 @@ function Hud.setMyLives(lives: number?, max: number, role: string?)
 end
 
 return Hud
+]====]; s.Parent = n7 end
+do local s = Instance.new("ModuleScript"); s.Name = "InviteButton"; s.Source = [====[--!strict
+-- "친구 초대" (owner 2026-10-26, the recommended choice: few players should not just wait): a sticker button on the right
+-- side while no round is being played and fewer than Config.INVITE_BELOW are ready. A press opens Roblox's invite
+-- prompt (init.client asks SocialService; this module only draws). It sits where the bell button is during a round.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Style = require(script.Parent:WaitForChild("Style"))
+
+local InviteButton = {}
+
+local button: TextButton
+
+-- onPress(): the player pressed it.
+function InviteButton.build(onPress: () -> ())
+	button = Style.button(Style.BOLD, 22)
+	button.Name = "Invite"
+	button.AnchorPoint = Vector2.new(1, 0.5)
+	button.Position = UDim2.new(1, -18, 0.6, 0)
+	button.Size = UDim2.fromOffset(150, 52)
+	button.BackgroundColor3 = Style.PICK
+	button.Text = Config.TEXT.INVITE
+	button.Visible = false
+	button.Parent = Style.gui()
+	button.Activated:Connect(onPress)
+end
+
+function InviteButton.set(visible: boolean)
+	button.Visible = visible
+end
+
+return InviteButton
 ]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "MicPanel"; s.Source = [====[--!strict
 -- Getting ready (docs/DESIGN_V3.md §2, §7): the voice connection and mic test lines (rows 0 and 1 under the status

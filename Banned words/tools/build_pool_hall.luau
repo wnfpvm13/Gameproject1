@@ -236,7 +236,8 @@ local LANES = 8
 local laneWidth = POOL_HALF_X * 2 / LANES
 for lane = 1, LANES do
 	local x = -POOL_HALF_X + (lane - 0.5) * laneWidth
-	box(pool, "LaneLine", Vector3.new(x - 0.5, POOL_FLOOR_Y, POOL_NEAR_Z + 3), Vector3.new(x + 0.5, POOL_FLOOR_Y + 0.05, POOL_FAR_Z - 3), LANE_TILE, Enum.Material.CeramicTiles, TRIM)
+	-- (the line stops where the T bars begin: overlapping tops in one plane flicker)
+	box(pool, "LaneLine", Vector3.new(x - 0.5, POOL_FLOOR_Y, POOL_NEAR_Z + 3.5), Vector3.new(x + 0.5, POOL_FLOOR_Y + 0.05, POOL_FAR_Z - 3.5), LANE_TILE, Enum.Material.CeramicTiles, TRIM)
 	for _, z in { POOL_NEAR_Z + 3, POOL_FAR_Z - 3 } do
 		box(pool, "LaneT", Vector3.new(x - 1.5, POOL_FLOOR_Y, z - 0.5), Vector3.new(x + 1.5, POOL_FLOOR_Y + 0.05, z + 0.5), LANE_TILE, Enum.Material.CeramicTiles, TRIM)
 	end
@@ -279,8 +280,13 @@ terrain.WaterTransparency = 0.85
 terrain.WaterReflectance = 0.2
 terrain.WaterWaveSize = 0.08
 terrain.WaterWaveSpeed = 6
-local waterSize = Vector3.new(POOL_HALF_X * 2, WATER_TOP_Y - POOL_FLOOR_Y, POOL_FAR_Z - POOL_NEAR_Z)
-terrain:FillBlock(CFrame.new(0, (WATER_TOP_Y + POOL_FLOOR_Y) / 2, (POOL_NEAR_Z + POOL_FAR_Z) / 2), waterSize, Enum.Material.Water)
+-- The water runs one terrain voxel (4 studs) past the basin's walls and floor, under the deck: water that stopped
+-- exactly on the walls' inner faces and the floor's top drew its edge in the same plane and flickered against them in
+-- game (owner 2026-10-27). The extra water is hidden behind the walls, under the deck and under the floor.
+local WATER_TUCK = 4
+local waterBottomY = POOL_FLOOR_Y - WATER_TUCK
+local waterSize = Vector3.new(POOL_HALF_X * 2 + WATER_TUCK * 2, WATER_TOP_Y - waterBottomY, POOL_FAR_Z - POOL_NEAR_Z + WATER_TUCK * 2)
+terrain:FillBlock(CFrame.new(0, (WATER_TOP_Y + waterBottomY) / 2, (POOL_NEAR_Z + POOL_FAR_Z) / 2), waterSize, Enum.Material.Water)
 
 -- Landing zone for flying players (far half of the pool, inside the lanes).
 local LANDING_MARGIN = 6 -- studs of water beside the landing zone on each side

@@ -2,12 +2,13 @@
 
 게임 이름은 2026-10-26 오너가 "의자에서 살아남기!"로 정했다(전 이름 "금칙어 게임 Korean"; 폴더·코드 이름 `Banned words`·`BannedWords`는 그대로). 로고와 스토어 초안: [docs/LAUNCH_2026-10-26.md](docs/LAUNCH_2026-10-26.md).
 
-MonCook과 별개인 로블록스 음성 파티 게임. V3: 밝은 실내 수영장의 플라잉 체어에 앉아 미션을 하고, 자기만 모르는
-금칙어(머리 위, 본인만 못 봄)를 피한다. 실패하면 의자가 뒤로 젖혀지며 "펑" 하고 래그돌로 수영장에 날아간다.
-(V2는 원형 라운지 의자에서 받아쓰기로 판정했다.)
+MonCook과 별개인 로블록스 음성 파티 게임(V3). 밝은 실내 수영장의 플라잉 체어에 앉아 미니게임을 이어서 하고(17가지 중
+한 판에 6개), 실패하면 의자가 "펑" 터지며 래그돌로 수영장에 날아간다. 목숨 3개를 지켜 결승 퀴즈에서 살아남으면 이긴다.
+처음 이름의 금칙어는 미니게임 "머리 위 스무고개"(머리 위 단어는 본인만 모름)로 남았다. (V2는 원형 라운지 의자에서
+받아쓰기로 판정했다.)
 
-**설계 기준: V3 (2026-10-22, 2026-10-23 미니게임 개편으로 최신화) — [docs/DESIGN_V3.md](docs/DESIGN_V3.md)** (실내 수영장 + 진행자 + 미니게임 10가지, 금칙어는 미니게임 "금칙어 토크" 하나, 의자 벨·발언권, 자유 대화 없음). 개편은 묶음 6a~6e로 만든다(설계 12번); 아래 "지금 코드"는 개편 전 흐름이다.
-지금 코드는 V3 미니게임 개편 묶음 6a까지 — 자유 대화 없음, 게임 사이 진행자 고르기·무작위, 금칙어 토크(받아쓰기 판정을 켠 뒤에만 나옴; Studio는 `BW_VoiceJudging`): [docs/MINIGAME_FLOW_2026-10-23.md](docs/MINIGAME_FLOW_2026-10-23.md). 그 전 1단계 묶음 기록 — 채팅 자동 판정·구제·채팅 전달 규칙: [docs/CHAT_JUDGING_2026-10-23.md](docs/CHAT_JUDGING_2026-10-23.md), 비공개 서버 금칙어(1인 1단어, 진행자 귀 판정·다시 뽑기): [docs/BANNED_WORDS_2026-10-23.md](docs/BANNED_WORDS_2026-10-23.md), 한마디·투표·진행자 판정(단상 레버): [docs/ONE_WORD_2026-10-23.md](docs/ONE_WORD_2026-10-23.md), 퀴즈·결승 퀴즈·룰렛(2D 원판): [docs/QUIZ_ROULETTE_2026-10-23.md](docs/QUIZ_ROULETTE_2026-10-23.md), 진행자 모드(지원·선정·미션 메뉴·효과음·판 중 교체): [docs/PRESENTER_2026-10-23.md](docs/PRESENTER_2026-10-23.md), 채팅 참가(음성이 안 되는 사람, 말풍선 강조): [docs/CHAT_JOIN_2026-10-23.md](docs/CHAT_JOIN_2026-10-23.md), 판 규칙(목숨 3개·8분·결승): [docs/ROUND_RULES_2026-10-22.md](docs/ROUND_RULES_2026-10-22.md), 발사 연출: [docs/FLING_2026-10-22.md](docs/FLING_2026-10-22.md). 공개 서버는 금칙어 없이 미션만(1단계), 비공개 서버는 진행자가 귀로(음성) 판정하고 채팅은 자동 판정 + 진행자 구제다. 2단계(공개 서버 금칙어, 음성 인식)는 실기기 시험 뒤. V2 규칙·코드 구조·테스트 기록은 [docs/DESIGN_V2.md](docs/DESIGN_V2.md), V2 마지막 상태는 git 태그 `banned-words-v2-final`.
+**설계 기준: V3 — [docs/DESIGN_V3.md](docs/DESIGN_V3.md)** (실내 수영장 + 진행자 + 미니게임, 의자 벨·발언권, 자유 대화 없음). 지금 코드는 묶음 10(오픈 전 재점검, 2026-10-26)까지이고, 최신 상태는 설계 문서 머리말과 [docs/BUNDLE10_2026-10-26.md](docs/BUNDLE10_2026-10-26.md), 오픈 준비는 [docs/LAUNCH_2026-10-26.md](docs/LAUNCH_2026-10-26.md)에 있다. 아래 줄은 묶음별 옛 기록이다.
+묶음 6a 무렵의 흐름 기록 — 자유 대화 없음, 게임 사이 진행자 고르기·무작위, 금칙어 토크(받아쓰기 판정을 켠 뒤에만 나옴; Studio는 `BW_VoiceJudging`): [docs/MINIGAME_FLOW_2026-10-23.md](docs/MINIGAME_FLOW_2026-10-23.md). 그 전 1단계 묶음 기록 — 채팅 자동 판정·구제·채팅 전달 규칙: [docs/CHAT_JUDGING_2026-10-23.md](docs/CHAT_JUDGING_2026-10-23.md), 비공개 서버 금칙어(1인 1단어, 진행자 귀 판정·다시 뽑기): [docs/BANNED_WORDS_2026-10-23.md](docs/BANNED_WORDS_2026-10-23.md), 한마디·투표·진행자 판정(단상 레버): [docs/ONE_WORD_2026-10-23.md](docs/ONE_WORD_2026-10-23.md), 퀴즈·결승 퀴즈·룰렛(2D 원판): [docs/QUIZ_ROULETTE_2026-10-23.md](docs/QUIZ_ROULETTE_2026-10-23.md), 진행자 모드(지원·선정·미션 메뉴·효과음·판 중 교체): [docs/PRESENTER_2026-10-23.md](docs/PRESENTER_2026-10-23.md), 채팅 참가(음성이 안 되는 사람, 말풍선 강조): [docs/CHAT_JOIN_2026-10-23.md](docs/CHAT_JOIN_2026-10-23.md), 판 규칙(목숨 3개·8분·결승): [docs/ROUND_RULES_2026-10-22.md](docs/ROUND_RULES_2026-10-22.md), 발사 연출: [docs/FLING_2026-10-22.md](docs/FLING_2026-10-22.md). 공개 서버는 금칙어 없이 미션만(1단계), 비공개 서버는 진행자가 귀로(음성) 판정하고 채팅은 자동 판정 + 진행자 구제다. 2단계(공개 서버 금칙어, 음성 인식)는 실기기 시험 뒤. V2 규칙·코드 구조·테스트 기록은 [docs/DESIGN_V2.md](docs/DESIGN_V2.md), V2 마지막 상태는 git 태그 `banned-words-v2-final`.
 - V3 맵(밝은 실내 수영장, 맵 `tools/build_pool_hall.luau` → 조명 `tools/build_pool_lighting.luau`): [docs/VISUAL_V3_POOL_2026-10-22.md](docs/VISUAL_V3_POOL_2026-10-22.md)
 - 제작 내역 전체(처음부터 V2.1.1까지): [docs/HISTORY_2026-10-20.md](docs/HISTORY_2026-10-20.md)
 - 그래픽(A안 예능 토크 스튜디오 세트, 맵 `tools/build_lounge_map.luau` → 조명 `tools/build_lounge_lighting.luau`): [docs/VISUAL_PLAN_2026-10-21.md](docs/VISUAL_PLAN_2026-10-21.md)

@@ -1,5 +1,5 @@
 """The game's logo and store icon in the sticker look (thick black outline, bright colours). Name picked by the owner
-on 2026-10-26: "의자에서 살아남기!" (the drafts it was picked from are in docs/LAUNCH_2026-10-26.md). Writes HTML and
+on 2026-10-26: "의자에서 살아남기!" (not one of the drafts in docs/LAUNCH_2026-10-26.md). Writes HTML and
 renders it to PNG with headless Edge into the folder given (default: .qa/logos):
 - logo.png 1024x576 (16:9, store page and posts), logo_screen.png and logo_podium.png in the shapes of the map's far
   LED screen and podium front (decals `IMAGES.screenLogo` / `IMAGES.podiumLogo` in tools/build_pool_hall.luau)
@@ -10,7 +10,7 @@ the network.
 usage: python -I tools/art/make_logos.py [outdir]"""
 import os, subprocess, sys
 
-HERE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".qa", "logos")
+HERE = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".qa", "logos")
 os.makedirs(HERE, exist_ok=True)
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 
@@ -71,6 +71,8 @@ def render(name, w, h, water, body):
     with open(path, "w", encoding="utf-8") as f:
         f.write(PAGE.format(w=w, h=h, water=water, wave=water - 30, body=body))
     out = os.path.join(HERE, f"{name}.png")
+    if os.path.exists(out):
+        os.remove(out)  # so a failed render (no Edge, no network) shows as False instead of keeping the old picture
     subprocess.run([EDGE, "--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1",
                     f"--window-size={w},{h}", "--virtual-time-budget=6000", f"--screenshot={out}",
                     "file:///" + path.replace("\\", "/")], capture_output=True, timeout=90)

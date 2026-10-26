@@ -20,7 +20,7 @@
 -- step of a punch or swing, or a weapon that always launches, makes the hit a launch, still pushed by health) and pushes by health (HitRules.force) times the weapon's push and
 -- the victim's resistance (a held gold bar), away from the attacker (a blast: from where it burst); a smash (health
 -- emptied) flies the same home run whatever hit it. A blast after the fight is over hits nobody. It is
--- sent to every client (Names.HitRemote: victim, velocity, attacker, kind, weapon): the victim's own client moves its
+-- sent to every client (Names.HitRemote: victim, velocity, attacker, kind, weapon, whether a crowd launched it): the victim's own client moves its
 -- character, everyone shows it; a sandbag is moved here. A weapon goes back to bare fists when used up, when its time
 -- is over, when its holder is out, and whenever no fight is running.
 local Players = game:GetService("Players")
@@ -45,7 +45,7 @@ export type Hooks = {
 	fighters: () -> { Model }, -- the models that can be hit
 	-- The health keeper: this hit's kind and the health left (damage taken; launch: the attacker's hit launches; by:
 	-- the attacker, told apart for the guard against being ganged up on).
-	hit: (victim: Model, now: number, damage: number, launch: boolean, by: Model) -> (HitRules.Kind, number),
+	hit: (victim: Model, now: number, damage: number, launch: boolean, by: Model) -> (HitRules.Kind, number, boolean),
 	knockHere: (model: Model, velocity: Vector3, kind: HitRules.Kind) -> boolean, -- moves a server-owned model (a sandbag)
 	onHit: (victim: Model, attacker: Model) -> (), -- for the knock-off credit
 	onSmash: (victim: Model) -> (), -- health emptied: out of the round
@@ -106,7 +106,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 	local function land(victim: CharacterParts.Body, attacker: Model, weapon: string, from: Vector3, facing: Vector3, now: number, step: number)
 		local w = weapons[weapon]
 		local launch = w.launch == true or AttackString.launches(stringRules, step, w.style)
-		local kind, health = hooks.hit(victim.model, now, w.damage, launch, attacker)
+		local kind, health, ganged = hooks.hit(victim.model, now, w.damage, launch, attacker)
 		if kind == "none" then
 			return
 		end
@@ -130,7 +130,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		hitAt[victim.model] = now
 		stunUntil[victim.model] = now + (if kind == "light" then Config.Hit.LightStun else Config.Knock.MinSeconds)
 		hooks.knockHere(victim.model, velocity, kind)
-		hitRemote:FireAllClients(victim.model, velocity, attacker, kind, weapon)
+		hitRemote:FireAllClients(victim.model, velocity, attacker, kind, weapon, ganged)
 		hooks.onHit(victim.model, attacker)
 		if kind == "smash" then
 			hooks.onSmash(victim.model)

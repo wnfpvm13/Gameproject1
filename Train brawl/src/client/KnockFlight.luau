@@ -31,7 +31,7 @@ function KnockFlight.hit(self: Flight, model: Model, velocity: Vector3, kind: st
 	-- still shows the flight: it ends it).
 	local launched = kind ~= "light"
 	if launched then
-		BodyMotion.launch(body, velocity)
+		BodyMotion.launch(body, velocity, kind)
 	else
 		BodyMotion.stagger(body, velocity)
 	end

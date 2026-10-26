@@ -1,6 +1,6 @@
 --!strict
 -- The home run on screen (the smash that empties a fighter's health; its finishing sound is HitFeedback's): a big
--- "홈런!" where it was hit, a light trail behind the flying body, and a star twinkling out with a pop where the body
+-- "홈런!" where it was hit, a light trail behind the flying body, and a gold burst twinkling out with a pop where the body
 -- was in the sky just before the server takes it to the stands (Config.Fall.HomeRunSeconds after the hit, which
 -- reaches each client at its own moment, so the body is followed each frame until it shows up in the stands; the
 -- trail goes off then, or it would draw a streak up to them). Shown on every client.
@@ -83,8 +83,9 @@ local function trail(body: CharacterParts.Body): Trail
 	return streak
 end
 
--- A home run on `victim`, now.
-function HomeRunShow.play(victim: Model)
+-- A home run on `victim`, now. `sparkle(at)` draws the twinkle the flight ends in (ImpactBurst's gold burst, through
+-- init: a drawn star instead of a "✦" letter, which read as a placeholder).
+function HomeRunShow.play(victim: Model, sparkle: (Vector3) -> ())
 	local body = CharacterParts.body(victim)
 	if not body then
 		return
@@ -98,7 +99,7 @@ function HomeRunShow.play(victim: Model)
 		following:Disconnect()
 		streak.Enabled = false
 		streak:Clear()
-		billboard(last, "✦", Color3.new(1, 1, 0.85), 60, Config.Feedback.TwinkleSeconds)
+		sparkle(last)
 		SoundBank.play("StarPop")
 	end
 	following = RunService.Heartbeat:Connect(function()

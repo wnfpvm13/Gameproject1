@@ -35,7 +35,8 @@ export type Hooks = {
 	stunned: () -> boolean, -- the player's character is flinching or flying from a hit
 	-- Draw and sound an attack that started at server time `at`, at `step` of the string.
 	draw: (model: Model, at: number, weapon: string, step: number) -> (),
-	predict: (victim: Model, weapon: string) -> (), -- show a hit the attack is about to land
+	-- Show a hit the attack is about to land (`finisher`: the string's launching last step).
+	predict: (victim: Model, weapon: string, finisher: boolean) -> (),
 }
 
 -- last: when the player's own last attack started; ready: when the next may start (by the cooldown of the weapon that
@@ -77,8 +78,9 @@ function OwnSwing.press(self: Swing, model: Model?)
 		-- Hit while attacking: the server judges from where the knock took the player, so show no hits of its own.
 		if me and not self.hooks.stunned() then
 			local victims = SwingTargets.find(me, self.hooks.fighters(), reach, aim, w.halfAngle)
+			local finisher = AttackString.launches(STRING, step, w.style)
 			for _, victim in victims do
-				self.hooks.predict(victim.model, weapon)
+				self.hooks.predict(victim.model, weapon, finisher)
 			end
 			if #victims > 0 then
 				AttackString.landed(self.chain) -- it landed: the string may go on (as the server counts it)

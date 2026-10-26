@@ -37,15 +37,17 @@ function BodyMotion.grounded(body: CharacterParts.Body): boolean
 	return Workspace:Raycast(body.root.Position, Vector3.new(0, -reach, 0), params) ~= nil
 end
 
--- A hit: stiff, held still for Config.Feedback.HitStopSeconds, then flying with `velocity`. A second hit during the
--- hold starts the hold again and its velocity wins. Unanchoring hands the physics back to Roblox's automatic choice,
--- so `reclaim(root)` runs first (the server takes a sandbag back).
-function BodyMotion.launch(body: CharacterParts.Body, velocity: Vector3, reclaim: ((BasePart) -> ())?)
+-- A launch (`kind` "launch" or "smash"): stiff, held still for its Config.Feedback.HitStop, then flying with
+-- `velocity`; a home run tumbles head over heels the way it was pushed (Config.Knock.SpinTurns over the flight, its time
+-- taken from the lift; the turning stops as it comes down). A second hit during the hold
+-- starts the hold again and its velocity wins. Unanchoring hands the physics back to Roblox's automatic choice, so
+-- `reclaim(root)` runs first (the server takes a sandbag back).
+function BodyMotion.launch(body: CharacterParts.Body, velocity: Vector3, kind: string, reclaim: ((BasePart) -> ())?)
 	local root = body.root
 	local mine = newHit(root)
 	body.humanoid.PlatformStand = true
 	root.Anchored = true
-	task.delay(Config.Feedback.HitStopSeconds, function()
+	task.delay(Config.Feedback.HitStop[kind] or Config.Feedback.HitStop.launch, function()
 		if launches[root] ~= mine or not root.Parent then
 			return
 		end
@@ -54,10 +56,22 @@ function BodyMotion.launch(body: CharacterParts.Body, velocity: Vector3, reclaim
 			reclaim(root)
 		end
 		root.AssemblyLinearVelocity = velocity
+		-- Head over heels: about the level axis across the push (pushed back, the feet swing up ahead).
+		local flat = Vector3.new(velocity.X, 0, velocity.Z)
+		local flight = 2 * math.max(velocity.Y, 1) / Workspace.Gravity -- up and back down to the same height
+		local turns = Config.Knock.SpinTurns[kind] or Config.Knock.SpinTurns.launch
+		if flat.Magnitude > 1e-3 and turns > 0 then
+			root.AssemblyAngularVelocity = flat.Unit:Cross(Vector3.yAxis) * -(turns * 2 * math.pi / flight)
+			task.delay(flight * 0.9, function()
+				if launches[root] == mine and root.Parent then
+					root.AssemblyAngularVelocity = Vector3.zero
+				end
+			end)
+		end
 	end)
 end
 
--- A light hit: held still for Config.Feedback.HitStopSeconds, then pushed along the ground at `velocity` (its X and
+-- A light hit: held still for Config.Feedback.HitStop.light, then pushed along the ground at `velocity` (its X and
 -- Z) for Config.Hit.SlideSeconds while staying on its feet (a constraint, as the Humanoid would stop a plain push at
 -- once). `reclaim(root)` as for launch.
 function BodyMotion.stagger(body: CharacterParts.Body, velocity: Vector3, reclaim: ((BasePart) -> ())?)
@@ -65,7 +79,7 @@ function BodyMotion.stagger(body: CharacterParts.Body, velocity: Vector3, reclai
 	local mine = newHit(root)
 	body.humanoid.PlatformStand = false
 	root.Anchored = true
-	task.delay(Config.Feedback.HitStopSeconds, function()
+	task.delay(Config.Feedback.HitStop.light, function()
 		if launches[root] ~= mine or not root.Parent then
 			return
 		end
@@ -109,6 +123,7 @@ end
 
 -- Back on the feet after a flight or a fall.
 function BodyMotion.getUp(body: CharacterParts.Body)
+	body.root.AssemblyAngularVelocity = Vector3.zero
 	body.humanoid.PlatformStand = false
 	body.humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 end

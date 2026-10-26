@@ -9,7 +9,8 @@
 -- animation shows and back out to it (no snap through standing straight). The joints are written in
 -- RunService.Stepped, after the Animator has written them for the frame (a value written in RenderStepped is
 -- overwritten before it is drawn - learned in Western train's CowboyPose), and put straight once a pose ends so the
--- Animator has them back.
+-- Animator has them back. When a blow lands, its attacker's pose pauses for the hit's hold (hold()), as the victim
+-- holds still.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -31,6 +32,7 @@ local BLEND_OUT = 0.2 -- and back out over its last this share
 -- A pose being drawn on a character: its joints, what kind ("attack", "light" or "flail"), when it started (server
 -- time for attacks, os.clock for reactions) and how long it lasts, the pose at a share of it, how it blends in, and
 -- the joints written so far (put straight at the end).
+-- holdFrom/holdUntil: a hold on the pose (when a blow lands): time stands still for the drawing between them.
 type Drawing = {
 	joints: { [string]: CharacterParts.Joint },
 	kind: string,
@@ -40,6 +42,8 @@ type Drawing = {
 	pose: (u: number) -> AttackPoses.Pose,
 	blendIn: number,
 	touched: { [string]: boolean },
+	holdFrom: number?,
+	holdUntil: number?,
 }
 local drawing: { [Model]: Drawing } = {}
 
@@ -71,6 +75,17 @@ local function begin(model: Model, kind: string, start: number, length: number, 
 	drawing[model] = { joints = joints, kind = kind, start = start, length = length, clock = clock, pose = pose, blendIn = blendIn, touched = {} }
 end
 
+-- How far through its move a drawing is, 0..1 (time stands still during its hold).
+local function progress(d: Drawing): number
+	local now = d.clock()
+	local from, untilAt = d.holdFrom, d.holdUntil
+	local elapsed = now - d.start
+	if from and untilAt then
+		elapsed -= math.clamp(now, from, untilAt) - from
+	end
+	return elapsed / d.length
+end
+
 -- How much of the pose shows at `u` (0..1): blended in from the animation at the start and back out at the end.
 local function weight(d: Drawing, u: number): number
 	local into = if d.blendIn > 0 then math.min(u / d.blendIn, 1) else 1
@@ -81,7 +96,7 @@ end
 
 RunService.Stepped:Connect(function()
 	for model, d in drawing do
-		local u = (d.clock() - d.start) / d.length
+		local u = progress(d)
 		local root = d.joints.Root or d.joints.Waist
 		if u >= 1 or not (root and root:IsDescendantOf(Workspace)) then
 			drawing[model] = nil
@@ -125,6 +140,23 @@ function SwingPose.play(model: Model, at: number, weapon: string, step: number)
 	end, BLEND_IN)
 end
 
+-- A blow of `model`'s landed: its attack pose stands still `seconds` from now (the hold that makes a hit land, on both
+-- sides). One hold per attack: a blow landing on several fighters, or the server's word after this client's own, holds
+-- it no longer than the longest of them.
+function SwingPose.hold(model: Model, seconds: number)
+	local d = drawing[model]
+	if not (d and d.kind == "attack") or seconds <= 0 then
+		return
+	end
+	local from = d.holdFrom
+	if from then
+		d.holdUntil = math.max(d.holdUntil or from, from + seconds)
+	else
+		local now = d.clock()
+		d.holdFrom, d.holdUntil = now, now + seconds
+	end
+end
+
 -- A hit on `model` of `kind` ("light", "launch" or "smash") that pushed it along `push`: its reaction, starting now
 -- (snapping in at once).
 function SwingPose.react(model: Model, kind: string, push: Vector3?)
@@ -145,9 +177,9 @@ function SwingPose.react(model: Model, kind: string, push: Vector3?)
 end
 
 -- Follows a character's Names.SwingAt (every attack the server takes). `skip(at, step)` returns true for an attack
--- this client already drew (the player's own, started at once); `heard(weapon)` sounds the others. Returns the
+-- this client already drew (the player's own, started at once); `heard(weapon, step)` sounds the others. Returns the
 -- connection.
-function SwingPose.follow(model: Model, skip: (number, number) -> boolean, heard: (string) -> ()): RBXScriptConnection
+function SwingPose.follow(model: Model, skip: (number, number) -> boolean, heard: (string, number) -> ()): RBXScriptConnection
 	return model:GetAttributeChangedSignal(Names.SwingAt):Connect(function()
 		local at = model:GetAttribute(Names.SwingAt)
 		local raw = model:GetAttribute(Names.SwingStep)
@@ -155,7 +187,7 @@ function SwingPose.follow(model: Model, skip: (number, number) -> boolean, heard
 		if typeof(at) == "number" and not skip(at, step) then
 			local weapon = WeaponRules.named(Config.Weapons, model:GetAttribute(Names.SwingWeapon))
 			SwingPose.play(model, at, weapon, step)
-			heard(weapon)
+			heard(weapon, step)
 		end
 	end)
 end

@@ -7,8 +7,9 @@
 -- click attacks only while the mouse is locked); every character's attacks are drawn from their Names.SwingAt; what
 -- everyone holds shows (WeaponHud), crates and lit sticks are heard (DropShow), dynamite bursts show (ExplosionShow);
 -- a hit from the server flinches or
--- launches the player's own character (KnockFlight) and is shown for everyone (HitFeedback and a flinch or flail
--- pose, SwingPose; a home run also HomeRunShow); a fall lays the player down behind the train (FallDrift); health shows over heads and at the bottom
+-- launches the player's own character (KnockFlight) and is shown for everyone (HitFeedback with the camera kick, a
+-- flinch or flail pose and the attacker's hold in SwingPose, a hit spark from ImpactBurst, a launch's streak and
+-- landing dust from LaunchShow; a home run also HomeRunShow); a fall lays the player down behind the train (FallDrift); health shows over heads and at the bottom
 -- (HealthBars), the round at the top (RoundHud) with the knock-off feed under it (FeedHud) and the round's sound
 -- (RoundAudio), the first-ride card shows the controls once (RideCard), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
 -- is watched first).
@@ -25,6 +26,7 @@ local PartUtil = require(shared:WaitForChild("PartUtil"))
 local ArenaLayout = require(shared:WaitForChild("ArenaLayout"))
 local SoundBank = require(shared:WaitForChild("SoundBank"))
 local WeaponRules = require(shared:WaitForChild("WeaponRules"))
+local AttackString = require(shared:WaitForChild("AttackString"))
 local Scenery = require(script:WaitForChild("Scenery"))
 local Canyon = require(script:WaitForChild("Canyon"))
 local CarDecor = require(script:WaitForChild("CarDecor"))
@@ -46,6 +48,8 @@ local RoundAudio = require(script:WaitForChild("RoundAudio"))
 local WeaponHud = require(script:WaitForChild("WeaponHud"))
 local DropShow = require(script:WaitForChild("DropShow"))
 local ExplosionShow = require(script:WaitForChild("ExplosionShow"))
+local ImpactBurst = require(script:WaitForChild("ImpactBurst"))
+local LaunchShow = require(script:WaitForChild("LaunchShow"))
 local RideCard = require(script:WaitForChild("RideCard"))
 
 local player = Players.LocalPlayer
@@ -93,6 +97,8 @@ local function fighters(): { Model }
 	return list
 end
 
+local STRING = AttackString.rules(Config.Attack)
+
 local own = OwnSwing.new(swingRemote, {
 	fighters = fighters,
 	stunned = function(): boolean
@@ -100,9 +106,19 @@ local own = OwnSwing.new(swingRemote, {
 	end,
 	draw = function(model: Model, at: number, weapon: string, step: number)
 		SwingPose.play(model, at, weapon, step)
-		HitFeedback.swing(model, weapon)
+		HitFeedback.swing(model, weapon, AttackString.launches(STRING, step, Config.Weapons[weapon].style))
 	end,
-	predict = HitFeedback.predict,
+	predict = function(victim: Model, weapon: string, finisher: boolean)
+		local character = player.Character
+		local from = if character then character:GetPivot().Position else victim:GetPivot().Position
+		if HitFeedback.predict(victim, weapon, from) then
+			local kind = if finisher then "launch" else "light"
+			ImpactBurst.play(ImpactBurst.at(victim, from), kind, weapon, victim:GetPivot().Position - from)
+			if character then
+				SwingPose.hold(character, Config.Feedback.HitStop[kind])
+			end
+		end
+	end,
 })
 SwingInput.bind(function(mouse: boolean)
 	if not mouse or aim:clickSwings() then
@@ -118,8 +134,8 @@ local function follow(model: Model)
 			return true
 		end
 		return false
-	end, function(weapon: string)
-		HitFeedback.swing(model, weapon)
+	end, function(weapon: string, step: number)
+		HitFeedback.swing(model, weapon, AttackString.launches(STRING, step, Config.Weapons[weapon].style))
 	end)
 end
 local function onPlayer(other: Player)
@@ -144,20 +160,41 @@ for _, instance in CollectionService:GetTagged(Names.SandbagTag) do
 end
 
 -- A hit, from the server: the victim's own client knocks it; everyone shows it.
-hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swinger: unknown, kind: unknown, weapon: unknown)
+hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swinger: unknown, kind: unknown, weapon: unknown, ganged: unknown)
 	if typeof(victim) ~= "Instance" or not victim:IsA("Model") then
 		return
 	end
 	local hitKind = if typeof(kind) == "string" then kind else "launch"
+	local push = if typeof(velocity) == "Vector3" then velocity else nil
 	local me = victim == player.Character
-	if me and typeof(velocity) == "Vector3" then
-		knock:hit(victim, velocity, hitKind)
+	if me and push then
+		knock:hit(victim, push, hitKind)
 		own:broken() -- being hit breaks the player's own string, as on the server
 	end
-	SwingPose.react(victim, hitKind, if typeof(velocity) == "Vector3" then velocity else nil)
-	HitFeedback.hit(victim, swinger == player.Character, me, hitKind, if typeof(weapon) == "string" then weapon else WeaponRules.FIST)
+	SwingPose.react(victim, hitKind, push)
+	local hitWeapon = if typeof(weapon) == "string" then weapon else WeaponRules.FIST
+	local mine = swinger == player.Character
+	local shown = HitFeedback.hit(victim, mine, me, hitKind, hitWeapon, push)
+	local attacker = if typeof(swinger) == "Instance" and swinger:IsA("Model") then swinger else nil
+	local thrown = Config.Weapons[hitWeapon] ~= nil and Config.Weapons[hitWeapon].style == "throw"
+	local crowd = ganged == true
+	-- (A crowd's launch shows red even on the screen that showed its own hit at once: that showed only a light hit.)
+	if shown or crowd then
+		-- A blast's burst is on the victim (its thrower is far away); a blow's toward whoever struck it.
+		local from = if attacker and not thrown then attacker:GetPivot().Position else nil
+		ImpactBurst.play(ImpactBurst.at(victim, from), if crowd then "crowd" elseif hitKind == "light" then "light" else "launch", hitWeapon, push)
+	end
+	if shown and attacker and not thrown then
+		-- The player's own hits shown at once were held then (one hold per attack either way); a thrower is long done.
+		SwingPose.hold(attacker, Config.Feedback.HitStop[hitKind] or 0)
+	end
+	if hitKind == "launch" then
+		LaunchShow.play(victim)
+	end
 	if hitKind == "smash" then
-		HomeRunShow.play(victim)
+		HomeRunShow.play(victim, function(at: Vector3)
+			ImpactBurst.play(at, "launch", WeaponRules.FIST, nil) -- the twinkle the flight ends in
+		end)
 	end
 end)
 
@@ -196,7 +233,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 	card:update(if typeof(phase) == "string" then phase else "Waiting", alive)
 end)
 -- After the camera has moved for the frame: the mouse lock (the Roblox camera resets the mouse every frame), then the
--- shake for a hit on the player.
+-- camera kick for a hit.
 RunService:BindToRenderStep("TrainBrawlAim", Enum.RenderPriority.Camera.Value + 1, function(dt: number)
 	local character = player.Character
 	local camera = Workspace.CurrentCamera
@@ -204,4 +241,4 @@ RunService:BindToRenderStep("TrainBrawlAim", Enum.RenderPriority.Camera.Value + 
 	local onSelf = humanoid ~= nil and camera.CameraSubject == humanoid
 	aim:update(character, onSelf and not drift:active(), not knock:stunned(), dt)
 end)
-RunService:BindToRenderStep("TrainBrawlShake", Enum.RenderPriority.Camera.Value + 2, HitFeedback.update)
+RunService:BindToRenderStep("TrainBrawlKick", Enum.RenderPriority.Camera.Value + 2, HitFeedback.update)

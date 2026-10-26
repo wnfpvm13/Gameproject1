@@ -358,7 +358,7 @@ Config.Hit = {
 	-- the moment of being unhittable after it), so a crowd cannot keep someone flinching.
 	GangWindow = 1.5,
 	GangHits = 3,
-	-- Light: held still Config.Feedback.HitStopSeconds, then pushed along the ground for SlideSeconds at a speed from
+	-- Light: held still Config.Feedback.HitStop.light, then pushed along the ground for SlideSeconds at a speed from
 	-- LightFull (full health) to LightEmpty (none); no swinging for LightStun. Measured 2026-10-25: 1.2 studs at 88
 	-- health, 2 at 40 (the Humanoid carries on a little after the push).
 	LightStun = 0.3,
@@ -375,7 +375,7 @@ Config.Hit = {
 	LaunchImmune = 0.9, -- a launched fighter cannot be hit for this long (flight, getting up and a moment more)
 	-- Smash, the home run: high into the sky and away. With this lift a body is still in the air (higher than the
 	-- highest top) when Config.Fall.HomeRunSeconds ends and it twinkles out - hit on the lowest deck it would reach the
-	-- sand about 0.27 s later - and its top (about 55, 60 from a chimney top) stays under the stands (80) (tests).
+	-- sand about 0.37 s later (its flight starts after the 0.16 s hold) - and its top (about 55, 60 from a chimney top) stays under the stands (80) (tests).
 	SmashPush = 60,
 	SmashLift = 120,
 }
@@ -390,18 +390,27 @@ Config.Knock = {
 	-- screen (about a round trip), so it is still taken; later, while the hit's stun lasts (Config.Hit.LightStun or
 	-- MinSeconds), the server refuses swings.
 	SwingGrace = 0.25,
+	-- A home run's body tumbles head over heels the way it was pushed, this many turns over its flight. A plain launch
+	-- does not: measured 2026-10-26 (Studio, same rig with and without), a quarter turn sent a health-64 launch 6.9 studs
+	-- instead of 3.1 (the body lands on its back and slides) - near the 7.5 from a roof's middle to its edge, so it
+	-- would change who stays on. A launch shows by its flailing pose instead (AttackPoses).
+	SpinTurns = { launch = 0, smash = 1.25 } :: { [string]: number },
 }
 
--- How a hit feels: its sound (Config.Sounds), a white flash on whoever is hit, and a little shake for the one hit.
+-- How a hit feels: its sound (Config.Sounds), a white flash and a comic burst where it lands, a hold (whoever is hit
+-- holds still, and the attacker's pose pauses with it), and a camera kick the way the hit went.
 Config.Feedback = {
-	HitStopSeconds = 0.06, -- whoever is hit holds still this long before flying (the beat that makes a hit land)
+	-- The hold: a heavier hit holds longer (the beat that makes a hit land). A launch's flight starts after it.
+	HitStop = { light = 0.06, launch = 0.1, smash = 0.16 } :: { [string]: number },
 	FlashSeconds = 0.15,
-	ShakeSeconds = 0.15,
-	ShakeStuds = 0.5,
+	BurstSeconds = 0.18, -- the comic burst where a hit lands
+	KickSeconds = 0.2, -- the camera kick
+	KickStuds = { light = 0.35, launch = 0.8, smash = 1.1, dealt = 0.15 } :: { [string]: number }, -- dealt: the attacker's own
+	FovPunch = 7, -- a launch or smash taken narrows the view this many degrees for a moment
+	DustSeconds = 0.6, -- the puff where a launched body lands
 	HomeRunTextSeconds = 1.6, -- the big "홈런!" over where the home run was hit
 	Gold = Color3.fromRGB(255, 214, 90), -- the home run's colour (text, trail, feed line)
 	TrailSeconds = 0.25, -- the light trail behind a home-run flight
-	TwinkleSeconds = 0.7, -- the star a home-run flight ends in
 	FeedSeconds = 4, -- a line in the knock-off feed stays this long
 	FeedLines = 3,
 }

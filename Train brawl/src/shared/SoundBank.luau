@@ -61,15 +61,20 @@ local function make(name: string, parent: Instance): Sound?
 	return sound
 end
 
--- Plays `name` once, at `at` (3D) or for the whole screen when nil.
-function SoundBank.play(name: string, at: BasePart?)
+-- Plays `name` once, at `at` (3D) or for the whole screen when nil; `speed` plays it that much faster (lower when
+-- under 1) instead of its usual small variation.
+function SoundBank.play(name: string, at: BasePart?, speed: number?)
 	local sound = make(name, at or SoundService)
 	if not sound then
 		return
 	end
+	if speed then
+		sound.PlaybackSpeed = speed
+	end
 	sound:Play()
 	local entry = (Config.Sounds :: any)[name]
-	local cut: number? = entry.seconds
+	-- Cut by how long it plays at its speed (slowed down, the same part of the recording takes longer).
+	local cut: number? = if entry.seconds then entry.seconds / sound.PlaybackSpeed else nil
 	if cut then
 		local function startCut()
 			task.delay(math.max(0, cut - FADE_SECONDS), function()

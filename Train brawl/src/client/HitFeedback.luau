@@ -1,8 +1,10 @@
 --!strict
 -- How hits feel on this client: a whoosh when someone attacks (each weapon's own: a punch, a bat's swing, a hammer's
--- heavy swing, a gold bar's, a throw), and for a hit a thump at the victim (each weapon's own: a punch, a bat, a
--- hammer's slam, a gold bar's clang; a dynamite blast is heard from ExplosionShow), a short white flash on them and,
--- when the victim is the player, a little camera shake. A launch adds a heavier layer (the bat's whack, a heavy body
+-- heavy swing, a gold bar's, a throw; a string's launching last step deeper and longer), and for a hit a thump at the
+-- victim (each weapon's own: a punch, a bat, a hammer's slam, a gold bar's clang; a dynamite blast is heard from
+-- ExplosionShow), a short white flash on them, and a camera kick: the player hit is knocked the way the hit pushed
+-- (harder and with the view narrowing for a moment on a launch or smash), the player who hit gets a small push
+-- toward the blow. A launch adds a heavier layer (the bat's whack, a heavy body
 -- blow for the rest), a home run (the smash that empties health) a finishing sound for the whole screen over the
 -- weapon's own thump (the bat's crack, a heavy blow for the rest: never the thump's own recording twice) and a cartoon
 -- slide whistle as the body flies off (its flight is HomeRunShow's). The player's own swing shows
@@ -24,7 +26,10 @@ local HitFeedback = {}
 local predicted: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
 -- Fighters launched lately, until when they cannot be hit (os.clock), from the server's word.
 local unhittable: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
-local shakeUntil = 0
+-- The camera kick running now: which way (world), how far at its peak, when it started, how much the view narrows,
+-- and the view's own width (kept while any narrowing is on, so it always comes back).
+local kick = { dir = Vector3.zero, studs = 0, start = -math.huge, fov = 0, baseFov = 70, narrowed = false }
+local PEAK = 0.2 -- the kick is out at its farthest this share of the way through
 
 local function flash(model: Model)
 	local highlight = Instance.new("Highlight")
@@ -57,28 +62,69 @@ local function show(victim: Model, weapon: string)
 	end
 end
 
--- Someone attacks with `weapon` (any character).
-function HitFeedback.swing(model: Model, weapon: string)
+-- How far out the kick is, 0..1, `s` of the way through: out fast, then easing back.
+local function kickAmount(s: number): number
+	if s < 0 or s >= 1 then
+		return 0
+	end
+	return if s < PEAK then s / PEAK else (1 - (s - PEAK) / (1 - PEAK)) ^ 2
+end
+
+-- Starts a camera kick along world `dir`, `studs` at its peak, narrowing the view `fov` degrees. A kick arriving while
+-- one is still out carries on from where that one is (no jump back to the middle) and keeps the larger narrowing.
+local function startKick(dir: Vector3, studs: number, fov: number)
+	local flat = Vector3.new(dir.X, 0, dir.Z)
+	if flat.Magnitude < 1e-3 or studs <= 0 then
+		return
+	end
+	local camera = Workspace.CurrentCamera
+	local now = os.clock()
+	local s = (now - kick.start) / Config.Feedback.KickSeconds
+	local before = kickAmount(s)
+	if not kick.narrowed then
+		kick.baseFov = camera.FieldOfView -- no narrowing on: this is the real width
+	end
+	local carried = kick.dir * kick.studs * before
+	local wanted = flat.Unit * studs
+	local both = carried + wanted
+	kick.dir = if both.Magnitude > 1e-3 then both.Unit else flat.Unit
+	kick.studs = math.max(studs, carried.Magnitude)
+	kick.fov = math.max(fov, kick.fov * before)
+	-- Start at the peak when the old kick is still out, or from the middle when nothing is.
+	kick.start = if before > 0.05 then now - PEAK * Config.Feedback.KickSeconds else now
+	kick.narrowed = kick.narrowed or kick.fov > 0
+end
+
+-- Someone attacks with `weapon` (any character); `finisher`: the launching last step of a string.
+function HitFeedback.swing(model: Model, weapon: string, finisher: boolean)
 	local body = CharacterParts.body(model)
 	local whoosh = WHOOSHES[weapon]
 	if body and whoosh then
-		SoundBank.play(whoosh, body.root)
+		-- Deeper and longer for the big one (still a little different each time).
+		SoundBank.play(whoosh, body.root, if finisher then 0.8 * (0.96 + math.random() * 0.08) else nil)
 	end
 end
 
--- The player's own attack with `weapon` hit this victim, as this client saw it.
-function HitFeedback.predict(victim: Model, weapon: string)
+-- The player's own attack with `weapon` hit this victim, as this client saw it, from `from` (the player's position).
+-- Returns whether it was shown (not while the victim cannot be hit).
+function HitFeedback.predict(victim: Model, weapon: string, from: Vector3): boolean
 	local endsAt = unhittable[victim]
 	if endsAt and os.clock() < endsAt then
-		return -- just launched: the server will not take this hit
+		return false -- just launched: the server will not take this hit
 	end
 	predicted[victim] = os.clock()
 	show(victim, weapon)
+	local body = CharacterParts.body(victim)
+	if body then
+		startKick(body.root.Position - from, Config.Feedback.KickStuds.dealt, 0)
+	end
+	return true
 end
 
 -- The server's word on a hit. mine: the attacker is the player; me: the victim is the player; kind: "light",
--- "launch" or "smash"; weapon: what hit.
-function HitFeedback.hit(victim: Model, mine: boolean, me: boolean, kind: string, weapon: string)
+-- "launch" or "smash"; weapon: what hit; push: the knock's velocity. Returns whether the plain hit (thump, flash) was
+-- shown now - not when this client showed it already from its own attack.
+function HitFeedback.hit(victim: Model, mine: boolean, me: boolean, kind: string, weapon: string, push: Vector3?): boolean
 	if kind == "launch" then
 		unhittable[victim] = os.clock() + Config.Hit.LaunchImmune
 	end
@@ -88,7 +134,8 @@ function HitFeedback.hit(victim: Model, mine: boolean, me: boolean, kind: string
 	if mine then
 		predicted[victim] = nil
 	end
-	if not (seen and os.clock() - seen < Config.Knock.PredictForget) then
+	local shownNow = not (seen and os.clock() - seen < Config.Knock.PredictForget)
+	if shownNow then
 		show(victim, weapon)
 	end
 	local body = CharacterParts.body(victim)
@@ -103,17 +150,35 @@ function HitFeedback.hit(victim: Model, mine: boolean, me: boolean, kind: string
 		end
 		SoundBank.play("FlyOff")
 	end
-	if me then
-		shakeUntil = os.clock() + Config.Feedback.ShakeSeconds
+	if me and push then
+		startKick(push, Config.Feedback.KickStuds[kind] or 0, if kind == "light" then 0 else Config.Feedback.FovPunch)
+	elseif mine and shownNow and push then
+		startKick(push, Config.Feedback.KickStuds.dealt, 0) -- a hit this client did not show at once (a slam, a blast)
 	end
+	return shownNow
 end
 
--- Every frame, after the camera has moved: the shake for a hit on the player.
+-- Every frame, after the camera has moved: the kick running now. A push across the view moves the camera sideways and
+-- tilts it a little; a push along the view (hit from the front or behind) dips it instead of sliding it forward or
+-- back, which the narrowing would cancel out. The view's width always comes back when the kick ends.
 function HitFeedback.update()
-	if os.clock() < shakeUntil then
-		local s = Config.Feedback.ShakeStuds
-		local camera = Workspace.CurrentCamera
-		camera.CFrame *= CFrame.new((math.random() - 0.5) * s, (math.random() - 0.5) * s, 0)
+	local camera = Workspace.CurrentCamera
+	local s = (os.clock() - kick.start) / Config.Feedback.KickSeconds
+	local amount = kickAmount(s)
+	if amount <= 0 then
+		if kick.narrowed and s >= 1 then
+			camera.FieldOfView = kick.baseFov
+			kick.narrowed, kick.fov = false, 0
+		end
+		return
+	end
+	local frame = camera.CFrame
+	local across = kick.dir:Dot(frame.RightVector)
+	local along = kick.dir:Dot(frame.LookVector)
+	local offset = frame.RightVector * across - frame.UpVector * (0.6 * math.abs(along)) + frame.LookVector * (0.25 * along)
+	camera.CFrame = (frame + offset * kick.studs * amount) * CFrame.Angles(0, 0, math.rad(-4 * across * amount))
+	if kick.narrowed then
+		camera.FieldOfView = kick.baseFov - kick.fov * amount
 	end
 end
 

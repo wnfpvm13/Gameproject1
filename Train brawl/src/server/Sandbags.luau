@@ -159,7 +159,7 @@ function Sandbags.start(fallLine: number, surfaces: { ArenaLayout.Surface }): Se
 				BodyMotion.stagger(bag.body, velocity, reclaim)
 			else
 				bag.stiffSince = os.clock()
-				BodyMotion.launch(bag.body, velocity, reclaim)
+				BodyMotion.launch(bag.body, velocity, kind, reclaim)
 			end
 			return true
 		end,

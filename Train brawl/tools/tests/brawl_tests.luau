@@ -307,7 +307,7 @@ do
 	local u = HitRules.new(100)
 	local kinds, now = {}, 0
 	for _ = 1, 9 do
-		table.insert(kinds, HitRules.hit(u, rules, now, 12, false, "A"))
+		table.insert(kinds, (HitRules.hit(u, rules, now, 12, false, "A")))
 		now += 1
 	end
 	check("the hit that empties health is a smash (the 9th from full)", kinds[9] == "smash" and kinds[8] ~= "smash" and u.health == 0, table.concat(kinds, ","))
@@ -366,13 +366,15 @@ do
 	local function heightAt(startY: number, after: number): number
 		return startY + h.SmashLift * after - GRAVITY / 2 * after * after
 	end
-	check("a home run from the lowest deck is still higher than the highest top when it twinkles out", heightAt(lowestTop + 3, t) - 3 > highestTop, string.format("%.1f", heightAt(lowestTop + 3, t)))
+	local hold = Config.Feedback.HitStop.smash -- the flight starts after the hold
+	check("a home run from the lowest deck is still higher than the highest top when it twinkles out", heightAt(lowestTop + 3, t - hold) - 3 > highestTop, string.format("%.1f", heightAt(lowestTop + 3, t - hold)))
 	-- It would reach the sand (its middle about 3 above it) a good moment after the twinkle, so a late network word
 	-- does not show it lying on the sand first.
 	local sandY = A.GroundY + 3
 	local land = (h.SmashLift + math.sqrt(h.SmashLift * h.SmashLift + 2 * GRAVITY * (lowestTop + 3 - sandY))) / GRAVITY
 	-- The flight starts after the hold, so it has flown (t - hold) when the server takes it away.
-	check("a home run reaches the sand at least 0.2 s after it twinkles out", land > t - Config.Feedback.HitStopSeconds + 0.2, string.format("%.2f", land))
+	check("a home run reaches the sand at least 0.2 s after it twinkles out", land > t - hold + 0.2, string.format("%.2f", land))
+	check("a heavier hit holds longer, and every hold is short", Config.Feedback.HitStop.light < Config.Feedback.HitStop.launch and Config.Feedback.HitStop.launch < Config.Feedback.HitStop.smash and Config.Feedback.HitStop.smash <= 0.2)
 	local top = highestTop + 3 + h.SmashLift * h.SmashLift / (2 * GRAVITY)
 	check("a home run's top stays under where the stands begin, even from the highest top", top < A.WaitingRoomHeight - A.StandsMargin - 2, string.format("%.1f", top))
 	local quickest = math.huge
@@ -634,7 +636,11 @@ do
 	local a = HitRules.new(100)
 	HitRules.hit(a, rules, 0, 8, false, "A")
 	HitRules.hit(a, rules, 0.4, 8, false, "B")
-	check("three attackers' hits together launch too", HitRules.hit(a, rules, 0.8, 8, false, "C") == "launch")
+	local crowdKind, crowd = HitRules.hit(a, rules, 0.8, 8, false, "C")
+	check("three attackers' hits together launch too, marked as a crowd's launch", crowdKind == "launch" and crowd == true)
+	local own = HitRules.new(100)
+	local ownKind, ownCrowd = HitRules.hit(own, rules, 0, 8, true, "A")
+	check("an attacker's own launch is not marked as a crowd's", ownKind == "launch" and ownCrowd == false)
 	local e = HitRules.new(100)
 	HitRules.hit(e, rules, 0, 8, false, "A")
 	HitRules.hit(e, rules, 0.75, 8, false, "B")

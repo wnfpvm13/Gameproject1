@@ -29,15 +29,15 @@ function HitRules.new(max: number): State
 end
 
 -- A hit of `damage` at time `now` by `by` (launch: the attacker's hit launches): updates `state` and says what kind
--- of hit it was ("none" while unhittable).
-function HitRules.hit(state: State, rules: Rules, now: number, damage: number, launch: boolean?, by: unknown?): Kind
+-- of hit it was ("none" while unhittable) and whether a crowd launched it (the guard, not the attacker's own launch).
+function HitRules.hit(state: State, rules: Rules, now: number, damage: number, launch: boolean?, by: unknown?): (Kind, boolean)
 	if now < state.immuneUntil or state.health <= 0 then
-		return "none"
+		return "none", false
 	end
 	state.health = math.max(0, state.health - damage)
 	if state.health <= 0 then
 		state.recent = {}
-		return "smash"
+		return "smash", false
 	end
 	local kept = {}
 	for _, hit in state.recent do
@@ -59,9 +59,9 @@ function HitRules.hit(state: State, rules: Rules, now: number, damage: number, l
 	if launch or ganged then
 		state.recent = {}
 		state.immuneUntil = now + rules.immune
-		return "launch"
+		return "launch", ganged and not launch
 	end
-	return "light"
+	return "light", false
 end
 
 -- A value that goes from `full` (health at max) to `empty` (health at 0) in a straight line.

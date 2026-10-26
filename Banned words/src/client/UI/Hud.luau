@@ -28,7 +28,28 @@ function Hud.build()
 	top.AnchorPoint = Vector2.new(0.5, 0)
 	top.Position = UDim2.new(0.5, 0, 0, 8)
 	top.Size = UDim2.new(0.5, 0, 0, 64)
-	Style.limit(top, Vector2.new(320, 0), Vector2.new(580, 200))
+	-- (at most the screen less 250 px each side: on a small PC window Roblox's player list sits at the top right,
+	-- review 2026-10-25)
+	local limit = Instance.new("UISizeConstraint")
+	limit.MinSize = Vector2.new(320, 0)
+	limit.Parent = top
+	local function fit()
+		local camera = workspace.CurrentCamera
+		local width = if camera then camera.ViewportSize.X - 500 else 580
+		limit.MaxSize = Vector2.new(math.clamp(width, 320, 580), 200)
+	end
+	fit()
+	local watched: Camera? = nil
+	local function watch()
+		local camera = workspace.CurrentCamera
+		if camera and camera ~= watched then
+			watched = camera
+			camera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
+			fit()
+		end
+	end
+	watch()
+	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watch)
 
 	statusL = Style.label(top, Style.BOLD, 22, Style.INK)
 	statusL.Position = UDim2.fromScale(0.04, 0.06)

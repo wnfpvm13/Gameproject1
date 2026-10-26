@@ -2,7 +2,9 @@
 -- My seat bell (docs/DESIGN_V3.md §5.1, §9; bundle 6b): a ProximityPrompt on my own chair's bell only (E, gamepad X,
 -- touch; the chairs stand 5 studs apart, so a prompt on every bell would reach the neighbours' too). It is enabled
 -- while the server has my bell open; a press asks the server to ring it (the server checks everything). Also finds any
--- player's bell, by the chair their character sits on, for the ding and the light.
+-- player's bell, by the chair their character sits on, for the ding and the light. The prompt draws nothing (Custom
+-- style, review 2026-10-25: its "E 벨" box sat over the seated players); E still rings, and the screen bell button
+-- shows the key.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -57,6 +59,7 @@ function Bell.set(canRing: boolean)
 			p.HoldDuration = 0
 			p.MaxActivationDistance = PROMPT_DISTANCE
 			p.RequiresLineOfSight = false
+			p.Style = Enum.ProximityPromptStyle.Custom
 			p.Triggered:Connect(function()
 				onRing()
 			end)

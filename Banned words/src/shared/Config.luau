@@ -298,6 +298,12 @@ return {
 	-- studs over the head). While words show over heads the tag is taller: ChatLook adds their rows (owner 2026-10-25:
 	-- a chat bubble was hidden behind the words).
 	CHAT_BUBBLE_VERTICAL_OFFSET = 2.5,
+	-- The show camera frames a round of few players closer (client ShowCamera, review 2026-10-25): the seated chairs plus
+	-- SHOW_MARGIN studs on each side, at least SHOW_MIN_HALF_WIDTH (whole row: the map's HalfWidth), FOV not under
+	-- SHOW_MIN_FOV.
+	SHOW_MARGIN = 8,
+	SHOW_MIN_HALF_WIDTH = 20,
+	SHOW_MIN_FOV = 20,
 
 	-- Presenter (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23): a volunteer runs the round from the podium.
 	PRESENTER_PICK_SECONDS = 10, -- the presenter picks the next game between games (then a random one)

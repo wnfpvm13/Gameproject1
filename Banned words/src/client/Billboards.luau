@@ -16,7 +16,7 @@ local Billboards = {}
 local WORD_FONT = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Heavy)
 local NAME_FONT = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold)
 local WIDTH = 4.6 -- studs; the flying chairs are 5 studs apart
-local ROW = 1.0 -- studs per word row
+local ROW = 1.4 -- studs per word row (review 2026-10-25: 1.0 was too small to read from the show camera)
 local NAME_ROW = 0.9
 local HEART_ROW = 0.8
 -- (the HUD's sticker look, owner 2026-10-25: paper and dark outlines; 2026-10-24 the name pill was black)

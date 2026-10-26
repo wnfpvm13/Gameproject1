@@ -10,6 +10,7 @@
 -- rests faded and still.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Style = require(script.Parent:WaitForChild("Style"))
@@ -58,6 +59,21 @@ function BellButton.build(onRing: () -> ())
 	button:GetPropertyChangedSignal("IsLoaded"):Connect(function()
 		standIn.Visible = not button.IsLoaded
 	end)
+	-- The key on a keyboard (the seat bell's prompt draws nothing, review 2026-10-25): a small sticker "E".
+	local key = Instance.new("TextLabel")
+	key.Name = "Key"
+	key.AnchorPoint = Vector2.new(1, 1)
+	key.Position = UDim2.fromScale(1, 1)
+	key.Size = UDim2.fromOffset(30, 30)
+	key.BackgroundColor3 = Style.PAPER
+	key.FontFace = Style.BOLD
+	key.TextSize = 20
+	key.TextColor3 = Style.INK
+	key.Text = "E"
+	key.ZIndex = 5
+	Style.round(key, 8)
+	key.Visible = UserInputService.KeyboardEnabled
+	key.Parent = button
 	local function press()
 		wiggle()
 		if live then

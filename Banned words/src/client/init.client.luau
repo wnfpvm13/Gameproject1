@@ -130,7 +130,7 @@ local function refresh()
 		presenter = if State.inRound() then round.presenter else nil,
 	}))
 	local seated = (State.inRound() and State.meAlive()) or os.clock() < myFlightEndsAt
-	ShowCamera.set(if presenting then "presenter" elseif seated then "show" else nil)
+	ShowCamera.set(if presenting then "presenter" elseif seated then "show" else nil, round.total)
 	ReactionBar.setVisible(not (State.inRound() and State.meAlive()) and not presenting)
 	-- Anyone not playing the round may volunteer (an out player or a spectator can take over a round,
 	-- docs/DESIGN_V3.md §8); the presenter steps down with the same button. Chat participants cannot present.

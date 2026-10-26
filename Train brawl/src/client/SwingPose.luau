@@ -7,12 +7,14 @@
 -- player's own (play(); redrawn as another step when the server counted it differently, restep()). A hit reaction
 -- (react(): a light hit's flinch the way the hit pushed, a launch's flail) takes over from an attack at once, and no
 -- attack is drawn over a flail; an attack taking over from another pose fades from where that one left each joint
--- (FADE). The pose is blended in from what the walking or idle animation shows and back out to it (no snap through
--- standing straight); a joint no animation moves blends from and back to straight instead. The joints are written in
+-- (FADE), the joints it does not turn back to the animation. The pose is blended in from what the walking or idle
+-- animation shows and back out to it (no snap through standing straight). The joints are written in
 -- RunService.Stepped, after the Animator has written them for the frame (a value written in RenderStepped is
--- overwritten before it is drawn - learned in Western train's CowboyPose); when a pose ends, the joints the Animator
--- moves are simply left to it (writing them straight there would show one frame of standing straight) and the others
--- put straight. When a blow lands, its attacker's pose pauses for the hit's hold (hold()), as the victim holds still.
+-- overwritten before it is drawn - learned in Western train's CowboyPose), and put straight each frame just before
+-- the Animator runs (RunService.PreAnimation): so what Stepped finds is the animation's pose - straight for a joint no
+-- animation moves - and a pose that ends simply stops (writing joints straight in Stepped would show a frame of
+-- standing straight; they are put straight once more before the next animation step). When a blow lands, its
+-- attacker's pose pauses for the hit's hold (hold()), as the victim holds still.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -34,7 +36,7 @@ local FADE = 0.08 -- an attack taking over from another pose fades from it over 
 
 -- A pose being drawn on a character: its joints, what kind ("attack", "light" or "flail"), when it started (server
 -- time for attacks, os.clock for reactions) and how long it lasts, the pose at a share of it, how it blends in, and
--- what was written to each joint last (to tell a joint no animation moves, and to fade the next pose from).
+-- what was written to each joint last (put straight before each animation step, and faded from by the next pose).
 -- holdFrom/holdUntil: a hold on the pose (when a blow lands): time stands still for the drawing between them.
 -- fadeFrom/fadeAt: where the pose it took over from left each joint, and when (os.clock) it took over.
 type Drawing = {
@@ -52,20 +54,28 @@ type Drawing = {
 	fadeAt: number,
 }
 local drawing: { [Model]: Drawing } = {}
+-- Joints a pose wrote that is over or replaced: put straight once before the next animation step.
+local loose: { CharacterParts.Joint } = {}
 
 local function serverNow(): number
 	return Workspace:GetServerTimeNow()
 end
 
--- Hands the joints the drawing wrote back (when the character is still in the world): each one still holding what
--- was written last is put straight - between frames that is every one (the Animator writes its own again before the
--- next is drawn); at a pose's end, in Stepped, only those no animation moves (the others show the animation already).
+-- Hands the joints the drawing wrote back to the animation (put straight before the next animation step).
 local function release(d: Drawing)
-	for name, value in d.written do
+	for name in d.written do
 		local joint = d.joints[name]
-		if joint and joint:IsDescendantOf(Workspace) and (joint :: any).Transform == value then
-			(joint :: any).Transform = CFrame.identity
+		if joint then
+			table.insert(loose, joint)
 		end
+	end
+end
+
+-- Puts `joint` straight (when the character is still in the world). Both joint kinds have Transform; the type checker
+-- cannot read or write through the union.
+local function straighten(joint: CharacterParts.Joint)
+	if joint:IsDescendantOf(Workspace) then
+		(joint :: any).Transform = CFrame.identity
 	end
 end
 
@@ -114,6 +124,27 @@ local function weight(d: Drawing, u: number): number
 	return w * w * (3 - 2 * w)
 end
 
+RunService.PreAnimation:Connect(function()
+	for _, joint in loose do
+		straighten(joint)
+	end
+	table.clear(loose)
+	for _, d in drawing do
+		for name in d.written do
+			local joint = d.joints[name]
+			if joint then
+				straighten(joint)
+			end
+		end
+	end
+end)
+
+-- Writes `value` to the drawing's joint `name` (remembered for the next frame and the next pose).
+local function write(d: Drawing, name: string, motor: any, value: CFrame)
+	motor.Transform = value
+	d.written[name] = value
+end
+
 RunService.Stepped:Connect(function()
 	for model, d in drawing do
 		local u = progress(d)
@@ -126,28 +157,34 @@ RunService.Stepped:Connect(function()
 			local fade = d.fadeFrom
 			local faded = if fade then math.min((os.clock() - d.fadeAt) / FADE, 1) else 1
 			if faded >= 1 then
+				fade = nil
 				d.fadeFrom = nil
 			end
-			for name, turn in d.pose(u) do
+			local s = faded * faded * (3 - 2 * faded)
+			local pose = d.pose(u)
+			for name, turn in pose do
 				local joint = d.joints[name]
 				if joint then
 					local frame = CFrame.Angles(math.rad(turn.x or 0), math.rad(turn.y or 0), math.rad(turn.z or 0))
 					if turn.shift then
 						frame = CFrame.new(turn.shift) * frame
 					end
-					-- The Animator has written this frame's pose already: blend from it - from straight for a joint
-					-- still holding what was written last frame (no animation moves it). (Both joint kinds have
-					-- Transform; the type checker cannot read or write through the union.)
+					-- The animation's pose for this frame is in the joint already (the Animator's, or straight): blend
+					-- from it.
 					local motor = joint :: any
-					local seen: CFrame = motor.Transform
-					local animated = if d.written[name] == seen then CFrame.identity else seen
-					local value = animated:Lerp(frame, w)
-					local left = if fade and faded < 1 then fade[name] else nil
-					if left then
-						value = left:Lerp(value, faded * faded * (3 - 2 * faded))
+					local value = (motor.Transform :: CFrame):Lerp(frame, w)
+					local left = if fade then fade[name] else nil
+					write(d, name, motor, if left then left:Lerp(value, s) else value)
+				end
+			end
+			if fade then
+				-- The joints the pose taken over from turned and this one does not, back to the animation.
+				for name, left in fade do
+					local joint = d.joints[name]
+					if joint and not pose[name] then
+						local motor = joint :: any
+						write(d, name, motor, left:Lerp(motor.Transform, s))
 					end
-					motor.Transform = value
-					d.written[name] = value
 				end
 			end
 		end

@@ -26,7 +26,8 @@ local STRING = AttackString.rules(Config.Attack)
 local OwnSwing = {}
 OwnSwing.__index = OwnSwing
 
--- What this client showed of the last this many attacks is kept (a word on an older one is long overdue).
+-- What this client showed of the last this many attacks is kept (a word on an older one is long overdue: more than
+-- 1.8 s even with fists).
 local KEEP = 4
 
 export type Hooks = {

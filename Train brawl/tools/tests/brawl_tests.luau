@@ -623,9 +623,10 @@ do
 	for name, wpn in Config.Weapons do
 		if AttackString.uses(wpn.style) then
 			local length = wpn.seconds * real.FinisherStretch
-			-- The finisher is drawn longer and still lands inside its drawn move. With the hold when it lands, the next
-			-- attack may start before it is quite over, but only in its last fifth (SwingPose's BLEND_OUT: already on
-			-- its way back to the animation, and the next attack fades in from it).
+			-- The finisher is drawn longer and still lands inside its drawn move. With a launch's hold when it lands, the
+			-- next attack may start before it is quite over, but only in its last fifth (SwingPose's BLEND_OUT: already
+			-- on its way back to the animation). (A home run's longer hold lets it start a little sooner - a fist's at
+			-- about three quarters; the next attack fades in from wherever the finisher is: SwingPose's FADE.)
 			fits = fits and wpn.hitAt + real.FinisherWindup < length * 0.9 and length + Config.Feedback.HitStop.launch <= wpn.cooldown + length * 0.2
 		end
 	end

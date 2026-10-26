@@ -142,6 +142,7 @@ export type Mission = {
 	expectedFor: ((players: number) -> number)?, -- the same for this many alive players, when it depends on them
 	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
 	minPlayers: number?, -- alive participants it needs (nil = any)
+	maxPlayers: number?, -- at most this many alive (nil = any; 머리 위 스무고개 runs long with many)
 	needsPresenter: boolean?, -- offered only while someone presents (the one-word mission)
 	available: (final: boolean) -> boolean,
 	run: (ctx: MissionCtx) -> boolean?, -- false: it had nothing to play (a quiz with no clean question left)
@@ -182,7 +183,8 @@ function MissionRunner.candidates(secondsLeft: number, alive: number, presenter:
 	for _, mission in MISSIONS do
 		local count = played[mission.id] or 0
 		if mission.available(false) and fits(mission, secondsLeft, alive) and (mission.maxPerRound == nil or count < mission.maxPerRound)
-			and alive >= (mission.minPlayers or 0) and (presenter or not mission.needsPresenter) then
+			and alive >= (mission.minPlayers or 0) and alive <= (mission.maxPlayers or math.huge)
+			and (presenter or not mission.needsPresenter) then
 			table.insert(list, mission)
 		end
 	end

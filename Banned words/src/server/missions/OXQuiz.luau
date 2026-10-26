@@ -53,6 +53,7 @@ local OXQuiz = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = nil :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 

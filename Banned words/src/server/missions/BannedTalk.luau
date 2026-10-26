@@ -56,6 +56,7 @@ local BannedTalk = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TALK_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 

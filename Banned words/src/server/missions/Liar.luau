@@ -61,6 +61,7 @@ local Liar = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.LIAR_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -97,6 +98,37 @@ local function shuffled(list: { any }, rng: Random): { any }
 	return out
 end
 
+local played: { [string]: boolean } = {} -- "category/word" played on this server (review 2026-10-25)
+
+-- A category and word not played yet on this server; when every one was, they all may come again. (Public for the
+-- tests.)
+function Liar.pickWord(rng: Random): (typeof(LiarBank[1]), string)
+	local fresh = {}
+	for _, entry in LiarBank do
+		for _, word in entry.words do
+			if not played[entry.category .. "/" .. word] then
+				table.insert(fresh, { entry = entry, word = word })
+			end
+		end
+	end
+	if #fresh == 0 then
+		table.clear(played)
+		for _, entry in LiarBank do
+			for _, word in entry.words do
+				table.insert(fresh, { entry = entry, word = word })
+			end
+		end
+	end
+	local pick = fresh[rng:NextInteger(1, #fresh)]
+	played[pick.entry.category .. "/" .. pick.word] = true
+	return pick.entry, pick.word
+end
+
+-- Every word may come again (for the tests).
+function Liar.forgetPlayed()
+	table.clear(played)
+end
+
 function Liar.available(final: boolean): boolean
 	return not final and #LiarBank > 0
 end
@@ -112,8 +144,7 @@ function Liar.run(ctx: Ctx): boolean?
 	if #players < Config.LIAR_MIN_PLAYERS then
 		return false
 	end
-	local entry = LiarBank[ctx.rng:NextInteger(1, #LiarBank)]
-	local word = entry.words[ctx.rng:NextInteger(1, #entry.words)]
+	local entry, word = Liar.pickWord(ctx.rng)
 	local liar = players[ctx.rng:NextInteger(1, #players)]
 	local function stillIn(player: Player): boolean
 		return table.find(ctx.players(), player) ~= nil and not ctx.flying(player)

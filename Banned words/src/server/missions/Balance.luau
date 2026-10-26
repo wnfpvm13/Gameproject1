@@ -51,6 +51,7 @@ local Balance = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BALANCE_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -88,6 +89,32 @@ local function names(list: { Player }): string
 	return table.concat(out, ", ")
 end
 
+local asked: { [number]: boolean } = {} -- questions asked on this server (review 2026-10-25: they came back soon)
+
+-- A question not asked yet on this server; when every one was, they all may come again. (Public for the tests.)
+function Balance.pickQuestion(rng: Random): typeof(BalanceBank[1])
+	local fresh = {}
+	for i in BalanceBank do
+		if not asked[i] then
+			table.insert(fresh, i)
+		end
+	end
+	if #fresh == 0 then
+		table.clear(asked)
+		for i in BalanceBank do
+			table.insert(fresh, i)
+		end
+	end
+	local index = fresh[rng:NextInteger(1, #fresh)]
+	asked[index] = true
+	return BalanceBank[index]
+end
+
+-- Every question may come again (for the tests).
+function Balance.forgetAsked()
+	table.clear(asked)
+end
+
 function Balance.available(final: boolean): boolean
 	return not final and #BalanceBank > 0
 end
@@ -98,7 +125,7 @@ function Balance.run(ctx: Ctx): boolean?
 	if #players < Config.BALANCE_MIN_PLAYERS then
 		return false
 	end
-	local question = BalanceBank[ctx.rng:NextInteger(1, #BalanceBank)]
+	local question = Balance.pickQuestion(ctx.rng)
 	-- Too few left in the middle (leaves): the game ends with no penalty (§4).
 	local function tooFew(): boolean
 		local here = 0

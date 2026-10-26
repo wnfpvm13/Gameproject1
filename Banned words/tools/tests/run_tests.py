@@ -29,6 +29,7 @@ SERVER_MODULES = [
     ("Config", "src/shared/Config.luau"),
     ("Judge", "src/shared/Judge.luau"),
     ("WordBank", "src/server/content/WordBank.luau"),
+    ("WordAliases", "src/server/content/WordAliases.luau"),
     ("Match", "src/server/Match.luau"),
     ("JudgeService", "src/server/services/JudgeService.luau"),
     ("WordService", "src/server/services/WordService.luau"),
@@ -39,6 +40,7 @@ ROUND_MODULES = [
     ("Match", "src/server/Match.luau"),
     ("Judge", "src/shared/Judge.luau"),
     ("WordBank", "src/server/content/WordBank.luau"),
+    ("WordAliases", "src/server/content/WordAliases.luau"),
     ("WordService", "src/server/services/WordService.luau"),
     ("RescueService", "src/server/services/RescueService.luau"),
     ("ChatGate", "src/server/services/ChatGate.luau"),
@@ -99,6 +101,7 @@ MISSION_MODULES = [
     ("Duel", "src/server/missions/Duel.luau"),
     ("Bottle", "src/server/missions/Bottle.luau"),
     ("Judge", "src/shared/Judge.luau"),
+    ("WordAliases", "src/server/content/WordAliases.luau"),
     ("Twenty", "src/server/missions/Twenty.luau"),
     ("MissionRunner", "src/server/services/MissionRunner.luau"),
 ]

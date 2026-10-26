@@ -49,6 +49,7 @@ local TestMission = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = nil :: number?, -- like the quiz: no limit
 	minPlayers = nil :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 

@@ -17,6 +17,7 @@ local RedLight = require(node("RedLight"))
 local Liar = require(node("Liar"))
 
 local fails = 0
+Config.QUIZ_SHUFFLE = false -- (these tests answer by place; one test below turns it on)
 local function check(name, ok, detail)
 	print((if ok then "PASS " else "FAIL ") .. name .. (if not ok and detail then "  " .. tostring(detail) else ""))
 	if not ok then
@@ -2363,6 +2364,99 @@ do
 		and #first.players == 2 and has(first.players, ps[1]) and has(first.players, ps[2]) and told[ps[1]] and told[ps[2]]
 		and not told[ps[3]])
 	at(now + 200)
+end
+
+---------------------------------------------------------------- 19. launch review (bundle 10)
+local BalanceBank = require(node("BalanceBank"))
+local LiarBank = require(node("LiarBank"))
+do
+	-- 머리 위 스무고개 only with TWENTY_MAX_PLAYERS alive or fewer (owner 2026-10-26).
+	MissionRunner.beginRound()
+	local function listed(alive)
+		for _, m in MissionRunner.candidates(100000, alive, false) do
+			if m.id == "twenty" then
+				return true
+			end
+		end
+		return false
+	end
+	check("19a 스무고개 is offered with TWENTY_MAX_PLAYERS alive, not with one more",
+		listed(Config.TWENTY_MAX_PLAYERS) and not listed(Config.TWENTY_MAX_PLAYERS + 1))
+	-- Other forms of a word (content/WordAliases): a right answer, a leak; never drawn next to a word one sits in.
+	local a, b = newPlayers(2)[1], newPlayers(1)[1]
+	check("19b another form of the word is a right answer (돈까스 for 돈가스, 경찰 for 경찰관); a longer word is not",
+		Twenty.isRight("돈까스", "돈가스") and Twenty.isRight("경찰", "경찰관") and Twenty.isRight("돈 가스", "돈가스")
+		and not Twenty.isRight("경찰차", "경찰관") and not Twenty.isRight("", "돈가스"))
+	check("19c writing another form of someone's word in chat is a leak too", Twenty.leaks("이거 돈까스야?", a, { [b] = "돈가스" })
+		and Twenty.leaks("헬기 맞지", a, { [b] = "헬리콥터" }) and not Twenty.leaks("헬기 맞지", a, { [a] = "헬리콥터" }))
+	local apart = true
+	local rng = Random.new(11)
+	for _ = 1, 300 do
+		local _, drawn = Twenty.draw(rng, Config.TWENTY_MAX_PLAYERS)
+		for i, w1 in drawn do
+			for j, w2 in drawn do
+				if i ~= j then
+					for _, f1 in Twenty.forms(w1) do
+						for _, f2 in Twenty.forms(w2) do
+							apart = apart and string.find(f1, f2, 1, true) == nil
+						end
+					end
+				end
+			end
+		end
+	end
+	check("19d no drawn word (or its other forms) sits inside another's", apart)
+	-- The quiz's choices come in a new order (the right one moves with them); numbers keep their order.
+	Config.QUIZ_SHUFFLE = true
+	local moved, kept, rightShown = false, true, true
+	for k = 1, 6 do
+		QuizBank.main = { q("섞기 " .. k, "정답", "오답1", "오답2", "오답3"), q("숫자 " .. k, "1개", "2개", "3개", "4개") }
+		for _ = 1, 2 do
+			local ps = newPlayers(1)
+			local record = fakeCtx(ps, false, nil)
+			record.ctx.rng = Random.new(k * 31)
+			local since = now
+			start(Quiz, record)
+			at(now + Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + 0.5)
+			local result = lastScreenOf(since, "quizResult")
+			if result then
+				local right = result.choices[result.answer]
+				rightShown = rightShown and (right == "정답" or right == "1개")
+				if right == "정답" then
+					moved = moved or result.answer ~= 1
+				else
+					kept = kept and result.choices[1] == "1개" and result.choices[4] == "4개"
+				end
+			end
+			at(now + Config.QUIZ_REVEAL_SECONDS + 1)
+		end
+	end
+	Config.QUIZ_SHUFFLE = false
+	QuizBank.main = realMain
+	check("19e the quiz's choices move (the right one with them); number choices keep their order", moved and kept
+		and rightShown)
+	-- No balance question or liar word again until every one was played on this server.
+	Balance.forgetAsked()
+	Liar.forgetPlayed()
+	local seenQ, againQ = {}, false
+	local rngB = Random.new(3)
+	for _ = 1, #BalanceBank do
+		local question = Balance.pickQuestion(rngB)
+		againQ = againQ or seenQ[question] == true
+		seenQ[question] = true
+	end
+	local seenW, againW, total = {}, false, 0
+	for _, entry in LiarBank do
+		total += #entry.words
+	end
+	local rngL = Random.new(4)
+	for _ = 1, total do
+		local entry, word = Liar.pickWord(rngL)
+		local key = entry.category .. "/" .. word
+		againW = againW or seenW[key] == true
+		seenW[key] = true
+	end
+	check("19f no balance question or liar word comes again before every one was played", not againQ and not againW)
 end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

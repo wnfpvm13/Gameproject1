@@ -191,6 +191,8 @@ return {
 	-- TWENTY_ANSWER_MAX letters at most (its verdict shows TWENTY_VERDICT_SECONDS). Over once TWENTY_SHARE of the players
 	-- (rounded up) are right, or after TWENTY_TRIES rounds (one answer a turn); whoever is not right flies.
 	TWENTY_MIN_PLAYERS = 2,
+	QUIZ_SHUFFLE = true, -- the quiz's choices in a new order each time (not choices that are numbers; tests turn it off)
+	TWENTY_MAX_PLAYERS = 6, -- offered only with this many alive or fewer (owner 2026-10-26: ten could take ~7 minutes)
 	TWENTY_MIN_LETTERS = 2, -- (one letter, like 배 or 자, hides in too many chat lines: writing it would fly people)
 	TWENTY_INTRO_SECONDS = 5,
 	TWENTY_TURN_SECONDS = 12,
@@ -207,7 +209,10 @@ return {
 		"네", "이네", "잖아", "이잖아", "처럼", "보다", "부터", "까지", "들" },
 	-- Words left out of 스무고개: an everyday word is spelled the same (사자 "let's buy", 판다 "sells", 화가 나, 배우다,
 	-- 유도 질문, 인도 = sidewalk), so writing it innocently would fly someone.
-	TWENTY_SKIP_WORDS = { "사자", "판다", "화가", "배우", "유도", "인도" },
+	TWENTY_SKIP_WORDS = { "사자", "판다", "화가", "배우", "유도", "인도",
+		-- (review 2026-10-25: everyday in chat — "사과해", "버스 태워 줘", "가위 바위 보", "선생님!" — or always said in this
+		-- game of flying chairs over a pool)
+		"사과", "버스", "가위", "선생님", "의자", "수영" },
 	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
 	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
 	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
@@ -300,10 +305,11 @@ return {
 	CHAT_BUBBLE_VERTICAL_OFFSET = 2.5,
 	-- The show camera frames a round of few players closer (client ShowCamera, review 2026-10-25): the seated chairs plus
 	-- SHOW_MARGIN studs on each side, at least SHOW_MIN_HALF_WIDTH (whole row: the map's HalfWidth), FOV not under
-	-- SHOW_MIN_FOV.
+	-- SHOW_MIN_FOV; the tops of the head tags (SHOW_KEEP_HEIGHT studs over the seats) keep their height on screen.
 	SHOW_MARGIN = 8,
-	SHOW_MIN_HALF_WIDTH = 20,
+	SHOW_MIN_HALF_WIDTH = 22,
 	SHOW_MIN_FOV = 20,
+	SHOW_KEEP_HEIGHT = 8,
 
 	-- Presenter (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23): a volunteer runs the round from the podium.
 	PRESENTER_PICK_SECONDS = 10, -- the presenter picks the next game between games (then a random one)

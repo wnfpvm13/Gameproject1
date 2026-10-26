@@ -6,8 +6,10 @@
 --               live on PoolHall.ShowCamera (attributes HalfWidth, MinFov, MaxFov). A round of few players (they sit in
 --               the middle chairs) is framed closer (review 2026-10-25: two players were tiny among eight empty chairs):
 --               the seated chairs plus Config.SHOW_MARGIN studs, at least Config.SHOW_MIN_HALF_WIDTH, and the view
---               tilts down by as much as keeps the seats at the same height on screen (the card under them, the pool
---               behind them where the flights land, stay where they were).
+--               tilts so the tops of the head tags (Config.SHOW_KEEP_HEIGHT over the seats) stay at the same height on
+--               screen as in the wide view: on a phone the status board above and the card below leave a narrow band,
+--               and 스무고개's words must stay in it (Studio check 2026-10-26: keeping the seats' height instead pushed
+--               the words under the status board).
 --   "presenter" the presenter looks at the row from behind the podium (PoolHall.PresenterCamera, attribute Fov). Their
 --               own character stands between that camera and the row, so it is hidden on their screen only (like
 --               first person; everyone else still sees them).
@@ -77,8 +79,8 @@ local function seatedReach(marker: BasePart, chairs: Instance): number
 	return offsets[math.clamp(seatedCount, 1, math.max(#offsets, 1))] or 0
 end
 
--- The show camera: where it looks from and its FOV. The whole row, or closer for few players (tilted so the seats keep
--- their height on screen).
+-- The show camera: where it looks from and its FOV. The whole row, or closer for few players (tilted so the head tags
+-- keep their height on screen).
 local function fitRow(marker: BasePart, chairs: Instance, camera: Camera): (CFrame, number)
 	local rowHalf = (marker:GetAttribute("HalfWidth") or 29) :: number
 	local maxFov = (marker:GetAttribute("MaxFov") or 70) :: number
@@ -92,12 +94,13 @@ local function fitRow(marker: BasePart, chairs: Instance, camera: Camera): (CFra
 	if close >= wide - 0.5 then
 		return marker.CFrame, wide
 	end
-	-- (the seats sit at the same fraction of the screen height as in the wide view)
+	-- (the head tags' tops sit at the same fraction of the screen height as in the wide view)
+	local keepY = seatY + Config.SHOW_KEEP_HEIGHT
 	local centreY = (marker.Position + marker.CFrame.LookVector * depth).Y
 	local wideHalf = depth * math.tan(math.rad(wide / 2))
 	local closeHalf = depth * math.tan(math.rad(close / 2))
-	local fromTop = (centreY + wideHalf - seatY) / (2 * wideHalf)
-	local closeCentreY = seatY + (fromTop - 0.5) * 2 * closeHalf
+	local fromTop = (centreY + wideHalf - keepY) / (2 * wideHalf)
+	local closeCentreY = keepY + (fromTop - 0.5) * 2 * closeHalf
 	local tilt = math.atan((centreY - closeCentreY) / depth)
 	return marker.CFrame * CFrame.Angles(-tilt, 0, 0), close
 end

@@ -60,6 +60,7 @@ local Quiz = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = nil :: number?, -- the basic mission: no limit (§5)
 	minPlayers = nil :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -110,11 +111,41 @@ function Quiz.available(final: boolean): boolean
 	return #(if final then QuizBank.final else QuizBank.main) > 0
 end
 
+-- `question`'s choices in a new order for this asking, and where the right one is now (review 2026-10-25: it sat in
+-- the same place every time, so a player who met a question again knew the spot). Choices that all hold a number
+-- (3만 km, 30만 km ...) keep their order. Config.QUIZ_SHUFFLE off keeps every order (the tests). The bank is not changed.
+local function shuffledChoices(question: QuizBank.Question, rng: Random): ({ string }, number)
+	local numbers = true
+	for _, choice in question.choices do
+		numbers = numbers and string.find(choice, "%d") ~= nil
+	end
+	if numbers or not Config.QUIZ_SHUFFLE then
+		return question.choices, question.answer
+	end
+	local order = {}
+	for i = 1, #question.choices do
+		order[i] = i
+	end
+	for i = #order, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		order[i], order[j] = order[j], order[i]
+	end
+	local choices, answer = {}, question.answer
+	for place, from in order do
+		choices[place] = question.choices[from]
+		if from == question.answer then
+			answer = place
+		end
+	end
+	return choices, answer
+end
+
 -- Everyone on the ground answers `question` with four choices; wrong or none is a fail (event `key`). Returns false if
 -- cancelled.
 local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): boolean
 	ctx.show(if ctx.final then Config.TEXT.FINAL_QUIZ else Config.TEXT.QUIZ_START)
-	local shown = { kind = "quiz", final = ctx.final, question = question.q, choices = question.choices }
+	local choices, rightAt = shuffledChoices(question, ctx.rng)
+	local shown = { kind = "quiz", final = ctx.final, question = question.q, choices = choices }
 	ctx.screen(shown)
 	if not ctx.wait(Config.QUIZ_INTRO_SECONDS) then
 		return false
@@ -125,7 +156,7 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 			table.insert(asked, player)
 		end
 	end
-	local answers = ctx.ask(shown, #question.choices, Config.QUIZ_SECONDS, asked)
+	local answers = ctx.ask(shown, #choices, Config.QUIZ_SECONDS, asked)
 	if ctx.cancelled() then
 		return false
 	end
@@ -137,13 +168,13 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 		else
 			table.insert(missed, player)
 		end
-		if choice ~= question.answer then
+		if choice ~= rightAt then
 			table.insert(wrong, player)
 		end
 	end
-	ctx.screen({ kind = "quizResult", final = ctx.final, question = question.q, choices = question.choices, answer = question.answer })
+	ctx.screen({ kind = "quizResult", final = ctx.final, question = question.q, choices = choices, answer = rightAt })
 	ctx.show(if #wrong == 0 then Config.TEXT.QUIZ_ALL_RIGHT
-		else string.format(Config.TEXT.QUIZ_ANSWER, question.choices[question.answer]))
+		else string.format(Config.TEXT.QUIZ_ANSWER, choices[rightAt]))
 	if not ctx.final then
 		ctx.answers(answered, missed) -- before the fail: a launched player's miss would not count any more
 	end
@@ -173,6 +204,7 @@ local BellQuiz = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BELL_QUIZ_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = true :: boolean?,
 }
 
@@ -276,6 +308,7 @@ local ChosungQuiz = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = nil :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 

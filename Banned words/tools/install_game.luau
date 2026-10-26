@@ -204,6 +204,8 @@ return {
 	-- TWENTY_ANSWER_MAX letters at most (its verdict shows TWENTY_VERDICT_SECONDS). Over once TWENTY_SHARE of the players
 	-- (rounded up) are right, or after TWENTY_TRIES rounds (one answer a turn); whoever is not right flies.
 	TWENTY_MIN_PLAYERS = 2,
+	QUIZ_SHUFFLE = true, -- the quiz's choices in a new order each time (not choices that are numbers; tests turn it off)
+	TWENTY_MAX_PLAYERS = 6, -- offered only with this many alive or fewer (owner 2026-10-26: ten could take ~7 minutes)
 	TWENTY_MIN_LETTERS = 2, -- (one letter, like 배 or 자, hides in too many chat lines: writing it would fly people)
 	TWENTY_INTRO_SECONDS = 5,
 	TWENTY_TURN_SECONDS = 12,
@@ -220,7 +222,10 @@ return {
 		"네", "이네", "잖아", "이잖아", "처럼", "보다", "부터", "까지", "들" },
 	-- Words left out of 스무고개: an everyday word is spelled the same (사자 "let's buy", 판다 "sells", 화가 나, 배우다,
 	-- 유도 질문, 인도 = sidewalk), so writing it innocently would fly someone.
-	TWENTY_SKIP_WORDS = { "사자", "판다", "화가", "배우", "유도", "인도" },
+	TWENTY_SKIP_WORDS = { "사자", "판다", "화가", "배우", "유도", "인도",
+		-- (review 2026-10-25: everyday in chat — "사과해", "버스 태워 줘", "가위 바위 보", "선생님!" — or always said in this
+		-- game of flying chairs over a pool)
+		"사과", "버스", "가위", "선생님", "의자", "수영" },
 	LEVER_SECONDS = 0.7, -- the podium lever is pulled this long before the launch
 	LEVER_DEGREES = 55, -- how far the lever handle swings down (in the first 30% of LEVER_SECONDS)
 	LEVER_RETURN_SECONDS = 0.4, -- then it comes back up
@@ -313,10 +318,11 @@ return {
 	CHAT_BUBBLE_VERTICAL_OFFSET = 2.5,
 	-- The show camera frames a round of few players closer (client ShowCamera, review 2026-10-25): the seated chairs plus
 	-- SHOW_MARGIN studs on each side, at least SHOW_MIN_HALF_WIDTH (whole row: the map's HalfWidth), FOV not under
-	-- SHOW_MIN_FOV.
+	-- SHOW_MIN_FOV; the tops of the head tags (SHOW_KEEP_HEIGHT studs over the seats) keep their height on screen.
 	SHOW_MARGIN = 8,
-	SHOW_MIN_HALF_WIDTH = 20,
+	SHOW_MIN_HALF_WIDTH = 22,
 	SHOW_MIN_FOV = 20,
+	SHOW_KEEP_HEIGHT = 8,
 
 	-- Presenter (docs/DESIGN_V3.md §8; bundle 3, owner 2026-10-23): a volunteer runs the round from the podium.
 	PRESENTER_PICK_SECONDS = 10, -- the presenter picks the next game between games (then a random one)
@@ -2509,13 +2515,13 @@ do local s = Instance.new("ModuleScript"); s.Name = "ChosungBank"; s.Source = [=
 -- that contain a banned word in play are skipped at run time.
 
 local ChosungBank = {
-	{ category = "과일", words = { "바나나", "사과", "포도", "딸기", "수박", "참외", "복숭아", "자두", "키위", "망고", "귤", "레몬", "체리", "파인애플", "블루베리", "멜론", "석류", "감", "배", "앵두" } },
+	{ category = "과일", words = { "바나나", "사과", "포도", "딸기", "수박", "참외", "복숭아", "자두", "키위", "망고", "귤", "레몬", "체리", "파인애플", "블루베리", "멜론", "석류", "감", "배", "무화과" } },
 	{ category = "동물", words = { "강아지", "고양이", "호랑이", "사자", "코끼리", "기린", "토끼", "거북이", "다람쥐", "고슴도치", "펭귄", "하마", "얼룩말", "캥거루", "판다", "여우", "늑대", "원숭이", "부엉이", "돌고래" } },
 	{ category = "음식", words = { "떡볶이", "김밥", "비빔밥", "불고기", "라면", "짜장면", "짬뽕", "냉면", "삼겹살", "김치찌개", "된장찌개", "순두부", "잡채", "만두", "치킨", "피자", "햄버거", "돈가스", "칼국수", "갈비탕" } },
 	{ category = "나라", words = { "일본", "중국", "미국", "영국", "프랑스", "독일", "이탈리아", "스페인", "캐나다", "호주", "브라질", "멕시코", "인도", "태국", "베트남", "러시아", "이집트", "스위스", "튀르키예", "아르헨티나" } },
 	{ category = "직업", words = { "소방관", "경찰관", "의사", "간호사", "선생님", "요리사", "미용사", "택배 기사", "제빵사", "조종사", "변호사", "약사", "수의사", "기자", "화가", "가수", "배우", "농부", "어부", "건축가" } },
 	{ category = "운동", words = { "축구", "야구", "농구", "배구", "탁구", "테니스", "배드민턴", "수영", "태권도", "유도", "양궁", "펜싱", "골프", "볼링", "스키", "스케이트", "마라톤", "씨름", "복싱", "럭비" } },
-	{ category = "탈것", words = { "자전거", "자동차", "버스", "지하철", "기차", "비행기", "헬리콥터", "배", "오토바이", "트럭", "택시", "케이블카", "킥보드", "열기구", "잠수함", "구급차", "소방차", "유람선", "트랙터", "로켓" } },
+	{ category = "탈것", words = { "자전거", "스포츠카", "버스", "지하철", "기차", "비행기", "헬리콥터", "배", "오토바이", "트럭", "택시", "케이블카", "킥보드", "열기구", "잠수함", "구급차", "소방차", "유람선", "트랙터", "로켓" } },
 	{ category = "학교 물건", words = { "연필", "지우개", "공책", "필통", "가위", "풀", "자", "색연필", "크레파스", "물감", "칠판", "분필", "책상", "의자", "사물함", "교과서", "형광펜", "볼펜", "스테이플러", "계산기" } },
 }
 
@@ -2567,7 +2573,7 @@ local EstimateBank: { Question } = {
 	{ q = "임진왜란이 일어난 해는?", answer = 1592 },
 	{ q = "콜럼버스가 아메리카에 처음 도착한 해는?", answer = 1492 },
 	{ q = "첫 근대 올림픽(아테네)이 열린 해는?", answer = 1896 },
-	{ q = "타이타닉호가 침몰한 해는?", answer = 1912 },
+	{ q = "에펠탑이 완성된 해는?", answer = 1889 },
 	{ q = "사람이 처음 달에 발을 디딘 해는?", answer = 1969 },
 	{ q = "서울 올림픽이 열린 해는?", answer = 1988 },
 }
@@ -2607,7 +2613,7 @@ export type Statement = { s: string, o: boolean }
 
 local OXBank: { Statement } = {
 	-- Animals and plants
-	{ s = "거미는 곤충이다", o = false },
+	{ s = "코알라는 곰의 한 종류다", o = false },
 	{ s = "고래는 포유류다", o = true },
 	{ s = "펭귄은 날 수 없다", o = true },
 	{ s = "상어는 어류다", o = true },
@@ -2615,8 +2621,8 @@ local OXBank: { Statement } = {
 	{ s = "물고기는 모두 알을 낳는다", o = false },
 	{ s = "닭은 하늘을 오래 날 수 있다", o = false },
 	{ s = "남극에는 북극곰이 산다", o = false },
-	{ s = "북극에는 펭귄이 산다", o = false },
-	{ s = "오스트레일리아에는 캥거루가 산다", o = true },
+	{ s = "고래상어는 고래가 아니라 상어다", o = true },
+	{ s = "달팽이는 이빨이 있다", o = true },
 	{ s = "코끼리는 육지에서 가장 무거운 동물이다", o = true },
 	{ s = "카멜레온은 몸 색을 바꿀 수 있다", o = true },
 	{ s = "꿀벌은 춤으로 꽃이 있는 곳을 알린다", o = true },
@@ -2645,18 +2651,18 @@ local OXBank: { Statement } = {
 	{ s = "다이아몬드는 탄소로 이루어져 있다", o = true },
 	{ s = "금은 자석에 잘 붙는다", o = false },
 	{ s = "사막에도 비가 내린다", o = true },
-	{ s = "피는 몸 밖으로 나오면 파랗게 변한다", o = false },
+	{ s = "몸속 정맥을 흐르는 피는 파란색이다", o = false },
 	{ s = "사람은 뇌의 10%만 쓴다", o = false },
 	-- Places, culture and numbers
 	{ s = "한글을 만든 왕은 세종대왕이다", o = true },
-	{ s = "대한민국의 수도는 부산이다", o = false },
+	{ s = "올림픽 금메달은 순금으로 만든다", o = false },
 	{ s = "대한민국의 나라꽃은 무궁화다", o = true },
 	{ s = "설날은 음력 1월 1일이다", o = true },
 	{ s = "백두산은 한반도에서 가장 높은 산이다", o = true },
 	{ s = "이집트에는 피라미드가 있다", o = true },
-	{ s = "에펠탑은 영국 런던에 있다", o = false },
+	{ s = "손톱은 발톱보다 빨리 자란다", o = true },
 	{ s = "하계 올림픽은 4년마다 열린다", o = true },
-	{ s = "정사각형은 네 변의 길이가 모두 같다", o = true },
+	{ s = "해바라기는 다 자란 뒤에도 하루 종일 해를 따라 돈다", o = false },
 	{ s = "모든 소수는 홀수다", o = false },
 	{ s = "0은 짝수다", o = true },
 }
@@ -2776,12 +2782,12 @@ QuizBank.main = {
 	{ q = "사람의 정상 체온은 약 몇 도?", choices = { "33도", "35도", "36.5도", "39도" }, answer = 3 },
 	{ q = "눈으로 들어오는 빛의 양을 조절하는 곳은?", choices = { "홍채", "수정체", "망막", "각막" }, answer = 1 },
 	{ q = "소변을 만드는 기관은?", choices = { "간", "쓸개", "이자", "콩팥" }, answer = 4 },
-	{ q = "프랑스의 수도는?", choices = { "파리", "런던", "로마", "베를린" }, answer = 1 },
-	{ q = "일본의 수도는?", choices = { "오사카", "도쿄", "교토", "삿포로" }, answer = 2 },
+	{ q = "게임 속 'NPC'에서 N은 무슨 뜻?", choices = { "New", "Next", "Non", "Normal" }, answer = 3 },
+	{ q = "오징어의 다리(팔)는 모두 몇 개?", choices = { "6개", "8개", "10개", "12개" }, answer = 3 },
 	{ q = "호주의 수도는?", choices = { "시드니", "멜버른", "퍼스", "캔버라" }, answer = 4 },
 	{ q = "캐나다의 수도는?", choices = { "오타와", "토론토", "밴쿠버", "몬트리올" }, answer = 1 },
 	{ q = "태국의 수도는?", choices = { "방콕", "치앙마이", "푸껫", "파타야" }, answer = 1 },
-	{ q = "이집트의 수도는?", choices = { "카이로", "알렉산드리아", "룩소르", "아스완" }, answer = 1 },
+	{ q = "브라질의 수도는?", choices = { "상파울루", "리우데자네이루", "브라질리아", "살바도르" }, answer = 3 },
 	{ q = "세계에서 가장 넓은 대양은?", choices = { "태평양", "대서양", "인도양", "북극해" }, answer = 1 },
 	{ q = "세계에서 가장 큰 대륙은?", choices = { "아프리카", "아시아", "유럽", "남극" }, answer = 2 },
 	{ q = "세계에서 가장 높은 산은?", choices = { "후지산", "킬리만자로산", "몽블랑", "에베레스트산" }, answer = 4 },
@@ -2789,7 +2795,7 @@ QuizBank.main = {
 	{ q = "우리나라에서 가장 큰 섬은?", choices = { "제주도", "울릉도", "거제도", "강화도" }, answer = 1 },
 	{ q = "아마존강이 흐르는 대륙은?", choices = { "아프리카", "유럽", "오세아니아", "남아메리카" }, answer = 4 },
 	{ q = "지구를 남반구와 북반구로 나누는 선은?", choices = { "날짜 변경선", "본초 자오선", "회귀선", "적도" }, answer = 4 },
-	{ q = "'가는 말이 고와야 ___' 빈칸은?", choices = { "발이 빠르다", "길이 멀다", "말이 많다", "오는 말이 곱다" }, answer = 4 },
+	{ q = "'가는 말이 고와야 ___' 빈칸은?", choices = { "듣는 귀가 곱다", "오는 정이 깊다", "말이 통한다", "오는 말이 곱다" }, answer = 4 },
 	{ q = "'소 잃고 ___ 고친다' 빈칸은?", choices = { "지붕", "대문", "외양간", "울타리" }, answer = 3 },
 	{ q = "맞춤법에 맞게 쓴 것은?", choices = { "어떻게", "어떡게", "어떻해", "어떻케" }, answer = 1 },
 	{ q = "'되다'를 바르게 쓴 것은?", choices = { "돼요", "되요", "되여", "돼여" }, answer = 1 },
@@ -2797,7 +2803,7 @@ QuizBank.main = {
 	{ q = "아주 쉬운 일을 뜻하는 속담은?", choices = { "하늘의 별 따기", "그림의 떡", "산 넘어 산", "식은 죽 먹기" }, answer = 4 },
 	{ q = "'우물 안 개구리'는 어떤 사람을 뜻할까?", choices = { "견문이 좁은 사람", "부지런한 사람", "노래 잘하는 사람", "겁 많은 사람" }, answer = 1 },
 	{ q = "'티끌 모아 ___' 빈칸은?", choices = { "바다", "부자", "보물", "태산" }, answer = 4 },
-	{ q = "'등잔 밑이 어둡다'의 뜻은?", choices = { "가까운 일을 더 모른다", "밤이 길다", "불을 조심하라", "일찍 자라" }, answer = 1 },
+	{ q = "'등잔 밑이 어둡다'의 뜻은?", choices = { "가까운 일을 더 모른다", "밤길을 조심하라", "작은 일이 크게 된다", "남의 일에 밝다" }, answer = 1 },
 	{ q = "'작심삼일'의 뜻은?", choices = { "결심이 오래 못 간다", "사흘 동안 쉰다", "마음이 넓다", "셋이 힘을 합친다" }, answer = 1 },
 	{ q = "그릇 씻는 일을 바르게 쓴 것은?", choices = { "설겆이", "설걷이", "설거찌", "설거지" }, answer = 4 },
 	{ q = "날짜를 묻는 말을 바르게 쓴 것은?", choices = { "몇 일", "며칠", "몇일", "몇칠" }, answer = 2 },
@@ -2813,7 +2819,7 @@ QuizBank.main = {
 	{ q = "솔잎을 깔고 쪄 먹는 반달 모양 떡은?", choices = { "송편", "인절미", "가래떡", "시루떡" }, answer = 1 },
 	{ q = "동지에 먹는 대표 음식은?", choices = { "냉면", "떡국", "삼계탕", "팥죽" }, answer = 4 },
 	{ q = "한글날은 언제일까?", choices = { "7월 17일", "8월 15일", "10월 3일", "10월 9일" }, answer = 4 },
-	{ q = "어린이날은 언제일까?", choices = { "5월 1일", "5월 5일", "5월 8일", "6월 6일" }, answer = 2 },
+	{ q = "100원짜리 동전에 새겨진 인물은?", choices = { "세종대왕", "이순신", "이황", "이이" }, answer = 2 },
 	{ q = "우리나라에서 낮이 가장 긴 절기는?", choices = { "춘분", "하지", "추분", "동지" }, answer = 2 },
 	{ q = "지구에서 가장 큰 동물은?", choices = { "코끼리", "기린", "고래상어", "대왕고래" }, answer = 4 },
 	{ q = "땅 위에서 가장 빨리 달리는 동물은?", choices = { "사자", "말", "치타", "타조" }, answer = 3 },
@@ -2825,14 +2831,14 @@ QuizBank.main = {
 	{ q = "알을 낳는 포유류는?", choices = { "오리너구리", "캥거루", "고래", "박쥐" }, answer = 1 },
 	{ q = "캥거루 새끼가 자라는 곳은?", choices = { "나무 위 둥지", "땅굴", "물속", "어미의 주머니" }, answer = 4 },
 	{ q = "문어의 다리는 몇 개?", choices = { "6개", "8개", "10개", "12개" }, answer = 2 },
-	{ q = "타조에 대해 맞는 것은?", choices = { "하늘을 날 수 있다", "알이 아주 작다", "다리가 4개다", "새 중에서 가장 크다" }, answer = 4 },
+	{ q = "타조에 대해 맞는 것은?", choices = { "하늘을 날 수 있다", "알이 아주 작다", "발가락이 다섯 개다", "새 중에서 가장 크다" }, answer = 4 },
 	{ q = "펭귄은 어느 무리에 속할까?", choices = { "포유류", "조류", "어류", "양서류" }, answer = 2 },
 	{ q = "꿀벌 집의 한 칸은 어떤 모양?", choices = { "원", "육각형", "삼각형", "사각형" }, answer = 2 },
 	{ q = "쌀국수 '포'로 유명한 나라는?", choices = { "태국", "베트남", "인도", "몽골" }, answer = 2 },
-	{ q = "김치에 가장 흔히 쓰는 채소는?", choices = { "배추", "당근", "감자", "양파" }, answer = 1 },
+	{ q = "마라탕의 '마라'에서 '마'는 어떤 맛?", choices = { "단맛", "혀가 얼얼한 맛", "짠맛", "신맛" }, answer = 2 },
 	{ q = "두부는 무엇으로 만들까?", choices = { "쌀", "밀", "콩", "옥수수" }, answer = 3 },
-	{ q = "보통 식빵을 만드는 주재료 가루는?", choices = { "밀가루", "옥수수가루", "콩가루", "메밀가루" }, answer = 1 },
-	{ q = "치즈는 무엇으로 만들까?", choices = { "달걀", "콩", "우유", "쌀" }, answer = 3 },
+	{ q = "축구에서 한 경기에 옐로카드를 두 장 받으면?", choices = { "경고 한 번 더", "퇴장", "프리킥만 줌", "벌금만 냄" }, answer = 2 },
+	{ q = "10원짜리 동전에 새겨진 탑은?", choices = { "석가탑", "다보탑", "미륵사지 석탑", "첨성대" }, answer = 2 },
 	{ q = "카레가 시작된 나라로 알려진 곳은?", choices = { "인도", "프랑스", "멕시코", "러시아" }, answer = 1 },
 	{ q = "깍두기의 주재료는?", choices = { "배추", "무", "오이", "파" }, answer = 2 },
 	{ q = "팝콘은 무엇을 튀겨 만들까?", choices = { "쌀", "보리", "콩", "옥수수" }, answer = 4 },
@@ -2847,7 +2853,7 @@ QuizBank.main = {
 	{ q = "축구에서 자기 페널티 구역 안에서 공을 손으로 잡는 선수는?", choices = { "공격수", "수비수", "미드필더", "골키퍼" }, answer = 4 },
 	{ q = "볼링에서 세워 두는 핀은 몇 개?", choices = { "8개", "9개", "10개", "12개" }, answer = 3 },
 	{ q = "축구 경기 전후반을 합친 정규 시간은?", choices = { "60분", "80분", "90분", "120분" }, answer = 3 },
-	{ q = "7 × 8 = ?", choices = { "54", "56", "58", "64" }, answer = 2 },
+	{ q = "알람을 몇 분 뒤에 다시 울리게 미루는 기능은?", choices = { "리셋", "스킵", "타이머", "스누즈" }, answer = 4 },
 	{ q = "삼각형 세 각의 크기를 더하면?", choices = { "90도", "180도", "270도", "360도" }, answer = 2 },
 	{ q = "12 × 12 = ?", choices = { "124", "132", "144", "156" }, answer = 3 },
 	{ q = "1 + 3 + 5 + 7 = ?", choices = { "14", "15", "16", "18" }, answer = 3 },
@@ -2857,14 +2863,14 @@ QuizBank.main = {
 	{ q = "원주율에 가장 가까운 수는?", choices = { "2.14", "3.14", "3.41", "4.13" }, answer = 2 },
 	{ q = "0.25를 분수로 나타내면?", choices = { "1/2", "1/3", "1/4", "1/5" }, answer = 3 },
 	{ q = "1,000,000을 한글로 읽으면?", choices = { "만", "십만", "백만", "천만" }, answer = 3 },
-	{ q = "가위바위보에서 가위를 이기는 것은?", choices = { "바위", "가위", "보", "비기기" }, answer = 1 },
+	{ q = "볼링에서 스트라이크를 세 번 연속하면 부르는 말은?", choices = { "터키", "더블", "스페어", "거터" }, answer = 1 },
 	{ q = "주사위에서 마주 보는 두 면의 눈을 더하면?", choices = { "5", "6", "7", "8" }, answer = 3 },
 	{ q = "체스판은 모두 몇 칸일까?", choices = { "36칸", "49칸", "64칸", "81칸" }, answer = 3 },
-	{ q = "포커용 트럼프 카드 한 벌(조커 빼고)은 몇 장?", choices = { "48장", "50장", "52장", "54장" }, answer = 3 },
+	{ q = "조커를 뺀 카드 한 벌은 모두 몇 장?", choices = { "48장", "50장", "52장", "54장" }, answer = 3 },
 	{ q = "윷놀이에서 윷가락 넷이 다 엎어지면?", choices = { "도", "모", "개", "윷" }, answer = 2 },
 	{ q = "바둑판의 가로줄은 몇 줄일까?", choices = { "15줄", "17줄", "19줄", "21줄" }, answer = 3 },
 	{ q = "공기놀이에 보통 쓰는 공깃돌 수는?", choices = { "3개", "4개", "5개", "7개" }, answer = 3 },
-	{ q = "바둑에서 먼저 두는 쪽의 돌은?", choices = { "흰 돌", "검은 돌", "아무나", "빨간 돌" }, answer = 2 },
+	{ q = "맞바둑에서 먼저 두는 쪽의 돌은?", choices = { "흰 돌", "검은 돌", "진 쪽의 돌", "나이 많은 쪽의 돌" }, answer = 2 },
 } :: { Question }
 
 QuizBank.final = {
@@ -2908,6 +2914,12 @@ QuizBank.final = {
 	{ q = "지구의 나이는 약 몇 년일까?", choices = { "약 4600만 년", "약 4억 6천만 년", "약 46억 년", "약 460억 년" }, answer = 3 },
 	{ q = "'모순'이라는 말이 나온 두 물건은?", choices = { "칼과 칼집", "활과 화살", "북과 장구", "창과 방패" }, answer = 4 },
 	{ q = "'군계일학'의 뜻은?", choices = { "닭이 학을 이김", "무리 중 뛰어난 사람", "무리 지어 다님", "새를 기르는 일" }, answer = 2 },
+	{ q = "한글 자판 그대로 W·A·S·D를 누르면 쳐지는 글자는?", choices = { "ㅂㅁㄴㅇ", "ㅈㅁㄴㅇ", "ㅈㅁㄷㅇ", "ㄷㅁㄴㅇ" }, answer = 2 },
+	{ q = "영어 자판 상태에서 '한글'을 그대로 치면?", choices = { "gksrmf", "gksgmf", "gjsrmf", "rksrmf" }, answer = 1 },
+	{ q = "체스를 시작할 때 판 위의 말은 모두 몇 개?", choices = { "16개", "24개", "32개", "36개" }, answer = 3 },
+	{ q = "볼링 한 게임의 최고 점수는?", choices = { "100점", "200점", "300점", "500점" }, answer = 3 },
+	{ q = "애국가는 모두 몇 절까지 있을까?", choices = { "2절", "3절", "4절", "5절" }, answer = 3 },
+	{ q = "5만 원권 지폐에 그려진 인물은?", choices = { "유관순", "신사임당", "허난설헌", "선덕여왕" }, answer = 2 },
 } :: { Question }
 
 return QuizBank
@@ -2963,6 +2975,34 @@ local TalkTopics: { string } = {
 }
 
 return TalkTopics
+]====]; s.Parent = n3 end
+do local s = Instance.new("ModuleScript"); s.Name = "WordAliases"; s.Source = [====[--!strict
+-- Other ways players write a ChosungBank word (bundle 10, review 2026-10-25: "돈까스" for 돈가스 was a wrong answer).
+-- 머리 위 스무고개 takes them as the right answer and as writing the word in chat; WordService keeps a chat line holding
+-- one from the word's owner. Data only: word -> its other forms (spaces and marks never matter, Judge.normalizeChat).
+-- No one-letter forms: the chat rule looks for them inside any line.
+local WordAliases: { [string]: { string } } = {
+	["돈가스"] = { "돈까스" },
+	["짜장면"] = { "자장면" },
+	["햄버거"] = { "버거" },
+	["순두부"] = { "순두부찌개" },
+	["튀르키예"] = { "터키" },
+	["호주"] = { "오스트레일리아" },
+	["거북이"] = { "거북" },
+	["경찰관"] = { "경찰" },
+	["소방관"] = { "소방수" },
+	["복싱"] = { "권투" },
+	["헬리콥터"] = { "헬기" },
+	["지하철"] = { "전철" },
+	["구급차"] = { "앰뷸런스" },
+	["오토바이"] = { "바이크" },
+	["유람선"] = { "크루즈" },
+	["공책"] = { "노트" },
+	["크레파스"] = { "크레용" },
+	["스테이플러"] = { "호치키스" },
+}
+
+return WordAliases
 ]====]; s.Parent = n3 end
 do local s = Instance.new("ModuleScript"); s.Name = "WordBank"; s.Source = [====[--!strict
 -- Word bank (version 2, server only, never replicated). Data + drawing only.
@@ -3097,6 +3137,7 @@ local Balance = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BALANCE_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -3134,6 +3175,32 @@ local function names(list: { Player }): string
 	return table.concat(out, ", ")
 end
 
+local asked: { [number]: boolean } = {} -- questions asked on this server (review 2026-10-25: they came back soon)
+
+-- A question not asked yet on this server; when every one was, they all may come again. (Public for the tests.)
+function Balance.pickQuestion(rng: Random): typeof(BalanceBank[1])
+	local fresh = {}
+	for i in BalanceBank do
+		if not asked[i] then
+			table.insert(fresh, i)
+		end
+	end
+	if #fresh == 0 then
+		table.clear(asked)
+		for i in BalanceBank do
+			table.insert(fresh, i)
+		end
+	end
+	local index = fresh[rng:NextInteger(1, #fresh)]
+	asked[index] = true
+	return BalanceBank[index]
+end
+
+-- Every question may come again (for the tests).
+function Balance.forgetAsked()
+	table.clear(asked)
+end
+
 function Balance.available(final: boolean): boolean
 	return not final and #BalanceBank > 0
 end
@@ -3144,7 +3211,7 @@ function Balance.run(ctx: Ctx): boolean?
 	if #players < Config.BALANCE_MIN_PLAYERS then
 		return false
 	end
-	local question = BalanceBank[ctx.rng:NextInteger(1, #BalanceBank)]
+	local question = Balance.pickQuestion(ctx.rng)
 	-- Too few left in the middle (leaves): the game ends with no penalty (§4).
 	local function tooFew(): boolean
 		local here = 0
@@ -3297,6 +3364,7 @@ local BannedTalk = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TALK_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -3378,6 +3446,7 @@ local BombPass = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BOMB_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -3537,6 +3606,7 @@ local Bottle = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BOTTLE_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -3738,6 +3808,7 @@ local Crocodile = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.CROC_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -3899,6 +3970,7 @@ local Duel = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.DUEL_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -4125,6 +4197,7 @@ local Estimate = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.ESTIMATE_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -4315,6 +4388,7 @@ local Liar = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.LIAR_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -4351,6 +4425,37 @@ local function shuffled(list: { any }, rng: Random): { any }
 	return out
 end
 
+local played: { [string]: boolean } = {} -- "category/word" played on this server (review 2026-10-25)
+
+-- A category and word not played yet on this server; when every one was, they all may come again. (Public for the
+-- tests.)
+function Liar.pickWord(rng: Random): (typeof(LiarBank[1]), string)
+	local fresh = {}
+	for _, entry in LiarBank do
+		for _, word in entry.words do
+			if not played[entry.category .. "/" .. word] then
+				table.insert(fresh, { entry = entry, word = word })
+			end
+		end
+	end
+	if #fresh == 0 then
+		table.clear(played)
+		for _, entry in LiarBank do
+			for _, word in entry.words do
+				table.insert(fresh, { entry = entry, word = word })
+			end
+		end
+	end
+	local pick = fresh[rng:NextInteger(1, #fresh)]
+	played[pick.entry.category .. "/" .. pick.word] = true
+	return pick.entry, pick.word
+end
+
+-- Every word may come again (for the tests).
+function Liar.forgetPlayed()
+	table.clear(played)
+end
+
 function Liar.available(final: boolean): boolean
 	return not final and #LiarBank > 0
 end
@@ -4366,8 +4471,7 @@ function Liar.run(ctx: Ctx): boolean?
 	if #players < Config.LIAR_MIN_PLAYERS then
 		return false
 	end
-	local entry = LiarBank[ctx.rng:NextInteger(1, #LiarBank)]
-	local word = entry.words[ctx.rng:NextInteger(1, #entry.words)]
+	local entry, word = Liar.pickWord(ctx.rng)
 	local liar = players[ctx.rng:NextInteger(1, #players)]
 	local function stillIn(player: Player): boolean
 		return table.find(ctx.players(), player) ~= nil and not ctx.flying(player)
@@ -4603,6 +4707,7 @@ local Nunchi = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.NUNCHI_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -4798,6 +4903,7 @@ local OXQuiz = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = nil :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -5017,6 +5123,7 @@ local OneWord = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.ONE_WORD_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -5059,10 +5166,13 @@ local function choosePerformers(ctx: Ctx, rung: { Player }): { Player }
 	return list
 end
 
--- A topic not given yet in this run and free of the banned words in play (nil if none is left).
+local heard: { [string]: boolean } = {} -- topics given on this server (review 2026-10-25: they came back soon)
+
+-- A topic not given yet in this run and free of the banned words in play (nil if none is left); one not heard yet on
+-- this server first (when every free one was, they may come again).
 local function pickTopic(ctx: Ctx, given: { [string]: boolean }): string?
 	local words = Match.wordsInPlay()
-	local free = {}
+	local free, fresh = {}, {}
 	for _, topic in OneWordTopics do
 		local clean = not given[topic]
 		for _, word in words do
@@ -5070,13 +5180,23 @@ local function pickTopic(ctx: Ctx, given: { [string]: boolean }): string?
 		end
 		if clean then
 			table.insert(free, topic)
+			if not heard[topic] then
+				table.insert(fresh, topic)
+			end
 		end
 	end
 	if #free == 0 then
 		return nil
 	end
-	local topic = free[ctx.rng:NextInteger(1, #free)]
+	if #fresh == 0 then
+		for _, topic in free do
+			heard[topic] = nil
+		end
+		fresh = free
+	end
+	local topic = fresh[ctx.rng:NextInteger(1, #fresh)]
 	given[topic] = true
+	heard[topic] = true
 	return topic
 end
 
@@ -5364,6 +5484,7 @@ local Quiz = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = nil :: number?, -- the basic mission: no limit (§5)
 	minPlayers = nil :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -5414,11 +5535,41 @@ function Quiz.available(final: boolean): boolean
 	return #(if final then QuizBank.final else QuizBank.main) > 0
 end
 
+-- `question`'s choices in a new order for this asking, and where the right one is now (review 2026-10-25: it sat in
+-- the same place every time, so a player who met a question again knew the spot). Choices that all hold a number
+-- (3만 km, 30만 km ...) keep their order. Config.QUIZ_SHUFFLE off keeps every order (the tests). The bank is not changed.
+local function shuffledChoices(question: QuizBank.Question, rng: Random): ({ string }, number)
+	local numbers = true
+	for _, choice in question.choices do
+		numbers = numbers and string.find(choice, "%d") ~= nil
+	end
+	if numbers or not Config.QUIZ_SHUFFLE then
+		return question.choices, question.answer
+	end
+	local order = {}
+	for i = 1, #question.choices do
+		order[i] = i
+	end
+	for i = #order, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		order[i], order[j] = order[j], order[i]
+	end
+	local choices, answer = {}, question.answer
+	for place, from in order do
+		choices[place] = question.choices[from]
+		if from == question.answer then
+			answer = place
+		end
+	end
+	return choices, answer
+end
+
 -- Everyone on the ground answers `question` with four choices; wrong or none is a fail (event `key`). Returns false if
 -- cancelled.
 local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): boolean
 	ctx.show(if ctx.final then Config.TEXT.FINAL_QUIZ else Config.TEXT.QUIZ_START)
-	local shown = { kind = "quiz", final = ctx.final, question = question.q, choices = question.choices }
+	local choices, rightAt = shuffledChoices(question, ctx.rng)
+	local shown = { kind = "quiz", final = ctx.final, question = question.q, choices = choices }
 	ctx.screen(shown)
 	if not ctx.wait(Config.QUIZ_INTRO_SECONDS) then
 		return false
@@ -5429,7 +5580,7 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 			table.insert(asked, player)
 		end
 	end
-	local answers = ctx.ask(shown, #question.choices, Config.QUIZ_SECONDS, asked)
+	local answers = ctx.ask(shown, #choices, Config.QUIZ_SECONDS, asked)
 	if ctx.cancelled() then
 		return false
 	end
@@ -5441,13 +5592,13 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 		else
 			table.insert(missed, player)
 		end
-		if choice ~= question.answer then
+		if choice ~= rightAt then
 			table.insert(wrong, player)
 		end
 	end
-	ctx.screen({ kind = "quizResult", final = ctx.final, question = question.q, choices = question.choices, answer = question.answer })
+	ctx.screen({ kind = "quizResult", final = ctx.final, question = question.q, choices = choices, answer = rightAt })
 	ctx.show(if #wrong == 0 then Config.TEXT.QUIZ_ALL_RIGHT
-		else string.format(Config.TEXT.QUIZ_ANSWER, question.choices[question.answer]))
+		else string.format(Config.TEXT.QUIZ_ANSWER, choices[rightAt]))
 	if not ctx.final then
 		ctx.answers(answered, missed) -- before the fail: a launched player's miss would not count any more
 	end
@@ -5477,6 +5628,7 @@ local BellQuiz = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BELL_QUIZ_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = true :: boolean?,
 }
 
@@ -5580,6 +5732,7 @@ local ChosungQuiz = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = nil :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -5747,6 +5900,7 @@ local RedLight = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.REDLIGHT_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -5980,6 +6134,7 @@ local Roulette = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.ROULETTE_PER_ROUND :: number?,
 	minPlayers = Config.ROULETTE_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -6069,6 +6224,7 @@ local TestMission = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = nil :: number?, -- like the quiz: no limit
 	minPlayers = nil :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -6150,6 +6306,7 @@ local TimeGuess = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TIMEGUESS_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -6300,6 +6457,7 @@ local Judge = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local Net = require(script.Parent.Parent:WaitForChild("Net"))
 local ChosungBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("ChosungBank"))
+local WordAliases = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("WordAliases"))
 
 -- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
 type Ctx = {
@@ -6343,6 +6501,8 @@ local Twenty = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TWENTY_MIN_PLAYERS :: number?,
+	-- (owner 2026-10-26, the recommended choice: with more alive a game runs long, up to about 7 minutes with ten)
+	maxPlayers = Config.TWENTY_MAX_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -6364,10 +6524,29 @@ function Twenty.needed(players: number): number
 	return math.max(1, math.ceil(players * Config.TWENTY_SHARE - 1e-9))
 end
 
--- Whether `typed` is `word`: the same letters, whatever spaces or marks are around them (택배기사 = 택배 기사).
+-- `word` and the other ways it is written (content/WordAliases: 돈가스, 돈까스).
+function Twenty.forms(word: string): { string }
+	local list = { word }
+	local more: { string } = WordAliases[word] or {}
+	for _, alias in more do
+		table.insert(list, alias)
+	end
+	return list
+end
+
+-- Whether `typed` is `word` or one of its other forms: the same letters, whatever spaces or marks are around them
+-- (택배기사 = 택배 기사).
 function Twenty.isRight(typed: string, word: string): boolean
 	local guess = Judge.normalizeChat(typed)
-	return guess ~= "" and guess == Judge.normalizeChat(word)
+	if guess == "" then
+		return false
+	end
+	for _, form in Twenty.forms(word) do
+		if guess == Judge.normalizeChat(form) then
+			return true
+		end
+	end
+	return false
 end
 
 -- A topic and `count` different words of it (pure, for the tests): words of TWENTY_MIN_LETTERS letters or more, not
@@ -6392,8 +6571,12 @@ function Twenty.draw(rng: Random, count: number): (string?, { string })
 			local word = table.remove(pool, rng:NextInteger(1, #pool)) :: string
 			local clash = false
 			for _, other in picked do
-				local a, b = Judge.normalizeChat(word), Judge.normalizeChat(other)
-				clash = clash or string.find(a, b, 1, true) ~= nil or string.find(b, a, 1, true) ~= nil
+				for _, mine in Twenty.forms(word) do -- (other forms too: 경찰 would sit inside 경찰관)
+					for _, theirs in Twenty.forms(other) do
+						local a, b = Judge.normalizeChat(mine), Judge.normalizeChat(theirs)
+						clash = clash or string.find(a, b, 1, true) ~= nil or string.find(b, a, 1, true) ~= nil
+					end
+				end
 			end
 			if not clash then
 				table.insert(picked, word)
@@ -6434,11 +6617,15 @@ function Twenty.writes(text: string, word: string): boolean
 end
 
 -- Whether `text` (a chat line of `sender`'s) writes another player's word in `hidden` (the words their owners do not
--- see yet). Pure, for the tests.
+-- see yet), or one of its other forms. Pure, for the tests.
 function Twenty.leaks(text: string, sender: Player, hidden: { [Player]: string }): boolean
 	for other, word in hidden do
-		if other ~= sender and Twenty.writes(text, word) then
-			return true
+		if other ~= sender then
+			for _, form in Twenty.forms(word) do
+				if Twenty.writes(text, form) then
+					return true
+				end
+			end
 		end
 	end
 	return false
@@ -7661,6 +7848,7 @@ export type Mission = {
 	expectedFor: ((players: number) -> number)?, -- the same for this many alive players, when it depends on them
 	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
 	minPlayers: number?, -- alive participants it needs (nil = any)
+	maxPlayers: number?, -- at most this many alive (nil = any; 머리 위 스무고개 runs long with many)
 	needsPresenter: boolean?, -- offered only while someone presents (the one-word mission)
 	available: (final: boolean) -> boolean,
 	run: (ctx: MissionCtx) -> boolean?, -- false: it had nothing to play (a quiz with no clean question left)
@@ -7701,7 +7889,8 @@ function MissionRunner.candidates(secondsLeft: number, alive: number, presenter:
 	for _, mission in MISSIONS do
 		local count = played[mission.id] or 0
 		if mission.available(false) and fits(mission, secondsLeft, alive) and (mission.maxPerRound == nil or count < mission.maxPerRound)
-			and alive >= (mission.minPlayers or 0) and (presenter or not mission.needsPresenter) then
+			and alive >= (mission.minPlayers or 0) and alive <= (mission.maxPlayers or math.huge)
+			and (presenter or not mission.needsPresenter) then
 			table.insert(list, mission)
 		end
 	end
@@ -9789,6 +9978,7 @@ local Judge = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local Net = require(script.Parent.Parent:WaitForChild("Net"))
 local WordBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("WordBank"))
+local WordAliases = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("WordAliases"))
 
 local WordService = {}
 
@@ -9895,7 +10085,8 @@ function WordService.place(words: { [Player]: string }, known: { [Player]: boole
 		table.clear(p.words)
 		local text = words[player]
 		if text then
-			table.insert(p.words, { text = text, aliases = {}, effectiveAt = math.huge })
+			-- (its other forms too: "경찰" must not reach the owner of 경찰관, review 2026-10-25)
+			table.insert(p.words, { text = text, aliases = table.clone(WordAliases[text] or {}), effectiveAt = math.huge })
 		end
 	end
 	shownToOwner = table.clone(known)
@@ -11574,8 +11765,10 @@ do local s = Instance.new("ModuleScript"); s.Name = "ShowCamera"; s.Source = [==
 --               live on PoolHall.ShowCamera (attributes HalfWidth, MinFov, MaxFov). A round of few players (they sit in
 --               the middle chairs) is framed closer (review 2026-10-25: two players were tiny among eight empty chairs):
 --               the seated chairs plus Config.SHOW_MARGIN studs, at least Config.SHOW_MIN_HALF_WIDTH, and the view
---               tilts down by as much as keeps the seats at the same height on screen (the card under them, the pool
---               behind them where the flights land, stay where they were).
+--               tilts so the tops of the head tags (Config.SHOW_KEEP_HEIGHT over the seats) stay at the same height on
+--               screen as in the wide view: on a phone the status board above and the card below leave a narrow band,
+--               and 스무고개's words must stay in it (Studio check 2026-10-26: keeping the seats' height instead pushed
+--               the words under the status board).
 --   "presenter" the presenter looks at the row from behind the podium (PoolHall.PresenterCamera, attribute Fov). Their
 --               own character stands between that camera and the row, so it is hidden on their screen only (like
 --               first person; everyone else still sees them).
@@ -11645,8 +11838,8 @@ local function seatedReach(marker: BasePart, chairs: Instance): number
 	return offsets[math.clamp(seatedCount, 1, math.max(#offsets, 1))] or 0
 end
 
--- The show camera: where it looks from and its FOV. The whole row, or closer for few players (tilted so the seats keep
--- their height on screen).
+-- The show camera: where it looks from and its FOV. The whole row, or closer for few players (tilted so the head tags
+-- keep their height on screen).
 local function fitRow(marker: BasePart, chairs: Instance, camera: Camera): (CFrame, number)
 	local rowHalf = (marker:GetAttribute("HalfWidth") or 29) :: number
 	local maxFov = (marker:GetAttribute("MaxFov") or 70) :: number
@@ -11660,12 +11853,13 @@ local function fitRow(marker: BasePart, chairs: Instance, camera: Camera): (CFra
 	if close >= wide - 0.5 then
 		return marker.CFrame, wide
 	end
-	-- (the seats sit at the same fraction of the screen height as in the wide view)
+	-- (the head tags' tops sit at the same fraction of the screen height as in the wide view)
+	local keepY = seatY + Config.SHOW_KEEP_HEIGHT
 	local centreY = (marker.Position + marker.CFrame.LookVector * depth).Y
 	local wideHalf = depth * math.tan(math.rad(wide / 2))
 	local closeHalf = depth * math.tan(math.rad(close / 2))
-	local fromTop = (centreY + wideHalf - seatY) / (2 * wideHalf)
-	local closeCentreY = seatY + (fromTop - 0.5) * 2 * closeHalf
+	local fromTop = (centreY + wideHalf - keepY) / (2 * wideHalf)
+	local closeCentreY = keepY + (fromTop - 0.5) * 2 * closeHalf
 	local tilt = math.atan((centreY - closeCentreY) / depth)
 	return marker.CFrame * CFrame.Angles(-tilt, 0, 0), close
 end

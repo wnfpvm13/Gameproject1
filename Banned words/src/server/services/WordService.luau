@@ -17,6 +17,7 @@ local Judge = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local Net = require(script.Parent.Parent:WaitForChild("Net"))
 local WordBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("WordBank"))
+local WordAliases = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("WordAliases"))
 
 local WordService = {}
 
@@ -123,7 +124,8 @@ function WordService.place(words: { [Player]: string }, known: { [Player]: boole
 		table.clear(p.words)
 		local text = words[player]
 		if text then
-			table.insert(p.words, { text = text, aliases = {}, effectiveAt = math.huge })
+			-- (its other forms too: "경찰" must not reach the owner of 경찰관, review 2026-10-25)
+			table.insert(p.words, { text = text, aliases = table.clone(WordAliases[text] or {}), effectiveAt = math.huge })
 		end
 	end
 	shownToOwner = table.clone(known)

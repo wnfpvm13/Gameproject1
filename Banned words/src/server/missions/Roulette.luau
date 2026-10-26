@@ -47,6 +47,7 @@ local Roulette = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.ROULETTE_PER_ROUND :: number?,
 	minPlayers = Config.ROULETTE_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 

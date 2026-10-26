@@ -63,6 +63,7 @@ local OneWord = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.ONE_WORD_MIN_PLAYERS :: number?,
+	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -105,10 +106,13 @@ local function choosePerformers(ctx: Ctx, rung: { Player }): { Player }
 	return list
 end
 
--- A topic not given yet in this run and free of the banned words in play (nil if none is left).
+local heard: { [string]: boolean } = {} -- topics given on this server (review 2026-10-25: they came back soon)
+
+-- A topic not given yet in this run and free of the banned words in play (nil if none is left); one not heard yet on
+-- this server first (when every free one was, they may come again).
 local function pickTopic(ctx: Ctx, given: { [string]: boolean }): string?
 	local words = Match.wordsInPlay()
-	local free = {}
+	local free, fresh = {}, {}
 	for _, topic in OneWordTopics do
 		local clean = not given[topic]
 		for _, word in words do
@@ -116,13 +120,23 @@ local function pickTopic(ctx: Ctx, given: { [string]: boolean }): string?
 		end
 		if clean then
 			table.insert(free, topic)
+			if not heard[topic] then
+				table.insert(fresh, topic)
+			end
 		end
 	end
 	if #free == 0 then
 		return nil
 	end
-	local topic = free[ctx.rng:NextInteger(1, #free)]
+	if #fresh == 0 then
+		for _, topic in free do
+			heard[topic] = nil
+		end
+		fresh = free
+	end
+	local topic = fresh[ctx.rng:NextInteger(1, #fresh)]
 	given[topic] = true
+	heard[topic] = true
 	return topic
 end
 

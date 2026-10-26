@@ -9,7 +9,7 @@ export type Statement = { s: string, o: boolean }
 
 local OXBank: { Statement } = {
 	-- Animals and plants
-	{ s = "거미는 곤충이다", o = false },
+	{ s = "코알라는 곰의 한 종류다", o = false },
 	{ s = "고래는 포유류다", o = true },
 	{ s = "펭귄은 날 수 없다", o = true },
 	{ s = "상어는 어류다", o = true },
@@ -17,8 +17,8 @@ local OXBank: { Statement } = {
 	{ s = "물고기는 모두 알을 낳는다", o = false },
 	{ s = "닭은 하늘을 오래 날 수 있다", o = false },
 	{ s = "남극에는 북극곰이 산다", o = false },
-	{ s = "북극에는 펭귄이 산다", o = false },
-	{ s = "오스트레일리아에는 캥거루가 산다", o = true },
+	{ s = "고래상어는 고래가 아니라 상어다", o = true },
+	{ s = "달팽이는 이빨이 있다", o = true },
 	{ s = "코끼리는 육지에서 가장 무거운 동물이다", o = true },
 	{ s = "카멜레온은 몸 색을 바꿀 수 있다", o = true },
 	{ s = "꿀벌은 춤으로 꽃이 있는 곳을 알린다", o = true },
@@ -47,18 +47,18 @@ local OXBank: { Statement } = {
 	{ s = "다이아몬드는 탄소로 이루어져 있다", o = true },
 	{ s = "금은 자석에 잘 붙는다", o = false },
 	{ s = "사막에도 비가 내린다", o = true },
-	{ s = "피는 몸 밖으로 나오면 파랗게 변한다", o = false },
+	{ s = "몸속 정맥을 흐르는 피는 파란색이다", o = false },
 	{ s = "사람은 뇌의 10%만 쓴다", o = false },
 	-- Places, culture and numbers
 	{ s = "한글을 만든 왕은 세종대왕이다", o = true },
-	{ s = "대한민국의 수도는 부산이다", o = false },
+	{ s = "올림픽 금메달은 순금으로 만든다", o = false },
 	{ s = "대한민국의 나라꽃은 무궁화다", o = true },
 	{ s = "설날은 음력 1월 1일이다", o = true },
 	{ s = "백두산은 한반도에서 가장 높은 산이다", o = true },
 	{ s = "이집트에는 피라미드가 있다", o = true },
-	{ s = "에펠탑은 영국 런던에 있다", o = false },
+	{ s = "손톱은 발톱보다 빨리 자란다", o = true },
 	{ s = "하계 올림픽은 4년마다 열린다", o = true },
-	{ s = "정사각형은 네 변의 길이가 모두 같다", o = true },
+	{ s = "해바라기는 다 자란 뒤에도 하루 종일 해를 따라 돈다", o = false },
 	{ s = "모든 소수는 홀수다", o = false },
 	{ s = "0은 짝수다", o = true },
 }

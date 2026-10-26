@@ -239,4 +239,19 @@ for key, text in Config.TEXT do
 end
 check("4 no fixed UI text (Config.TEXT) contains a word-bank word", #clashes == 0, table.concat(clashes, ", "))
 
+---------------------------------------------------------------- 5. a mission's words bring their other forms (bundle 10)
+do
+	local a, b = fakePlayer(51), fakePlayer(52)
+	table.clear(Match.participants)
+	Match.participants[a] = { player = a, alive = true, words = {} }
+	Match.participants[b] = { player = b, alive = true, words = {} }
+	Match.phase = "Play"
+	WordService.place({ [a] = "경찰관", [b] = "사과" }, {})
+	check("5a a line with another form of my hidden word (경찰 for 경찰관) never reaches me; other lines and others do",
+		WordService.hides(a, "너 경찰이야?") and WordService.hides(a, "경찰관?") and not WordService.hides(a, "동물이야?")
+		and not WordService.hides(b, "너 경찰이야?"))
+	WordService.clear()
+	table.clear(Match.participants)
+end
+
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

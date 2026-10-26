@@ -21,6 +21,7 @@ local Judge = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local Net = require(script.Parent.Parent:WaitForChild("Net"))
 local ChosungBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("ChosungBank"))
+local WordAliases = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("WordAliases"))
 
 -- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
 type Ctx = {
@@ -64,6 +65,8 @@ local Twenty = {
 	expectedFor = nil :: ((players: number) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TWENTY_MIN_PLAYERS :: number?,
+	-- (owner 2026-10-26, the recommended choice: with more alive a game runs long, up to about 7 minutes with ten)
+	maxPlayers = Config.TWENTY_MAX_PLAYERS :: number?,
 	needsPresenter = nil :: boolean?,
 }
 
@@ -85,10 +88,29 @@ function Twenty.needed(players: number): number
 	return math.max(1, math.ceil(players * Config.TWENTY_SHARE - 1e-9))
 end
 
--- Whether `typed` is `word`: the same letters, whatever spaces or marks are around them (택배기사 = 택배 기사).
+-- `word` and the other ways it is written (content/WordAliases: 돈가스, 돈까스).
+function Twenty.forms(word: string): { string }
+	local list = { word }
+	local more: { string } = WordAliases[word] or {}
+	for _, alias in more do
+		table.insert(list, alias)
+	end
+	return list
+end
+
+-- Whether `typed` is `word` or one of its other forms: the same letters, whatever spaces or marks are around them
+-- (택배기사 = 택배 기사).
 function Twenty.isRight(typed: string, word: string): boolean
 	local guess = Judge.normalizeChat(typed)
-	return guess ~= "" and guess == Judge.normalizeChat(word)
+	if guess == "" then
+		return false
+	end
+	for _, form in Twenty.forms(word) do
+		if guess == Judge.normalizeChat(form) then
+			return true
+		end
+	end
+	return false
 end
 
 -- A topic and `count` different words of it (pure, for the tests): words of TWENTY_MIN_LETTERS letters or more, not
@@ -113,8 +135,12 @@ function Twenty.draw(rng: Random, count: number): (string?, { string })
 			local word = table.remove(pool, rng:NextInteger(1, #pool)) :: string
 			local clash = false
 			for _, other in picked do
-				local a, b = Judge.normalizeChat(word), Judge.normalizeChat(other)
-				clash = clash or string.find(a, b, 1, true) ~= nil or string.find(b, a, 1, true) ~= nil
+				for _, mine in Twenty.forms(word) do -- (other forms too: 경찰 would sit inside 경찰관)
+					for _, theirs in Twenty.forms(other) do
+						local a, b = Judge.normalizeChat(mine), Judge.normalizeChat(theirs)
+						clash = clash or string.find(a, b, 1, true) ~= nil or string.find(b, a, 1, true) ~= nil
+					end
+				end
 			end
 			if not clash then
 				table.insert(picked, word)
@@ -155,11 +181,15 @@ function Twenty.writes(text: string, word: string): boolean
 end
 
 -- Whether `text` (a chat line of `sender`'s) writes another player's word in `hidden` (the words their owners do not
--- see yet). Pure, for the tests.
+-- see yet), or one of its other forms. Pure, for the tests.
 function Twenty.leaks(text: string, sender: Player, hidden: { [Player]: string }): boolean
 	for other, word in hidden do
-		if other ~= sender and Twenty.writes(text, word) then
-			return true
+		if other ~= sender then
+			for _, form in Twenty.forms(word) do
+				if Twenty.writes(text, form) then
+					return true
+				end
+			end
 		end
 	end
 	return false

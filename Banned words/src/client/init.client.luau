@@ -355,7 +355,39 @@ local function bottlesFor(payload: { [string]: any })
 		bottlesUp = false
 	end
 end
+-- The sounds of a screen's moments: only when it comes after the one before (a screen sent again on Sync stays quiet).
+local function cueSounds(before: { [string]: any }, now: { [string]: any })
+	Fx.ticking(now.kind == "bomb")
+	if now.kind == "quizResult" and before.kind == "quiz" and now.question == before.question then
+		if MissionPanel.myPick() == now.answer then
+			Fx.cue("right")
+		end
+	elseif now.kind == "redLight" and now.light == "red" and before.kind == "redLight" and before.light ~= "red" then
+		Fx.cue("whistle")
+	elseif now.kind == "duel" and now.stage == "fire" and before.kind == "duel" and before.stage ~= "fire" then
+		Fx.cue("fire")
+	elseif now.kind == "roulette" and before.kind ~= "roulette" and typeof(now.startsAt) == "number"
+		and typeof(now.spinSeconds) == "number" then
+		local left = now.startsAt + now.spinSeconds - workspace:GetServerTimeNow()
+		if left > 0.5 then
+			Fx.cue("roll", left)
+		end
+	elseif now.kind == "roundResult" and before.kind ~= "roundResult" and typeof(now.winners) == "table" then
+		local winners = {}
+		for _, userId in now.winners do
+			local winner = typeof(userId) == "number" and Players:GetPlayerByUserId(userId)
+			if winner then
+				table.insert(winners, winner)
+			end
+		end
+		if #winners > 0 then
+			Fx.celebrate(winners)
+		end
+	end
+end
+
 remotes.Mission.OnClientEvent:Connect(function(payload)
+	cueSounds(lastMission, payload)
 	lastMission = payload
 	BellButton.setIcon(if payload.kind == "duel" then "gun" else "bell")
 	bellTrap = (payload.kind == "duel" and payload.stage ~= "fire") or (payload.kind == "redLight" and payload.light == "red")

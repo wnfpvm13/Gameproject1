@@ -785,7 +785,11 @@ local function runRound()
 	ChatGate.setGuard(false)
 	openVoices()
 	Match.setPhase("Result", Config.RESULT_TIME, text)
-	MissionRunner.showRoundResult(text, Awards.lines())
+	local winnerIds = {}
+	for _, player in Match.aliveList() do
+		table.insert(winnerIds, player.UserId)
+	end
+	MissionRunner.showRoundResult(text, Awards.lines(), winnerIds)
 	waitPhase()
 	cleanup()
 	lastEndedAt = os.clock()

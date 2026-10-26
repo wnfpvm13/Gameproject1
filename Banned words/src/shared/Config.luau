@@ -630,6 +630,14 @@ return {
 	-- Roblox-licensed Pro Sound Effects (public, free).
 	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)
 	SOUND_BANG = "rbxassetid://9114086657", -- Dirt Explosion 1: sharp bang (SFX), the flying chair firing
-	SOUND_BELL = "rbxassetid://1839997929", -- the seat bell's ding (APM game show toolkit, Correct Answer 2; replace
-	-- with a shorter desk-bell sound after the owner hears it)
+	-- (owner 2026-10-26, the recommended choice: sounds for the moments that had none, all Roblox-licensed APM Music /
+	-- Pro Sound Effects; the owner listens in Studio and may swap any of them)
+	SOUND_BELL = "rbxassetid://9125485591", -- Desk Bell Counter Service Single Ringing Ding 1 (SFX): the seat bell
+	SOUND_RIGHT = "rbxassetid://1839997929", -- Correct Answer 2 (APM game show toolkit): my quiz answer was right
+	SOUND_WIN = "rbxassetid://1839997889", -- Organ Fanfare (APM game show toolkit, 3 s): the round's winners
+	SOUND_TICK = "rbxassetid://1839998128", -- Coconut Clock (APM game show toolkit, ticking): while the bomb goes round
+	SOUND_ROLL = "rbxassetid://1839997904", -- Roll Reveal (APM game show toolkit, drum roll with a crash): the roulette
+	SOUND_ROLL_CRASH_AT = 6.0, -- seconds into SOUND_ROLL where the crash is (it starts so the crash meets the pick; by ear)
+	SOUND_WHISTLE = "rbxassetid://9118114334", -- Referee Whistle Interior Gymnasium 1 (SFX): 무궁화's red light
+	SOUND_VOLUME = 0.5, -- these game sounds, under the voices
 }

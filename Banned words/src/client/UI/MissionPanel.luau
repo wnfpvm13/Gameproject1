@@ -1045,6 +1045,11 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end
 
+-- What I picked on the screen showing now (a choice number), or nil.
+function MissionPanel.myPick(): number?
+	return state.myPick
+end
+
 -- I rang my bell at `now` (server time): 물병 세우기's marker stops there on my screen.
 function MissionPanel.rang(now: number)
 	if state.kind == "bottle" and state.timing.stoppedAt == 0 and now >= state.timing.barStartAt then

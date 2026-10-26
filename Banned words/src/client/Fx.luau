@@ -2,7 +2,9 @@
 -- Effects: the flying chair firing (an explosion — bigger the fewer lives were left, a white flash for the biggest —,
 -- the seat flap snapping back on its hinge, "펑", smoke and confetti),
 -- the splash where the player hits the water (no sound: owner 2026-10-24), the elimination buzzer and red flash, floating emoji reactions, the presenter's sound
--- buttons and a seat bell's ding with its light (bundle 6b).
+-- buttons and a seat bell's ding with its light (bundle 6b). Since 2026-10-26 (owner, the recommended choice) the game's
+-- own moments have sounds too (`cue`, the bomb's ticking `ticking`) and the winners get confetti and a fanfare
+-- (`celebrate`).
 -- The server only sends signals; every client animates the flap itself (a server-moved flap would stutter).
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
@@ -25,6 +27,8 @@ local buzzer: Sound
 local bang: Sound
 local bellSound: Sound
 local presenterSounds: { Sound } = {} -- the presenter's sound buttons (Config.PRESENTER_SOUNDS order)
+local cues: { [string]: Sound } = {} -- the game's moments (Fx.cue)
+local tick: Sound -- the bomb's ticking (Fx.ticking)
 local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
 local playing: { [BasePart]: number } = {} -- hinge -> current animation number
 
@@ -83,6 +87,40 @@ function Fx.init()
 	bellSound = sound("Bell", Config.SOUND_BELL, 0.7)
 	for i, entry in Config.PRESENTER_SOUNDS do
 		presenterSounds[i] = sound("PresenterSound" .. i, entry.id, 0.7)
+	end
+	cues.right = sound("Right", Config.SOUND_RIGHT, Config.SOUND_VOLUME)
+	cues.win = sound("Win", Config.SOUND_WIN, Config.SOUND_VOLUME)
+	cues.roll = sound("Roll", Config.SOUND_ROLL, Config.SOUND_VOLUME)
+	cues.whistle = sound("Whistle", Config.SOUND_WHISTLE, Config.SOUND_VOLUME)
+	cues.fire = sound("Fire", Config.SOUND_BANG, Config.SOUND_VOLUME)
+	tick = sound("Tick", Config.SOUND_TICK, Config.SOUND_VOLUME * 0.8)
+	tick.Looped = true
+end
+
+-- One of the game's moments: "right" (my answer was right), "win" (the round's winners), "whistle" (무궁화's red
+-- light), "fire" (총잡이 결투's "발사!"), "roll" (the roulette spins: `seconds` until it stops, the crash meets it).
+function Fx.cue(name: string, seconds: number?)
+	local template = cues[name]
+	if not template then
+		return
+	end
+	if name == "roll" and seconds then
+		local copy = template:Clone()
+		copy.TimePosition = math.max(0, Config.SOUND_ROLL_CRASH_AT - seconds)
+		copy.Parent = SoundService
+		copy:Play()
+		Debris:AddItem(copy, 12)
+		return
+	end
+	playCopy(template)
+end
+
+-- The bomb's ticking: on while the bomb goes round, off when it is over.
+function Fx.ticking(on: boolean)
+	if on and not tick.IsPlaying then
+		tick:Play()
+	elseif not on and tick.IsPlaying then
+		tick:Stop()
 	end
 end
 
@@ -360,6 +398,31 @@ end
 
 -- Someone said a word: buzzer + red flash (the launch itself comes with the "Fling" signal).
 -- Someone went out: the buzzer, and a red flash unless `calm` (the device's reduced motion setting).
+-- The round's winners: a fanfare and confetti over each of them (owner 2026-10-26, the recommended choice: the result
+-- was one card and a toast).
+function Fx.celebrate(winners: { Player })
+	playCopy(cues.win)
+	for _, player in winners do
+		local head = player.Character and player.Character:FindFirstChild("Head") :: BasePart?
+		if head then
+			local anchor = anchorAt(head.Position + Vector3.new(0, 4, 0), 4)
+			for _, color in CONFETTI do
+				emitter(anchor, {
+					Color = ColorSequence.new(color),
+					Size = NumberSequence.new(0.4),
+					Lifetime = NumberRange.new(1.6, 2.6),
+					Speed = NumberRange.new(12, 22),
+					EmissionDirection = Enum.NormalId.Top,
+					SpreadAngle = Vector2.new(50, 50),
+					Acceleration = Vector3.new(0, -18, 0),
+					RotSpeed = NumberRange.new(-300, 300),
+					Rotation = NumberRange.new(0, 360),
+				}, 14)
+			end
+		end
+	end
+end
+
 function Fx.elimination(calm: boolean?)
 	buzzer:Play()
 	if calm then

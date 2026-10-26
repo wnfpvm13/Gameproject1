@@ -643,8 +643,16 @@ return {
 	-- Roblox-licensed Pro Sound Effects (public, free).
 	SOUND_BUZZER = "rbxassetid://9113085764", -- Alarm Buzzer 5 (SFX)
 	SOUND_BANG = "rbxassetid://9114086657", -- Dirt Explosion 1: sharp bang (SFX), the flying chair firing
-	SOUND_BELL = "rbxassetid://1839997929", -- the seat bell's ding (APM game show toolkit, Correct Answer 2; replace
-	-- with a shorter desk-bell sound after the owner hears it)
+	-- (owner 2026-10-26, the recommended choice: sounds for the moments that had none, all Roblox-licensed APM Music /
+	-- Pro Sound Effects; the owner listens in Studio and may swap any of them)
+	SOUND_BELL = "rbxassetid://9125485591", -- Desk Bell Counter Service Single Ringing Ding 1 (SFX): the seat bell
+	SOUND_RIGHT = "rbxassetid://1839997929", -- Correct Answer 2 (APM game show toolkit): my quiz answer was right
+	SOUND_WIN = "rbxassetid://1839997889", -- Organ Fanfare (APM game show toolkit, 3 s): the round's winners
+	SOUND_TICK = "rbxassetid://1839998128", -- Coconut Clock (APM game show toolkit, ticking): while the bomb goes round
+	SOUND_ROLL = "rbxassetid://1839997904", -- Roll Reveal (APM game show toolkit, drum roll with a crash): the roulette
+	SOUND_ROLL_CRASH_AT = 6.0, -- seconds into SOUND_ROLL where the crash is (it starts so the crash meets the pick; by ear)
+	SOUND_WHISTLE = "rbxassetid://9118114334", -- Referee Whistle Interior Gymnasium 1 (SFX): 무궁화's red light
+	SOUND_VOLUME = 0.5, -- these game sounds, under the voices
 }
 ]====]; s.Parent = n1 end
 do local s = Instance.new("ModuleScript"); s.Name = "Hangul"; s.Source = [====[--!strict
@@ -2082,7 +2090,11 @@ local function runRound()
 	ChatGate.setGuard(false)
 	openVoices()
 	Match.setPhase("Result", Config.RESULT_TIME, text)
-	MissionRunner.showRoundResult(text, Awards.lines())
+	local winnerIds = {}
+	for _, player in Match.aliveList() do
+		table.insert(winnerIds, player.UserId)
+	end
+	MissionRunner.showRoundResult(text, Awards.lines(), winnerIds)
 	waitPhase()
 	cleanup()
 	lastEndedAt = os.clock()
@@ -8244,9 +8256,10 @@ function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player
 	return ballot[tied[rng:NextInteger(1, #tied)]], byId
 end
 
--- The round's result on everyone's screen: who won and the round awards (owner 2026-10-24).
-function MissionRunner.showRoundResult(title: string, lines: { string })
-	setScreen({ kind = "roundResult", title = title, lines = lines })
+-- The round's result on everyone's screen: who won and the round awards (owner 2026-10-24); `winners` (userIds) get
+-- the confetti and the fanfare (2026-10-26).
+function MissionRunner.showRoundResult(title: string, lines: { string }, winners: { number }?)
+	setScreen({ kind = "roundResult", title = title, lines = lines, winners = winners or {} })
 end
 
 -- Clears a between-games screen left over (the main game ended while it showed).
@@ -10513,7 +10526,39 @@ local function bottlesFor(payload: { [string]: any })
 		bottlesUp = false
 	end
 end
+-- The sounds of a screen's moments: only when it comes after the one before (a screen sent again on Sync stays quiet).
+local function cueSounds(before: { [string]: any }, now: { [string]: any })
+	Fx.ticking(now.kind == "bomb")
+	if now.kind == "quizResult" and before.kind == "quiz" and now.question == before.question then
+		if MissionPanel.myPick() == now.answer then
+			Fx.cue("right")
+		end
+	elseif now.kind == "redLight" and now.light == "red" and before.kind == "redLight" and before.light ~= "red" then
+		Fx.cue("whistle")
+	elseif now.kind == "duel" and now.stage == "fire" and before.kind == "duel" and before.stage ~= "fire" then
+		Fx.cue("fire")
+	elseif now.kind == "roulette" and before.kind ~= "roulette" and typeof(now.startsAt) == "number"
+		and typeof(now.spinSeconds) == "number" then
+		local left = now.startsAt + now.spinSeconds - workspace:GetServerTimeNow()
+		if left > 0.5 then
+			Fx.cue("roll", left)
+		end
+	elseif now.kind == "roundResult" and before.kind ~= "roundResult" and typeof(now.winners) == "table" then
+		local winners = {}
+		for _, userId in now.winners do
+			local winner = typeof(userId) == "number" and Players:GetPlayerByUserId(userId)
+			if winner then
+				table.insert(winners, winner)
+			end
+		end
+		if #winners > 0 then
+			Fx.celebrate(winners)
+		end
+	end
+end
+
 remotes.Mission.OnClientEvent:Connect(function(payload)
+	cueSounds(lastMission, payload)
 	lastMission = payload
 	BellButton.setIcon(if payload.kind == "duel" then "gun" else "bell")
 	bellTrap = (payload.kind == "duel" and payload.stage ~= "fire") or (payload.kind == "redLight" and payload.light == "red")
@@ -11321,7 +11366,9 @@ do local s = Instance.new("ModuleScript"); s.Name = "Fx"; s.Source = [====[--!st
 -- Effects: the flying chair firing (an explosion — bigger the fewer lives were left, a white flash for the biggest —,
 -- the seat flap snapping back on its hinge, "펑", smoke and confetti),
 -- the splash where the player hits the water (no sound: owner 2026-10-24), the elimination buzzer and red flash, floating emoji reactions, the presenter's sound
--- buttons and a seat bell's ding with its light (bundle 6b).
+-- buttons and a seat bell's ding with its light (bundle 6b). Since 2026-10-26 (owner, the recommended choice) the game's
+-- own moments have sounds too (`cue`, the bomb's ticking `ticking`) and the winners get confetti and a fanfare
+-- (`celebrate`).
 -- The server only sends signals; every client animates the flap itself (a server-moved flap would stutter).
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
@@ -11344,6 +11391,8 @@ local buzzer: Sound
 local bang: Sound
 local bellSound: Sound
 local presenterSounds: { Sound } = {} -- the presenter's sound buttons (Config.PRESENTER_SOUNDS order)
+local cues: { [string]: Sound } = {} -- the game's moments (Fx.cue)
+local tick: Sound -- the bomb's ticking (Fx.ticking)
 local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
 local playing: { [BasePart]: number } = {} -- hinge -> current animation number
 
@@ -11402,6 +11451,40 @@ function Fx.init()
 	bellSound = sound("Bell", Config.SOUND_BELL, 0.7)
 	for i, entry in Config.PRESENTER_SOUNDS do
 		presenterSounds[i] = sound("PresenterSound" .. i, entry.id, 0.7)
+	end
+	cues.right = sound("Right", Config.SOUND_RIGHT, Config.SOUND_VOLUME)
+	cues.win = sound("Win", Config.SOUND_WIN, Config.SOUND_VOLUME)
+	cues.roll = sound("Roll", Config.SOUND_ROLL, Config.SOUND_VOLUME)
+	cues.whistle = sound("Whistle", Config.SOUND_WHISTLE, Config.SOUND_VOLUME)
+	cues.fire = sound("Fire", Config.SOUND_BANG, Config.SOUND_VOLUME)
+	tick = sound("Tick", Config.SOUND_TICK, Config.SOUND_VOLUME * 0.8)
+	tick.Looped = true
+end
+
+-- One of the game's moments: "right" (my answer was right), "win" (the round's winners), "whistle" (무궁화's red
+-- light), "fire" (총잡이 결투's "발사!"), "roll" (the roulette spins: `seconds` until it stops, the crash meets it).
+function Fx.cue(name: string, seconds: number?)
+	local template = cues[name]
+	if not template then
+		return
+	end
+	if name == "roll" and seconds then
+		local copy = template:Clone()
+		copy.TimePosition = math.max(0, Config.SOUND_ROLL_CRASH_AT - seconds)
+		copy.Parent = SoundService
+		copy:Play()
+		Debris:AddItem(copy, 12)
+		return
+	end
+	playCopy(template)
+end
+
+-- The bomb's ticking: on while the bomb goes round, off when it is over.
+function Fx.ticking(on: boolean)
+	if on and not tick.IsPlaying then
+		tick:Play()
+	elseif not on and tick.IsPlaying then
+		tick:Stop()
 	end
 end
 
@@ -11679,6 +11762,31 @@ end
 
 -- Someone said a word: buzzer + red flash (the launch itself comes with the "Fling" signal).
 -- Someone went out: the buzzer, and a red flash unless `calm` (the device's reduced motion setting).
+-- The round's winners: a fanfare and confetti over each of them (owner 2026-10-26, the recommended choice: the result
+-- was one card and a toast).
+function Fx.celebrate(winners: { Player })
+	playCopy(cues.win)
+	for _, player in winners do
+		local head = player.Character and player.Character:FindFirstChild("Head") :: BasePart?
+		if head then
+			local anchor = anchorAt(head.Position + Vector3.new(0, 4, 0), 4)
+			for _, color in CONFETTI do
+				emitter(anchor, {
+					Color = ColorSequence.new(color),
+					Size = NumberSequence.new(0.4),
+					Lifetime = NumberRange.new(1.6, 2.6),
+					Speed = NumberRange.new(12, 22),
+					EmissionDirection = Enum.NormalId.Top,
+					SpreadAngle = Vector2.new(50, 50),
+					Acceleration = Vector3.new(0, -18, 0),
+					RotSpeed = NumberRange.new(-300, 300),
+					Rotation = NumberRange.new(0, 360),
+				}, 14)
+			end
+		end
+	end
+end
+
 function Fx.elimination(calm: boolean?)
 	buzzer:Play()
 	if calm then
@@ -13791,6 +13899,11 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		elseif shownButtons == 3 then UDim2.new(1 / 3, -6, 0, 44)
 		else UDim2.new(0.5, -4, 0, 44)
 	MissionPanel.tick(workspace:GetServerTimeNow())
+end
+
+-- What I picked on the screen showing now (a choice number), or nil.
+function MissionPanel.myPick(): number?
+	return state.myPick
 end
 
 -- I rang my bell at `now` (server time): 물병 세우기's marker stops there on my screen.

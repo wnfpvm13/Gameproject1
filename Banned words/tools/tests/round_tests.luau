@@ -662,6 +662,12 @@ do
 		and lines[1] == string.format(Config.TEXT.AWARD_FLIGHT, ps[1].DisplayName, 100 * Config.STUDS_TO_METERS)
 		and lines[2] == string.format(Config.TEXT.AWARD_SURVIVOR, table.concat(names, ", "), Config.ROUND_GAMES),
 		table.concat(lines, " / "))
+	local winners = shown and shown.winners or {}
+	local matches = true
+	for _, p in ps do
+		matches = matches and (table.find(winners, p.UserId) ~= nil) == (string.find(shown.title, p.DisplayName, 1, true) ~= nil)
+	end
+	check("7q7 the result screen names the winners by id (their confetti and fanfare, 2026-10-26)", #winners > 0 and matches)
 end
 
 -- 7C1: a game with too few players to start (it says "nothing to play") is not one of the round's games.

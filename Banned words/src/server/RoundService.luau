@@ -730,6 +730,11 @@ local function runRound()
 			table.remove(candidates, i)
 		end
 	end
+	if presenter and #candidates < Config.MIN_PLAYERS and presenter.Parent and table.find(stillHere, presenter) then
+		PresenterService.endRound() -- (too few without them: they sit and play instead, the round goes on)
+		table.insert(candidates, presenter)
+		presenter = nil
+	end
 	if #candidates < Config.MIN_PLAYERS then
 		cleanup()
 		return

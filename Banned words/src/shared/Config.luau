@@ -306,6 +306,7 @@ return {
 	-- The show camera frames a round of few players closer (client ShowCamera, review 2026-10-25): the seated chairs plus
 	-- SHOW_MARGIN studs on each side, at least SHOW_MIN_HALF_WIDTH (whole row: the map's HalfWidth), FOV not under
 	-- SHOW_MIN_FOV; the tops of the head tags (SHOW_KEEP_HEIGHT studs over the seats) keep their height on screen.
+	NOTICE_KEEP_SECONDS = 1.5, -- a life-loss toast within this of a moment's line shows that line above it (client)
 	SHOW_MARGIN = 8,
 	SHOW_MIN_HALF_WIDTH = 22,
 	SHOW_MIN_FOV = 20,
@@ -351,7 +352,7 @@ return {
 		TEST_MISSION = "연습 미션 · 운에 맡겨 보세요",
 		FINAL = "결승! 틀리면 바로 탈락",
 		ALL_WRONG = "모두 틀렸어요! 이번 문제는 무효",
-		TO_FINAL = "남은 사람 모두 목숨 0개! 결승에서 승부",
+		TO_FINAL = "남은 사람 모두 목숨을 잃었어요! 결승에서 승부",
 		LIFE_LOST = "%s 목숨 1개 잃음",
 		OUT = "%s 탈락!",
 		MY_LIFE_LOST = "목숨 1개를 잃었어요 · 남은 목숨 %d개",
@@ -367,20 +368,20 @@ return {
 		SETTLING = "마지막 말을 확인하고 있어요…",
 		RECOGNITION_UNSTABLE = "목소리가 잘 안 잡혀요. 마이크를 확인해 주세요",
 		-- Getting ready (MicPanel, docs/DESIGN_V3.md §2, §7): voice, or chat for players who cannot use voice.
-		VOICE_NONE = "음성 채팅 계정만 참가할 수 있어요 (13세 이상, 연령 인증)",
-		VOICE_CONNECT = "음성 연결: ≡ 메뉴(ESC) → 설정 → 음성 채팅 연결",
+		VOICE_NONE = "음성 채팅을 켠 계정만 참가할 수 있어요 (13세 이상·연령 인증)",
+		VOICE_CONNECT = "음성 연결: 왼쪽 위 ≡ 메뉴(ESC) → 설정 → 음성 채팅 연결",
 		VOICE_MUTED = "마이크가 꺼져 있어요",
 		CONNECT_TO_PLAY = "음성을 연결하면 다음 판부터 참가해요",
 		MIC_ON = "마이크를 켜 주세요",
 		MIC_TEST = "마이크 체크! 아무 말이나 해 보세요",
 		MIC_TESTED = "마이크 확인 완료!",
 		READY = "준비 완료!",
-		READY_COUNT = "준비 완료! (지금 %d명)",
-		READY_NEXT_ROUND = "준비 완료! 지금 판이 끝나면 바로 참가해요",
+		READY_COUNT = "준비 완료! (준비 %d명)",
+		READY_NEXT_ROUND = "준비 완료! 다음 판부터 같이 해요",
 		HEADSET_TIP = "헤드셋을 쓰면 더 잘 들려요", -- speakers feed others' voices back into the mic
 		NO_VOICE_WATCH = "관람석에서 구경할 수 있어요",
 		CHAT_CHECKING = "계정 확인 중…",
-		CHAT_JOIN = "채팅으로 참가하기",
+		CHAT_JOIN = "말 대신 채팅으로 참가",
 		CHAT_CANCEL = "채팅 참가 취소",
 		CHAT_JOINED = "채팅으로 참가! 판 동안 내 마이크는 꺼져요",
 		CHAT_TAG = "[채팅]", -- before a chat participant's name in the chat window
@@ -400,7 +401,7 @@ return {
 		TEST_MISSION_TITLE = "연습 미션",
 		TEST_MISSION_BRIEF = "운에 맡겨요 · 가끔 날아가요", -- (the briefing before it, owner 2026-10-24)
 		QUIZ_TITLE = "퀴즈",
-		QUIZ_BRIEF = "4개 중 정답을 못 고르면 날아가요", -- (the briefing before it, owner 2026-10-24)
+		QUIZ_BRIEF = "4개 중 정답 고르기! 틀리면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		QUIZ_START = "정답은?",
 		FINAL_QUIZ = "결승 문제 나갑니다!",
 		QUIZ_ANSWER = "정답: %s",
@@ -411,7 +412,7 @@ return {
 		ROULETTE_HIT = "%s 당첨!",
 		ONE_WORD_TITLE = "좋아하는 거 말하기",
 		ONE_WORD_BRIEF = "벨 순서대로 한마디, 가장 아쉬운 한 명이 날아가요", -- (the briefing before it, owner 2026-10-24)
-		ONE_WORD_START = "발언권은 벨로!",
+		ONE_WORD_START = "벨 누른 순서대로 말해요!",
 		ONE_WORD_BELL = "🔔 벨을 누르면 먼저 말해요",
 		ONE_WORD_TURN = "%s 차례 · %s",
 		ONE_WORD_PREP = "곧 시작",
@@ -473,10 +474,11 @@ return {
 		BALANCE_COUNT = "%s %d · %s %d",
 		BALANCE_EVEN = "반반!",
 		BALANCE_SAME = "만장일치!",
+		BALANCE_EMPTY = "아무도 안 골랐어요",
 		BALANCE_NOBODY = "아무도 안 날아가요",
 		BALANCE_NONE = "안 고른 %s 날아가요",
 		REDLIGHT_TITLE = "무궁화 꽃이 피었습니다",
-		REDLIGHT_BRIEF = "초록불엔 벨 연타! 빨간불에 누르거나 못 가면 날아가요", -- (the briefing before it, owner 2026-10-24)
+		REDLIGHT_BRIEF = "초록불엔 벨 연타! 빨간불에 누르거나 도착 못 하면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		REDLIGHT_START = "끝까지 가야 살아요!",
 		REDLIGHT_GREEN = "🟢 달려!",
 		REDLIGHT_RED = "🔴 멈춰!",
@@ -487,14 +489,14 @@ return {
 		REDLIGHT_SHORT = "🐌 도착 실패! %s",
 		REDLIGHT_ALL_SAFE = "모두 도착!",
 		LIAR_TITLE = "라이어 게임",
-		LIAR_BRIEF = "제시어를 모르는 라이어를 찾아요. 날아가는 건 라이어뿐", -- (the briefing before it, owner 2026-10-24)
+		LIAR_BRIEF = "라이어를 찾아요! 걸린 라이어가 제시어도 틀리면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		LIAR_START = "이 중에 라이어가 있다!",
 		LIAR_CATEGORY = "주제: %s",
 		LIAR_WORD = "제시어: %s",
 		LIAR_YOU = "🤫 내가 라이어! 주제: %s",
 		LIAR_CLUE = "%s 설명 차례",
 		LIAR_ACCUSE = "라이어는 누구?",
-		LIAR_VOTE = "라이어에게 투표!",
+		LIAR_VOTE = "라이어 같은 사람에게 투표!",
 		LIAR_NONE = "모르겠음",
 		LIAR_GUESS = "라이어의 반격! 제시어는?",
 		LIAR_CAUGHT = "🎯 잡았다! 라이어는 %s · 제시어 %s",
@@ -511,10 +513,10 @@ return {
 		TALK_TITLE = "금칙어 토크",
 		-- Bundle 8b (owner 2026-10-24).
 		TIMEGUESS_TITLE = "숫자 맞추기",
-		TIMEGUESS_BRIEF = "목표 시간에 벨, 가장 빗나가면 날아가요 (시계 %d초만)",
+		TIMEGUESS_BRIEF = "목표 시간에 벨! 시계는 %d초만 보여요, 가장 빗나가면 날아가요",
 		TIMEGUESS_START = "%.2f초에 벨!",
 		TIMEGUESS_TARGET = "목표 %.2f초",
-		TIMEGUESS_HOW = "%d초 뒤 시계가 사라져요. 감으로 벨!",
+		TIMEGUESS_HOW = "시계는 처음 %d초만 보여요. 그다음은 감으로 벨!",
 		TIMEGUESS_RESULT = "목표 %.2f초 · %s 날아가요",
 		TIMEGUESS_NONE = "안 누름",
 		DUEL_TITLE = "총잡이 결투",
@@ -539,7 +541,7 @@ return {
 		BOTTLE_TIE = "모두 동점! 아무도 안 날아가요",
 		-- Bundle 8c (owner 2026-10-24).
 		CHOSUNG_TITLE = "초성 퀴즈",
-		CHOSUNG_BRIEF = "초성 보고 정답을 못 고르면 날아가요",
+		CHOSUNG_BRIEF = "초성 보고 정답 고르기! 틀리면 날아가요",
 		CHOSUNG_Q = "%s · %s",
 		OX_TITLE = "O/X 퀴즈",
 		OX_BRIEF = "O/X %d문제, 가장 많이 틀리면 날아가요",
@@ -551,7 +553,7 @@ return {
 		OX_RESULT = "가장 많이 틀린 %s 날아가요",
 		OX_ALL_RIGHT = "모두 만점! 아무도 안 날아가요",
 		ESTIMATE_TITLE = "숫자 근사 퀴즈",
-		ESTIMATE_BRIEF = "정답에 가까운 숫자를! 가장 먼 사람이 날아가요",
+		ESTIMATE_BRIEF = "정답에 가까운 숫자를 적어요! 가장 먼 사람이 날아가요",
 		ESTIMATE_START = "숫자 적고 꼭 확인!",
 		ESTIMATE_HINT = "숫자만 (1 이상)",
 		ESTIMATE_SEND = "확인",
@@ -564,10 +566,10 @@ return {
 		-- Bundle 9c (owner 2026-10-25).
 		TWENTY_TITLE = "머리 위 스무고개",
 		TWENTY_BRIEF = "질문으로 내 단어를 맞혀요, 못 맞히면 날아가요",
-		TWENTY_INTRO = "내 차례 %d초 동안 묻고, 답은 딱 한 번!",
+		TWENTY_INTRO = "차례마다 %d초 동안 묻고, 답은 한 번만!",
 		TWENTY_TURN = "%s 님이 질문해요, 대답해 주세요",
 		TWENTY_MY_TURN = "내 차례! 질문하고 아래에 답 쓰기",
-		TWENTY_INFO = "주제 %s · %d/%d바퀴 · %d명 맞힘 (%d명이면 끝)",
+		TWENTY_INFO = "주제 %s · %d/%d바퀴 · %d명 맞힘 (목표 %d명)",
 		TWENTY_NO_LEAK = "남의 단어를 채팅에 쓰면 바로 날아가요",
 		TWENTY_ONE_TRY = "답은 한 번만!",
 		TWENTY_HINT = "내 단어는?",

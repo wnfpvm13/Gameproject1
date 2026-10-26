@@ -72,7 +72,7 @@ local function nextStep(r: Ready): (string, boolean)
 	elseif r.status == "NoVoice" or r.status == "Disconnected" then
 		return TEXT.CONNECT_TO_PLAY, false
 	elseif r.chatMode then
-		return TEXT.CHAT_JOINED, true
+		return if r.roundOn then TEXT.READY_NEXT_ROUND else TEXT.CHAT_JOINED, true
 	elseif r.status == "Muted" then
 		return TEXT.MIC_ON, false
 	elseif not r.micTested then

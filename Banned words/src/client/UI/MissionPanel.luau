@@ -151,22 +151,36 @@ local function answerButton(index: number): TextButton
 	local size = Instance.new("UITextSizeConstraint")
 	size.MaxTextSize = 22
 	size.Parent = b
-	-- (a small second line: the next-game vote shows each game's rule under its name, review 2026-10-25 — a first-time
-	-- player otherwise votes for names only)
+	-- (the next-game vote: each game's name on the left and its rule on the right, each in its own box — review
+	-- 2026-10-25/26: a first-time player otherwise votes for names only, and a long name ran into the rule)
+	local name = Instance.new("TextLabel")
+	name.Name = "Name"
+	name.BackgroundTransparency = 1
+	name.Size = UDim2.fromScale(0.34, 1)
+	name.FontFace = Style.BOLD
+	name.TextColor3 = Style.INK
+	name.TextScaled = true
+	name.TextWrapped = true
+	name.Text = ""
+	name.Visible = false
+	local nameSize = Instance.new("UITextSizeConstraint")
+	nameSize.MaxTextSize = 20
+	nameSize.Parent = name
+	name.Parent = b
 	local sub = Instance.new("TextLabel")
 	sub.Name = "Sub"
 	sub.BackgroundTransparency = 1
-	sub.AnchorPoint = Vector2.new(0.5, 1)
-	sub.Position = UDim2.fromScale(0.5, 1)
-	sub.Size = UDim2.fromScale(1, 0.52)
+	sub.Position = UDim2.fromScale(0.36, 0)
+	sub.Size = UDim2.fromScale(0.64, 1)
 	sub.FontFace = Style.REGULAR
 	sub.TextColor3 = Style.INK
 	sub.TextScaled = true
 	sub.TextWrapped = true
+	sub.TextXAlignment = Enum.TextXAlignment.Left
 	sub.Text = ""
 	sub.Visible = false
 	local subSize = Instance.new("UITextSizeConstraint")
-	subSize.MaxTextSize = 14
+	subSize.MaxTextSize = 16
 	subSize.Parent = sub
 	sub.Parent = b
 	b.LayoutOrder = index
@@ -607,10 +621,11 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	title.TextColor3 = Style.INK -- (the duel turns it red at "fire!")
 	for _, b in buttons do
 		buttonIcon(b, nil) -- (only the bomb's pass button has a picture)
-		b.TextYAlignment = Enum.TextYAlignment.Center
-		local sub = b:FindFirstChild("Sub") :: TextLabel?
-		if sub then
-			sub.Visible = false -- (only the next-game vote has the small line)
+		for _, part in { "Name", "Sub" } do
+			local label = b:FindFirstChild(part) :: TextLabel?
+			if label then
+				label.Visible = false -- (only the next-game vote uses them)
+			end
 		end
 	end
 	subNote.Visible = false
@@ -695,11 +710,14 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			b.Visible = choices[i] ~= nil
 			b.Text = choices[i] or ""
 			paint(b, canAnswer and not state.myPick, i == state.myPick)
+			local name = b:FindFirstChild("Name") :: TextLabel?
 			local sub = b:FindFirstChild("Sub") :: TextLabel?
-			if sub and rules[i] and rules[i] ~= "" then
+			if name and sub and rules[i] and rules[i] ~= "" then
+				name.Text = b.Text
 				sub.Text = rules[i]
+				b.Text = "" -- (the name shows in its own box beside the rule)
+				name.Visible = true
 				sub.Visible = true
-				b.TextYAlignment = Enum.TextYAlignment.Top
 			end
 		end
 	elseif kind == "timeGuess" or kind == "timeGuessResult" then
@@ -865,8 +883,9 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		note.Text = payload.rule or ""
 		note.TextColor3 = Style.INK
 		noteLimit.MaxTextSize = 21
-		subNote.Text = payload.recap or ""
-		subNote.Visible = subNote.Text ~= ""
+		local count = string.format(TEXT.GAME_COUNT, payload.game or 1, payload.games or 1)
+		subNote.Text = if (payload.recap or "") ~= "" then count .. "  ·  " .. payload.recap else count
+		subNote.Visible = true
 	elseif kind == "vote" then
 		local liarVote = payload.prompt == "liar"
 		title.Text = if liarVote then TEXT.LIAR_VOTE else TEXT.JUDGE_VOTE
@@ -1018,8 +1037,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	end
 	-- (four short answers: one row, so the card stays low; a big vote: three smaller columns, so twelve still fit a
 	-- phone)
-	answerLayout.CellSize = if kind == "nextVote" then UDim2.new(1 / math.max(shownButtons, 1), -6, 0, 66) -- (each
-		-- game's name and its rule)
+	answerLayout.CellSize = if kind == "nextVote" then UDim2.new(1, 0, 0, 46) -- (a row each: the name and its rule)
 		elseif shownButtons > 6 then UDim2.new(1 / 3, -6, 0, 40)
 		elseif shownButtons == 4 and longest <= 7 then UDim2.new(0.25, -6, 0, 44)
 		elseif shownButtons == 3 then UDim2.new(1 / 3, -6, 0, 44)

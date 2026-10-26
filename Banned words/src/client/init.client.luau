@@ -409,6 +409,9 @@ end)
 
 -- One event's lives lost (docs/DESIGN_V3.md §4): the bubbles pop, one toast names everyone (my own line first; when
 -- everyone left fell at once, the last line says they play the final).
+-- The last moment's line and when it came: a life-loss toast right after it keeps it on top (review 2026-10-26: "⏰ 시간
+-- 초과! 민수" was replaced at once by the lives line, and the card steps aside while flying, so nobody read why).
+local lastNotice, lastNoticeAt = "", 0
 remotes.LifeLost.OnClientEvent:Connect(function(info)
 	local lost, out, lines = {}, {}, {}
 	local anyOut = false
@@ -450,6 +453,9 @@ remotes.LifeLost.OnClientEvent:Connect(function(info)
 	if info.final then
 		table.insert(lines, Config.TEXT.TO_FINAL)
 	end
+	if lastNotice ~= "" and os.clock() - lastNoticeAt < Config.NOTICE_KEEP_SECONDS then
+		table.insert(lines, 1, lastNotice) -- (why it happened, then what it cost)
+	end
 	if anyOut then
 		Fx.elimination(GuiService.ReducedMotionEnabled)
 	end
@@ -457,6 +463,7 @@ remotes.LifeLost.OnClientEvent:Connect(function(info)
 end)
 
 remotes.Notice.OnClientEvent:Connect(function(info)
+	lastNotice, lastNoticeAt = info.text, os.clock()
 	Toast.show(info.text, "near")
 end)
 

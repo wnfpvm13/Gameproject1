@@ -198,6 +198,8 @@ function Balance.run(ctx: Ctx): boolean?
 		text = string.format(Config.TEXT.BALANCE_COUNT, question.a, #sideA, question.b, #sideB)
 	elseif #sideA > 0 and #sideA == #sideB then
 		text = Config.TEXT.BALANCE_EVEN
+	elseif #sideA == 0 and #sideB == 0 then
+		text = Config.TEXT.BALANCE_EMPTY
 	else
 		text = Config.TEXT.BALANCE_SAME
 	end

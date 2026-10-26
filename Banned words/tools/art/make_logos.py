@@ -1,7 +1,11 @@
-"""Logo drafts (sticker look: thick black outline, bright colours) for the game's new name (owner 2026-10-26: a name
-about the flying chairs, picked from candidates). Writes one HTML per name into the folder given (default: .qa/logos)
-and renders it to PNG (1024x576, the LED screen's shape) with headless Edge. Font: Black Han Sans (Google Fonts, SIL
-Open Font License — fine in images and logos), loaded online, so this needs the network.
+"""The game's logo and store icon in the sticker look (thick black outline, bright colours). Name picked by the owner
+on 2026-10-26: "의자에서 살아남기!" (the drafts it was picked from are in docs/LAUNCH_2026-10-26.md). Writes HTML and
+renders it to PNG with headless Edge into the folder given (default: .qa/logos):
+- logo.png 1024x576 (16:9, store page and posts), logo_screen.png and logo_podium.png in the shapes of the map's far
+  LED screen and podium front (decals `IMAGES.screenLogo` / `IMAGES.podiumLogo` in tools/build_pool_hall.luau)
+- icon.png 512x512, the store icon draft: the flying chair and a "펑!" sticker, no name (it must read when small)
+Font: Black Han Sans (Google Fonts, SIL Open Font License — fine in images and logos), loaded online, so this needs
+the network.
 
 usage: python -I tools/art/make_logos.py [outdir]"""
 import os, subprocess, sys
@@ -10,14 +14,11 @@ HERE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.pat
 os.makedirs(HERE, exist_ok=True)
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 
-NAMES = {
-    "A": ["의자가", "날아간다"],
-    "B": ["펑!", "의자쇼"],
-    "C": ["펑!", "플라잉 체어"],
-}
+LINE1, LINE2 = "의자에서", "살아남기!"
 
+# The flying chair on a burst, drawn around (0, 0); each picture places and scales it.
 CHAIR = """
-<g transform="translate(790,250) rotate(-22)">
+<g transform="{place}">
   <!-- burst behind -->
   <polygon points="0,-150 32,-62 120,-96 70,-18 150,22 60,44 92,128 14,76 -40,150 -46,62 -138,80 -78,10 -150,-40 -60,-52 -96,-136 -20,-70"
     fill="#FFD43B" stroke="#222326" stroke-width="10" stroke-linejoin="round"/>
@@ -31,44 +32,66 @@ CHAIR = """
 </g>
 """
 
-TEMPLATE = """<!DOCTYPE html><html><head><meta charset="utf-8">
+# A word as a sticker: white edge, then black outline, then colour.
+STICKER = """
+  <text class="t edge" x="{x}" y="{y}" font-size="{s}" fill="#FFFFFF" stroke-width="{edge}" text-anchor="middle"{extra}>{text}</text>
+  <text class="t ink" x="{x}" y="{y}" font-size="{s}" fill="{c}" stroke-width="{ink}" text-anchor="middle"{extra}>{text}</text>
+"""
+
+PAGE = """<!DOCTYPE html><html><head><meta charset="utf-8">
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=block" rel="stylesheet">
 <style>
-html,body{{margin:0;padding:0;width:1024px;height:576px;overflow:hidden;background:#59C3F0}}
+html,body{{margin:0;padding:0;width:{w}px;height:{h}px;overflow:hidden;background:#59C3F0}}
 svg{{display:block}}
 .t{{font-family:'Black Han Sans',sans-serif;paint-order:stroke fill;stroke-linejoin:round}}
 .edge{{stroke:#FFFFFF}}
 .ink{{stroke:#222326}}
 </style></head><body>
-<svg width="1024" height="576" viewBox="0 0 1024 576">
+<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}">
   <defs>
     <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
       <circle cx="14" cy="14" r="5" fill="#FFFFFF" opacity="0.22"/>
     </pattern>
   </defs>
-  <rect width="1024" height="576" fill="#59C3F0"/>
-  <rect width="1024" height="576" fill="url(#dots)"/>
+  <rect width="{w}" height="{h}" fill="#59C3F0"/>
+  <rect width="{w}" height="{h}" fill="url(#dots)"/>
   <!-- pool water strip -->
-  <path d="M0 470 Q 128 440 256 470 T 512 470 T 768 470 T 1024 470 V576 H0 Z" fill="#2F80ED" stroke="#222326" stroke-width="8"/>
-  {chair}
-  <!-- the name: white sticker edge, then black outline, then colour -->
-  <text class="t edge" x="{x}" y="{y1}" font-size="{s1}" fill="#FFFFFF" stroke-width="44" text-anchor="middle">{l1}</text>
-  <text class="t ink" x="{x}" y="{y1}" font-size="{s1}" fill="{c1}" stroke-width="16" text-anchor="middle">{l1}</text>
-  <text class="t edge" x="{x}" y="{y2}" font-size="{s2}" fill="#FFFFFF" stroke-width="44" text-anchor="middle">{l2}</text>
-  <text class="t ink" x="{x}" y="{y2}" font-size="{s2}" fill="{c2}" stroke-width="16" text-anchor="middle">{l2}</text>
+  <path d="M0 {water} Q 128 {wave} 256 {water} T 512 {water} T 768 {water} T 1024 {water} V{h} H0 Z" fill="#2F80ED" stroke="#222326" stroke-width="8"/>
+  {body}
 </svg></body></html>
 """
 
-for key, (l1, l2) in NAMES.items():
-    long2 = len(l2) >= 5
-    html = TEMPLATE.format(chair=CHAIR, x=360, y1=230, y2=400 if not long2 else 390,
-                           s1=150 if len(l1) <= 3 else 130, s2=170 if not long2 else 112,
-                           l1=l1, l2=l2, c1="#FF5A5F", c2="#FFD43B")
-    path = os.path.join(HERE, f"logo_{key}.html")
+
+def sticker(text, x, y, size, colour, edge=44, ink=16, extra=""):
+    return STICKER.format(text=text, x=x, y=y, s=size, c=colour, edge=edge, ink=ink, extra=extra)
+
+
+def render(name, w, h, water, body):
+    path = os.path.join(HERE, f"{name}.html")
     with open(path, "w", encoding="utf-8") as f:
-        f.write(html)
-    out = os.path.join(HERE, f"logo_{key}.png")
+        f.write(PAGE.format(w=w, h=h, water=water, wave=water - 30, body=body))
+    out = os.path.join(HERE, f"{name}.png")
     subprocess.run([EDGE, "--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1",
-                    "--window-size=1024,576", "--virtual-time-budget=6000", f"--screenshot={out}",
+                    f"--window-size={w},{h}", "--virtual-time-budget=6000", f"--screenshot={out}",
                     "file:///" + path.replace("\\", "/")], capture_output=True, timeout=90)
-    print(key, os.path.exists(out))
+    print(name, os.path.exists(out))
+
+
+# The logo: the name on the left, the chair flying off on the right. A Decal stretches its image over the whole face,
+# so each surface gets a copy drawn in that face's shape: (name, height for width 1024, water line, chair x, chair y,
+# chair scale, text x, text size, baseline 1, baseline 2).
+LOGOS = [
+    ("logo", 576, 470, 820, 240, 0.95, 340, 140, 235, 400),  # 16:9, for the store page and posts
+    ("logo_screen", 387, 340, 805, 170, 0.7, 330, 118, 165, 300),  # far LED screen, 28.6 x 10.8 studs
+    ("logo_podium", 465, 405, 815, 200, 0.8, 335, 128, 195, 345),  # podium front, 4.4 x 2 studs
+]
+for name, h, water, cx, cy, cs, tx, ts, y1, y2 in LOGOS:
+    render(name, 1024, h, water,
+           CHAIR.format(place=f"translate({cx},{cy}) rotate(-22) scale({cs})")
+           + sticker(LINE1, tx, y1, ts, "#FF5A5F")
+           + sticker(LINE2, tx, y2, ts, "#FFD43B"))
+
+# Store icon: only the chair and the bang, big.
+render("icon", 512, 512, 462,
+       CHAIR.format(place="translate(300,218) rotate(-22) scale(1.2)")
+       + sticker("펑!", 130, 140, 120, "#FF5A5F", edge=36, ink=14, extra=' transform="rotate(-12 130 140)"'))

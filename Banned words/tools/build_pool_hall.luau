@@ -61,10 +61,12 @@ local LEAF_LIGHT = Color3.fromRGB(96, 168, 84)
 local WARM_WHITE = Color3.fromRGB(255, 244, 230)
 local COOL_WHITE = Color3.fromRGB(240, 246, 255)
 
--- Images painted by tools/art/make_art.ps1 and uploaded 2026-10-21 (texts: 금칙어 / KOREAN / TALK / LIVE / ON AIR,
--- none of them in the word bank).
+-- Images uploaded through Studio MCP. The logos (the name "의자에서 살아남기!", owner 2026-10-26) are drawn by
+-- tools/art/make_logos.py in each face's shape, since a Decal stretches over the whole face; onAir by
+-- tools/art/make_art.ps1 (2026-10-21, text ON AIR, not in the word bank).
 local IMAGES = {
-	screenLogo = "rbxassetid://99718360226508",
+	screenLogo = "rbxassetid://81598731615102", -- far LED screen, 1024x387
+	podiumLogo = "rbxassetid://74923008573479", -- podium front, 1024x465
 	onAir = "rbxassetid://79467207024292",
 }
 
@@ -385,7 +387,7 @@ part(podium, "Desk", Vector3.new(6, 3.6, 2), podiumFrame * CFrame.new(0, 2.4, -1
 part(podium, "DeskTop", Vector3.new(6.4, 0.2, 2.4), podiumFrame * CFrame.new(0, 4.3, -1.2), CHAIR_BLUE, Enum.Material.SmoothPlastic, { reflectance = 0.05 })
 part(podium, "GlowBand", Vector3.new(6.02, 0.15, 2.02), podiumFrame * CFrame.new(0, 3.6, -1.2), CORAL_GLOW, Enum.Material.Neon, TRIM)
 local front = part(podium, "Front", Vector3.new(4.4, 2, 0.06), podiumFrame * CFrame.new(0, 2.2, -2.23), BLACK, nil, TRIM)
-decal(front, IMAGES.screenLogo, Enum.NormalId.Front)
+decal(front, IMAGES.podiumLogo, Enum.NormalId.Front)
 tube(podium, "MicStand", (podiumFrame * CFrame.new(-1.8, 4.4, -1.4)).Position, (podiumFrame * CFrame.new(-1.8, 5.3, -1.6)).Position, 0.08, CHROME, Enum.Material.Metal, TRIM)
 ball(podium, "Mic", (podiumFrame * CFrame.new(-1.8, 5.4, -1.65)).Position, 0.3, BLACK, Enum.Material.Metal, TRIM)
 local lever = Instance.new("Model")

@@ -113,11 +113,11 @@ def quiz_table(rows):
 
 
 parts.append(f"<h2 id=quiz>1. 퀴즈 (4지선다) — {len(main)}문제</h2>")
-parts.append("<p>10초 안에 고르기, 틀리거나 안 고르면 날아감. 게임에서는 보기 순서를 섞어서 보여 준다. "
+parts.append("<p>10초 안에 고르기, 틀리거나 안 고르면 날아감. 게임에서는 보기 순서를 섞어서 보여 준다(보기 4개에 모두 숫자가 들어 있으면 이 순서 그대로). "
              "벨 퀴즈(진행자가 있을 때 진행자가 고르는 미션)도 이 문제들에서 3문제를 낸다.</p>")
 quiz_table(main)
 parts.append(f"<h2 id=final>2. 결승 퀴즈 (4지선다, 더 어려움) — {len(final)}문제</h2>")
-parts.append("<p>결승에서만 나온다. 틀리면 탈락(모두 틀리면 그 문제는 무효). 보기 순서는 섞인다.</p>")
+parts.append("<p>결승에서만 나온다. 틀리면 탈락(모두 틀리면 그 문제는 무효). 보기 순서는 섞인다(모두 숫자인 보기는 그대로).</p>")
 quiz_table(final)
 
 parts.append(f"<h2 id=ox>3. O/X 퀴즈 — {ox_count}문장 (O {ox_o} / X {ox_count - ox_o})</h2>")
@@ -134,7 +134,7 @@ for heading, rows in ox:
 
 parts.append(f"<h2 id=estimate>4. 숫자 근사 퀴즈 — {est_count}문제</h2>")
 parts.append("<p>15초 안에 정수를 적는다. 안 적은 사람이 있으면 그 사람만, 모두 적었으면 정답에서 가장 먼 사람이 날아감. "
-             "2명 이상일 때만 나온다.</p>")
+             "모두 정확히 맞히면 아무도 안 날아감. 2명 이상일 때만 나온다.</p>")
 n = 0
 for heading, rows in estimate:
     if heading:

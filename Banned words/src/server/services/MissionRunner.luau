@@ -486,11 +486,12 @@ function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player
 		open.from[player] = true
 	end
 	question = open
-	local titles = {}
+	local titles, rules = {}, {}
 	for _, mission in ballot do
 		table.insert(titles, mission.title)
+		table.insert(rules, mission.brief or "") -- (under each name: a first-time player knows what they vote for)
 	end
-	setScreen({ kind = "nextVote", recap = recap, choices = titles, id = open.id, endsAt = open.endsAt })
+	setScreen({ kind = "nextVote", recap = recap, choices = titles, rules = rules, id = open.id, endsAt = open.endsAt })
 	local untilAt = os.clock() + Config.NEXT_VOTE_SECONDS
 	while os.clock() < untilAt and not stop() do
 		local waiting = false

@@ -1072,6 +1072,26 @@ do
 	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
 	check("11d (both end)", run.done and run2.done)
 end
+do
+	-- Review 2026-10-25: a talker who leaves gives the floor back at once (the others were kept muted for the rest).
+	local ps = newPlayers(4)
+	local record = fakeCtx(ps, false, nil)
+	record.rings = { { ps[1], ps[2], ps[3] } }
+	local run = start(Balance, record)
+	local untilAt = now + 30
+	while now < untilAt and record.floors[1] ~= ps[1] do
+		at(now + 0.1)
+	end
+	local gotAt = now
+	at(now + 1)
+	ps[1].Parent = nil
+	at(now + 0.5)
+	check("11e a talker who leaves gives the floor back at once", record.floors[1] == ps[1] and record.floors[2] == false
+		and now - gotAt < Config.BALANCE_TALK_SECONDS)
+	record.cancel = true
+	at(now + 30)
+	check("11f (ends)", run.done)
+end
 
 ---------------------------------------------------------------- 12. red light, green light (bundle 6d)
 do

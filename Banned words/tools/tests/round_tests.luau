@@ -517,8 +517,8 @@ do
 	local reseat = find(Seat.reseats, ps[1])
 	check("7a a participant's new character goes back on the chair", reseat ~= nil and reseat.at >= play + 10.4 and reseat.at <= play + 10.7)
 	check("7a the round start sets the server kind (Studio default)", Match.serverKind == Config.STUDIO_SERVER_KIND)
-	check("7a no free talk: the first game starts once its card is over", #Scripted.runs == 1
-		and math.abs(Scripted.runs[1] - (play + CARD)) < 0.3 and Match.message == string.format(Config.TEXT.NEXT_GAME, Scripted.title),
+	check("7a no free talk: the first game starts once its card is over; the status board names it while it runs",
+		#Scripted.runs == 1 and math.abs(Scripted.runs[1] - (play + CARD)) < 0.3 and Match.message == Scripted.title,
 		Scripted.runs[1] and string.format("+%.1f", Scripted.runs[1] - play))
 	local list = finish(since)
 	local final, result = phaseAt(list, "Final"), phaseAt(list, "Result")
@@ -1380,6 +1380,37 @@ do
 		and Match.presenterPending == false)
 	workspaceAttributes.BW_ServerKind = nil
 	finish(since8)
+
+	-- 10Z: someone leaves while the presenter checks of a new round run (review 2026-10-25): they get no chair, and the
+	-- round waits for enough players instead of starting with one (here: the volunteer then plays as the second).
+	workspaceAttributes.BW_ServerKind = "public" -- friend checks run
+	local studioMin = Config.MIN_PLAYERS
+	Config.MIN_PLAYERS = 2 -- (live servers; Studio plays rounds of one)
+	local zs = newPlayers(3)
+	offer(zs[1], true)
+	playerList = zs
+	advanceUntil(function() return Match.phase == "Countdown" end, 60)
+	friendsDelay = 3
+	at(Match.endsAt + 1.5) -- (the countdown is over and the checks run: two friend checks of 3 s, still "Countdown")
+	friendsDelay = 0
+	local checking = Match.phase == "Countdown"
+	leave(zs[3], { zs[1], zs[2] })
+	local startedAlone, sinceZ = false, now
+	advanceUntil(function()
+		if Match.phase == "Play" and Match.startedWith < 2 then
+			startedAlone = true
+		end
+		return Match.phase == "Play"
+	end, 120)
+	check("10z a player who left during the presenter checks gets no chair, and no round starts with one",
+		checking and not startedAlone and Match.participants[zs[3]] == nil and Match.startedWith == 2
+		and Match.participants[zs[1]] ~= nil and Match.participants[zs[2]] ~= nil,
+		string.format("checking=%s alone=%s z3=%s started=%s z1=%s z2=%s phase=%s", tostring(checking),
+			tostring(startedAlone), tostring(Match.participants[zs[3]] ~= nil), tostring(Match.startedWith),
+			tostring(Match.participants[zs[1]] ~= nil), tostring(Match.participants[zs[2]] ~= nil), tostring(Match.phase)))
+	workspaceAttributes.BW_ServerKind = nil
+	finish(sinceZ)
+	Config.MIN_PLAYERS = studioMin
 
 	-- 10D: who may present (PresenterService.choose directly, between rounds).
 	local function pool(n)

@@ -336,24 +336,24 @@ return {
 	-- Fixed UI texts players may read aloud (checked against the word bank by tools/check_content.luau).
 	-- %s / %d are filled in by the code (names, numbers).
 	TEXT = {
-		NEED_READY = "참가 준비된 플레이어 %d명 더 필요해요", -- voice ready or joining by chat
-		NEED_PLAYERS = "플레이어 %d명 더 필요해요",
+		NEED_READY = "%d명만 더 준비하면 시작해요", -- voice ready or joining by chat
+		NEED_PLAYERS = "%d명만 더 오면 시작해요",
 		COUNTDOWN = "곧 시작해요",
-		RECOVERING = "잠시 문제가 생겨서 다음 판을 준비해요",
-		ASSIGN = "목숨은 %d개예요 · 미션에 실패하면 날아가요",
-		PLAY_START = "본 경기 시작!",
+		RECOVERING = "앗, 문제가 생겼어요. 새 판을 준비할게요",
+		ASSIGN = "목숨 %d개! 미션에 실패하면 날아가요",
+		PLAY_START = "첫 미션 갑니다!",
 		NEXT_GAME = "다음: %s",
 		GAME_COUNT = "미션 %d/%d", -- the status board during the main game: the game now / games in a round
-		NEXT_VOTE = "다음에 할 미션을 골라요",
+		NEXT_VOTE = "다음 미션 투표!",
 		RECAP_LOST = "%s 목숨 잃음",
 		RECAP_OUT = "%s 탈락",
-		RECAP_NONE = "아무도 안 날아갔어요",
-		PICKING = "진행자가 다음 미션을 고르는 중",
+		RECAP_NONE = "모두 무사!",
+		PICKING = "진행자가 고르는 중…",
 		TEST_MISSION = "연습 미션 · 운에 맡겨 보세요",
-		FINAL = "결승 · 틀리면 바로 탈락",
-		ALL_WRONG = "모두 틀려서 아무도 탈락하지 않아요 · 다시!",
-		TO_FINAL = "남은 사람이 한꺼번에 떨어져서 그대로 결승으로 가요",
-		LIFE_LOST = "%s · 목숨 1개 잃음",
+		FINAL = "결승! 틀리면 바로 탈락",
+		ALL_WRONG = "모두 틀렸어요! 이번 문제는 무효",
+		TO_FINAL = "남은 사람 모두 목숨 0개! 결승에서 승부",
+		LIFE_LOST = "%s 목숨 1개 잃음",
 		OUT = "%s 탈락!",
 		MY_LIFE_LOST = "목숨 1개를 잃었어요 · 남은 목숨 %d개",
 		MY_NO_LIVES = "목숨을 모두 잃었어요", -- (the last one left, or everyone left fell at once)
@@ -363,55 +363,56 @@ return {
 		JOINT_WINNERS = "%s 공동 우승!",
 		NO_WINNER = "우승자 없이 끝났어요",
 		-- Round awards on the result screen (owner 2026-10-24).
-		AWARD_FLIGHT = "최장 비행 %s · %.1fm",
-		AWARD_SURVIVOR = "목숨을 안 잃은 미션 최다 %s · %d개",
+		AWARD_FLIGHT = "비행왕 %s (%.1fm)",
+		AWARD_SURVIVOR = "생존왕 %s (무사 통과 %d번)",
 		SETTLING = "마지막 말을 확인하고 있어요…",
-		RECOGNITION_UNSTABLE = "음성 인식이 불안정해요 · 마이크 연결을 확인해 주세요",
+		RECOGNITION_UNSTABLE = "목소리가 잘 안 잡혀요. 마이크를 확인해 주세요",
 		-- Getting ready (MicPanel, docs/DESIGN_V3.md §2, §7): voice, or chat for players who cannot use voice.
-		VOICE_NONE = "음성 채팅이 켜진 계정만 참가할 수 있어요 (만 13세 이상 + 연령 인증 필요)",
-		VOICE_CONNECT = "음성 채팅 연결 필요 · 왼쪽 위 ≡ 메뉴(또는 ESC) → 설정 → 음성 채팅 연결",
+		VOICE_NONE = "음성 채팅 계정만 참가할 수 있어요 (13세 이상, 연령 인증)",
+		VOICE_CONNECT = "음성 연결: ≡ 메뉴(ESC) → 설정 → 음성 채팅 연결",
 		VOICE_MUTED = "마이크가 꺼져 있어요",
-		CONNECT_TO_PLAY = "음성을 연결하면 다음 판부터 참가할 수 있어요",
+		CONNECT_TO_PLAY = "음성을 연결하면 다음 판부터 참가해요",
 		MIC_ON = "마이크를 켜 주세요",
-		MIC_TEST = "마이크 테스트 · 아무 말이나 해 보세요",
+		MIC_TEST = "마이크 체크! 아무 말이나 해 보세요",
 		MIC_TESTED = "마이크 확인 완료!",
 		READY = "준비 완료!",
-		READY_COUNT = "준비 완료! (준비된 사람 %d명)",
-		HEADSET_TIP = "헤드셋을 쓰면 억울한 탈락을 막을 수 있어요", -- speakers feed others' voices back into the mic
-		NO_VOICE_WATCH = "지금은 관전만 할 수 있어요",
-		CHAT_CHECKING = "계정을 확인하고 있어요",
-		CHAT_JOIN = "⌨ 말 대신 채팅으로 참가",
+		READY_COUNT = "준비 완료! (지금 %d명)",
+		READY_NEXT_ROUND = "준비 완료! 지금 판이 끝나면 바로 참가해요",
+		HEADSET_TIP = "헤드셋을 쓰면 더 잘 들려요", -- speakers feed others' voices back into the mic
+		NO_VOICE_WATCH = "관람석에서 구경할 수 있어요",
+		CHAT_CHECKING = "계정 확인 중…",
+		CHAT_JOIN = "채팅으로 참가하기",
 		CHAT_CANCEL = "채팅 참가 취소",
-		CHAT_JOINED = "채팅으로 참가해요 · 다른 사람 음성은 들리고, 판 중 내 마이크는 꺼져요",
+		CHAT_JOINED = "채팅으로 참가! 판 동안 내 마이크는 꺼져요",
 		CHAT_TAG = "[채팅]", -- before a chat participant's name in the chat window
 		-- Presenter (docs/DESIGN_V3.md §8).
 		VOLUNTEER = "🎤 진행자 지원",
 		VOLUNTEER_CANCEL = "진행자 지원 취소",
 		STEP_DOWN = "진행 넘기기",
-		VOLUNTEERED = "진행자로 지원했어요 · 조건이 맞으면 진행을 맡아요",
-		PRESENTER_NAMED = "오늘의 진행자: %s",
-		PRESENTER_CHANGED = "진행자가 바뀌었어요: %s",
-		PRESENTER_NONE = "진행자 없이 자동으로 진행해요",
+		VOLUNTEERED = "진행자 지원 완료! 뽑히면 알려 줄게요",
+		PRESENTER_NAMED = "이번 판 진행자: %s",
+		PRESENTER_CHANGED = "진행자 교체: %s",
+		PRESENTER_NONE = "이제부터 자동 진행",
 		PRESENTER_TAG = "🎤 진행자",
 		ME_PRESENTER = "🎤 내가 진행자",
-		PRESENTER_CREDIT = "진행 %s",
+		PRESENTER_CREDIT = "진행: %s",
 		PICK_MISSION = "다음 미션을 골라 주세요",
-		PICK_AUTO = "시간이 지나서 무작위로 골랐어요",
+		PICK_AUTO = "시간 초과! 랜덤으로 골랐어요",
 		TEST_MISSION_TITLE = "연습 미션",
 		TEST_MISSION_BRIEF = "운에 맡겨요 · 가끔 날아가요", -- (the briefing before it, owner 2026-10-24)
 		QUIZ_TITLE = "퀴즈",
-		QUIZ_BRIEF = "4개 중 정답을 골라요 · 틀리거나 안 고르면 날아가요", -- (the briefing before it, owner 2026-10-24)
-		QUIZ_START = "퀴즈 · 정답을 골라요 · 틀리거나 안 고르면 날아가요",
-		FINAL_QUIZ = "결승 퀴즈 · 틀리면 바로 탈락",
+		QUIZ_BRIEF = "4개 중 정답을 못 고르면 날아가요", -- (the briefing before it, owner 2026-10-24)
+		QUIZ_START = "정답은?",
+		FINAL_QUIZ = "결승 문제 나갑니다!",
 		QUIZ_ANSWER = "정답: %s",
 		QUIZ_ALL_RIGHT = "모두 정답!",
 		ROULETTE_TITLE = "룰렛",
-		ROULETTE_BRIEF = "원판이 한 명을 골라요 · 걸리면 날아가요", -- (the briefing before it, owner 2026-10-24)
-		ROULETTE_START = "룰렛이 돌아가요 · 걸린 한 명이 날아가요",
+		ROULETTE_BRIEF = "룰렛에 걸린 한 명이 날아가요", -- (the briefing before it, owner 2026-10-24)
+		ROULETTE_START = "룰렛 돌아갑니다!",
 		ROULETTE_HIT = "%s 당첨!",
 		ONE_WORD_TITLE = "좋아하는 거 말하기",
-		ONE_WORD_BRIEF = "벨 순서대로 주제에 맞게 말해요 · 진행자나 투표로 한 명이 날아가요", -- (the briefing before it, owner 2026-10-24)
-		ONE_WORD_START = "좋아하는 거 말하기 · 벨을 누르면 먼저 말해요",
+		ONE_WORD_BRIEF = "벨 순서대로 한마디, 가장 아쉬운 한 명이 날아가요", -- (the briefing before it, owner 2026-10-24)
+		ONE_WORD_START = "발언권은 벨로!",
 		ONE_WORD_BELL = "🔔 벨을 누르면 먼저 말해요",
 		ONE_WORD_TURN = "%s 차례 · %s",
 		ONE_WORD_PREP = "곧 시작",
@@ -420,9 +421,9 @@ return {
 		JUDGE_PICK = "날릴 사람을 골라 주세요",
 		FLING_BUTTON = "날려!",
 		JUDGE_WAIT = "진행자가 날릴 사람을 고르는 중",
-		JUDGE_VOTE = "투표 · 가장 아쉬운 한마디는?",
-		JUDGE_TO_VOTE = "시간이 지나서 투표로 정해요",
-		VOTE_NONE = "안 날림",
+		JUDGE_VOTE = "가장 아쉬운 한마디는?",
+		JUDGE_TO_VOTE = "시간 초과! 투표로 정해요",
+		VOTE_NONE = "아무도 안 날림",
 		VOTE_ABSTAIN = "안 들려요",
 		NOBODY_FLUNG = "아무도 안 날아가요",
 		FLUNG = "%s 날아가요!",
@@ -433,74 +434,74 @@ return {
 		MY_WORD_WAS = "내 금칙어: '%s'", -- (no particle: it would depend on the word's last syllable)
 		BELL_BUTTON = "🔔 벨", -- (the seat bell's E prompt)
 		BELL_QUIZ_TITLE = "벨 퀴즈",
-		BELL_QUIZ_BRIEF = "먼저 벨을 누르고 말로 답해요 · 진행자가 판정해요", -- (the briefing before it, owner 2026-10-24)
-		BELL_QUIZ_START = "벨 퀴즈 · 먼저 벨을 누른 사람이 말로 답해요",
-		BELL_QUIZ_WAIT = "🔔 벨을 눌러 답하세요",
+		BELL_QUIZ_BRIEF = "먼저 벨 누르고 말로 답! 틀리면 날아가요", -- (the briefing before it, owner 2026-10-24)
+		BELL_QUIZ_START = "손은 벨 위에!",
+		BELL_QUIZ_WAIT = "🔔 아는 사람 벨!",
 		BELL_QUIZ_ANSWERING = "%s 님이 답하는 중",
 		BELL_QUIZ_RIGHT = "⭕ 정답! %s",
 		BELL_QUIZ_WRONG = "❌ 땡! %s",
-		BELL_QUIZ_NOBODY = "아무도 안 눌러서 모두 답해요",
+		BELL_QUIZ_NOBODY = "아무도 안 눌러서 모두 객관식으로!",
 		VERDICT_PICK = "맞았나요? 정답: %s",
 		CROC_TITLE = "악어 이빨",
-		CROC_BRIEF = "차례대로 이빨을 하나씩 눌러요 · 무는 이빨이면 날아가요", -- (the briefing before it, owner 2026-10-24)
-		CROC_START = "악어 이빨 · 차례대로 이빨을 하나 눌러요 · 물리면 날아가요",
+		CROC_BRIEF = "차례로 이빨을 누르다 물리면 날아가요", -- (the briefing before it, owner 2026-10-24)
+		CROC_START = "누가 물릴까?",
 		CROC_TURN = "%s 차례",
 		CROC_BITE = "😱 덥석! %s",
 		CROC_LATE = "⏰ 시간 초과! %s",
 		BOMB_TITLE = "폭탄 돌리기",
-		BOMB_BRIEF = "폭탄을 받으면 버튼이 켜질 때 넘겨요 · 터질 때 들고 있으면 날아가요", -- (the briefing before it)
-		BOMB_START = "폭탄 돌리기 · 버튼이 켜지면 바로 넘겨요",
+		BOMB_BRIEF = "터질 때 폭탄을 들고 있으면 날아가요", -- (the briefing before it)
+		BOMB_START = "째깍째깍…",
 		BOMB_PASS = "넘기기", -- (with the bomb picture, Config.IMAGES.BOMB)
-		BOMB_MINE = "💣 폭탄이 나한테! 버튼이 켜지면 넘겨요",
+		BOMB_MINE = "💣 나한테 왔다! 버튼이 켜지면 넘겨요",
 		BOMB_HOLDER = "💣 %s",
 		BOMB_BOOM = "💥 펑! %s",
 		NUNCHI_TITLE = "눈치 게임",
-		NUNCHI_BRIEF = "1부터 한 명씩 벨을 눌러요 · 겹치거나 마지막이면 날아가요", -- (the briefing before it, owner 2026-10-24)
-		NUNCHI_START = "눈치 게임 · 1부터 한 명씩 벨! 겹치거나 꼴찌면 날아가요",
+		NUNCHI_BRIEF = "1부터 한 명씩 벨, 겹치거나 꼴찌면 날아가요", -- (the briefing before it, owner 2026-10-24)
+		NUNCHI_START = "눈치껏 벨!",
 		NUNCHI_CLASH = "💥 겹쳤다! %s",
 		NUNCHI_LAST = "🐢 꼴찌! %s",
-		NUNCHI_IDLE = "벨을 안 눌러서 날아가요: %s",
+		NUNCHI_IDLE = "안 누른 %s 날아가요",
 		NUNCHI_NEXT = "다음 숫자: %d",
 		NUNCHI_ORDER = "%d %s",
 		NUNCHI_NONE = "✕ %s",
 		BALANCE_TITLE = "밸런스 게임",
-		BALANCE_BRIEF = "둘 중 하나를 몰래 골라요 · 적은 쪽이 날아가요", -- (the briefing before it, owner 2026-10-24)
-		BALANCE_START = "밸런스 게임 · 적은 쪽이 날아가요",
+		BALANCE_BRIEF = "둘 중 하나를 골라요, 적은 쪽이 날아가요", -- (the briefing before it, owner 2026-10-24)
+		BALANCE_START = "둘 중 하나만 고른다면?",
 		BALANCE_VS = "%s vs %s",
-		BALANCE_BELL = "🔔 벨을 누르면 먼저 말해요",
-		BALANCE_TALK = "%s 님 차례",
-		BALANCE_PICK = "몰래 골라요 · 시간 안에 바꿀 수 있어요",
+		BALANCE_BELL = "🔔 벨 누르면 먼저 설득!",
+		BALANCE_TALK = "%s 설득 중!",
+		BALANCE_PICK = "몰래 고르기! 끝나기 전엔 바꿔도 돼요",
 		BALANCE_COUNT = "%s %d · %s %d",
 		BALANCE_EVEN = "반반!",
-		BALANCE_SAME = "모두 같은 쪽!",
+		BALANCE_SAME = "만장일치!",
 		BALANCE_NOBODY = "아무도 안 날아가요",
-		BALANCE_NONE = "안 고름: %s",
+		BALANCE_NONE = "안 고른 %s 날아가요",
 		REDLIGHT_TITLE = "무궁화 꽃이 피었습니다",
-		REDLIGHT_BRIEF = "초록불에 벨을 눌러 앞으로 · 빨간불에 누르면 날아가요", -- (the briefing before it, owner 2026-10-24)
-		REDLIGHT_START = "무궁화 꽃이 피었습니다 · 초록불에 벨! 빨간불엔 멈춰요",
-		REDLIGHT_GREEN = "🟢 가세요!",
-		REDLIGHT_RED = "🔴 멈춰요!",
+		REDLIGHT_BRIEF = "초록불엔 벨 연타! 빨간불에 누르거나 못 가면 날아가요", -- (the briefing before it, owner 2026-10-24)
+		REDLIGHT_START = "끝까지 가야 살아요!",
+		REDLIGHT_GREEN = "🟢 달려!",
+		REDLIGHT_RED = "🔴 멈춰!",
 		REDLIGHT_STEPS = "내 걸음 %d / %d",
-		REDLIGHT_YOU_CAUGHT = "🔴 걸렸어요! 이번 게임은 여기까지",
+		REDLIGHT_YOU_CAUGHT = "🔴 걸렸다! 이번 미션은 여기까지",
 		REDLIGHT_YOU_SAFE = "🏁 도착! 이제 안전해요",
 		REDLIGHT_CAUGHT = "🔴 움직였다! %s",
-		REDLIGHT_SHORT = "🐌 못 왔다! %s",
+		REDLIGHT_SHORT = "🐌 도착 실패! %s",
 		REDLIGHT_ALL_SAFE = "모두 도착!",
 		LIAR_TITLE = "라이어 게임",
-		LIAR_BRIEF = "제시어를 모르는 라이어를 찾아요 · 라이어가 못 맞히면 라이어만 날아가요", -- (the briefing before it, owner 2026-10-24)
-		LIAR_START = "라이어 게임 · 제시어를 모르는 한 명을 찾아요",
+		LIAR_BRIEF = "제시어를 모르는 라이어를 찾아요. 날아가는 건 라이어뿐", -- (the briefing before it, owner 2026-10-24)
+		LIAR_START = "이 중에 라이어가 있다!",
 		LIAR_CATEGORY = "주제: %s",
 		LIAR_WORD = "제시어: %s",
-		LIAR_YOU = "🤫 당신이 라이어! 주제: %s",
-		LIAR_CLUE = "%s 님의 설명",
+		LIAR_YOU = "🤫 내가 라이어! 주제: %s",
+		LIAR_CLUE = "%s 설명 차례",
 		LIAR_ACCUSE = "라이어는 누구?",
-		LIAR_VOTE = "투표 · 라이어는 누구?",
+		LIAR_VOTE = "라이어에게 투표!",
 		LIAR_NONE = "모르겠음",
-		LIAR_GUESS = "라이어의 마지막 기회 · 제시어는?",
+		LIAR_GUESS = "라이어의 반격! 제시어는?",
 		LIAR_CAUGHT = "🎯 잡았다! 라이어는 %s · 제시어 %s",
 		LIAR_ESCAPED = "😎 라이어 %s 승리! 제시어 %s",
 		ACCUSE_PICK = "라이어로 지목할 사람",
-		MINIGAME_TOO_FEW = "사람이 너무 적어져서 이번 게임은 그냥 끝나요",
+		MINIGAME_TOO_FEW = "인원이 부족해서 이번 미션은 패스!",
 		ACCUSE_BUTTON = "지목!",
 		VERDICT_RIGHT = "⭕ 맞음",
 		VERDICT_WRONG = "❌ 틀림",
@@ -511,48 +512,48 @@ return {
 		TALK_TITLE = "금칙어 토크",
 		-- Bundle 8b (owner 2026-10-24).
 		TIMEGUESS_TITLE = "숫자 맞추기",
-		TIMEGUESS_BRIEF = "목표 시간에 맞춰 벨 · 시계는 %d초만 보여요 · 가장 많이 빗나간 사람이 날아가요",
-		TIMEGUESS_START = "%.2f초에 맞춰 벨을 눌러요",
+		TIMEGUESS_BRIEF = "목표 시간에 벨, 가장 빗나가면 날아가요 (시계 %d초만)",
+		TIMEGUESS_START = "%.2f초에 벨!",
 		TIMEGUESS_TARGET = "목표 %.2f초",
-		TIMEGUESS_HOW = "시계는 처음 %d초만 보여요 · 맞다 싶을 때 벨 한 번",
+		TIMEGUESS_HOW = "%d초 뒤 시계가 사라져요. 감으로 벨!",
 		TIMEGUESS_RESULT = "목표 %.2f초 · %s 날아가요",
 		TIMEGUESS_NONE = "안 누름",
 		DUEL_TITLE = "총잡이 결투",
-		DUEL_BRIEF = "발사! 신호에 먼저 벨 · 신호 전에 누르면 날아가요",
-		DUEL_READY = "준비… 신호를 기다려요",
+		DUEL_BRIEF = "'발사!'에 먼저 벨, 늦거나 미리 누르면 날아가요",
+		DUEL_READY = "아직 쏘지 마요…",
 		DUEL_WAIT = "준비…",
 		DUEL_FIRE = "발사!",
 		DUEL_VS = "상대: %s",
-		DUEL_BYE = "이번엔 쉬어요",
-		DUEL_PAIR = "%s 대 %s",
+		DUEL_BYE = "이번엔 부전승!",
+		DUEL_PAIR = "%s vs %s",
 		DUEL_MS = "%s %dms",
 		DUEL_FALSE = "%s 부정 출발",
 		DUEL_NEVER = "%s 안 누름",
 		DUEL_RESULT = "%s 날아가요",
 		DUEL_DRAW = "동시! 아무도 안 날아가요",
 		BOTTLE_TITLE = "물병 세우기",
-		BOTTLE_BRIEF = "움직이는 막대를 초록 칸에서 벨로 멈춰요 · %d번 · 가장 적게 세운 사람이 날아가요",
-		BOTTLE_START = "막대가 초록 칸에 올 때 벨",
+		BOTTLE_BRIEF = "초록 칸에서 벨! %d번 중 가장 적게 세우면 날아가요",
+		BOTTLE_START = "초록 칸에서 벨!",
 		BOTTLE_THROW = "%d / %d번째",
 		BOTTLE_STOOD = "%s %d개",
 		BOTTLE_RESULT = "가장 적게 세운 %s 날아가요",
-		BOTTLE_TIE = "모두 똑같이 세웠어요 · 아무도 안 날아가요",
+		BOTTLE_TIE = "모두 동점! 아무도 안 날아가요",
 		-- Bundle 8c (owner 2026-10-24).
 		CHOSUNG_TITLE = "초성 퀴즈",
-		CHOSUNG_BRIEF = "초성을 보고 어떤 낱말인지 골라요 · 틀리거나 안 고르면 날아가요",
+		CHOSUNG_BRIEF = "초성 보고 정답을 못 고르면 날아가요",
 		CHOSUNG_Q = "%s · %s",
 		OX_TITLE = "O/X 퀴즈",
-		OX_BRIEF = "문장 %d개 · 맞으면 O, 틀리면 X · 가장 많이 틀린 사람이 날아가요",
+		OX_BRIEF = "O/X %d문제, 가장 많이 틀리면 날아가요",
 		OX_START = "맞으면 O, 틀리면 X",
 		OX_QUESTION = "%d/%d · %s",
 		OX_O = "O",
 		OX_X = "X",
 		OX_WRONG = "%s %d개 틀림",
 		OX_RESULT = "가장 많이 틀린 %s 날아가요",
-		OX_ALL_RIGHT = "모두 다 맞혔어요 · 아무도 안 날아가요",
+		OX_ALL_RIGHT = "모두 만점! 아무도 안 날아가요",
 		ESTIMATE_TITLE = "숫자 근사 퀴즈",
-		ESTIMATE_BRIEF = "정답에 가까운 숫자를 적어요 · 가장 먼 사람이 날아가요",
-		ESTIMATE_START = "숫자를 적고 확인을 눌러요",
+		ESTIMATE_BRIEF = "정답에 가까운 숫자를! 가장 먼 사람이 날아가요",
+		ESTIMATE_START = "숫자 적고 꼭 확인!",
 		ESTIMATE_HINT = "숫자만 (1 이상)",
 		ESTIMATE_SEND = "확인",
 		ESTIMATE_SENT = "%d 냈어요",
@@ -560,29 +561,29 @@ return {
 		ESTIMATE_GUESS = "%s %d",
 		ESTIMATE_NONE = "%s 안 냄",
 		ESTIMATE_RESULT = "정답 %d · %s 날아가요",
-		ESTIMATE_NOBODY = "정답 %d · 모두 딱 맞혔어요 · 아무도 안 날아가요",
+		ESTIMATE_NOBODY = "정답 %d! 모두 딱 맞혀서 아무도 안 날아가요",
 		-- Bundle 9c (owner 2026-10-25).
 		TWENTY_TITLE = "머리 위 스무고개",
-		TWENTY_BRIEF = "질문해서 내 머리 위 단어를 맞혀요 · 남의 단어를 채팅에 쓰면 날아가요",
-		TWENTY_INTRO = "내 단어는 나만 몰라요 · 차례마다 %d초 동안 물어보고 한 번 맞혀요",
-		TWENTY_TURN = "%s 님 차례 · 질문에 답해 주세요",
-		TWENTY_MY_TURN = "내 차례! 물어보고 정답을 쳐요",
-		TWENTY_INFO = "주제: %s · %d/%d바퀴 · 맞힌 사람 %d/%d명",
-		TWENTY_NO_LEAK = "남의 단어를 채팅에 쓰면 날아가요",
-		TWENTY_ONE_TRY = "이번 차례에 한 번만 낼 수 있어요",
+		TWENTY_BRIEF = "질문으로 내 단어를 맞혀요, 못 맞히면 날아가요",
+		TWENTY_INTRO = "내 차례 %d초 동안 묻고, 답은 딱 한 번!",
+		TWENTY_TURN = "%s 님이 질문해요, 대답해 주세요",
+		TWENTY_MY_TURN = "내 차례! 질문하고 아래에 답 쓰기",
+		TWENTY_INFO = "주제 %s · %d/%d바퀴 · %d명 맞힘 (%d명이면 끝)",
+		TWENTY_NO_LEAK = "남의 단어를 채팅에 쓰면 바로 날아가요",
+		TWENTY_ONE_TRY = "답은 한 번만!",
 		TWENTY_HINT = "내 단어는?",
-		TWENTY_SEND = "정답!",
+		TWENTY_SEND = "답 내기",
 		TWENTY_SENT = "'%s' 냈어요",
-		TWENTY_RIGHT = "⭕ %s 님 정답! %s",
-		TWENTY_WRONG = "❌ %s 님 땡",
-		TWENTY_TIMEOUT = "⏰ %s 님 시간 끝",
-		TWENTY_LEAK = "%s 님이 남의 단어를 채팅에 써서 날아가요",
-		TWENTY_LEAK_MINE = "💥 남의 단어를 써서 날아가요 · 내 단어: %s",
+		TWENTY_RIGHT = "⭕ 정답! %s (%s)",
+		TWENTY_WRONG = "❌ 땡! %s",
+		TWENTY_TIMEOUT = "⏰ 시간 초과! %s",
+		TWENTY_LEAK = "%s 님이 남의 단어를 흘려서 날아가요",
+		TWENTY_LEAK_MINE = "💥 남의 단어를 채팅에 써 버렸어요! 내 단어: %s",
 		TWENTY_RESULT = "못 맞힌 %s 날아가요",
 		TWENTY_NOBODY = "날아갈 사람이 없어요",
 		TWENTY_RESULT_TITLE = "머리 위 스무고개 · 주제: %s",
 		TWENTY_RIGHT_LIST = "맞힘: %s",
-		TWENTY_LEAKED = "%s 💥(채팅)",
+		TWENTY_LEAKED = "%s(채팅)",
 		TWENTY_MY_WORD = "내 단어: %s",
 		TALK_BRIEF = "남의 머리 위 금칙어를 말하게 해요 · 내 금칙어를 말하면 날아가요", -- (the briefing before it, owner 2026-10-24)
 		TALK_SOON = "곧 시작",
@@ -590,7 +591,7 @@ return {
 		TALK_ON = "주제로 이야기하세요 · 자기 금칙어를 말하면 날아가요",
 		TALK_TOPIC = "주제: %s",
 		WORDS_HEARD = "🔔 들었다",
-		AFK_OUT = "%s 님은 두 번 연속 답하지 않아 관전으로 바뀌었어요",
+		AFK_OUT = "%s 님은 2번 연속 답이 없어서 관전으로 바뀌었어요",
 		SOUND_DRUMROLL = "두구두구",
 		SOUND_APPLAUSE = "박수",
 		SOUND_LAUGH = "웃음",
@@ -1658,8 +1659,9 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 			countAnswers()
 			onFail(players, key, subjective)
 		end,
+		-- (a moment's line is a toast only; the status board keeps what is going on — the game's name — so the same
+		-- sentence never shows twice at once, review 2026-10-25)
 		show = function(text: string)
-			Match.setMessage(text)
 			Net.notice(text)
 		end,
 		cancelled = function()
@@ -1829,6 +1831,7 @@ local function playMain(myRound: number)
 			runs += 1
 			local run = runs
 			lastId = mission.id
+			Match.setMessage(mission.title) -- (the status board names the game while it runs)
 			table.clear(gameLost)
 			table.clear(gameOut)
 			local playing = Match.aliveList() -- (who plays this game)
@@ -2001,8 +2004,18 @@ local function runRound()
 	Awards.beginRound()
 	MissionRunner.beginRound()
 	local presenter = PresenterService.choose(candidates) -- before the chairs are counted: every volunteer is looked at
-	if presenter then
-		table.remove(candidates, table.find(candidates, presenter))
+	-- (the presenter checks wait on web calls: whoever left or stopped being ready meanwhile gets no chair, and with too
+	-- few left there is no round — review 2026-10-25: a round of one, or a chair for someone already gone)
+	local stillHere = Match.eligiblePlayers()
+	for i = #candidates, 1, -1 do
+		local player = candidates[i]
+		if player == presenter or player.Parent == nil or not table.find(stillHere, player) then
+			table.remove(candidates, i)
+		end
+	end
+	if #candidates < Config.MIN_PLAYERS then
+		cleanup()
+		return
 	end
 	while #candidates > Config.MAX_PLAYERS do
 		table.remove(candidates)
@@ -2020,6 +2033,10 @@ local function runRound()
 		end
 	end
 	Match.startedWith = #Match.aliveList()
+	if Match.startedWith < Config.MIN_PLAYERS then -- (someone was respawning and got no chair)
+		cleanup()
+		return
+	end
 	LifeService.beginRound()
 	ChatGate.setGuard(false) -- (chat rules come with the banned-word talk, §7)
 	if Match.presenter then
@@ -3087,6 +3104,22 @@ local function ground(ctx: Ctx): { Player }
 	return list
 end
 
+-- `talker` holds the floor for `seconds`, or less once they left, went out or fly (review 2026-10-25: the others stayed
+-- muted for the rest of it). False if the mission was cancelled. (Liar.luau has the same small helper.)
+local function talkFor(ctx: Ctx, talker: Player, seconds: number): boolean
+	local untilAt = os.clock() + seconds
+	ctx.floor(talker)
+	local going = true
+	while going and os.clock() < untilAt do
+		going = ctx.wait(math.min(0.25, untilAt - os.clock()))
+		if talker.Parent == nil or not table.find(ctx.players(), talker) or ctx.flying(talker) then
+			break
+		end
+	end
+	ctx.floor(nil)
+	return going
+end
+
 local function names(list: { Player }): string
 	local out = {}
 	for _, player in list do
@@ -3142,9 +3175,7 @@ function Balance.run(ctx: Ctx): boolean?
 			ctx.screen({ kind = "balance", stage = "talk", a = question.a, b = question.b, ids = { talker.UserId },
 				endsAt = Match.now() + seconds })
 			ctx.show(string.format(Config.TEXT.BALANCE_TALK, talker.DisplayName))
-			ctx.floor(talker)
-			ctx.wait(seconds)
-			ctx.floor(nil)
+			talkFor(ctx, talker, seconds)
 		end
 	end
 	if ctx.cancelled() then
@@ -4289,6 +4320,22 @@ local function ids(list: { Player }): { number }
 	return out
 end
 
+-- `talker` holds the floor for `seconds`, or less once they left, went out or fly (review 2026-10-25: the others stayed
+-- muted for the rest of it). False if the mission was cancelled. (Balance.luau has the same small helper.)
+local function talkFor(ctx: Ctx, talker: Player, seconds: number): boolean
+	local untilAt = os.clock() + seconds
+	ctx.floor(talker)
+	local going = true
+	while going and os.clock() < untilAt do
+		going = ctx.wait(math.min(0.25, untilAt - os.clock()))
+		if talker.Parent == nil or not table.find(ctx.players(), talker) or ctx.flying(talker) then
+			break
+		end
+	end
+	ctx.floor(nil)
+	return going
+end
+
 local function shuffled(list: { any }, rng: Random): { any }
 	local out = table.clone(list)
 	for i = #out, 2, -1 do
@@ -4391,9 +4438,7 @@ function Liar.run(ctx: Ctx): boolean?
 			local seconds = if p and p.chat then Config.LIAR_CLUE_CHAT_SECONDS else Config.LIAR_CLUE_SECONDS
 			show("clue", { ids = { player.UserId }, endsAt = Match.now() + seconds })
 			ctx.show(string.format(Config.TEXT.LIAR_CLUE, player.DisplayName))
-			ctx.floor(player)
-			ctx.wait(seconds)
-			ctx.floor(nil)
+			talkFor(ctx, player, seconds)
 		end
 	end
 	if ctx.cancelled() then
@@ -5936,7 +5981,8 @@ function Roulette.available(final: boolean): boolean
 	return not final
 end
 
-function Roulette.run(ctx: Ctx)
+-- Returns false when too few were on the ground to start (it does not count as a game, like the others).
+function Roulette.run(ctx: Ctx): boolean?
 	local wheel = {}
 	for _, player in ctx.players() do
 		if not ctx.flying(player) then
@@ -5944,7 +5990,7 @@ function Roulette.run(ctx: Ctx)
 		end
 	end
 	if #wheel < Config.ROULETTE_MIN_PLAYERS then
-		return
+		return false
 	end
 	local index = ctx.rng:NextInteger(1, #wheel)
 	local ids = {}
@@ -5955,12 +6001,13 @@ function Roulette.run(ctx: Ctx)
 	ctx.screen({ kind = "roulette", ids = ids, pick = index, startsAt = Match.now(),
 		spinSeconds = Config.ROULETTE_SPIN_SECONDS })
 	if not ctx.wait(Config.ROULETTE_SPIN_SECONDS) then
-		return
+		return nil
 	end
 	local picked = wheel[index]
 	ctx.show(string.format(Config.TEXT.ROULETTE_HIT, picked.DisplayName))
 	ctx.fail({ picked }, "spin")
 	ctx.reveal(Config.ROULETTE_REVEAL_SECONDS) -- the wheel stays on the name, also when this decided the round
+	return nil
 end
 
 return Roulette
@@ -7952,11 +7999,12 @@ function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player
 		open.from[player] = true
 	end
 	question = open
-	local titles = {}
+	local titles, rules = {}, {}
 	for _, mission in ballot do
 		table.insert(titles, mission.title)
+		table.insert(rules, mission.brief or "") -- (under each name: a first-time player knows what they vote for)
 	end
-	setScreen({ kind = "nextVote", recap = recap, choices = titles, id = open.id, endsAt = open.endsAt })
+	setScreen({ kind = "nextVote", recap = recap, choices = titles, rules = rules, id = open.id, endsAt = open.endsAt })
 	local untilAt = os.clock() + Config.NEXT_VOTE_SECONDS
 	while os.clock() < untilAt and not stop() do
 		local waiting = false
@@ -9983,6 +10031,7 @@ local function refreshVoice()
 		status = status,
 		micTested = State.micTested,
 		inMyRound = State.inRound() and (State.isParticipant(State.myId()) or State.mePresenting()),
+		roundOn = State.inRound(),
 		readyCount = State.round.readyCount,
 		chatAccess = State.chatAccess,
 		chatMode = player:GetAttribute("BW_ChatMode") == true,
@@ -10135,7 +10184,12 @@ Speech.onUnstable(function()
 		Toast.show(Config.TEXT.RECOGNITION_UNSTABLE, "near")
 	end
 end)
-Speech.start(script) -- this LocalScript lives in PlayerScripts and survives respawns
+-- (this LocalScript lives in PlayerScripts and survives respawns; a speech setup that fails on some device must not
+-- stop the rest of the game from wiring up — review 2026-10-25)
+local speechOk, speechError = pcall(Speech.start, script)
+if not speechOk then
+	warn("[BannedWords] speech setup failed:", speechError)
+end
 
 -- Server events.
 local stateSeen = false -- the first state after joining only sets things up (no "it started" toast for late joiners)
@@ -12241,8 +12295,10 @@ function Hud.build()
 	aliveL.TextXAlignment = Enum.TextXAlignment.Right
 end
 
+-- The message alone, or the phase's name when there is none (review 2026-10-25: "본 경기 · 본 경기 시작!", "결승 ·
+-- 결승 퀴즈 · …" said the same thing twice).
 function Hud.setStatus(phase: string, message: string)
-	statusL.Text = (PHASE_TITLE[phase] or phase) .. (if message ~= "" then " · " .. message else "")
+	statusL.Text = if message ~= "" then message else PHASE_TITLE[phase] or phase
 end
 
 function Hud.setTimer(seconds: number?)
@@ -12288,6 +12344,7 @@ export type Ready = {
 	status: string, -- Speech.status(): NoVoice / Disconnected / Muted / Listening / Speaking
 	micTested: boolean,
 	inMyRound: boolean, -- I play in the round being played
+	roundOn: boolean, -- a round is being played (without me: I join the next one)
 	readyCount: number?, -- players ready to play (voice or chat)
 	chatAccess: string, -- from the server, to me only: checking / voice / voiceOnly / noVoice
 	chatMode: boolean, -- I join by chat (server attribute BW_ChatMode)
@@ -12352,6 +12409,9 @@ local function nextStep(r: Ready): (string, boolean)
 		return TEXT.MIC_TEST, false
 	elseif r.chatAccess == "checking" then
 		return TEXT.CHAT_CHECKING, false -- (ready by voice once the server knows the account has voice)
+	end
+	if r.roundOn then
+		return TEXT.READY_NEXT_ROUND, true -- (review 2026-10-25: ready but watching said nothing about why)
 	end
 	local ready = if r.readyCount then string.format(TEXT.READY_COUNT, r.readyCount) else TEXT.READY
 	return ready .. " · " .. TEXT.HEADSET_TIP, true
@@ -12448,6 +12508,8 @@ local title: TextLabel
 local titleLimit: UITextSizeConstraint -- (lifted for the 초성 quiz's bigger consonants)
 local timer: TextLabel
 local note: TextLabel
+local noteLimit: UITextSizeConstraint -- (the briefing's rule reads bigger)
+local subNote: TextLabel -- a small line under the buttons (the briefing: what the last game did)
 local swapButton: TextButton
 local answerGrid: Frame
 local answerLayout: UIGridLayout
@@ -12524,6 +12586,24 @@ local function answerButton(index: number): TextButton
 	local size = Instance.new("UITextSizeConstraint")
 	size.MaxTextSize = 22
 	size.Parent = b
+	-- (a small second line: the next-game vote shows each game's rule under its name, review 2026-10-25 — a first-time
+	-- player otherwise votes for names only)
+	local sub = Instance.new("TextLabel")
+	sub.Name = "Sub"
+	sub.BackgroundTransparency = 1
+	sub.AnchorPoint = Vector2.new(0.5, 1)
+	sub.Position = UDim2.fromScale(0.5, 1)
+	sub.Size = UDim2.fromScale(1, 0.52)
+	sub.FontFace = Style.REGULAR
+	sub.TextColor3 = Style.INK
+	sub.TextScaled = true
+	sub.TextWrapped = true
+	sub.Text = ""
+	sub.Visible = false
+	local subSize = Instance.new("UITextSizeConstraint")
+	subSize.MaxTextSize = 14
+	subSize.Parent = sub
+	sub.Parent = b
 	b.LayoutOrder = index
 	b.Activated:Connect(function()
 		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt -- (not while the question shows first)
@@ -12623,8 +12703,13 @@ function MissionPanel.build(onPick: (number, number | string) -> ())
 	title.Size = UDim2.new(1, 0, 0, 64)
 	title.LayoutOrder = 1
 	note = Style.label(card, Style.REGULAR, 18, Style.FAINT)
+	noteLimit = note:FindFirstChildOfClass("UITextSizeConstraint") :: UITextSizeConstraint
 	note.Size = UDim2.new(1, 0, 0, 22)
 	note.LayoutOrder = 2
+	subNote = Style.label(card, Style.REGULAR, 15, Style.FAINT)
+	subNote.Size = UDim2.new(1, 0, 0, 18)
+	subNote.LayoutOrder = 5
+	subNote.Visible = false
 
 	answerGrid = Instance.new("Frame")
 	answerGrid.BackgroundTransparency = 1
@@ -12957,7 +13042,14 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	title.TextColor3 = Style.INK -- (the duel turns it red at "fire!")
 	for _, b in buttons do
 		buttonIcon(b, nil) -- (only the bomb's pass button has a picture)
+		b.TextYAlignment = Enum.TextYAlignment.Center
+		local sub = b:FindFirstChild("Sub") :: TextLabel?
+		if sub then
+			sub.Visible = false -- (only the next-game vote has the small line)
+		end
 	end
+	subNote.Visible = false
+	noteLimit.MaxTextSize = 18
 	-- (only the 초성 quiz's consonants are drawn as RichText, at a fixed size and without the size limit: a bigger
 	-- RichText size inside scaled or limited text is cut off)
 	title.RichText = false
@@ -12976,7 +13068,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	-- (the awards and the timing games' results take two lines: many names)
 	note.Size = UDim2.new(1, 0, 0, if kind == "roundResult" or kind == "timeGuessResult" or kind == "duelResult"
 		or kind == "bottleThrow" or kind == "bottleResult" or kind == "oxResult" or kind == "estimateResult" or twenty
-		then 46 else 22)
+		or kind == "brief" then 46 else 22)
 	state.shown = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
 		or kind == "talk" or bells or games or between or timing or quizKinds or twenty
 	card.Visible = state.shown and not state.hidden
@@ -13033,10 +13125,17 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		note.Text = payload.recap or "" -- (what the last game did; nothing before the first)
 		note.Visible = note.Text ~= ""
 		local choices = if kind == "nextVote" then payload.choices or {} else {}
+		local rules = if kind == "nextVote" then payload.rules or {} else {}
 		for i, b in buttons do
 			b.Visible = choices[i] ~= nil
 			b.Text = choices[i] or ""
 			paint(b, canAnswer and not state.myPick, i == state.myPick)
+			local sub = b:FindFirstChild("Sub") :: TextLabel?
+			if sub and rules[i] and rules[i] ~= "" then
+				sub.Text = rules[i]
+				sub.Visible = true
+				b.TextYAlignment = Enum.TextYAlignment.Top
+			end
 		end
 	elseif kind == "timeGuess" or kind == "timeGuessResult" then
 		title.Text = string.format(TEXT.TIMEGUESS_TARGET, tonumber(payload.target) or 0)
@@ -13157,7 +13256,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 				table.insert(rightNames, name)
 			end
 			if table.find(leaked, ids[i]) then
-				table.insert(flown, string.format(TEXT.TWENTY_LEAKED, name))
+				table.insert(flown, string.format(TEXT.TWENTY_LEAKED, name) .. " 💥") -- (💥: who flew, as on every result)
 			elseif table.find(losers, ids[i]) then
 				table.insert(flown, name .. " 💥")
 			end
@@ -13195,9 +13294,14 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		note.Text = table.concat(payload.lines or {}, "\n")
 		note.Visible = note.Text ~= ""
 	elseif kind == "brief" then
-		title.Text = string.format("%s · %s", string.format(TEXT.GAME_COUNT, payload.game or 1, payload.games or 1),
-			payload.title or "")
-		note.Text = if (payload.recap or "") ~= "" then payload.recap .. "  ·  " .. (payload.rule or "") else payload.rule or ""
+		-- (review 2026-10-25: the rule was a tiny line glued to the last game's recap, unreadable in 3 s; now the name, the
+		-- rule in two big lines, and the recap on its own small line; the game count is on the status board)
+		title.Text = payload.title or ""
+		note.Text = payload.rule or ""
+		note.TextColor3 = Style.INK
+		noteLimit.MaxTextSize = 21
+		subNote.Text = payload.recap or ""
+		subNote.Visible = subNote.Text ~= ""
 	elseif kind == "vote" then
 		local liarVote = payload.prompt == "liar"
 		title.Text = if liarVote then TEXT.LIAR_VOTE else TEXT.JUDGE_VOTE
@@ -13349,9 +13453,11 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	end
 	-- (four short answers: one row, so the card stays low; a big vote: three smaller columns, so twelve still fit a
 	-- phone)
-	answerLayout.CellSize = if shownButtons > 6 then UDim2.new(1 / 3, -6, 0, 40)
+	answerLayout.CellSize = if kind == "nextVote" then UDim2.new(1 / math.max(shownButtons, 1), -6, 0, 66) -- (each
+		-- game's name and its rule)
+		elseif shownButtons > 6 then UDim2.new(1 / 3, -6, 0, 40)
 		elseif shownButtons == 4 and longest <= 7 then UDim2.new(0.25, -6, 0, 44)
-		elseif shownButtons == 3 then UDim2.new(1 / 3, -6, 0, 44) -- (the next-game vote)
+		elseif shownButtons == 3 then UDim2.new(1 / 3, -6, 0, 44)
 		else UDim2.new(0.5, -4, 0, 44)
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end

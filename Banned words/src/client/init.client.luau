@@ -79,6 +79,7 @@ local function refreshVoice()
 		status = status,
 		micTested = State.micTested,
 		inMyRound = State.inRound() and (State.isParticipant(State.myId()) or State.mePresenting()),
+		roundOn = State.inRound(),
 		readyCount = State.round.readyCount,
 		chatAccess = State.chatAccess,
 		chatMode = player:GetAttribute("BW_ChatMode") == true,
@@ -231,7 +232,12 @@ Speech.onUnstable(function()
 		Toast.show(Config.TEXT.RECOGNITION_UNSTABLE, "near")
 	end
 end)
-Speech.start(script) -- this LocalScript lives in PlayerScripts and survives respawns
+-- (this LocalScript lives in PlayerScripts and survives respawns; a speech setup that fails on some device must not
+-- stop the rest of the game from wiring up — review 2026-10-25)
+local speechOk, speechError = pcall(Speech.start, script)
+if not speechOk then
+	warn("[BannedWords] speech setup failed:", speechError)
+end
 
 -- Server events.
 local stateSeen = false -- the first state after joining only sets things up (no "it started" toast for late joiners)

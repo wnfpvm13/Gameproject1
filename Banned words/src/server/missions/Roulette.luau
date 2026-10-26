@@ -54,7 +54,8 @@ function Roulette.available(final: boolean): boolean
 	return not final
 end
 
-function Roulette.run(ctx: Ctx)
+-- Returns false when too few were on the ground to start (it does not count as a game, like the others).
+function Roulette.run(ctx: Ctx): boolean?
 	local wheel = {}
 	for _, player in ctx.players() do
 		if not ctx.flying(player) then
@@ -62,7 +63,7 @@ function Roulette.run(ctx: Ctx)
 		end
 	end
 	if #wheel < Config.ROULETTE_MIN_PLAYERS then
-		return
+		return false
 	end
 	local index = ctx.rng:NextInteger(1, #wheel)
 	local ids = {}
@@ -73,12 +74,13 @@ function Roulette.run(ctx: Ctx)
 	ctx.screen({ kind = "roulette", ids = ids, pick = index, startsAt = Match.now(),
 		spinSeconds = Config.ROULETTE_SPIN_SECONDS })
 	if not ctx.wait(Config.ROULETTE_SPIN_SECONDS) then
-		return
+		return nil
 	end
 	local picked = wheel[index]
 	ctx.show(string.format(Config.TEXT.ROULETTE_HIT, picked.DisplayName))
 	ctx.fail({ picked }, "spin")
 	ctx.reveal(Config.ROULETTE_REVEAL_SECONDS) -- the wheel stays on the name, also when this decided the round
+	return nil
 end
 
 return Roulette

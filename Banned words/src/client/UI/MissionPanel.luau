@@ -73,6 +73,8 @@ local title: TextLabel
 local titleLimit: UITextSizeConstraint -- (lifted for the 초성 quiz's bigger consonants)
 local timer: TextLabel
 local note: TextLabel
+local noteLimit: UITextSizeConstraint -- (the briefing's rule reads bigger)
+local subNote: TextLabel -- a small line under the buttons (the briefing: what the last game did)
 local swapButton: TextButton
 local answerGrid: Frame
 local answerLayout: UIGridLayout
@@ -149,6 +151,24 @@ local function answerButton(index: number): TextButton
 	local size = Instance.new("UITextSizeConstraint")
 	size.MaxTextSize = 22
 	size.Parent = b
+	-- (a small second line: the next-game vote shows each game's rule under its name, review 2026-10-25 — a first-time
+	-- player otherwise votes for names only)
+	local sub = Instance.new("TextLabel")
+	sub.Name = "Sub"
+	sub.BackgroundTransparency = 1
+	sub.AnchorPoint = Vector2.new(0.5, 1)
+	sub.Position = UDim2.fromScale(0.5, 1)
+	sub.Size = UDim2.fromScale(1, 0.52)
+	sub.FontFace = Style.REGULAR
+	sub.TextColor3 = Style.INK
+	sub.TextScaled = true
+	sub.TextWrapped = true
+	sub.Text = ""
+	sub.Visible = false
+	local subSize = Instance.new("UITextSizeConstraint")
+	subSize.MaxTextSize = 14
+	subSize.Parent = sub
+	sub.Parent = b
 	b.LayoutOrder = index
 	b.Activated:Connect(function()
 		local open = state.endsAt > 0 and workspace:GetServerTimeNow() < state.endsAt -- (not while the question shows first)
@@ -248,8 +268,13 @@ function MissionPanel.build(onPick: (number, number | string) -> ())
 	title.Size = UDim2.new(1, 0, 0, 64)
 	title.LayoutOrder = 1
 	note = Style.label(card, Style.REGULAR, 18, Style.FAINT)
+	noteLimit = note:FindFirstChildOfClass("UITextSizeConstraint") :: UITextSizeConstraint
 	note.Size = UDim2.new(1, 0, 0, 22)
 	note.LayoutOrder = 2
+	subNote = Style.label(card, Style.REGULAR, 15, Style.FAINT)
+	subNote.Size = UDim2.new(1, 0, 0, 18)
+	subNote.LayoutOrder = 5
+	subNote.Visible = false
 
 	answerGrid = Instance.new("Frame")
 	answerGrid.BackgroundTransparency = 1
@@ -582,7 +607,14 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	title.TextColor3 = Style.INK -- (the duel turns it red at "fire!")
 	for _, b in buttons do
 		buttonIcon(b, nil) -- (only the bomb's pass button has a picture)
+		b.TextYAlignment = Enum.TextYAlignment.Center
+		local sub = b:FindFirstChild("Sub") :: TextLabel?
+		if sub then
+			sub.Visible = false -- (only the next-game vote has the small line)
+		end
 	end
+	subNote.Visible = false
+	noteLimit.MaxTextSize = 18
 	-- (only the 초성 quiz's consonants are drawn as RichText, at a fixed size and without the size limit: a bigger
 	-- RichText size inside scaled or limited text is cut off)
 	title.RichText = false
@@ -601,7 +633,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	-- (the awards and the timing games' results take two lines: many names)
 	note.Size = UDim2.new(1, 0, 0, if kind == "roundResult" or kind == "timeGuessResult" or kind == "duelResult"
 		or kind == "bottleThrow" or kind == "bottleResult" or kind == "oxResult" or kind == "estimateResult" or twenty
-		then 46 else 22)
+		or kind == "brief" then 46 else 22)
 	state.shown = quizLike or kind == "roulette" or kind == "oneWord" or kind == "oneWordJudge" or kind == "vote"
 		or kind == "talk" or bells or games or between or timing or quizKinds or twenty
 	card.Visible = state.shown and not state.hidden
@@ -658,10 +690,17 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		note.Text = payload.recap or "" -- (what the last game did; nothing before the first)
 		note.Visible = note.Text ~= ""
 		local choices = if kind == "nextVote" then payload.choices or {} else {}
+		local rules = if kind == "nextVote" then payload.rules or {} else {}
 		for i, b in buttons do
 			b.Visible = choices[i] ~= nil
 			b.Text = choices[i] or ""
 			paint(b, canAnswer and not state.myPick, i == state.myPick)
+			local sub = b:FindFirstChild("Sub") :: TextLabel?
+			if sub and rules[i] and rules[i] ~= "" then
+				sub.Text = rules[i]
+				sub.Visible = true
+				b.TextYAlignment = Enum.TextYAlignment.Top
+			end
 		end
 	elseif kind == "timeGuess" or kind == "timeGuessResult" then
 		title.Text = string.format(TEXT.TIMEGUESS_TARGET, tonumber(payload.target) or 0)
@@ -782,7 +821,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 				table.insert(rightNames, name)
 			end
 			if table.find(leaked, ids[i]) then
-				table.insert(flown, string.format(TEXT.TWENTY_LEAKED, name))
+				table.insert(flown, string.format(TEXT.TWENTY_LEAKED, name) .. " 💥") -- (💥: who flew, as on every result)
 			elseif table.find(losers, ids[i]) then
 				table.insert(flown, name .. " 💥")
 			end
@@ -820,9 +859,14 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		note.Text = table.concat(payload.lines or {}, "\n")
 		note.Visible = note.Text ~= ""
 	elseif kind == "brief" then
-		title.Text = string.format("%s · %s", string.format(TEXT.GAME_COUNT, payload.game or 1, payload.games or 1),
-			payload.title or "")
-		note.Text = if (payload.recap or "") ~= "" then payload.recap .. "  ·  " .. (payload.rule or "") else payload.rule or ""
+		-- (review 2026-10-25: the rule was a tiny line glued to the last game's recap, unreadable in 3 s; now the name, the
+		-- rule in two big lines, and the recap on its own small line; the game count is on the status board)
+		title.Text = payload.title or ""
+		note.Text = payload.rule or ""
+		note.TextColor3 = Style.INK
+		noteLimit.MaxTextSize = 21
+		subNote.Text = payload.recap or ""
+		subNote.Visible = subNote.Text ~= ""
 	elseif kind == "vote" then
 		local liarVote = payload.prompt == "liar"
 		title.Text = if liarVote then TEXT.LIAR_VOTE else TEXT.JUDGE_VOTE
@@ -974,9 +1018,11 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	end
 	-- (four short answers: one row, so the card stays low; a big vote: three smaller columns, so twelve still fit a
 	-- phone)
-	answerLayout.CellSize = if shownButtons > 6 then UDim2.new(1 / 3, -6, 0, 40)
+	answerLayout.CellSize = if kind == "nextVote" then UDim2.new(1 / math.max(shownButtons, 1), -6, 0, 66) -- (each
+		-- game's name and its rule)
+		elseif shownButtons > 6 then UDim2.new(1 / 3, -6, 0, 40)
 		elseif shownButtons == 4 and longest <= 7 then UDim2.new(0.25, -6, 0, 44)
-		elseif shownButtons == 3 then UDim2.new(1 / 3, -6, 0, 44) -- (the next-game vote)
+		elseif shownButtons == 3 then UDim2.new(1 / 3, -6, 0, 44)
 		else UDim2.new(0.5, -4, 0, 44)
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end

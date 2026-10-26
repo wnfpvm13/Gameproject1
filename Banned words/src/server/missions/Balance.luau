@@ -64,6 +64,22 @@ local function ground(ctx: Ctx): { Player }
 	return list
 end
 
+-- `talker` holds the floor for `seconds`, or less once they left, went out or fly (review 2026-10-25: the others stayed
+-- muted for the rest of it). False if the mission was cancelled. (Liar.luau has the same small helper.)
+local function talkFor(ctx: Ctx, talker: Player, seconds: number): boolean
+	local untilAt = os.clock() + seconds
+	ctx.floor(talker)
+	local going = true
+	while going and os.clock() < untilAt do
+		going = ctx.wait(math.min(0.25, untilAt - os.clock()))
+		if talker.Parent == nil or not table.find(ctx.players(), talker) or ctx.flying(talker) then
+			break
+		end
+	end
+	ctx.floor(nil)
+	return going
+end
+
 local function names(list: { Player }): string
 	local out = {}
 	for _, player in list do
@@ -119,9 +135,7 @@ function Balance.run(ctx: Ctx): boolean?
 			ctx.screen({ kind = "balance", stage = "talk", a = question.a, b = question.b, ids = { talker.UserId },
 				endsAt = Match.now() + seconds })
 			ctx.show(string.format(Config.TEXT.BALANCE_TALK, talker.DisplayName))
-			ctx.floor(talker)
-			ctx.wait(seconds)
-			ctx.floor(nil)
+			talkFor(ctx, talker, seconds)
 		end
 	end
 	if ctx.cancelled() then

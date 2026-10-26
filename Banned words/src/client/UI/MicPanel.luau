@@ -14,6 +14,7 @@ export type Ready = {
 	status: string, -- Speech.status(): NoVoice / Disconnected / Muted / Listening / Speaking
 	micTested: boolean,
 	inMyRound: boolean, -- I play in the round being played
+	roundOn: boolean, -- a round is being played (without me: I join the next one)
 	readyCount: number?, -- players ready to play (voice or chat)
 	chatAccess: string, -- from the server, to me only: checking / voice / voiceOnly / noVoice
 	chatMode: boolean, -- I join by chat (server attribute BW_ChatMode)
@@ -78,6 +79,9 @@ local function nextStep(r: Ready): (string, boolean)
 		return TEXT.MIC_TEST, false
 	elseif r.chatAccess == "checking" then
 		return TEXT.CHAT_CHECKING, false -- (ready by voice once the server knows the account has voice)
+	end
+	if r.roundOn then
+		return TEXT.READY_NEXT_ROUND, true -- (review 2026-10-25: ready but watching said nothing about why)
 	end
 	local ready = if r.readyCount then string.format(TEXT.READY_COUNT, r.readyCount) else TEXT.READY
 	return ready .. " · " .. TEXT.HEADSET_TIP, true

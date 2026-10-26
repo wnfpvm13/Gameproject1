@@ -72,6 +72,22 @@ local function ids(list: { Player }): { number }
 	return out
 end
 
+-- `talker` holds the floor for `seconds`, or less once they left, went out or fly (review 2026-10-25: the others stayed
+-- muted for the rest of it). False if the mission was cancelled. (Balance.luau has the same small helper.)
+local function talkFor(ctx: Ctx, talker: Player, seconds: number): boolean
+	local untilAt = os.clock() + seconds
+	ctx.floor(talker)
+	local going = true
+	while going and os.clock() < untilAt do
+		going = ctx.wait(math.min(0.25, untilAt - os.clock()))
+		if talker.Parent == nil or not table.find(ctx.players(), talker) or ctx.flying(talker) then
+			break
+		end
+	end
+	ctx.floor(nil)
+	return going
+end
+
 local function shuffled(list: { any }, rng: Random): { any }
 	local out = table.clone(list)
 	for i = #out, 2, -1 do
@@ -174,9 +190,7 @@ function Liar.run(ctx: Ctx): boolean?
 			local seconds = if p and p.chat then Config.LIAR_CLUE_CHAT_SECONDS else Config.LIAR_CLUE_SECONDS
 			show("clue", { ids = { player.UserId }, endsAt = Match.now() + seconds })
 			ctx.show(string.format(Config.TEXT.LIAR_CLUE, player.DisplayName))
-			ctx.floor(player)
-			ctx.wait(seconds)
-			ctx.floor(nil)
+			talkFor(ctx, player, seconds)
 		end
 	end
 	if ctx.cancelled() then

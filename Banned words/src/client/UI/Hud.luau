@@ -47,8 +47,10 @@ function Hud.build()
 	aliveL.TextXAlignment = Enum.TextXAlignment.Right
 end
 
+-- The message alone, or the phase's name when there is none (review 2026-10-25: "본 경기 · 본 경기 시작!", "결승 ·
+-- 결승 퀴즈 · …" said the same thing twice).
 function Hud.setStatus(phase: string, message: string)
-	statusL.Text = (PHASE_TITLE[phase] or phase) .. (if message ~= "" then " · " .. message else "")
+	statusL.Text = if message ~= "" then message else PHASE_TITLE[phase] or phase
 end
 
 function Hud.setTimer(seconds: number?)

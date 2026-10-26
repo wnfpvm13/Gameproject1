@@ -376,8 +376,9 @@ local function missionCtx(myRound: number, final: boolean, onFail: ({ Player }, 
 			countAnswers()
 			onFail(players, key, subjective)
 		end,
+		-- (a moment's line is a toast only; the status board keeps what is going on — the game's name — so the same
+		-- sentence never shows twice at once, review 2026-10-25)
 		show = function(text: string)
-			Match.setMessage(text)
 			Net.notice(text)
 		end,
 		cancelled = function()
@@ -547,6 +548,7 @@ local function playMain(myRound: number)
 			runs += 1
 			local run = runs
 			lastId = mission.id
+			Match.setMessage(mission.title) -- (the status board names the game while it runs)
 			table.clear(gameLost)
 			table.clear(gameOut)
 			local playing = Match.aliveList() -- (who plays this game)
@@ -719,8 +721,18 @@ local function runRound()
 	Awards.beginRound()
 	MissionRunner.beginRound()
 	local presenter = PresenterService.choose(candidates) -- before the chairs are counted: every volunteer is looked at
-	if presenter then
-		table.remove(candidates, table.find(candidates, presenter))
+	-- (the presenter checks wait on web calls: whoever left or stopped being ready meanwhile gets no chair, and with too
+	-- few left there is no round — review 2026-10-25: a round of one, or a chair for someone already gone)
+	local stillHere = Match.eligiblePlayers()
+	for i = #candidates, 1, -1 do
+		local player = candidates[i]
+		if player == presenter or player.Parent == nil or not table.find(stillHere, player) then
+			table.remove(candidates, i)
+		end
+	end
+	if #candidates < Config.MIN_PLAYERS then
+		cleanup()
+		return
 	end
 	while #candidates > Config.MAX_PLAYERS do
 		table.remove(candidates)
@@ -738,6 +750,10 @@ local function runRound()
 		end
 	end
 	Match.startedWith = #Match.aliveList()
+	if Match.startedWith < Config.MIN_PLAYERS then -- (someone was respawning and got no chair)
+		cleanup()
+		return
+	end
 	LifeService.beginRound()
 	ChatGate.setGuard(false) -- (chat rules come with the banned-word talk, §7)
 	if Match.presenter then

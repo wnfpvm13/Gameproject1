@@ -6,8 +6,10 @@
 -- client's shown hits land, a hit on the player breaks it, and the server's word corrects it); a punch's or swing's hits are
 -- shown at once too (the same cone the server uses, without the network slack: SwingTargets; a slam's or a thrown
 -- stick's hits wait for the server's word); and the server is told where the character aims (it turns with the camera
--- under the mouse lock) and which step was drawn. The server judges it for real (WeaponService). The drawing and the hit effects come in as
--- hooks (SwingPose, HitFeedback via init).
+-- under the mouse lock), which step was drawn and the attack's number (counted here: the server hands it back with
+-- the attack, Names.SwingTag, and with its hits, so each word is matched to the attack it is about, however late it
+-- comes). The server judges it for real (WeaponService). The drawing and the hit effects come in as hooks (SwingPose,
+-- HitFeedback via init).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -24,27 +26,31 @@ local STRING = AttackString.rules(Config.Attack)
 local OwnSwing = {}
 OwnSwing.__index = OwnSwing
 
--- An attack the server reports this close to the player's own last one is that one (already drawn).
-local SAME_SWING_SECONDS = 0.5
--- The server's word on the player's latest attack comes within this of when it was pressed (a one-way trip; every
--- attack waits at least a cooldown after the last).
-local LATEST_SECONDS = 0.25
+-- What this client showed of the last this many attacks is kept (a word on an older one is long overdue).
+local KEEP = 4
 
 export type Hooks = {
 	fighters: () -> { Model }, -- the characters still in the round
 	stunned: () -> boolean, -- the player's character is flinching or flying from a hit
 	-- Draw and sound an attack that started at server time `at`, at `step` of the string.
 	draw: (model: Model, at: number, weapon: string, step: number) -> (),
+	-- Draw the attack drawn at `at` as `step` instead (the server counted it differently; not sounded again).
+	restep: (model: Model, at: number, weapon: string, step: number) -> (),
 	-- Show a hit the attack is about to land (`finisher`: the string's launching last step); returns the kind of burst
 	-- shown ("light" or "launch"), nil when it was not shown (the victim cannot be hit just now).
 	predict: (victim: Model, weapon: string, finisher: boolean) -> string?,
 }
 
+-- One attack's showing: the burst kind this client showed at once on each victim, and the victims the server's word
+-- came for first (the server took the attack as an earlier step, which lands sooner).
+type Showing = { shown: { [Model]: string }, confirmed: { [Model]: boolean } }
+
 -- last: when the player's own last attack started; ready: when the next may start (by the cooldown of the weapon that
 -- attack used, as the server counts it: running out of a slow weapon does not let a quick fist out sooner).
--- chain: the player's 1-2-3 string; weapon: what the last attack was made with (a new weapon starts the string over).
--- For the last attack only: shown, the burst kind this client showed at once on each victim; confirmed, the victims the
--- server's word came for first (the server took the attack as an earlier step, which lands sooner).
+-- chain: the player's 1-2-3 string; weapon: what the last attack was made with (a new weapon starts the string over);
+-- model: the character it was made by. count: the attacks pressed so far (the last one's number); cut: the count when
+-- the string was last broken (a word on an attack pressed before that does not touch the string). showings: the last
+-- KEEP attacks' showings, by number.
 type Fields = {
 	remote: RemoteEvent,
 	hooks: Hooks,
@@ -52,8 +58,10 @@ type Fields = {
 	ready: number,
 	chain: AttackString.State,
 	weapon: string?,
-	shown: { [Model]: string },
-	confirmed: { [Model]: boolean },
+	model: Model?,
+	count: number,
+	cut: number,
+	showings: { [number]: Showing },
 }
 export type Swing = typeof(setmetatable({} :: Fields, OwnSwing))
 
@@ -65,10 +73,18 @@ function OwnSwing.new(remote: RemoteEvent, hooks: Hooks): Swing
 		ready = -math.huge,
 		chain = AttackString.new(),
 		weapon = nil,
-		shown = {},
-		confirmed = {},
+		model = nil,
+		count = 0,
+		cut = 0,
+		showings = {},
 	}
 	return setmetatable(fields, OwnSwing)
+end
+
+-- Whether attack number `tag` is the player's latest and pressed since the string was last broken (a word on it may
+-- move the string).
+local function current(self: Swing, tag: number): boolean
+	return tag == self.count and tag > self.cut
 end
 
 -- The control was pressed; `model` is the player's character (nil = none).
@@ -85,8 +101,12 @@ function OwnSwing.press(self: Swing, model: Model?)
 	end
 	self.last = now
 	self.ready = now + w.cooldown
-	table.clear(self.shown)
-	table.clear(self.confirmed)
+	self.count += 1
+	local tag = self.count
+	local showing: Showing = { shown = {}, confirmed = {} }
+	self.showings[tag] = showing
+	self.showings[tag - KEEP] = nil
+	self.model = body.model
 	if weapon ~= self.weapon then
 		AttackString.reset(self.chain) -- a new weapon in hand starts the string over (as on the server)
 		self.weapon = weapon
@@ -95,7 +115,7 @@ function OwnSwing.press(self: Swing, model: Model?)
 	self.hooks.draw(body.model, now, weapon, step)
 	-- The server judges along this aim (taken now), so the hits shown at once use it too.
 	local aim = body.root.CFrame.LookVector
-	self.remote:FireServer(aim, step)
+	self.remote:FireServer(aim, step, tag)
 	local reach = w.reach
 	if not reach then
 		return -- a slam or a throw: its hits are shown when the server says
@@ -106,64 +126,76 @@ function OwnSwing.press(self: Swing, model: Model?)
 		if me and not self.hooks.stunned() then
 			local victims = SwingTargets.find(me, self.hooks.fighters(), reach, aim, w.halfAngle)
 			-- The server's word may have corrected this attack's step meanwhile (settle): show the step it counts.
-			local counted = if self.last == now then self.chain.step else step
+			local counted = if current(self, tag) then self.chain.step else step
 			local finisher = AttackString.launches(STRING, counted, w.style)
 			local landed = false
 			for _, victim in victims do
-				if self.confirmed[victim.model] then
+				if showing.confirmed[victim.model] then
 					landed = true -- the server's word came first and showed it
 				else
 					local kind = self.hooks.predict(victim.model, weapon, finisher)
 					if kind then
-						self.shown[victim.model] = kind
+						showing.shown[victim.model] = kind
 						landed = true
 					end
 				end
 			end
-			if landed then
+			if landed and current(self, tag) then
 				AttackString.landed(self.chain) -- it landed: the string may go on (as the server counts it)
 			end
 		end
 	end)
 end
 
--- The server's word that an attack of the player's, started at server time `at` (nil: not an attack, a blast), hit
--- `victim`. When it is the latest attack: it landed, so the string may go on when the weapon has one (`strings`; the
--- server's reach is a little longer than the hits shown at once), and the burst kind this client already showed on
--- that victim is returned - nil when it showed none (then show it now; the attack's own showing skips the victim).
--- A word for an earlier attack returns nil and changes nothing.
-function OwnSwing.serverHit(self: Swing, at: number?, victim: Model, strings: boolean): string?
-	if not (at and math.abs(at - self.last) < LATEST_SECONDS) then
-		return nil
+-- The server's word that the player's attack number `tag` (nil: not an attack, a blast) hit `victim`. Returns the
+-- burst kind this client already showed on that victim for that attack - nil when it showed none (then show it now;
+-- the attack's own showing skips the victim) - and whether it is the latest attack (the one drawn now). When it is,
+-- it landed, so the string may go on when the weapon has one (`strings`; the server's reach is a little longer than
+-- the hits shown at once). A word on an older attack changes no string.
+function OwnSwing.serverHit(self: Swing, tag: number?, victim: Model, strings: boolean): (string?, boolean)
+	if tag == nil then
+		return nil, false
 	end
-	if strings then
+	local showing = self.showings[tag]
+	if not showing then
+		return nil, false -- an attack too long ago to know what was shown
+	end
+	if strings and current(self, tag) then
 		AttackString.landed(self.chain)
 	end
-	local kind = self.shown[victim]
+	local kind = showing.shown[victim]
 	if not kind then
-		self.confirmed[victim] = true
+		showing.confirmed[victim] = true
 	end
-	return kind
+	return kind, tag == self.count
 end
 
--- The player was hit: the string is broken (the next attack is a 1, as on the server).
+-- The player was hit: the string is broken (the next attack is a 1, as on the server), and words on the attacks
+-- pressed before it leave the string alone.
 function OwnSwing.broken(self: Swing)
 	AttackString.reset(self.chain)
+	self.cut = self.count
 end
 
--- The server's step for an attack of the player's that it says started at `at` (Names.SwingStep): when that is the
--- player's latest attack and the server counted differently (it dropped an attack, or the network shook more than its
--- slack), this client counts on from the server's step. (An older attack's word, arriving after the next press, is
--- left alone.)
-function OwnSwing.settle(self: Swing, at: number, step: number)
-	if math.abs(at - self.last) < LATEST_SECONDS and step ~= self.chain.step then
-		self.chain.step = step
+-- The server's step for the player's attack number `tag` (Names.SwingStep): when that is the latest attack and the
+-- server counted differently (it dropped an attack, or the network shook more than its slack), this client counts on
+-- from the server's step and redraws the attack as that step. (An older attack's word, arriving after the next
+-- press, is left alone.)
+function OwnSwing.settle(self: Swing, tag: number, step: number)
+	if not current(self, tag) or step == self.chain.step then
+		return
+	end
+	self.chain.step = step
+	local model, weapon = self.model, self.weapon
+	if model and weapon then
+		self.hooks.restep(model, self.last, weapon, step)
 	end
 end
 
--- Whether an attack of the player's character that the server says started at `at` is the one drawn when pressed.
-function OwnSwing.drawn(self: Swing, at: number): boolean
-	return math.abs(at - self.last) < SAME_SWING_SECONDS
+-- Whether attack number `tag` of the player's character (Names.SwingTag) was drawn when pressed (every one this
+-- client numbered was).
+function OwnSwing.drawn(self: Swing, tag: number): boolean
+	return tag >= 1 and tag <= self.count
 end
 
 return OwnSwing

@@ -103,14 +103,15 @@ function AttackPoses.sample(keys: { Key }, u: number): Pose
 	return blend(keys[#keys].pose, keys[#keys].pose, 1, all)
 end
 
--- Keys in order whatever the timing gives (a key that would come before the one ahead of it moves just after it).
+-- Keys in order whatever the timing gives (a key that would come before the one ahead of it moves just after it, and
+-- one that would come too late moves back to leave room for those after it; the last is at the end).
 local function ordered(keys: { Key }): { Key }
-	for i = 2, #keys do
-		if keys[i].t <= keys[i - 1].t then
-			keys[i].t = math.min(keys[i - 1].t + 0.01, 1)
-		end
+	local n = #keys
+	for i = 2, n do
+		local latest = 1 - 0.01 * (n - i)
+		keys[i].t = math.min(math.max(keys[i].t, keys[i - 1].t + 0.01), latest)
 	end
-	keys[#keys].t = 1
+	keys[n].t = 1
 	return keys
 end
 
@@ -233,13 +234,16 @@ local function slam(k: number): { Key }
 	return blow(up, down, down, k, 0.85, 0.2)
 end
 
+-- The stick leaves the hand at `k`, with the arm on its way forward over the shoulder (wound back before it, followed
+-- through low after).
 local function throw(k: number): { Key }
 	local back: Pose = { Waist = { x = 8, y = -30 }, Neck = { y = 18 }, RightShoulder = { x = 170 }, RightElbow = { x = 60 }, LeftShoulder = { x = 70 } }
 	local out: Pose = { Waist = { x = -8, y = 26 }, Neck = { y = -10 }, RightShoulder = { x = 40 }, RightElbow = { x = 10 }, LeftShoulder = { x = 20 } }
 	return ordered({
 		{ t = 0, pose = REST },
-		{ t = k, pose = back },
-		{ t = math.min(k + 0.3, 0.9), pose = out, ease = "in" },
+		{ t = k * 0.6, pose = back },
+		{ t = k, pose = blend(back, out, 0.5), ease = "in" },
+		{ t = math.min(k + 0.25, 0.9), pose = out, ease = "out" },
 		{ t = 1, pose = blend(out, REST, SETTLE) },
 	})
 end

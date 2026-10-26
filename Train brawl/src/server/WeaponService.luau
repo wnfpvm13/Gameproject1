@@ -11,7 +11,8 @@
 -- Each punch or swing is a step of its attacker's 1-2-3 string (AttackString: it goes on only while attacks land; the
 -- client says which step it drew, the server takes that only as far as its own count allows; being hit breaks a
 -- fighter's string; the launching last step lands a moment later). It marks the character's
--- Names.SwingStep and Names.SwingAt (every client draws the weapon's attack and step from them) and, the weapon's hitAt
+-- Names.SwingStep, Names.SwingTag (the attack's number its client sent) and Names.SwingAt (every client draws the
+-- weapon's attack and step from them) and, the weapon's hitAt
 -- later, lands it by its style: a punch or a swing hits every other fighter in a cone in front (SwingTargets, reach
 -- widened by the network slack), a slam everyone around a point just ahead, a throw sends a lit dynamite stick
 -- (Dynamite) whose blast hits everyone around where it bursts (not the thrower).
@@ -20,7 +21,8 @@
 -- step of a punch or swing, or a weapon that always launches, makes the hit a launch, still pushed by health) and pushes by health (HitRules.force) times the weapon's push and
 -- the victim's resistance (a held gold bar), away from the attacker (a blast: from where it burst); a smash (health
 -- emptied) flies the same home run whatever hit it. A blast after the fight is over hits nobody. It is
--- sent to every client (Names.HitRemote: victim, velocity, attacker, kind, weapon, whether a crowd launched it): the victim's own client moves its
+-- sent to every client (Names.HitRemote: victim, velocity, attacker, kind, weapon, whether a crowd launched it, and
+-- the attack's number as its player's client counted them - none for a blast): the victim's own client moves its
 -- character, everyone shows it; a sandbag is moved here. A weapon goes back to bare fists when used up, when its time
 -- is over, when its holder is out, and whenever no fight is running.
 local Players = game:GetService("Players")
@@ -107,9 +109,9 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 	end
 
 	-- One hit of `weapon` by `attacker` on `victim` at `step` of the attacker's string, pushed away from `from` (or along
-	-- `facing` when on top of it). `swingAt`: the server time the attack started (Names.SwingAt; nil for a blast), sent
-	-- with the hit so the attacker's screen knows which of its attacks it was.
-	local function land(victim: CharacterParts.Body, attacker: Model, weapon: string, from: Vector3, facing: Vector3, now: number, step: number, swingAt: number?)
+	-- `facing` when on top of it). `tag`: the attack's number its player's client sent (Names.SwingTag; nil for a blast
+	-- or none sent), sent with the hit so the attacker's screen knows which of its attacks it was.
+	local function land(victim: CharacterParts.Body, attacker: Model, weapon: string, from: Vector3, facing: Vector3, now: number, step: number, tag: number?)
 		local w = weapons[weapon]
 		local launch = w.launch == true or AttackString.launches(stringRules, step, w.style)
 		local kind, health, ganged = hooks.hit(victim.model, now, w.damage, launch, attacker)
@@ -136,7 +138,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		hitAt[victim.model] = now
 		stunUntil[victim.model] = now + (if kind == "light" then Config.Hit.LightStun else Config.Knock.MinSeconds)
 		hooks.knockHere(victim.model, velocity, kind)
-		hitRemote:FireAllClients(victim.model, velocity, attacker, kind, weapon, ganged, swingAt)
+		hitRemote:FireAllClients(victim.model, velocity, attacker, kind, weapon, ganged, tag)
 		hooks.onHit(victim.model, attacker)
 		if kind == "smash" then
 			hooks.onSmash(victim.model)
@@ -158,7 +160,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		return list
 	end
 
-	local function strike(attacker: Model, weapon: string, facing: Vector3, step: number, swingAt: number)
+	local function strike(attacker: Model, weapon: string, facing: Vector3, step: number, tag: number?)
 		local body = CharacterParts.body(attacker)
 		if not (body and hooks.canSwing(attacker)) then
 			return
@@ -169,7 +171,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		if w.style == "slam" then
 			local center = from + facing * assert(w.ahead, weapon .. ".ahead")
 			for _, victim in around(center, assert(w.radius, weapon .. ".radius"), attacker) do
-				land(victim, attacker, weapon, from, facing, now, step, swingAt)
+				land(victim, attacker, weapon, from, facing, now, step, tag)
 			end
 		elseif w.style == "throw" then
 			hooks.throw(from, facing, function(at: Vector3)
@@ -185,12 +187,12 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		else
 			local reach = assert(w.reach, weapon .. ".reach") + attack.ReachSlack
 			for _, victim in SwingTargets.find(body, hooks.fighters(), reach, facing, w.halfAngle) do
-				land(victim, attacker, weapon, from, facing, now, step, swingAt)
+				land(victim, attacker, weapon, from, facing, now, step, tag)
 			end
 		end
 	end
 
-	local received = swingRemote.OnServerEvent:Connect(function(player: Player, aim: unknown, drawn: unknown)
+	local received = swingRemote.OnServerEvent:Connect(function(player: Player, aim: unknown, drawn: unknown, number: unknown)
 		local model = player.Character
 		local body = CharacterParts.body(model)
 		if not (model and body and body.humanoid.Health > 0 and hooks.canSwing(model)) then
@@ -211,6 +213,8 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		readyAt[player] = math.max(now, ready or now) + w.cooldown
 		-- Its step in the player's string: the step the client drew, as far as this server's own count allows.
 		local claim = if typeof(drawn) == "number" and drawn % 1 == 0 then drawn else nil
+		-- The attack's number as the client counted them: only handed back (whole numbers only, also false for NaN).
+		local tag = if typeof(number) == "number" and number % 1 == 0 and math.abs(number) < 2 ^ 31 then number else nil
 		local chain = strings[player]
 		if not chain then
 			chain = AttackString.new()
@@ -230,6 +234,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		end
 		model:SetAttribute(Names.SwingWeapon, weapon)
 		model:SetAttribute(Names.SwingStep, step)
+		model:SetAttribute(Names.SwingTag, tag)
 		model:SetAttribute(Names.SwingAt, now)
 		-- One use spent; the last one goes back to bare fists once the attack is out of the hand.
 		local uses = model:GetAttribute(Names.WeaponUses)
@@ -238,7 +243,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 			model:SetAttribute(Names.WeaponUses, uses - 1)
 		end
 		task.delay(AttackString.hitAt(stringRules, w.hitAt, step, w.style), function()
-			strike(model, weapon, facing, step, now)
+			strike(model, weapon, facing, step, tag)
 			if spent and holding(model) == weapon then
 				set(model, FIST)
 			end

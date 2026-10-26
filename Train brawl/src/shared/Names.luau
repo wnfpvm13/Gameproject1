@@ -27,6 +27,9 @@ return {
 	SwingAt = "SwingAt", -- server time the character's last attack started (every client draws it)
 	SwingWeapon = "SwingWeapon", -- the weapon that attack was made with (set just before SwingAt)
 	SwingStep = "SwingStep", -- that attack's step in its attacker's string (AttackString; set just before SwingAt)
+	-- that attack's number as its player's client counted them (set just before SwingAt; the client tells its own
+	-- attacks apart by it, OwnSwing)
+	SwingTag = "SwingTag",
 	Weapon = "Weapon", -- the weapon a character holds (Config.Weapons; "Fist" or none = bare fists)
 	WeaponUses = "WeaponUses", -- attacks left with it (when it has uses)
 	WeaponEndsAt = "WeaponEndsAt", -- server time it runs out (when it lasts a time)

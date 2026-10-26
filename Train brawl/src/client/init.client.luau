@@ -114,6 +114,7 @@ local own = OwnSwing.new(swingRemote, {
 		SwingPose.play(model, at, weapon, step)
 		HitFeedback.swing(model, weapon, AttackString.launches(STRING, step, Config.Weapons[weapon].style))
 	end,
+	restep = SwingPose.restep,
 	predict = function(victim: Model, weapon: string, finisher: boolean): string?
 		local character = player.Character
 		local from = if character then character:GetPivot().Position else victim:GetPivot().Position
@@ -136,9 +137,10 @@ end)
 
 -- Every character's attacks, drawn from the server's word (the player's own was drawn when pressed).
 local function follow(model: Model)
-	SwingPose.follow(model, function(at: number, step: number): boolean
-		if model == player.Character and own:drawn(at) then
-			own:settle(at, step) -- count on from the server's step if it counted differently
+	SwingPose.follow(model, function(_at: number, step: number): boolean
+		local tag = if model == player.Character then model:GetAttribute(Names.SwingTag) else nil
+		if typeof(tag) == "number" and own:drawn(tag) then
+			own:settle(tag, step) -- count on from the server's step (and redraw) if it counted differently
 			return true
 		end
 		return false
@@ -168,7 +170,7 @@ for _, instance in CollectionService:GetTagged(Names.SandbagTag) do
 end
 
 -- A hit, from the server: the victim's own client knocks it; everyone shows it.
-hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swinger: unknown, kind: unknown, weapon: unknown, ganged: unknown, swingAt: unknown)
+hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swinger: unknown, kind: unknown, weapon: unknown, ganged: unknown, tag: unknown)
 	if typeof(victim) ~= "Instance" or not victim:IsA("Model") then
 		return
 	end
@@ -183,8 +185,12 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 	local hitWeapon = if typeof(weapon) == "string" then weapon else WeaponRules.FIST
 	local mine = swinger == player.Character
 	local used = Config.Weapons[hitWeapon]
-	-- What this screen showed at once for the player's own latest attack on this victim (nil: nothing).
-	local guess = if mine then own:serverHit(if typeof(swingAt) == "number" then swingAt else nil, victim, used ~= nil and AttackString.uses(used.style)) else nil
+	-- What this screen showed at once for that attack of the player's on this victim (nil: nothing), and whether it is
+	-- the attack drawn now.
+	local guess, latest = nil, false
+	if mine then
+		guess, latest = own:serverHit(if typeof(tag) == "number" then tag else nil, victim, used ~= nil and AttackString.uses(used.style))
+	end
 	local shown = HitFeedback.hit(victim, guess ~= nil, mine, me, hitKind, hitWeapon, push)
 	local attacker = if typeof(swinger) == "Instance" and swinger:IsA("Model") then swinger else nil
 	local thrown = Config.Weapons[hitWeapon] ~= nil and Config.Weapons[hitWeapon].style == "throw"
@@ -197,9 +203,10 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 		local from = if attacker and not thrown then attacker:GetPivot().Position else nil
 		ImpactBurst.play(ImpactBurst.at(victim, from), burst, hitWeapon, push)
 	end
-	if attacker and not thrown then
+	if attacker and not thrown and (latest or not mine) then
 		-- One hold per attack, as long as the longest: the player's own hit held at once is held longer when the server
-		-- made it bigger (a home run off the third). A thrower is long done.
+		-- made it bigger (a home run off the third). A thrower is long done, and a word on an older attack of the
+		-- player's comes while the next one is drawn (it is not held for this).
 		SwingPose.hold(attacker, Config.Feedback.HitStop[hitKind] or 0)
 	end
 	if hitKind == "launch" then

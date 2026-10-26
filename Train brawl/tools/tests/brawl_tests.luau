@@ -623,11 +623,13 @@ do
 	for name, wpn in Config.Weapons do
 		if AttackString.uses(wpn.style) then
 			local length = wpn.seconds * real.FinisherStretch
-			-- The finisher is drawn longer, still lands inside its drawn move, and is done by the time the next may start.
-			fits = fits and wpn.hitAt + real.FinisherWindup < length * 0.9 and length <= wpn.cooldown
+			-- The finisher is drawn longer and still lands inside its drawn move. With the hold when it lands, the next
+			-- attack may start before it is quite over, but only in its last fifth (SwingPose's BLEND_OUT: already on
+			-- its way back to the animation, and the next attack fades in from it).
+			fits = fits and wpn.hitAt + real.FinisherWindup < length * 0.9 and length + Config.Feedback.HitStop.launch <= wpn.cooldown + length * 0.2
 		end
 	end
-	check("every finisher lands inside its longer move and ends by the weapon's cooldown", fits)
+	check("every finisher lands inside its longer move and is past its last fifth by the weapon's cooldown", fits)
 end
 
 -- 10. The guard against being ganged up on (stage 5b), beyond section 4.
@@ -685,6 +687,29 @@ do
 	check("a blow ends half way back to rest, not standing straight", near(last.LeftShoulder.x :: number, (out.LeftShoulder.x :: number) * 0.5, 1e-6) and (last.LeftShoulder.x :: number) > 0)
 	local spin = AttackPoses.sample(AttackPoses.keys("swing", 3, true, 0.4), 0.4 + 0.6 * 0.6)
 	check("the swing finisher's knees ease back to rest while it spins (not dropped)", spin.RightKnee ~= nil and spin.RightKnee.x == 0)
+	local inOrder, orderDetail = true, ""
+	for _, case in { { "punch", 1, false }, { "punch", 2, false }, { "punch", 3, true }, { "swing", 1, false }, { "swing", 3, true }, { "slam", 1, false }, { "throw", 1, false } } do
+		for _, k in { 0.1, 0.4, 0.9 } do
+			local keys = AttackPoses.keys(case[1], case[2], case[3], k)
+			for i = 2, #keys do
+				if not (keys[i].t > keys[i - 1].t) then
+					inOrder = false
+					orderDetail = case[1] .. " " .. case[2] .. " at k " .. k
+				end
+			end
+			if keys[#keys].t ~= 1 then
+				inOrder = false
+				orderDetail = case[1] .. " " .. case[2] .. " does not end at 1"
+			end
+		end
+	end
+	check("an attack's keys stay in order however late its blow lands", inOrder, orderDetail)
+	local toss = AttackPoses.keys("throw", 1, false, 0.4)
+	local early, release, after = AttackPoses.sample(toss, 0.3), AttackPoses.sample(toss, 0.4), AttackPoses.sample(toss, 0.5)
+	local arm = function(pose: any): number
+		return pose.RightShoulder.x
+	end
+	check("a thrown stick leaves the hand with the arm on its way forward", arm(early) > arm(release) and arm(release) > arm(after) and arm(release) < 170 and arm(release) > 40)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

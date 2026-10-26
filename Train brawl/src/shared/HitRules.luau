@@ -1,16 +1,18 @@
 --!strict
 -- What a hit does to a fighter, as pure rules (Smash Legends-style; the numbers come in from Config.Health and
 -- Config.Hit). Health drops by the hit's damage (each weapon's own), and the hit that empties it is a smash (a certain
--- ring-out). Otherwise the hits on one fighter within `window` seconds of the first make a combo: the `launchOn`-th one
--- launches (flying, lying down) and ends the combo, the ones before are light (a flinch); a weapon that always launches
--- (a hammer, a dynamite blast) launches on any hit. Right after a launch the fighter
--- cannot be hit for `immune` seconds. How hard a hit pushes grows as health drops (force, scale). Requires nothing.
+-- ring-out). Otherwise a hit launches (flying, lying down) when the attacker says so - the last step of the
+-- attacker's string (AttackString) or a weapon that always launches (a hammer, a dynamite blast) - or when it makes
+-- `gang` hits within the last `window` seconds and those hits came from two or more attackers (a crowd cannot keep
+-- one fighter flinching); any other hit is light (a flinch). Right after a launch the fighter cannot be hit for `immune`
+-- seconds. How hard a hit pushes grows as health drops (force, scale). Requires nothing.
 
 local HitRules = {}
 
 export type Kind = string -- "none" | "light" | "launch" | "smash"
-export type State = { health: number, combo: number, comboStart: number, immuneUntil: number }
-export type Rules = { max: number, window: number, launchOn: number, immune: number }
+-- recent: the hits of the last `window` seconds (when, and by whom: any value an attacker is told apart by).
+export type State = { health: number, recent: { { at: number, by: unknown } }, immuneUntil: number }
+export type Rules = { max: number, window: number, gang: number, immune: number }
 -- The pushes (along the ground) and lifts of Config.Hit.
 export type Forces = {
 	LightFull: number,
@@ -23,28 +25,39 @@ export type Forces = {
 }
 
 function HitRules.new(max: number): State
-	return { health = max, combo = 0, comboStart = -math.huge, immuneUntil = -math.huge }
+	return { health = max, recent = {}, immuneUntil = -math.huge }
 end
 
--- A hit of `damage` at time `now` (launch: it launches whatever the combo): updates `state` and says what kind of hit
--- it was ("none" while unhittable).
-function HitRules.hit(state: State, rules: Rules, now: number, damage: number, launch: boolean?): Kind
+-- A hit of `damage` at time `now` by `by` (launch: the attacker's hit launches): updates `state` and says what kind
+-- of hit it was ("none" while unhittable).
+function HitRules.hit(state: State, rules: Rules, now: number, damage: number, launch: boolean?, by: unknown?): Kind
 	if now < state.immuneUntil or state.health <= 0 then
 		return "none"
 	end
 	state.health = math.max(0, state.health - damage)
 	if state.health <= 0 then
-		state.combo = 0
+		state.recent = {}
 		return "smash"
 	end
-	if now - state.comboStart > rules.window then
-		state.combo = 0
-		state.comboStart = now
+	local kept = {}
+	for _, hit in state.recent do
+		if now - hit.at <= rules.window then
+			table.insert(kept, hit)
+		end
 	end
-	state.combo += 1
-	if launch or state.combo >= rules.launchOn then
-		state.combo = 0
-		state.comboStart = -math.huge
+	table.insert(kept, { at = now, by = by })
+	state.recent = kept
+	local ganged = false
+	if #kept >= rules.gang then
+		for _, hit in kept do
+			if hit.by ~= kept[1].by then
+				ganged = true
+				break
+			end
+		end
+	end
+	if launch or ganged then
+		state.recent = {}
 		state.immuneUntil = now + rules.immune
 		return "launch"
 	end

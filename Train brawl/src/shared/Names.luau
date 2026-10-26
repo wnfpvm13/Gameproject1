@@ -26,6 +26,7 @@ return {
 	-- Character attributes
 	SwingAt = "SwingAt", -- server time the character's last attack started (every client draws it)
 	SwingWeapon = "SwingWeapon", -- the weapon that attack was made with (set just before SwingAt)
+	SwingStep = "SwingStep", -- that attack's step in its attacker's string (AttackString; set just before SwingAt)
 	Weapon = "Weapon", -- the weapon a character holds (Config.Weapons; "Fist" or none = bare fists)
 	WeaponUses = "WeaponUses", -- attacks left with it (when it has uses)
 	WeaponEndsAt = "WeaponEndsAt", -- server time it runs out (when it lasts a time)

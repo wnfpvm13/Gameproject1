@@ -3,7 +3,7 @@
 -- (a handle and an iron head), a dynamite stick (red, a fuse with sparks) or a gold bar; bare fists hold nothing.
 -- Welded to the hand, pointing ahead and a little down, massless and not colliding (hits are judged by the
 -- WeaponService, not by touching). Made on the server so every client sees it; the attacks themselves are drawn on
--- each client by turning the shoulder (SwingPose).
+-- each client by turning the body's joints (SwingPose).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")

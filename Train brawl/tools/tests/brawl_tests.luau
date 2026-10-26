@@ -286,24 +286,29 @@ end
 
 -- 4. Hit rules.
 do
-	local rules = { max = 100, window = 1.5, launchOn = 3, immune = 0.9 }
+	local rules = { max = 100, window = 1.5, gang = 3, immune = 0.9 }
 	local s = HitRules.new(100)
 	check("a fighter starts at full health", s.health == 100)
-	local k1 = HitRules.hit(s, rules, 0, 12)
-	local k2 = HitRules.hit(s, rules, 0.6, 12)
-	local k3 = HitRules.hit(s, rules, 1.2, 12)
-	check("the first two hits of a combo are light, the third launches", k1 == "light" and k2 == "light" and k3 == "launch", k1 .. "," .. k2 .. "," .. k3)
-	check("each hit takes its damage", s.health == 64)
-	check("right after a launch the fighter cannot be hit", HitRules.hit(s, rules, 1.5, 12) == "none" and s.health == 64)
-	check("after the moment passes a new combo starts light", HitRules.hit(s, rules, 2.2, 12) == "light")
-	local t = HitRules.new(100)
-	HitRules.hit(t, rules, 0, 12)
-	check("hits too far apart do not make a combo", HitRules.hit(t, rules, 2, 12) == "light" and HitRules.hit(t, rules, 4, 12) == "light")
+	local k1 = HitRules.hit(s, rules, 0, 12, false, "A")
+	local k2 = HitRules.hit(s, rules, 0.5, 12, false, "A")
+	local k3 = HitRules.hit(s, rules, 1.0, 12, false, "A")
+	check("one attacker's hits stay light however many land (the attacker's string decides the launch)", k1 == "light" and k2 == "light" and k3 == "light", k1 .. "," .. k2 .. "," .. k3)
+	check("the attacker's launching hit launches", HitRules.hit(s, rules, 1.4, 12, true, "A") == "launch")
+	check("each hit takes its damage", s.health == 52)
+	check("right after a launch the fighter cannot be hit", HitRules.hit(s, rules, 1.8, 12, false, "B") == "none" and s.health == 52)
+	check("after the moment passes hits are light again", HitRules.hit(s, rules, 2.4, 12, false, "A") == "light")
+	local g = HitRules.new(100)
+	local g1, g2 = HitRules.hit(g, rules, 0, 8, false, "A"), HitRules.hit(g, rules, 0.3, 8, false, "B")
+	check("ganged up on: the third hit within the window from two attackers launches", g1 == "light" and g2 == "light" and HitRules.hit(g, rules, 0.6, 8, false, "A") == "launch")
+	local h = HitRules.new(100)
+	HitRules.hit(h, rules, 0, 8, false, "A")
+	HitRules.hit(h, rules, 1.0, 8, false, "B")
+	check("hits further apart than the window do not count together", HitRules.hit(h, rules, 2.0, 8, false, "A") == "light")
 	local u = HitRules.new(100)
 	local kinds, now = {}, 0
 	for _ = 1, 9 do
-		table.insert(kinds, HitRules.hit(u, rules, now, 12))
-		now += 1 -- past the immune moment, and two hits a combo at most
+		table.insert(kinds, HitRules.hit(u, rules, now, 12, false, "A"))
+		now += 1
 	end
 	check("the hit that empties health is a smash (the 9th from full)", kinds[9] == "smash" and kinds[8] ~= "smash" and u.health == 0, table.concat(kinds, ","))
 	check("an emptied fighter takes no more hits", HitRules.hit(u, rules, now + 5, 12) == "none")
@@ -333,7 +338,8 @@ do
 		local push, lift = HitRules.force("launch", health, max, h)
 		return BatMath.flightDistance(push, lift, GRAVITY)
 	end
-	local first, second = launchAt(max - h.LaunchOn * damage), launchAt(max - 2 * h.LaunchOn * damage)
+	local strikes = Config.Attack.StringCount -- a string's last hit launches: the first launch comes after its hits
+	local first, second = launchAt(max - strikes * damage), launchAt(max - 2 * strikes * damage)
 	check("the first combo's launch lands on the roof from its middle", first < A.RoofWidth / 2, string.format("%.1f", first))
 	-- The launches as measured in Studio (2026-10-25, a server-physics sandbag on a 15-wide roof): the travel includes
 	-- landing and sliding, so it is longer than the formula's. A tuning change to these pushes must be measured again.
@@ -369,16 +375,15 @@ do
 	check("a home run reaches the sand at least 0.2 s after it twinkles out", land > t - Config.Feedback.HitStopSeconds + 0.2, string.format("%.2f", land))
 	local top = highestTop + 3 + h.SmashLift * h.SmashLift / (2 * GRAVITY)
 	check("a home run's top stays under where the stands begin, even from the highest top", top < A.WaitingRoomHeight - A.StandsMargin - 2, string.format("%.1f", top))
-	local quickest, comboFits = math.huge, true
+	local quickest = math.huge
 	for _, w in Config.Weapons do
 		quickest = math.min(quickest, w.cooldown)
-		if w.style == "punch" or w.style == "swing" then
-			comboFits = comboFits and h.ComboWindow > (h.LaunchOn - 1) * w.cooldown
-		end
 	end
+	local a = Config.Attack
 	check("a light hit's stun ends before any weapon can attack again (the one hit can answer)", h.LightStun + 0.1 < quickest)
 	check("a launched fighter stays unhittable past lying down", h.LaunchImmune > Config.Knock.MinSeconds + 0.2)
-	check("a combo has time for its hits with every punching or swinging weapon", comboFits)
+	check("a string waits a moment for the next press, then starts again", a.StringGap >= 0.2 and a.StringGap <= 0.6 and a.StringSlack < a.StringGap and a.StringCount == 3)
+	check("a crowd's hits launch within the same window the old combo had", h.GangWindow >= 1 and h.GangHits == 3)
 	check("a plank is wider than a character and narrower than a roof", A.PlankWidth > 2.5 and A.PlankWidth < A.RoofWidth)
 	check("the car gap is well under a character's thickness (about 1: nobody slips through)", A.CarGap <= 0.5)
 	local within = true
@@ -558,6 +563,88 @@ do
 	check("the clock reads minutes and seconds", Words.clock(113) == "1:53" and Words.clock(5) == "0:05" and Words.clock(0) == "0:00")
 	check("the feed credits who knocked who off, and a fall with nobody to credit", Words.feed("B", "A", "homerun") == "A → B 홈런!" and Words.feed("B", "A", "fall") == "A → B 하차" and Words.feed("B", nil, "fall") == "B 하차")
 	check("what the player holds reads its name and what is left", Words.uses("Hammer", 3) == "망치 ×3" and Words.secondsLeft("GoldBar", 12) == "금괴 12초")
+end
+
+-- 9. The attacker's 1-2-3 string (stage 5b).
+do
+	local r = { count = 3, gap = 0.35, slack = 0.15, windup = 0.08 }
+	-- An attack that lands, then takes the next (each at `at`).
+	local function hits(s: any, at: number, claim: number?): number
+		local step = AttackString.take(s, r, at, 0.45, "punch", claim)
+		AttackString.landed(s)
+		return step
+	end
+	local s = AttackString.new()
+	local steps = { hits(s, 0), hits(s, 0.5), hits(s, 1.0), hits(s, 1.5) }
+	check("landed attacks in a row go 1, 2, 3 and start again after the third", steps[1] == 1 and steps[2] == 2 and steps[3] == 3 and steps[4] == 1, table.concat(steps, ","))
+	local m = AttackString.new()
+	AttackString.take(m, r, 0, 0.45, "punch") -- a miss
+	check("a miss starts the string again (swinging at the air on the way in banks nothing)", AttackString.take(m, r, 0.5, 0.45, "punch") == 1)
+	local p = AttackString.new()
+	hits(p, 0)
+	check("a pause longer than the gap starts the string again", AttackString.take(p, r, 0.45 + 0.36, 0.45, "punch") == 1)
+	local c = AttackString.new()
+	hits(c, 0)
+	check("the client's next step is taken a little past the gap (jitter)", AttackString.take(c, r, 0.45 + 0.4, 0.45, "punch", 2) == 2)
+	local late = AttackString.new()
+	hits(late, 0)
+	check("but not past the gap and its slack", AttackString.take(late, r, 0.45 + 0.51, 0.45, "punch", 2) == 1)
+	local k = AttackString.new()
+	hits(k, 0)
+	check("a client cannot skip to the launching step", AttackString.take(k, r, 0.5, 0.45, "punch", 3) == 2)
+	local four = AttackString.new()
+	hits(four, 0)
+	hits(four, 0.5)
+	hits(four, 1.0)
+	check("nor claim a step past the last", AttackString.take(four, r, 1.5, 0.45, "punch", 4) == 1)
+	local miss = AttackString.new()
+	AttackString.take(miss, r, 0, 0.45, "punch")
+	check("nor keep a string going on a miss", AttackString.take(miss, r, 0.5, 0.45, "punch", 2) == 1)
+	local o = AttackString.new()
+	hits(o, 0)
+	check("a client may always start a new string", AttackString.take(o, r, 0.5, 0.45, "punch", 1) == 1)
+	local b = AttackString.new()
+	hits(b, 0)
+	AttackString.reset(b)
+	check("being hit breaks the string, even against the client's word", AttackString.take(b, r, 0.5, 0.45, "punch", 2) == 1)
+	local w = AttackString.new()
+	hits(w, 0)
+	hits(w, 0.5)
+	check("a slam or a throw is no step and starts the string over", AttackString.take(w, r, 1.0, 0.9, "throw") == 1 and AttackString.take(w, r, 1.5, 0.45, "punch") == 1)
+	check("the third step of a punch or swing launches, not the others, and not a slam or a throw", AttackString.launches(r, 3, "punch") and AttackString.launches(r, 3, "swing") and not AttackString.launches(r, 2, "punch") and not AttackString.launches(r, 3, "slam") and not AttackString.launches(r, 3, "throw"))
+	check("the launching step lands a moment later than the others", AttackString.hitAt(r, 0.1, 3, "punch") == 0.1 + r.windup and AttackString.hitAt(r, 0.1, 2, "punch") == 0.1 and AttackString.hitAt(r, 0.45, 3, "slam") == 0.45)
+	local real = Config.Attack
+	local rr = AttackString.rules(real)
+	check("the real rules come from Config.Attack", rr.count == real.StringCount and rr.gap == real.StringGap and rr.slack == real.StringSlack and rr.windup == real.FinisherWindup)
+	check("with the real numbers a fist string keeps going for presses up to 0.8 s apart", near(Config.Weapons.Fist.cooldown + real.StringGap, 0.8))
+	local fits = true
+	for name, wpn in Config.Weapons do
+		if AttackString.uses(wpn.style) then
+			local length = wpn.seconds * real.FinisherStretch
+			-- The finisher is drawn longer, still lands inside its drawn move, and is done by the time the next may start.
+			fits = fits and wpn.hitAt + real.FinisherWindup < length * 0.9 and length <= wpn.cooldown
+		end
+	end
+	check("every finisher lands inside its longer move and ends by the weapon's cooldown", fits)
+end
+
+-- 10. The guard against being ganged up on (stage 5b), beyond section 4.
+do
+	local rules = { max = 100, window = 1.5, gang = 3, immune = 0.9 }
+	local a = HitRules.new(100)
+	HitRules.hit(a, rules, 0, 8, false, "A")
+	HitRules.hit(a, rules, 0.4, 8, false, "B")
+	check("three attackers' hits together launch too", HitRules.hit(a, rules, 0.8, 8, false, "C") == "launch")
+	local e = HitRules.new(100)
+	HitRules.hit(e, rules, 0, 8, false, "A")
+	HitRules.hit(e, rules, 0.75, 8, false, "B")
+	check("the window includes its very edge", HitRules.hit(e, rules, 1.5, 8, false, "A") == "launch")
+	local f = HitRules.new(100)
+	HitRules.hit(f, rules, 0, 8, false, "A")
+	HitRules.hit(f, rules, 0.3, 8, false, "B")
+	HitRules.hit(f, rules, 0.6, 8, false, "A") -- launched: the list is cleared
+	local after1, after2 = HitRules.hit(f, rules, 1.6, 8, false, "B"), HitRules.hit(f, rules, 1.9, 8, false, "A")
+	check("after a crowd launch the count starts again", after1 == "light" and after2 == "light")
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

@@ -7,8 +7,8 @@
 -- click attacks only while the mouse is locked); every character's attacks are drawn from their Names.SwingAt; what
 -- everyone holds shows (WeaponHud), crates and lit sticks are heard (DropShow), dynamite bursts show (ExplosionShow);
 -- a hit from the server flinches or
--- launches the player's own character (KnockFlight) and is shown for everyone (HitFeedback; a home run also
--- HomeRunShow); a fall lays the player down behind the train (FallDrift); health shows over heads and at the bottom
+-- launches the player's own character (KnockFlight) and is shown for everyone (HitFeedback and a flinch or flail
+-- pose, SwingPose; a home run also HomeRunShow); a fall lays the player down behind the train (FallDrift); health shows over heads and at the bottom
 -- (HealthBars), the round at the top (RoundHud) with the knock-off feed under it (FeedHud) and the round's sound
 -- (RoundAudio), the first-ride card shows the controls once (RideCard), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
 -- is watched first).
@@ -98,8 +98,8 @@ local own = OwnSwing.new(swingRemote, {
 	stunned = function(): boolean
 		return knock:stunned()
 	end,
-	draw = function(model: Model, at: number, weapon: string)
-		SwingPose.play(model, at, weapon)
+	draw = function(model: Model, at: number, weapon: string, step: number)
+		SwingPose.play(model, at, weapon, step)
 		HitFeedback.swing(model, weapon)
 	end,
 	predict = HitFeedback.predict,
@@ -112,8 +112,12 @@ end)
 
 -- Every character's attacks, drawn from the server's word (the player's own was drawn when pressed).
 local function follow(model: Model)
-	SwingPose.follow(model, function(at: number): boolean
-		return model == player.Character and own:drawn(at)
+	SwingPose.follow(model, function(at: number, step: number): boolean
+		if model == player.Character and own:drawn(at) then
+			own:settle(at, step) -- count on from the server's step if it counted differently
+			return true
+		end
+		return false
 	end, function(weapon: string)
 		HitFeedback.swing(model, weapon)
 	end)
@@ -148,7 +152,9 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 	local me = victim == player.Character
 	if me and typeof(velocity) == "Vector3" then
 		knock:hit(victim, velocity, hitKind)
+		own:broken() -- being hit breaks the player's own string, as on the server
 	end
+	SwingPose.react(victim, hitKind, if typeof(velocity) == "Vector3" then velocity else nil)
 	HitFeedback.hit(victim, swinger == player.Character, me, hitKind, if typeof(weapon) == "string" then weapon else WeaponRules.FIST)
 	if hitKind == "smash" then
 		HomeRunShow.play(victim)

@@ -235,6 +235,16 @@ Config.Attack = {
 	ReachSlack = 1.5,
 	HeightReach = 5, -- the target's middle within this much higher or lower (cones and areas alike)
 	CooldownSlack = 0.1, -- the server takes an attack this much early (clock and network jitter)
+	-- The attacker's 1-2-3 string (AttackString, punches and swings): when the last attack landed, an attack starting
+	-- within StringGap after its weapon was ready again is the next step; the StringCount-th (the 3rd) launches what it
+	-- hits, landing FinisherWindup later than the weapon's hitAt (a wind-up everyone sees) and drawn FinisherStretch
+	-- times the weapon's seconds. The server takes the client's step up to StringSlack later than its own clock would
+	-- (network jitter).
+	StringCount = 3,
+	StringGap = 0.35, -- with bare fists: a new attack within 0.8 s of the last one keeps the string
+	StringSlack = 0.15,
+	FinisherWindup = 0.08,
+	FinisherStretch = 1.5,
 }
 
 -- The bat's look (WeaponGear): a big cartoon bat, so its reach shows.
@@ -331,9 +341,9 @@ Config.Drops = {
 }
 
 -- Health and what a hit does (the rules are in HitRules; Smash Legends-style): health drops with every hit, and the
--- lower it is the farther a hit pushes. The first hits of a combo are light (a flinch and a short push, no lying
--- down, over before the swinger's next swing, so the one hit can answer); the hit that ends a combo launches (flying,
--- lying down) and leaves its fighter unhittable for a moment; the hit that empties health is a smash (a certain
+-- lower it is the farther a hit pushes. The first hits of an attacker's string are light (a flinch and a short push,
+-- no lying down, over before the swinger's next swing, so the one hit can answer); the string's last hit launches
+-- (flying, lying down) and leaves its fighter unhittable for a moment; the hit that empties health is a smash (a certain
 -- ring-out). Falling off is out at any health. A body travels about 0.28 to 0.42 x the launch push (measured: push 18
 -- went 6.2, 24.4 went 10.3, 28 went 10.6, 15.4 went 4.3 to 5.4, 29.2 went 11.0, landing lying and sliding a little) and
 -- 1.2 to 2 studs from a light hit (the light pushes stayed as they were when the roofs grew: planks are still 4 wide).
@@ -343,8 +353,11 @@ Config.Health = {
 }
 
 Config.Hit = {
-	ComboWindow = 1.5, -- hits on the same fighter within this long of the combo's first one count together
-	LaunchOn = 3, -- the hit that ends a combo (the 3rd) launches
+	-- What launches: the attacker's string (Config.Attack.StringCount), a weapon that always launches, or the guard
+	-- against being ganged up on: GangHits hits within GangWindow from two or more attackers together launch (with
+	-- the moment of being unhittable after it), so a crowd cannot keep someone flinching.
+	GangWindow = 1.5,
+	GangHits = 3,
 	-- Light: held still Config.Feedback.HitStopSeconds, then pushed along the ground for SlideSeconds at a speed from
 	-- LightFull (full health) to LightEmpty (none); no swinging for LightStun. Measured 2026-10-25: 1.2 studs at 88
 	-- health, 2 at 40 (the Humanoid carries on a little after the push).
@@ -352,10 +365,10 @@ Config.Hit = {
 	SlideSeconds = 0.18,
 	LightFull = 5.5,
 	LightEmpty = 14,
-	-- Launch: push from LaunchFull (at full health) to LaunchEmpty (at none), lift LaunchLift. A launch ends a combo,
-	-- so the first one comes at 64 health: measured 4.3 to 5.4 studs; the second at 28: 11.0 (2026-10-25, with the
+	-- Launch: push from LaunchFull (at full health) to LaunchEmpty (at none), lift LaunchLift. A string's third hit
+	-- launches, so with a bat the first one comes at 64 health: measured 4.3 to 5.4 studs; the second at 28: 11.0 (2026-10-25, with the
 	-- 15-wide roofs: 7.5 from the middle to an edge; on 10-wide roofs two thirds of these pushes went 3.6 and 6.9). The two light
-	-- hits before it push too: taken all the same way from the middle of a roof, a first combo can carry a fighter off.
+	-- hits before it push too: taken all the same way from the middle of a roof, a first string can carry a fighter off.
 	LaunchFull = 1.5,
 	LaunchEmpty = 40,
 	LaunchLift = 28,

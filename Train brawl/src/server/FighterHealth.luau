@@ -13,16 +13,16 @@ local FighterHealth = {}
 
 export type Keeper = {
 	reset: (model: Model) -> (), -- full health (a new round)
-	-- A hit of `damage` lands (server time; launch: it launches whatever the combo): its kind ("none" while unhittable)
-	-- and the health left after it.
-	hit: (model: Model, now: number, damage: number, launch: boolean) -> (HitRules.Kind, number),
+	-- A hit of `damage` by `by` lands (server time; launch: the attacker's hit launches): its kind ("none" while
+	-- unhittable) and the health left after it.
+	hit: (model: Model, now: number, damage: number, launch: boolean, by: Model?) -> (HitRules.Kind, number),
 }
 
 function FighterHealth.start(): Keeper
 	local rules: HitRules.Rules = {
 		max = Config.Health.Max,
-		window = Config.Hit.ComboWindow,
-		launchOn = Config.Hit.LaunchOn,
+		window = Config.Hit.GangWindow,
+		gang = Config.Hit.GangHits,
 		immune = Config.Hit.LaunchImmune,
 	}
 	local states: { [Model]: HitRules.State } = setmetatable({}, { __mode = "k" }) :: any
@@ -41,9 +41,9 @@ function FighterHealth.start(): Keeper
 			states[model] = HitRules.new(rules.max)
 			model:SetAttribute(Names.Health, rules.max)
 		end,
-		hit = function(model: Model, now: number, damage: number, launch: boolean): (HitRules.Kind, number)
+		hit = function(model: Model, now: number, damage: number, launch: boolean, by: Model?): (HitRules.Kind, number)
 			local state = stateOf(model)
-			local kind = HitRules.hit(state, rules, now, damage, launch)
+			local kind = HitRules.hit(state, rules, now, damage, launch, by)
 			model:SetAttribute(Names.Health, state.health)
 			return kind, state.health
 		end,

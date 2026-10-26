@@ -1,6 +1,6 @@
 --!strict
 -- Finding the parts of a character (players' and sandbags', R15 or R6) that the brawl needs: its root and Humanoid,
--- the hand that holds a weapon, the shoulder joint that swings it, and how high its feet are. Requires nothing.
+-- the hand that holds a weapon, the joints the drawn poses turn (R15), and how high its feet are. Requires nothing.
 
 local CharacterParts = {}
 
@@ -26,19 +26,33 @@ function CharacterParts.weaponHand(model: Model): BasePart?
 	return if hand and hand:IsA("BasePart") then hand else nil
 end
 
--- The right shoulder joint, which swings a weapon or a punch: a Motor6D on older rigs, an AnimationConstraint on characters with
--- Roblox's newer avatar joints (both have Transform).
-function CharacterParts.shoulder(model: Model): Joint?
-	local upper = model:FindFirstChild("RightUpperArm")
-	local joint = upper and upper:FindFirstChild("RightShoulder")
-	if not joint then
-		local torso = model:FindFirstChild("Torso")
-		joint = torso and torso:FindFirstChild("Right Shoulder")
+-- Each R15 joint the drawn poses turn, by name, and the part that holds it.
+local JOINT_PARTS: { [string]: string } = {
+	Root = "LowerTorso",
+	Waist = "UpperTorso",
+	Neck = "Head",
+	RightShoulder = "RightUpperArm",
+	LeftShoulder = "LeftUpperArm",
+	RightElbow = "RightLowerArm",
+	LeftElbow = "LeftLowerArm",
+	RightHip = "RightUpperLeg",
+	LeftHip = "LeftUpperLeg",
+	RightKnee = "RightLowerLeg",
+	LeftKnee = "LeftLowerLeg",
+}
+
+-- The R15 joints of a character found by name (a Motor6D on older rigs, an AnimationConstraint on characters with
+-- Roblox's newer avatar joints: both have Transform); missing ones are left out (an R6 body has none of them).
+function CharacterParts.joints(model: Model): { [string]: Joint }
+	local found: { [string]: Joint } = {}
+	for name, partName in JOINT_PARTS do
+		local part = model:FindFirstChild(partName)
+		local joint = part and part:FindFirstChild(name)
+		if joint and (joint:IsA("Motor6D") or joint:IsA("AnimationConstraint")) then
+			found[name] = joint :: any
+		end
 	end
-	if joint and (joint:IsA("Motor6D") or joint:IsA("AnimationConstraint")) then
-		return joint :: any
-	end
-	return nil
+	return found
 end
 
 -- The feet's height (world Y). An R6 HipHeight leaves out its 2-stud legs; an R15 one includes them.

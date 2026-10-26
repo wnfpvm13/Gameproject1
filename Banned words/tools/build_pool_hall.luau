@@ -209,10 +209,13 @@ local floor = Instance.new("Folder")
 floor.Name = "Floor"
 floor.Parent = hall
 local deckDepth = 2
-box(floor, "DeckNear", Vector3.new(-HALL_HALF_X, -deckDepth, HALL_NEAR_Z), Vector3.new(HALL_HALF_X, 0, POOL_NEAR_Z), DECK_TILE, Enum.Material.CeramicTiles)
-box(floor, "DeckFar", Vector3.new(-HALL_HALF_X, -deckDepth, POOL_FAR_Z), Vector3.new(HALL_HALF_X, 0, HALL_FAR_Z), DECK_TILE, Enum.Material.CeramicTiles)
-box(floor, "DeckLeft", Vector3.new(-HALL_HALF_X, -deckDepth, POOL_NEAR_Z), Vector3.new(-POOL_HALF_X, 0, POOL_FAR_Z), DECK_TILE, Enum.Material.CeramicTiles)
-box(floor, "DeckRight", Vector3.new(POOL_HALF_X, -deckDepth, POOL_NEAR_Z), Vector3.new(HALL_HALF_X, 0, POOL_FAR_Z), DECK_TILE, Enum.Material.CeramicTiles)
+-- The deck stops at the basin walls' outer faces (POOL_WALL thick): a deck reaching the water's edge shared the walls'
+-- inner faces, grey and blue drawn in one plane, which flickered along the waterline (owner 2026-10-27).
+local POOL_WALL = 1
+box(floor, "DeckNear", Vector3.new(-HALL_HALF_X, -deckDepth, HALL_NEAR_Z), Vector3.new(HALL_HALF_X, 0, POOL_NEAR_Z - POOL_WALL), DECK_TILE, Enum.Material.CeramicTiles)
+box(floor, "DeckFar", Vector3.new(-HALL_HALF_X, -deckDepth, POOL_FAR_Z + POOL_WALL), Vector3.new(HALL_HALF_X, 0, HALL_FAR_Z), DECK_TILE, Enum.Material.CeramicTiles)
+box(floor, "DeckLeft", Vector3.new(-HALL_HALF_X, -deckDepth, POOL_NEAR_Z - POOL_WALL), Vector3.new(-POOL_HALF_X - POOL_WALL, 0, POOL_FAR_Z + POOL_WALL), DECK_TILE, Enum.Material.CeramicTiles)
+box(floor, "DeckRight", Vector3.new(POOL_HALF_X + POOL_WALL, -deckDepth, POOL_NEAR_Z - POOL_WALL), Vector3.new(HALL_HALF_X, 0, POOL_FAR_Z + POOL_WALL), DECK_TILE, Enum.Material.CeramicTiles)
 local border = 1.6
 box(floor, "EdgeNear", Vector3.new(-POOL_HALF_X - border, 0, POOL_NEAR_Z - border), Vector3.new(POOL_HALF_X + border, 0.06, POOL_NEAR_Z), DECK_EDGE, Enum.Material.Slate, TRIM)
 box(floor, "EdgeFar", Vector3.new(-POOL_HALF_X - border, 0, POOL_FAR_Z), Vector3.new(POOL_HALF_X + border, 0.06, POOL_FAR_Z + border), DECK_EDGE, Enum.Material.Slate, TRIM)
@@ -228,10 +231,11 @@ local pool = Instance.new("Folder")
 pool.Name = "Pool"
 pool.Parent = hall
 box(pool, "Bottom", Vector3.new(-POOL_HALF_X, POOL_FLOOR_Y - 1, POOL_NEAR_Z), Vector3.new(POOL_HALF_X, POOL_FLOOR_Y, POOL_FAR_Z), POOL_TILE, Enum.Material.CeramicTiles)
-box(pool, "WallNear", Vector3.new(-POOL_HALF_X, POOL_FLOOR_Y, POOL_NEAR_Z - 1), Vector3.new(POOL_HALF_X, 0, POOL_NEAR_Z), POOL_TILE, Enum.Material.CeramicTiles)
-box(pool, "WallFar", Vector3.new(-POOL_HALF_X, POOL_FLOOR_Y, POOL_FAR_Z), Vector3.new(POOL_HALF_X, 0, POOL_FAR_Z + 1), POOL_TILE, Enum.Material.CeramicTiles)
-box(pool, "WallLeft", Vector3.new(-POOL_HALF_X - 1, POOL_FLOOR_Y, POOL_NEAR_Z), Vector3.new(-POOL_HALF_X, 0, POOL_FAR_Z), POOL_TILE, Enum.Material.CeramicTiles)
-box(pool, "WallRight", Vector3.new(POOL_HALF_X, POOL_FLOOR_Y, POOL_NEAR_Z), Vector3.new(POOL_HALF_X + 1, 0, POOL_FAR_Z), POOL_TILE, Enum.Material.CeramicTiles)
+-- (the end walls run over the corners, so the deck has no hole there)
+box(pool, "WallNear", Vector3.new(-POOL_HALF_X - POOL_WALL, POOL_FLOOR_Y, POOL_NEAR_Z - POOL_WALL), Vector3.new(POOL_HALF_X + POOL_WALL, 0, POOL_NEAR_Z), POOL_TILE, Enum.Material.CeramicTiles)
+box(pool, "WallFar", Vector3.new(-POOL_HALF_X - POOL_WALL, POOL_FLOOR_Y, POOL_FAR_Z), Vector3.new(POOL_HALF_X + POOL_WALL, 0, POOL_FAR_Z + POOL_WALL), POOL_TILE, Enum.Material.CeramicTiles)
+box(pool, "WallLeft", Vector3.new(-POOL_HALF_X - POOL_WALL, POOL_FLOOR_Y, POOL_NEAR_Z), Vector3.new(-POOL_HALF_X, 0, POOL_FAR_Z), POOL_TILE, Enum.Material.CeramicTiles)
+box(pool, "WallRight", Vector3.new(POOL_HALF_X, POOL_FLOOR_Y, POOL_NEAR_Z), Vector3.new(POOL_HALF_X + POOL_WALL, 0, POOL_FAR_Z), POOL_TILE, Enum.Material.CeramicTiles)
 local LANES = 8
 local laneWidth = POOL_HALF_X * 2 / LANES
 for lane = 1, LANES do
@@ -281,8 +285,8 @@ terrain.WaterReflectance = 0.2
 terrain.WaterWaveSize = 0.08
 terrain.WaterWaveSpeed = 6
 -- The water runs one terrain voxel (4 studs) past the basin's walls and floor, under the deck: water that stopped
--- exactly on the walls' inner faces and the floor's top drew its edge in the same plane and flickered against them in
--- game (owner 2026-10-27). The extra water is hidden behind the walls, under the deck and under the floor.
+-- exactly on the walls' inner faces and the floor's top had its edge in their planes (like the deck above; 2026-10-27).
+-- The extra water is hidden behind the walls, under the deck and under the floor.
 local WATER_TUCK = 4
 local waterBottomY = POOL_FLOOR_Y - WATER_TUCK
 local waterSize = Vector3.new(POOL_HALF_X * 2 + WATER_TUCK * 2, WATER_TOP_Y - waterBottomY, POOL_FAR_Z - POOL_NEAR_Z + WATER_TUCK * 2)

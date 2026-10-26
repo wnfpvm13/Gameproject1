@@ -146,7 +146,7 @@ local function lockJump(humanoid: Humanoid, on: boolean)
 	humanoid.JumpHeight = if on then 0 else DEFAULT_JUMP_HEIGHT
 end
 
--- Seats n players in the middle n chairs (the show camera always frames the whole row). Returns the seat per player.
+-- Seats n players in the middle n chairs (the show camera frames them, client ShowCamera). Returns the seat per player.
 function SeatService.seatPlayers(players: { Player }): { [Player]: Seat }
 	local seats = SeatService.getSeats()
 	local result: { [Player]: Seat } = {}

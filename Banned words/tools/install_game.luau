@@ -9141,7 +9141,7 @@ local function lockJump(humanoid: Humanoid, on: boolean)
 	humanoid.JumpHeight = if on then 0 else DEFAULT_JUMP_HEIGHT
 end
 
--- Seats n players in the middle n chairs (the show camera always frames the whole row). Returns the seat per player.
+-- Seats n players in the middle n chairs (the show camera frames them, client ShowCamera). Returns the seat per player.
 function SeatService.seatPlayers(players: { Player }): { [Player]: Seat }
 	local seats = SeatService.getSeats()
 	local result: { [Player]: Seat } = {}
@@ -11936,6 +11936,15 @@ local mode: Mode? = nil
 local seatedCount = 0 -- participants this round (they sit in the middle chairs); 0 = frame the whole row
 local wideUntil = 0 -- os.clock() until which the whole row is framed (someone flies: review 2026-10-26, the close frame
 -- cut flights to the side and landings outside the pool)
+local easing: Tween? = nil -- the way back to the close frame; stopped by anything else moving the camera (re-check
+-- 2026-10-26: it overwrote a new launch's wide frame and the normal camera after the round)
+
+local function stopEasing()
+	if easing then
+		easing:Cancel()
+		easing = nil
+	end
+end
 local bound: Camera? = nil -- the camera the change listeners below watch
 local connections: { RBXScriptConnection } = {}
 
@@ -12099,6 +12108,7 @@ local function bind(camera: Camera)
 end
 
 place = function(): boolean
+	stopEasing()
 	local camera = workspace.CurrentCamera
 	if not camera then
 		return false
@@ -12129,6 +12139,9 @@ end)
 -- if the map is late.
 function ShowCamera.set(to: Mode?, seated: number?)
 	local count = if to == "show" then seated or 0 else 0
+	if to ~= mode then
+		stopEasing()
+	end
 	if to == mode and count == seatedCount then
 		return
 	end
@@ -12167,6 +12180,7 @@ function ShowCamera.shake(strength: number, seconds: number)
 	if not rig(camera) then
 		return
 	end
+	stopEasing()
 	shaking += 1
 	local mine = shaking
 	local started = os.clock()
@@ -12192,6 +12206,7 @@ function ShowCamera.widen(seconds: number)
 	wideUntil = math.max(wideUntil, os.clock() + seconds)
 	widenings += 1
 	local mine = widenings
+	stopEasing()
 	if mode == "show" then
 		place()
 	end
@@ -12202,8 +12217,16 @@ function ShowCamera.widen(seconds: number)
 		end
 		local at, fov = rig(camera)
 		if at then
-			TweenService:Create(camera, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-				{ CFrame = at, FieldOfView = fov }):Play()
+			stopEasing()
+			local tween = TweenService:Create(camera, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+				{ CFrame = at, FieldOfView = fov })
+			easing = tween
+			tween.Completed:Once(function()
+				if easing == tween then
+					easing = nil
+				end
+			end)
+			tween:Play()
 		end
 	end)
 end

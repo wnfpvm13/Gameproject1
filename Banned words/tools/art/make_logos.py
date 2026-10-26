@@ -22,11 +22,14 @@ CHAIR = """
   <!-- burst behind -->
   <polygon points="0,-150 32,-62 120,-96 70,-18 150,22 60,44 92,128 14,76 -40,150 -46,62 -138,80 -78,10 -150,-40 -60,-52 -96,-136 -20,-70"
     fill="#FFD43B" stroke="#222326" stroke-width="10" stroke-linejoin="round"/>
-  <!-- the chair: a white seat and back on a blue frame -->
-  <rect x="-58" y="-78" width="92" height="104" rx="16" fill="#FFFFFF" stroke="#222326" stroke-width="10"/>
-  <rect x="-70" y="22" width="132" height="34" rx="12" fill="#FFFFFF" stroke="#222326" stroke-width="10"/>
-  <rect x="-62" y="56" width="18" height="52" rx="6" fill="#2F80ED" stroke="#222326" stroke-width="8"/>
-  <rect x="34" y="56" width="18" height="52" rx="6" fill="#2F80ED" stroke="#222326" stroke-width="8"/>
+  <!-- the game's chair (tools/build_pool_hall.luau) seen from the side, facing right: blue box base with a white
+       stripe, white seat cushion, blue back shell with a white cushion on its front and a blue roll on top -->
+  <rect x="-52" y="22" width="104" height="80" rx="10" fill="#1C70E2" stroke="#222326" stroke-width="10"/>
+  <rect x="-52" y="34" width="104" height="12" fill="#FFFFFF" stroke="#222326" stroke-width="6"/>
+  <rect x="-66" y="-118" width="30" height="146" rx="10" fill="#1C70E2" stroke="#222326" stroke-width="10"/>
+  <circle cx="-51" cy="-120" r="19" fill="#1C70E2" stroke="#222326" stroke-width="10"/>
+  <rect x="-40" y="-100" width="18" height="104" rx="8" fill="#FFFFFF" stroke="#222326" stroke-width="8"/>
+  <rect x="-42" y="-2" width="110" height="30" rx="15" fill="#FFFFFF" stroke="#222326" stroke-width="10"/>
   <!-- speed lines -->
   <path d="M -150 120 L -210 150 M -120 150 L -170 190 M -175 80 L -240 98" stroke="#222326" stroke-width="10" stroke-linecap="round"/>
 </g>
@@ -95,5 +98,5 @@ for name, h, water, cx, cy, cs, tx, ts, y1, y2 in LOGOS:
 
 # Store icon: only the chair and the bang, big.
 render("icon", 512, 512, 462,
-       CHAIR.format(place="translate(300,218) rotate(-22) scale(1.2)")
-       + sticker("펑!", 130, 140, 120, "#FF5A5F", edge=36, ink=14, extra=' transform="rotate(-12 130 140)"'))
+       CHAIR.format(place="translate(322,236) rotate(-22) scale(1.12)")
+       + sticker("펑!", 116, 128, 112, "#FF5A5F", edge=36, ink=14, extra=' transform="rotate(-12 116 128)"'))

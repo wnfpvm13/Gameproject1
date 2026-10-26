@@ -65,8 +65,8 @@ local COOL_WHITE = Color3.fromRGB(240, 246, 255)
 -- tools/art/make_logos.py in each face's shape, since a Decal stretches over the whole face; onAir by
 -- tools/art/make_art.ps1 (2026-10-21, text ON AIR, not in the word bank).
 local IMAGES = {
-	screenLogo = "rbxassetid://81598731615102", -- far LED screen, 1024x387
-	podiumLogo = "rbxassetid://74923008573479", -- podium front, 1024x465
+	screenLogo = "rbxassetid://131242369545373", -- far LED screen, 1024x387
+	podiumLogo = "rbxassetid://133224927272345", -- podium front, 1024x465
 	onAir = "rbxassetid://79467207024292",
 }
 

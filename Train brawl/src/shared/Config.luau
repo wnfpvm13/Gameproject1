@@ -40,7 +40,6 @@ type Weapon = {
 	resist: number?,
 	slow: number?,
 	weight: number?,
-	label: string,
 }
 
 -- The arena: big trains side by side on parallel tracks. They stand still in the world; the scenery scrolls past
@@ -252,11 +251,11 @@ Config.Bat = {
 -- single hit carries one off a roof from its middle, tests), launch makes even a first hit a launch. style: how it
 -- attacks and is drawn (punch, swing: a cone of reach and halfAngle; slam: an area of radius just ahead; throw: a lit
 -- stick that bursts after its fuse). hitAt: seconds after pressing when it lands; seconds: the drawn attack. weight:
--- how often a crate holds it. label: its name on screen.
+-- how often a crate holds it. (Its name on screen is in Words.Weapons.)
 Config.Weapons = {
 	-- A quick jab: short reach, light damage, a little push (13 punches empty health).
 	-- (Its cooldown leaves a punched fighter, stunned Config.Hit.LightStun, a moment to answer before the next punch.)
-	Fist = { style = "punch", damage = 8, push = 0.8, reach = 4, halfAngle = 60, cooldown = 0.45, hitAt = 0.1, seconds = 0.26, label = "맨주먹" },
+	Fist = { style = "punch", damage = 8, push = 0.8, reach = 4, halfAngle = 60, cooldown = 0.45, hitAt = 0.1, seconds = 0.26 },
 	-- The old bat: as the whole game used before the weapons (reach measured: the drawn tip passes 4.2 ahead as it hits).
 	Bat = {
 		style = "swing",
@@ -269,7 +268,6 @@ Config.Weapons = {
 		seconds = 0.32,
 		uses = 15,
 		weight = 3,
-		label = "방망이",
 	},
 	-- Raised high (a long wind-up everyone sees), slammed down: everyone around the spot just ahead flies, away from the
 	-- one who slammed.
@@ -285,7 +283,6 @@ Config.Weapons = {
 		seconds = 0.75,
 		uses = 3,
 		weight = 2,
-		label = "망치",
 	},
 	-- Thrown in an arc; a red ring shows where it comes down; it bursts after its fuse, throwing everyone around out.
 	Dynamite = {
@@ -302,7 +299,6 @@ Config.Weapons = {
 		seconds = 0.45,
 		uses = 1,
 		weight = 2,
-		label = "다이너마이트",
 	},
 	-- Heavy: while it is held its holder is pushed half as far but walks slower; a slow, hard swing.
 	GoldBar = {
@@ -318,7 +314,6 @@ Config.Weapons = {
 		resist = 0.5,
 		slow = 0.75,
 		weight = 1.5,
-		label = "금괴",
 	},
 } :: { [string]: Weapon }
 
@@ -398,27 +393,34 @@ Config.Feedback = {
 	FeedLines = 3,
 }
 
--- Sounds: Roblox's own licensed library (Pro Sound Effects and APM Music uploads), free to use in Roblox games; and
--- the built-in rbxasset ones. volume is the Sound's; seconds cuts a long one short (it fades out over the last 0.5).
+-- Sounds: only Roblox's own licensed library (Pro Sound Effects and APM Music uploads), free to use in Roblox games; no
+-- built-in default sounds (players know them, and they read as unfinished). volume is the Sound's; seconds cuts a long
+-- one short (it fades out over the last 0.5); vary plays it up to that share higher or lower each time.
 -- Music plays in the Music group (the on-screen button mutes it), the rest in Effects.
 Config.Sounds = {
-	Swing = { id = "rbxassetid://9120972321", volume = 0.5 }, -- Wood Whoosh Slicing Air Quick Swings 4
-	Punch = { id = "rbxassetid://9120728815", volume = 0.45, seconds = 0.6 }, -- Whoosh Heavy Punches 1
-	PunchHit = { id = "rbxassetid://9113564874", volume = 0.8, seconds = 0.8 }, -- Boxing Hits 6
-	HammerHit = { id = "rbxassetid://9114757272", volume = 0.9, seconds = 1.2 }, -- Hammer Tire Exterior Sledgehammer Impacts 1
-	GoldHit = { id = "rbxassetid://9116554603", volume = 0.8, seconds = 1.2 }, -- Metal Crown Kings Headgear Hit Clang 1
+	Swing = { id = "rbxassetid://9120972321", volume = 0.5, vary = 0.08 }, -- Wood Whoosh Slicing Air Quick Swings 4 (the bat)
+	Punch = { id = "rbxassetid://9120728815", volume = 0.45, seconds = 0.6, vary = 0.08 }, -- Whoosh Heavy Punches 1
+	HeavySwing = { id = "rbxassetid://9125959352", volume = 0.6, seconds = 1.1, vary = 0.05 }, -- Slowed Whip Swishes Whomping Airy Whoosh Bys (the hammer)
+	GoldSwing = { id = "rbxassetid://9120742729", volume = 0.55, vary = 0.06 }, -- Whoosh Thick Quick Multiple Variations 1 (the gold bar)
+	Throw = { id = "rbxassetid://9126283052", volume = 0.5, vary = 0.08 }, -- Wood Swish Ruler Whoosh Fast Movement In Air (a dynamite throw)
+	PunchHit = { id = "rbxassetid://9113564874", volume = 0.8, seconds = 0.8, vary = 0.1 }, -- Boxing Hits 6
+	BatHit = { id = "rbxassetid://9113502635", volume = 0.8, seconds = 0.7, vary = 0.08 }, -- Body Hits 10 (a 2x4 on the body)
+	HammerHit = { id = "rbxassetid://9114757272", volume = 0.9, seconds = 1.2, vary = 0.05 }, -- Hammer Tire Exterior Sledgehammer Impacts 1
+	GoldHit = { id = "rbxassetid://9116554603", volume = 0.8, seconds = 1.2, vary = 0.06 }, -- Metal Crown Kings Headgear Hit Clang 1
+	BodyLaunch = { id = "rbxassetid://9113570289", volume = 0.95, vary = 0.06 }, -- Boxing Hits 14 (a heavy blow into a bag)
+	HitLaunch = { id = "rbxassetid://9125380595", volume = 0.9, seconds = 1.2, vary = 0.05 }, -- Baseball Wood Bat Power Whack 1
+	HomeRun = { id = "rbxassetid://9125380872", volume = 1, seconds = 2 }, -- Baseball Wood Bat Power Whack 5
+	FlyOff = { id = "rbxassetid://9119198150", volume = 0.5 }, -- Slide Whistle 6 (a home-run body flying off)
+	StarPop = { id = "rbxassetid://9113263649", volume = 0.6 }, -- Balloon Pop 3 (a home-run flight popping out of the sky)
 	Blast = { id = "rbxassetid://9120769331", volume = 1, seconds = 2.5 }, -- Wind Whoosh Sonic Boom Low End Impact 1
 	Fuse = { id = "rbxassetid://9119380593", volume = 0.5, seconds = 1.6 }, -- Soldering From Sparklers 1 (a fizzing fuse)
 	Parachute = { id = "rbxassetid://9117235033", volume = 0.5, seconds = 2 }, -- Parachute Blossom 9
-	CrateLand = { id = "rbxassetid://9113466920", volume = 0.7, seconds = 1.5 }, -- Board Drops Wood Impacts Wobble 3
-	HitLight = { id = "rbxassetid://9119330371", volume = 0.9 }, -- Soccer Ball Tackle 4 (a deep thump)
-	HitLaunch = { id = "rbxassetid://9125380595", volume = 0.9, seconds = 1.2 }, -- Baseball Wood Bat Power Whack 1
-	HomeRun = { id = "rbxassetid://9125380872", volume = 1, seconds = 2 }, -- Baseball Wood Bat Power Whack 5
-	Cheer = { id = "rbxassetid://9120973900", volume = 0.45, seconds = 3.5 }, -- Wrestling Crowd 2 (cheers)
-	Twinkle = { id = "rbxassetid://9126073001", volume = 0.7 }, -- Synth Sparkle Tone Ding 4
+	CrateLand = { id = "rbxassetid://9113466920", volume = 0.7, seconds = 1.5, vary = 0.08 }, -- Board Drops Wood Impacts Wobble 3
+	Pickup = { id = "rbxassetid://9120873789", volume = 0.7, seconds = 0.8 }, -- Wooden Chest Open Close Cedar Box 9 (a weapon taken from a crate)
+	CountBell = { id = "rbxassetid://9116223567", volume = 0.5, seconds = 0.9 }, -- Large Metal Triangle Single Ringing Hits 3 (each count-down second)
 	Whistle = { id = "rbxassetid://9119628070", volume = 0.55, seconds = 2.5 }, -- Steam Train Whistle Airy 2
-	Tick = { id = "rbxasset://sounds/electronicpingshort.wav", volume = 0.45 },
-	Win = { id = "rbxassetid://9126073318", volume = 0.7 }, -- Synth Sparkle Tone Ding 1 (with the cheer)
+	WinBell = { id = "rbxassetid://9113583408", volume = 0.6, seconds = 3 }, -- Brass Bell Various Rings Long Decays 1 (a winner)
+	Cheer = { id = "rbxassetid://9120973900", volume = 0.3, seconds = 2.5 }, -- Wrestling Crowd 2 (the stands cheering a winner)
 	Train = { id = "rbxassetid://9112889081", volume = 0.22, looped = true }, -- Train Steam 2 (a steady chuff)
 	MusicWaiting = { id = "rbxassetid://1840254626", volume = 0.25, looped = true, music = true }, -- Country Fiddle
 	MusicFight = { id = "rbxassetid://1838431777", volume = 0.2, looped = true, music = true }, -- Resophonic Reel

@@ -3,11 +3,15 @@
 -- each press (mouse: it was a mouse click); whether a swing may start is the caller's call.
 -- (The binding follows Western train's JumpInput.)
 local ContextActionService = game:GetService("ContextActionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
+local UiStyle = require(shared:WaitForChild("UiStyle"))
+local Words = require(shared:WaitForChild("Words"))
 
 local SwingInput = {}
 
 local ACTION = "TrainBrawlSwing"
-local BUTTON_TITLE = "때리기"
 
 -- Returns a function that removes the control.
 function SwingInput.bind(onSwing: (mouse: boolean) -> ()): () -> ()
@@ -17,7 +21,7 @@ function SwingInput.bind(onSwing: (mouse: boolean) -> ()): () -> ()
 		end
 		return Enum.ContextActionResult.Pass -- clicks still reach the camera and the GUI
 	end, true, Enum.ContextActionPriority.High.Value, Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2)
-	ContextActionService:SetTitle(ACTION, BUTTON_TITLE)
+	ContextActionService:SetTitle(ACTION, Words.AttackButton)
 	-- A big button where the thumb rests, above the jump button.
 	local button = ContextActionService:GetButton(ACTION)
 	if button then
@@ -26,7 +30,7 @@ function SwingInput.bind(onSwing: (mouse: boolean) -> ()): () -> ()
 		local title = button:FindFirstChild("ActionTitle")
 		if title and title:IsA("TextLabel") then
 			title.TextSize = 22 -- the default is small for a button this big
-			title.Font = Enum.Font.GothamBold
+			UiStyle.text(title)
 		end
 	end
 	return function()

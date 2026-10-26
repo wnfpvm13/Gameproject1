@@ -2,7 +2,8 @@
 -- Plays the sounds named in Config.Sounds on this client: once at a part (3D) or for the whole screen, or as a loop.
 -- Music goes to the "TrainBrawlMusic" SoundGroup (the music button mutes it), everything else to "TrainBrawlEffects".
 -- A sound that has `seconds` is cut short (counted from when it has loaded), fading out over its last half second; a
--- sound that fails to load just stays silent. preload() fetches them all at the start so the first home run is not
+-- sound that has `vary` plays a little higher or lower each time (by up to that share), so a flurry of punches does not
+-- repeat one sample like a machine; a sound that fails to load just stays silent. preload() fetches them all at the start so the first home run is not
 -- late. Shared so every client part can use it (client parts do not require each other); on the server it does
 -- nothing.
 local Debris = game:GetService("Debris")
@@ -51,6 +52,9 @@ local function make(name: string, parent: Instance): Sound?
 	sound.SoundId = entry.id
 	sound.Volume = entry.volume
 	sound.Looped = entry.looped == true
+	if entry.vary then
+		sound.PlaybackSpeed = 1 + (math.random() * 2 - 1) * entry.vary
+	end
 	sound.RollOffMaxDistance = ROLL_OFF
 	sound.SoundGroup = group(entry.music == true)
 	sound.Parent = parent
@@ -114,11 +118,6 @@ function SoundBank.preload()
 			sound:Destroy()
 		end
 	end)
-end
-
--- Whether a sound named `name` is playing for the whole screen right now (one cheer at a time).
-function SoundBank.playing(name: string): boolean
-	return SoundService:FindFirstChild(name) ~= nil
 end
 
 -- Mutes or unmutes the music group.

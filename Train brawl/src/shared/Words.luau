@@ -1,0 +1,91 @@
+--!strict
+-- Every word the game shows on screen, in one place: Korean first (owner default 2026-10-26), so another language can
+-- be added here later without touching the parts that show them. Train words where a Korean player reads them
+-- naturally: the fighters still in are "탑승객", going out is "하차". Short lines, no lists of facts joined by dots.
+-- Pure (no Roblox calls), so the tests can read it.
+
+local Words = {}
+
+-- Each weapon's name (Config.Weapons keys).
+Words.Weapons = {
+	Fist = "맨주먹",
+	Bat = "방망이",
+	Hammer = "망치",
+	Dynamite = "다이너마이트",
+	GoldBar = "금괴",
+} :: { [string]: string }
+
+-- The round line and the big centre text.
+Words.WaitingFew = "다른 승객을 기다리는 중"
+Words.WaitingSoon = "곧 다음 열차 출발"
+Words.Go = "출발!"
+Words.Out = "하차!"
+Words.OutWatching = "관전 중"
+Words.LateWatching = "다음 열차를 기다리는 중"
+Words.Draw = "무승부"
+Words.WinnerNote = "끝까지 버텼다!"
+Words.HomeRun = "홈런!"
+
+function Words.aboard(count: number): string
+	return string.format("탑승객 %d", count)
+end
+
+function Words.knockOffs(count: number): string
+	return string.format("KO %d", count)
+end
+
+function Words.clock(seconds: number): string
+	return string.format("%d:%02d", seconds // 60, seconds % 60)
+end
+
+function Words.winner(name: string): string
+	return string.format("%s 승리!", name)
+end
+
+-- A line in the knock-off feed: who went out, who gets the credit (nil = nobody: nobody hit them lately), and how
+-- ("homerun" or "fall").
+function Words.feed(victim: string, by: string?, how: string): string
+	if how == "homerun" then
+		return if by then string.format("%s → %s 홈런!", by, victim) else string.format("%s 홈런!", victim)
+	end
+	return if by then string.format("%s → %s 하차", by, victim) else string.format("%s 하차", victim)
+end
+
+-- What the player holds: its name and the attacks or seconds left.
+function Words.uses(weapon: string, count: number): string
+	return string.format("%s ×%d", Words.Weapons[weapon] or weapon, count)
+end
+
+function Words.secondsLeft(weapon: string, seconds: number): string
+	return string.format("%s %d초", Words.Weapons[weapon] or weapon, seconds)
+end
+
+-- A Studio practice sandbag's name (number `n`).
+function Words.sandbag(n: number): string
+	return string.format("샌드백 %d", n)
+end
+
+-- The music button, the touch attack button.
+Words.MusicOn = "음악 ON"
+Words.MusicOff = "음악 OFF"
+Words.AttackButton = "때리기"
+
+-- The first-ride card: its title and its rows (the control, then what it does) for the kind of control in use:
+-- "mouse", "touch" or "gamepad".
+Words.CardTitle = "탑승 안내"
+function Words.cardRows(control: string): { { string } }
+	local attack = if control == "touch" then "오른쪽 버튼" elseif control == "gamepad" then "RT / R2" else "클릭"
+	local rows = {
+		{ attack, "때리기" },
+		{ "3연타", "상대가 날아간다" },
+		{ "체력이 낮을수록", "더 멀리 날아간다" },
+		{ "낙하산 상자", "맨손으로 닿으면 무기" },
+		{ "기차에서 떨어지면", "탈락" },
+	}
+	if control == "mouse" then
+		table.insert(rows, { "왼쪽 Alt", "커서 켜기·끄기" })
+	end
+	return rows
+end
+
+return Words

@@ -10,7 +10,7 @@
 -- launches the player's own character (KnockFlight) and is shown for everyone (HitFeedback; a home run also
 -- HomeRunShow); a fall lays the player down behind the train (FallDrift); health shows over heads and at the bottom
 -- (HealthBars), the round at the top (RoundHud) with the knock-off feed under it (FeedHud) and the round's sound
--- (RoundAudio), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
+-- (RoundAudio), the first-ride card shows the controls once (RideCard), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
 -- is watched first).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -46,6 +46,7 @@ local RoundAudio = require(script:WaitForChild("RoundAudio"))
 local WeaponHud = require(script:WaitForChild("WeaponHud"))
 local DropShow = require(script:WaitForChild("DropShow"))
 local ExplosionShow = require(script:WaitForChild("ExplosionShow"))
+local RideCard = require(script:WaitForChild("RideCard"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
@@ -72,6 +73,7 @@ local bars = HealthBars.new(playerGui)
 local feed = FeedHud.new(playerGui)
 local audio = RoundAudio.new(playerGui)
 local weaponHud = WeaponHud.new(playerGui)
+local card = RideCard.new(playerGui)
 DropShow.start(Workspace:WaitForChild(Names.CratesFolder), Workspace:WaitForChild(Names.ArenaFolder))
 
 -- The characters still in the round, as this client sees them (players' and sandbags').
@@ -184,6 +186,8 @@ RunService.RenderStepped:Connect(function(dt: number)
 	audio:update(Workspace:GetServerTimeNow())
 	local standing = if alive then "in" elseif state == false then "out" else "watching"
 	hud:update(Workspace:GetServerTimeNow(), standing, if character then PartUtil.number(character, Names.KOs) or 0 else 0)
+	local phase = Workspace:GetAttribute(Names.Phase)
+	card:update(if typeof(phase) == "string" then phase else "Waiting", alive)
 end)
 -- After the camera has moved for the frame: the mouse lock (the Roblox camera resets the mouse every frame), then the
 -- shake for a hit on the player.

@@ -1,8 +1,8 @@
 --!strict
 -- The round's sound on this client: the train's steady chuff all the time, western music (calm while waiting, faster
--- during the count-down and the fight), a tick for each count-down second, the whistle when the fight starts, and a
--- ding with a cheer for a winner (one cheer: not again over a home run's). A small button at the bottom right, above
--- the touch "때리기" button, turns the music off and on (the effects stay). Reads the Workspace round attributes each
+-- during the count-down and the fight), a triangle for each count-down second, the whistle when the fight
+-- starts, and a big bell with the stands' cheer for a winner. A small button at the bottom right, above the touch
+-- attack button, turns the music off and on (the effects stay). Reads the Workspace round attributes each
 -- frame; sounds come from Config.Sounds through SoundBank.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -11,6 +11,8 @@ local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Names = require(shared:WaitForChild("Names"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
 local SoundBank = require(shared:WaitForChild("SoundBank"))
+local UiStyle = require(shared:WaitForChild("UiStyle"))
+local Words = require(shared:WaitForChild("Words"))
 
 local RoundAudio = {}
 RoundAudio.__index = RoundAudio
@@ -27,8 +29,9 @@ type Fields = {
 export type Audio = typeof(setmetatable({} :: Fields, RoundAudio))
 
 local function setMusicLabel(button: TextButton, on: boolean)
-	button.Text = if on then "♪ 음악 켬" else "♪ 음악 끔"
-	button.BackgroundTransparency = if on then 0.35 else 0.6
+	button.Text = if on then Words.MusicOn else Words.MusicOff
+	button.BackgroundTransparency = if on then 0.25 else 0.55
+	UiStyle.fade(button, if on then 0 else 0.35)
 end
 
 function RoundAudio.new(playerGui: Instance): Audio
@@ -42,10 +45,9 @@ function RoundAudio.new(playerGui: Instance): Audio
 	button.AnchorPoint = Vector2.new(1, 1)
 	button.Position = UDim2.new(1, -20, 1, -240)
 	button.Size = UDim2.fromOffset(104, 32)
-	button.BackgroundColor3 = Color3.fromRGB(40, 32, 26)
-	button.TextColor3 = Color3.new(1, 1, 1)
-	button.Font = Enum.Font.FredokaOne
-	button.TextSize = 18
+	button.BackgroundColor3 = UiStyle.PlateColor
+	button.TextSize = 17
+	UiStyle.text(button)
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 8)
 	corner.Parent = button
@@ -97,10 +99,8 @@ function RoundAudio.update(self: Audio, now: number)
 		elseif current == "Ended" and before ~= nil then -- not for someone who joins during the result
 			local winner = Workspace:GetAttribute(Names.Winner)
 			if typeof(winner) == "string" and winner ~= "" then
-				SoundBank.play("Win")
-				if not SoundBank.playing("Cheer") then -- a home run's cheer may be on already
-					SoundBank.play("Cheer")
-				end
+				SoundBank.play("WinBell")
+				SoundBank.play("Cheer")
 			end
 		end
 	end
@@ -108,7 +108,7 @@ function RoundAudio.update(self: Audio, now: number)
 		local left = math.ceil((PartUtil.number(Workspace, Names.PhaseEndsAt) or now) - now)
 		if left >= 1 and left ~= self.lastTick then
 			self.lastTick = left
-			SoundBank.play("Tick")
+			SoundBank.play("CountBell")
 		end
 	else
 		self.lastTick = nil

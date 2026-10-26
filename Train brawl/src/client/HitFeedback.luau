@@ -1,9 +1,11 @@
 --!strict
--- How hits feel on this client: a whoosh when someone attacks (a punch's or a swing's), and for a hit a thump at the
--- victim (each weapon's own: a punch, a bat, a hammer's slam, a gold bar's clang; a dynamite blast is heard from
--- ExplosionShow), a short white flash on them and, when the victim is the player, a little camera shake. A launch
--- adds a heavier whack, a home run (the smash that empties health) the bat's crack and a cheer (its flight is
--- HomeRunShow's). The player's own swing shows
+-- How hits feel on this client: a whoosh when someone attacks (each weapon's own: a punch, a bat's swing, a hammer's
+-- heavy swing, a gold bar's, a throw), and for a hit a thump at the victim (each weapon's own: a punch, a bat, a
+-- hammer's slam, a gold bar's clang; a dynamite blast is heard from ExplosionShow), a short white flash on them and,
+-- when the victim is the player, a little camera shake. A launch adds a heavier layer (the bat's whack, a heavy body
+-- blow for the rest), a home run (the smash that empties health) a finishing sound for the whole screen over the
+-- weapon's own thump (the bat's crack, a heavy blow for the rest: never the thump's own recording twice) and a cartoon
+-- slide whistle as the body flies off (its flight is HomeRunShow's). The player's own swing shows
 -- its hits at once (predict), and the server's word for the same hit then shows only what it adds; a fighter just
 -- launched cannot be hit for a moment (Config.Hit.LaunchImmune), so no hit is predicted on it then. Sounds:
 -- Config.Sounds through SoundBank.
@@ -35,9 +37,13 @@ local function flash(model: Model)
 end
 
 -- Each weapon's thump when it lands (none for a blast: its boom is the sound).
-local THUMPS: { [string]: string? } = { Fist = "PunchHit", Bat = "HitLight", Hammer = "HammerHit", GoldBar = "GoldHit" }
+local THUMPS: { [string]: string? } = { Fist = "PunchHit", Bat = "BatHit", Hammer = "HammerHit", GoldBar = "GoldHit" }
 -- Each weapon's whoosh when it is used.
-local WHOOSHES: { [string]: string? } = { Fist = "Punch", Bat = "Swing", Hammer = "Swing", GoldBar = "Swing", Dynamite = "Punch" }
+local WHOOSHES: { [string]: string? } = { Fist = "Punch", Bat = "Swing", Hammer = "HeavySwing", GoldBar = "GoldSwing", Dynamite = "Throw" }
+-- The heavier layer a launch adds at the victim.
+local LAUNCHES: { [string]: string? } = { Fist = "BodyLaunch", Bat = "HitLaunch", Hammer = "BodyLaunch", GoldBar = "BodyLaunch" }
+-- A home run's finishing sound, for the whole screen, over the weapon's thump (a different recording from it).
+local SMASHES: { [string]: string? } = { Fist = "BodyLaunch", Bat = "HomeRun", Hammer = "BodyLaunch", GoldBar = "BodyLaunch" }
 
 -- The plain hit: the weapon's thump and a flash.
 local function show(victim: Model, weapon: string)
@@ -86,13 +92,16 @@ function HitFeedback.hit(victim: Model, mine: boolean, me: boolean, kind: string
 		show(victim, weapon)
 	end
 	local body = CharacterParts.body(victim)
-	if body and kind == "launch" then
-		SoundBank.play("HitLaunch", body.root)
+	local launch = LAUNCHES[weapon]
+	local smash = SMASHES[weapon]
+	if body and kind == "launch" and launch then
+		SoundBank.play(launch, body.root)
 	elseif kind == "smash" then
-		SoundBank.play("HomeRun") -- for the whole screen: the body flies off (and a sandbag is removed) mid-sound
-		if not SoundBank.playing("Cheer") then -- the round's win cheer may have started first
-			SoundBank.play("Cheer")
+		-- For the whole screen: the body flies off (and a sandbag is removed) mid-sound.
+		if smash then
+			SoundBank.play(smash)
 		end
+		SoundBank.play("FlyOff")
 	end
 	if me then
 		shakeUntil = os.clock() + Config.Feedback.ShakeSeconds

@@ -1,7 +1,7 @@
 --!strict
 -- The sounds of the weapon crates on this client (the crates themselves are the server's: WeaponDrops): a parachute
--- opening as one starts falling, a wooden thump when it lands (Names.CrateLanded), and a bright ding for whoever takes
--- it (Names.CrateTakenBy), and the fizz of a lit dynamite stick while it flies (the server's "Dynamite" parts).
+-- opening as one starts falling, a wooden thump when it lands (Names.CrateLanded), and the weapon being taken up at
+-- whoever takes it (Names.CrateTakenBy), and the fizz of a lit dynamite stick while it flies (the server's "Dynamite" parts).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -34,7 +34,7 @@ local function watch(crate: Instance)
 		local player = if typeof(name) == "string" then Players:FindFirstChild(name) else nil
 		local character = if player and player:IsA("Player") then player.Character else nil
 		local root = character and character:FindFirstChild("HumanoidRootPart")
-		SoundBank.play("Twinkle", if root and root:IsA("BasePart") then root else nil)
+		SoundBank.play("Pickup", if root and root:IsA("BasePart") then root else nil)
 	end)
 end
 

@@ -31,7 +31,6 @@ export type Weapon = {
 	resist: number?, -- while held, knocks taken are multiplied by this
 	slow: number?, -- while held, walking speed is multiplied by this
 	weight: number?,
-	label: string,
 }
 
 -- The weapon named by `value` (a character's Names.Weapon attribute), or "Fist" when it names none.

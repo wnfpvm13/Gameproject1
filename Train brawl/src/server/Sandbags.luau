@@ -1,5 +1,5 @@
 --!strict
--- Studio practice partners: sandbag characters (default avatars named "샌드백 N") that wander the top they stand on
+-- Studio practice partners: sandbag characters (default avatars named Words.sandbag(N)) that wander the top they stand on
 -- during a fight and take hits like players. The server owns their physics (SetNetworkOwner(nil)), so it moves them itself with the same rules a
 -- player's own client follows (BodyMotion): a short hold, stiff while flying, back on their feet after landing
 -- (Config.Knock), and lying down and left behind once below the fall line.
@@ -15,6 +15,7 @@ local Names = require(shared:WaitForChild("Names"))
 local CharacterParts = require(shared:WaitForChild("CharacterParts"))
 local ArenaLayout = require(shared:WaitForChild("ArenaLayout"))
 local BodyMotion = require(shared:WaitForChild("BodyMotion"))
+local Words = require(shared:WaitForChild("Words"))
 
 local Sandbags = {}
 
@@ -118,7 +119,7 @@ function Sandbags.start(fallLine: number, surfaces: { ArenaLayout.Surface }): Se
 				model.Name = "Sandbag" .. i
 				local humanoid = model:FindFirstChildOfClass("Humanoid")
 				if humanoid then
-					humanoid.DisplayName = "샌드백 " .. i
+					humanoid.DisplayName = Words.sandbag(i)
 					humanoid.WalkSpeed = Config.Sandbag.WalkSpeed
 				end
 				CollectionService:AddTag(model, Names.SandbagTag)

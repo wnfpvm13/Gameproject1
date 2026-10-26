@@ -1,6 +1,6 @@
 --!strict
--- The home run on screen (the smash that empties a fighter's health; the crack and cheer are HitFeedback's): a big
--- "홈런!" where it was hit, a light trail behind the flying body, and a star twinkling out with a ding where the body
+-- The home run on screen (the smash that empties a fighter's health; its finishing sound is HitFeedback's): a big
+-- "홈런!" where it was hit, a light trail behind the flying body, and a star twinkling out with a pop where the body
 -- was in the sky just before the server takes it to the stands (Config.Fall.HomeRunSeconds after the hit, which
 -- reaches each client at its own moment, so the body is followed each frame until it shows up in the stands; the
 -- trail goes off then, or it would draw a streak up to them). Shown on every client.
@@ -14,6 +14,8 @@ local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Config = require(shared:WaitForChild("Config"))
 local CharacterParts = require(shared:WaitForChild("CharacterParts"))
 local SoundBank = require(shared:WaitForChild("SoundBank"))
+local UiStyle = require(shared:WaitForChild("UiStyle"))
+local Words = require(shared:WaitForChild("Words"))
 
 local HomeRunShow = {}
 
@@ -42,16 +44,17 @@ local function billboard(at: Vector3, text: string, color: Color3, size: number,
 	local label = Instance.new("TextLabel")
 	label.BackgroundTransparency = 1
 	label.Size = UDim2.fromScale(1, 1)
-	label.Font = Enum.Font.FredokaOne
 	label.TextScaled = true
 	label.Text = text
-	label.TextColor3 = color
-	label.TextStrokeTransparency = 0
-	label.TextStrokeColor3 = Color3.fromRGB(60, 30, 10)
+	UiStyle.text(label, color, 4)
 	label.Parent = gui
 	anchor.Parent = Workspace
 	local fade = TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	TweenService:Create(label, fade, { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+	TweenService:Create(label, fade, { TextTransparency = 1 }):Play()
+	local outline = label:FindFirstChildOfClass("UIStroke")
+	if outline then
+		TweenService:Create(outline, fade, { Transparency = 1 }):Play()
+	end
 	TweenService:Create(gui, fade, { StudsOffset = Vector3.new(0, 7, 0) }):Play()
 	Debris:AddItem(anchor, seconds + 0.1)
 end
@@ -86,7 +89,7 @@ function HomeRunShow.play(victim: Model)
 	if not body then
 		return
 	end
-	billboard(body.root.Position, "홈런!", GOLD, 70, Config.Feedback.HomeRunTextSeconds)
+	billboard(body.root.Position, Words.HomeRun, GOLD, 70, Config.Feedback.HomeRunTextSeconds)
 	local streak = trail(body)
 	local last = body.root.Position
 	local started = os.clock()
@@ -96,7 +99,7 @@ function HomeRunShow.play(victim: Model)
 		streak.Enabled = false
 		streak:Clear()
 		billboard(last, "✦", Color3.new(1, 1, 0.85), 60, Config.Feedback.TwinkleSeconds)
-		SoundBank.play("Twinkle")
+		SoundBank.play("StarPop")
 	end
 	following = RunService.Heartbeat:Connect(function()
 		-- Gone (a sandbag is removed), in the stands, or late: twinkle where it last flew.

@@ -17,6 +17,8 @@ local PartUtil = require(shared:WaitForChild("PartUtil"))
 local CharacterParts = require(shared:WaitForChild("CharacterParts"))
 local ArenaLayout = require(shared:WaitForChild("ArenaLayout"))
 local WeaponRules = require(shared:WaitForChild("WeaponRules"))
+local UiStyle = require(shared:WaitForChild("UiStyle"))
+local Words = require(shared:WaitForChild("Words"))
 
 local WeaponDrops = {}
 
@@ -133,15 +135,8 @@ function WeaponDrops.start(surfaces: { ArenaLayout.Surface }, folder: Instance, 
 		tag.StudsOffset = Vector3.new(0, CRATE, 0)
 		tag.AlwaysOnTop = true
 		tag.MaxDistance = 120
-		local label = Instance.new("TextLabel")
-		label.Size = UDim2.fromScale(1, 1)
-		label.BackgroundTransparency = 1
-		label.Font = Enum.Font.GothamBlack
-		label.TextScaled = true
-		label.TextColor3 = Color3.fromRGB(255, 226, 120)
-		label.TextStrokeTransparency = 0.3
-		label.Text = Config.Weapons[weapon].label
-		label.Parent = tag
+		local label = UiStyle.label(tag, "Weapon", UDim2.fromScale(1, 1), 28, UiStyle.Gold)
+		label.Text = Words.Weapons[weapon] or weapon
 		tag.Parent = box
 		-- Where it will land.
 		local marker = part("LandingMark", Vector3.new(0.1, 4.5, 4.5), Color3.fromRGB(255, 214, 90), Enum.Material.Neon, Enum.PartType.Cylinder)

@@ -469,7 +469,7 @@ do
 	local styles = { punch = true, swing = true, slam = true, throw = true }
 	local shaped, lasting = true, true
 	for name, w in W do
-		shaped = shaped and styles[w.style] == true and w.damage > 0 and w.push > 0 and w.label ~= ""
+		shaped = shaped and styles[w.style] == true and w.damage > 0 and w.push > 0 and (Words.Weapons[name] or "") ~= ""
 		if w.style == "punch" or w.style == "swing" then
 			shaped = shaped and w.reach ~= nil and w.halfAngle ~= nil
 		elseif w.style == "slam" then
@@ -536,6 +536,28 @@ do
 	local d = Config.Drops
 	check("crates: one for every three fighters, at least one, at most MaxOnMap", WeaponRules.cratesFor(1, d.MaxOnMap) == 1 and WeaponRules.cratesFor(3, d.MaxOnMap) == 1 and WeaponRules.cratesFor(4, d.MaxOnMap) == math.min(2, d.MaxOnMap) and WeaponRules.cratesFor(30, d.MaxOnMap) == d.MaxOnMap)
 	check("a crate lands before the next is due and lies a while", d.FallSeconds < d.Every and d.LifeSeconds > d.FallSeconds and d.FirstAfter < Config.Round.MaxSeconds)
+end
+
+-- 8. Words on screen (stage 5a): one place, every weapon named, every control has its card, no line left empty.
+do
+	local named = true
+	for name in Config.Weapons do
+		named = named and type(Words.Weapons[name]) == "string" and Words.Weapons[name] ~= ""
+	end
+	check("every weapon has a name on screen", named)
+	local cards = true
+	for _, control in { "mouse", "touch", "gamepad" } do
+		local rows = Words.cardRows(control)
+		cards = cards and #rows >= 4 and #rows <= 6
+		for _, row in rows do
+			cards = cards and #row == 2 and row[1] ~= "" and row[2] ~= ""
+		end
+	end
+	check("every kind of control has a first-ride card of 4 to 6 rows", cards)
+	check("the mouse card names Alt, the touch card does not", Words.cardRows("mouse")[6][1] == "왼쪽 Alt" and #Words.cardRows("touch") == 5)
+	check("the clock reads minutes and seconds", Words.clock(113) == "1:53" and Words.clock(5) == "0:05" and Words.clock(0) == "0:00")
+	check("the feed credits who knocked who off, and a fall with nobody to credit", Words.feed("B", "A", "homerun") == "A → B 홈런!" and Words.feed("B", "A", "fall") == "A → B 하차" and Words.feed("B", nil, "fall") == "B 하차")
+	check("what the player holds reads its name and what is left", Words.uses("Hammer", 3) == "망치 ×3" and Words.secondsLeft("GoldBar", 12) == "금괴 12초")
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

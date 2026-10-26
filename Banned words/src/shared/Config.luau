@@ -380,6 +380,7 @@ return {
 		READY_COUNT = "준비 완료! (준비 %d명)",
 		READY_NEXT_ROUND = "준비 완료! 다음 판부터 같이 해요",
 		INVITE = "친구 초대",
+		INVITE_UNAVAILABLE = "이 계정은 여기서 초대를 보낼 수 없어요",
 		HEADSET_TIP = "헤드셋을 쓰면 더 잘 들려요", -- speakers feed others' voices back into the mic
 		NO_VOICE_WATCH = "관람석에서 구경할 수 있어요",
 		CHAT_CHECKING = "계정 확인 중…",

@@ -532,7 +532,7 @@ end
 -- The round's result on everyone's screen: who won and the round awards (owner 2026-10-24); `winners` (userIds) get
 -- the confetti and the fanfare (2026-10-26).
 function MissionRunner.showRoundResult(title: string, lines: { string }, winners: { number }?)
-	setScreen({ kind = "roundResult", title = title, lines = lines, winners = winners or {} })
+	setScreen({ kind = "roundResult", title = title, lines = lines, winners = winners or {}, at = Match.now() })
 end
 
 -- Clears a between-games screen left over (the main game ended while it showed).

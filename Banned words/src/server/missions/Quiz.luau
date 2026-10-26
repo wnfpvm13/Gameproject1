@@ -160,7 +160,7 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 	if ctx.cancelled() then
 		return false
 	end
-	local answered, missed, wrong = {}, {}, {}
+	local answered, missed, wrong, rightIds = {}, {}, {}, {}
 	for _, player in asked do
 		local choice = answers[player]
 		if choice then
@@ -170,9 +170,13 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 		end
 		if choice ~= rightAt then
 			table.insert(wrong, player)
+		else
+			table.insert(rightIds, player.UserId)
 		end
 	end
-	ctx.screen({ kind = "quizResult", final = ctx.final, question = question.q, choices = choices, answer = rightAt })
+	-- (`right`: who the server counted right — their "correct" sound, review 2026-10-26)
+	ctx.screen({ kind = "quizResult", final = ctx.final, question = question.q, choices = choices, answer = rightAt,
+		right = rightIds })
 	ctx.show(if #wrong == 0 then Config.TEXT.QUIZ_ALL_RIGHT
 		else string.format(Config.TEXT.QUIZ_ANSWER, choices[rightAt]))
 	if not ctx.final then

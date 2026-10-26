@@ -206,17 +206,26 @@ local function ringMyBell()
 end
 Bell.start(ringMyBell)
 BellButton.build(ringMyBell)
--- Roblox's invite prompt, where this player may send invites (it differs by platform and account).
+-- Roblox's invite prompt, where this player may send invites (it differs by platform and account). One at a time; when
+-- Roblox answers, only if no round started meanwhile (review 2026-10-26).
+local inviting = false
 InviteButton.build(function()
+	if inviting then
+		return
+	end
+	inviting = true
 	task.spawn(function()
 		local ok, can = pcall(function()
 			return SocialService:CanSendGameInviteAsync(player)
 		end)
-		if ok and can then
+		if ok and can and not State.inRound() then
 			pcall(function()
 				SocialService:PromptGameInvite(player)
 			end)
+		elseif ok and not can then
+			Toast.show(Config.TEXT.INVITE_UNAVAILABLE, "info")
 		end
+		inviting = false
 	end)
 end)
 Fx.init()
@@ -372,24 +381,31 @@ local function bottlesFor(payload: { [string]: any })
 		bottlesUp = false
 	end
 end
--- The sounds of a screen's moments: only when it comes after the one before (a screen sent again on Sync stays quiet).
+-- The sounds of a screen's moments: only when it comes after the one before, and only right when it happens (a screen
+-- sent again on Sync, or the first one a late joiner gets, stays quiet — review 2026-10-26).
+local MOMENT_FRESH = 1.5 -- seconds after a roulette's start or a result in which they still sound
 local function cueSounds(before: { [string]: any }, now: { [string]: any })
 	Fx.ticking(now.kind == "bomb")
+	if now.kind ~= "roulette" then
+		Fx.stopRoll() -- (a roulette that ended or stopped takes its drum roll with it)
+	end
+	local serverNow = workspace:GetServerTimeNow()
 	if now.kind == "quizResult" and before.kind == "quiz" and now.question == before.question then
-		if MissionPanel.myPick() == now.answer then
-			Fx.cue("right")
+		if typeof(now.right) == "table" and table.find(now.right, State.myId()) then
+			Fx.cue("right") -- (the server counted my answer right: not one that arrived after the end)
 		end
 	elseif now.kind == "redLight" and now.light == "red" and before.kind == "redLight" and before.light ~= "red" then
 		Fx.cue("whistle")
 	elseif now.kind == "duel" and now.stage == "fire" and before.kind == "duel" and before.stage ~= "fire" then
 		Fx.cue("fire")
 	elseif now.kind == "roulette" and before.kind ~= "roulette" and typeof(now.startsAt) == "number"
-		and typeof(now.spinSeconds) == "number" then
-		local left = now.startsAt + now.spinSeconds - workspace:GetServerTimeNow()
+		and typeof(now.spinSeconds) == "number" and serverNow - now.startsAt < MOMENT_FRESH then
+		local left = now.startsAt + now.spinSeconds - serverNow
 		if left > 0.5 then
 			Fx.cue("roll", left)
 		end
-	elseif now.kind == "roundResult" and before.kind ~= "roundResult" and typeof(now.winners) == "table" then
+	elseif now.kind == "roundResult" and before.kind ~= "roundResult" and typeof(now.winners) == "table"
+		and typeof(now.at) == "number" and serverNow - now.at < MOMENT_FRESH then
 		local winners = {}
 		for _, userId in now.winners do
 			local winner = typeof(userId) == "number" and Players:GetPlayerByUserId(userId)

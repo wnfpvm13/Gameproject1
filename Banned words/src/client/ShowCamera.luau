@@ -184,6 +184,7 @@ local function bind(camera: Camera)
 	bound = camera
 	table.insert(connections, camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 		if mode then
+			stopEasing() -- (the way back aimed at the old shape)
 			local at, fov = rig(camera)
 			if at then
 				camera.CFrame = at

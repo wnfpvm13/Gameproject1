@@ -159,6 +159,7 @@ function OXQuiz.run(ctx: Ctx): boolean?
 			return nil
 		end
 		local right = if statement.o then 1 else 2
+		local rightIds = {} -- (who the server counted right: their "correct" sound)
 		local still = present()
 		for _, player in from do
 			if not table.find(still, player) then
@@ -171,9 +172,12 @@ function OXQuiz.run(ctx: Ctx): boolean?
 			end
 			if choice ~= right then
 				wrong[player] = (wrong[player] or 0) + 1
+			else
+				table.insert(rightIds, player.UserId)
 			end
 		end
-		ctx.screen({ kind = "quizResult", final = false, question = question, choices = choices, answer = right })
+		ctx.screen({ kind = "quizResult", final = false, question = question, choices = choices, answer = right,
+			right = rightIds })
 		if not ctx.wait(Config.OX_REVEAL_SECONDS) then
 			return nil
 		end

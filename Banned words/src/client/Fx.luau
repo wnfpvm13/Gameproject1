@@ -29,6 +29,8 @@ local bellSound: Sound
 local presenterSounds: { Sound } = {} -- the presenter's sound buttons (Config.PRESENTER_SOUNDS order)
 local cues: { [string]: Sound } = {} -- the game's moments (Fx.cue)
 local tick: Sound -- the bomb's ticking (Fx.ticking)
+local rolls = 0 -- the roulette's drum rolls started (Fx.stopRoll cancels the waiting one and stops the playing one)
+local rolling: Sound? = nil
 local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
 local playing: { [BasePart]: number } = {} -- hinge -> current animation number
 
@@ -106,17 +108,32 @@ function Fx.cue(name: string, seconds: number?)
 	end
 	if name == "roll" and seconds then
 		-- (started so its crash lands on the pick: later for a long spin, part-way in for a short one)
+		rolls += 1
+		local mine = rolls
 		local wait = math.max(0, seconds - Config.SOUND_ROLL_CRASH_AT)
 		task.delay(wait, function()
+			if mine ~= rolls then
+				return -- (stopped meanwhile)
+			end
 			local copy = template:Clone()
 			copy.TimePosition = math.max(0, Config.SOUND_ROLL_CRASH_AT - seconds)
 			copy.Parent = SoundService
 			copy:Play()
+			rolling = copy
 			Debris:AddItem(copy, 12)
 		end)
 		return
 	end
 	playCopy(template)
+end
+
+-- The roulette is over or stopped: no drum roll waiting, none playing on.
+function Fx.stopRoll()
+	rolls += 1
+	if rolling then
+		rolling:Stop()
+		rolling = nil
+	end
 end
 
 -- The bomb's ticking: on while the bomb goes round, off when it is over.
@@ -400,7 +417,6 @@ function Fx.splash(position: Vector3)
 	}, 18)
 end
 
--- Someone said a word: buzzer + red flash (the launch itself comes with the "Fling" signal).
 -- Someone went out: the buzzer, and a red flash unless `calm` (the device's reduced motion setting).
 -- The round's winners: a fanfare and confetti over each of them (owner 2026-10-26, the recommended choice: the result
 -- was one card and a toast).
@@ -427,6 +443,7 @@ function Fx.celebrate(winners: { Player })
 	end
 end
 
+-- Someone said a word: buzzer + red flash (the launch itself comes with the "Fling" signal).
 function Fx.elimination(calm: boolean?)
 	buzzer:Play()
 	if calm then

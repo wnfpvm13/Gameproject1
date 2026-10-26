@@ -2458,5 +2458,23 @@ do
 	end
 	check("19f no balance question or liar word comes again before every one was played", not againQ and not againW)
 end
+do
+	-- The result names who the server counted right (their "correct" sound): not an answer that came after the end.
+	QuizBank.main = { q("맞힌 사람", "가", "나", "다", "라") }
+	local ps = newPlayers(3)
+	local record = fakeCtx(ps, false, nil)
+	local since = now
+	start(Quiz, record)
+	at(now + Config.QUIZ_INTRO_SECONDS + 0.1)
+	answer(ps[1], 1)
+	answer(ps[2], 2)
+	at(now + Config.QUIZ_SECONDS + 0.2)
+	answer(ps[3], 1) -- (after the end: not counted)
+	local result = lastScreenOf(since, "quizResult")
+	local right = result and result.right or {}
+	check("19g the quiz result lists who was counted right (the late answer is not)", #right == 1 and right[1] == ps[1].UserId)
+	at(now + Config.QUIZ_REVEAL_SECONDS + 1)
+	QuizBank.main = realMain
+end
 
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

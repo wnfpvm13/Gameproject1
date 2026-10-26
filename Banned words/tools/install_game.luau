@@ -393,6 +393,7 @@ return {
 		READY_COUNT = "준비 완료! (준비 %d명)",
 		READY_NEXT_ROUND = "준비 완료! 다음 판부터 같이 해요",
 		INVITE = "친구 초대",
+		INVITE_UNAVAILABLE = "이 계정은 여기서 초대를 보낼 수 없어요",
 		HEADSET_TIP = "헤드셋을 쓰면 더 잘 들려요", -- speakers feed others' voices back into the mic
 		NO_VOICE_WATCH = "관람석에서 구경할 수 있어요",
 		CHAT_CHECKING = "계정 확인 중…",
@@ -5032,6 +5033,7 @@ function OXQuiz.run(ctx: Ctx): boolean?
 			return nil
 		end
 		local right = if statement.o then 1 else 2
+		local rightIds = {} -- (who the server counted right: their "correct" sound)
 		local still = present()
 		for _, player in from do
 			if not table.find(still, player) then
@@ -5044,9 +5046,12 @@ function OXQuiz.run(ctx: Ctx): boolean?
 			end
 			if choice ~= right then
 				wrong[player] = (wrong[player] or 0) + 1
+			else
+				table.insert(rightIds, player.UserId)
 			end
 		end
-		ctx.screen({ kind = "quizResult", final = false, question = question, choices = choices, answer = right })
+		ctx.screen({ kind = "quizResult", final = false, question = question, choices = choices, answer = right,
+			right = rightIds })
 		if not ctx.wait(Config.OX_REVEAL_SECONDS) then
 			return nil
 		end
@@ -5605,7 +5610,7 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 	if ctx.cancelled() then
 		return false
 	end
-	local answered, missed, wrong = {}, {}, {}
+	local answered, missed, wrong, rightIds = {}, {}, {}, {}
 	for _, player in asked do
 		local choice = answers[player]
 		if choice then
@@ -5615,9 +5620,13 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 		end
 		if choice ~= rightAt then
 			table.insert(wrong, player)
+		else
+			table.insert(rightIds, player.UserId)
 		end
 	end
-	ctx.screen({ kind = "quizResult", final = ctx.final, question = question.q, choices = choices, answer = rightAt })
+	-- (`right`: who the server counted right — their "correct" sound, review 2026-10-26)
+	ctx.screen({ kind = "quizResult", final = ctx.final, question = question.q, choices = choices, answer = rightAt,
+		right = rightIds })
 	ctx.show(if #wrong == 0 then Config.TEXT.QUIZ_ALL_RIGHT
 		else string.format(Config.TEXT.QUIZ_ANSWER, choices[rightAt]))
 	if not ctx.final then
@@ -8259,7 +8268,7 @@ end
 -- The round's result on everyone's screen: who won and the round awards (owner 2026-10-24); `winners` (userIds) get
 -- the confetti and the fanfare (2026-10-26).
 function MissionRunner.showRoundResult(title: string, lines: { string }, winners: { number }?)
-	setScreen({ kind = "roundResult", title = title, lines = lines, winners = winners or {} })
+	setScreen({ kind = "roundResult", title = title, lines = lines, winners = winners or {}, at = Match.now() })
 end
 
 -- Clears a between-games screen left over (the main game ended while it showed).
@@ -10377,17 +10386,26 @@ local function ringMyBell()
 end
 Bell.start(ringMyBell)
 BellButton.build(ringMyBell)
--- Roblox's invite prompt, where this player may send invites (it differs by platform and account).
+-- Roblox's invite prompt, where this player may send invites (it differs by platform and account). One at a time; when
+-- Roblox answers, only if no round started meanwhile (review 2026-10-26).
+local inviting = false
 InviteButton.build(function()
+	if inviting then
+		return
+	end
+	inviting = true
 	task.spawn(function()
 		local ok, can = pcall(function()
 			return SocialService:CanSendGameInviteAsync(player)
 		end)
-		if ok and can then
+		if ok and can and not State.inRound() then
 			pcall(function()
 				SocialService:PromptGameInvite(player)
 			end)
+		elseif ok and not can then
+			Toast.show(Config.TEXT.INVITE_UNAVAILABLE, "info")
 		end
+		inviting = false
 	end)
 end)
 Fx.init()
@@ -10543,24 +10561,31 @@ local function bottlesFor(payload: { [string]: any })
 		bottlesUp = false
 	end
 end
--- The sounds of a screen's moments: only when it comes after the one before (a screen sent again on Sync stays quiet).
+-- The sounds of a screen's moments: only when it comes after the one before, and only right when it happens (a screen
+-- sent again on Sync, or the first one a late joiner gets, stays quiet — review 2026-10-26).
+local MOMENT_FRESH = 1.5 -- seconds after a roulette's start or a result in which they still sound
 local function cueSounds(before: { [string]: any }, now: { [string]: any })
 	Fx.ticking(now.kind == "bomb")
+	if now.kind ~= "roulette" then
+		Fx.stopRoll() -- (a roulette that ended or stopped takes its drum roll with it)
+	end
+	local serverNow = workspace:GetServerTimeNow()
 	if now.kind == "quizResult" and before.kind == "quiz" and now.question == before.question then
-		if MissionPanel.myPick() == now.answer then
-			Fx.cue("right")
+		if typeof(now.right) == "table" and table.find(now.right, State.myId()) then
+			Fx.cue("right") -- (the server counted my answer right: not one that arrived after the end)
 		end
 	elseif now.kind == "redLight" and now.light == "red" and before.kind == "redLight" and before.light ~= "red" then
 		Fx.cue("whistle")
 	elseif now.kind == "duel" and now.stage == "fire" and before.kind == "duel" and before.stage ~= "fire" then
 		Fx.cue("fire")
 	elseif now.kind == "roulette" and before.kind ~= "roulette" and typeof(now.startsAt) == "number"
-		and typeof(now.spinSeconds) == "number" then
-		local left = now.startsAt + now.spinSeconds - workspace:GetServerTimeNow()
+		and typeof(now.spinSeconds) == "number" and serverNow - now.startsAt < MOMENT_FRESH then
+		local left = now.startsAt + now.spinSeconds - serverNow
 		if left > 0.5 then
 			Fx.cue("roll", left)
 		end
-	elseif now.kind == "roundResult" and before.kind ~= "roundResult" and typeof(now.winners) == "table" then
+	elseif now.kind == "roundResult" and before.kind ~= "roundResult" and typeof(now.winners) == "table"
+		and typeof(now.at) == "number" and serverNow - now.at < MOMENT_FRESH then
 		local winners = {}
 		for _, userId in now.winners do
 			local winner = typeof(userId) == "number" and Players:GetPlayerByUserId(userId)
@@ -11411,6 +11436,8 @@ local bellSound: Sound
 local presenterSounds: { Sound } = {} -- the presenter's sound buttons (Config.PRESENTER_SOUNDS order)
 local cues: { [string]: Sound } = {} -- the game's moments (Fx.cue)
 local tick: Sound -- the bomb's ticking (Fx.ticking)
+local rolls = 0 -- the roulette's drum rolls started (Fx.stopRoll cancels the waiting one and stops the playing one)
+local rolling: Sound? = nil
 local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
 local playing: { [BasePart]: number } = {} -- hinge -> current animation number
 
@@ -11488,17 +11515,32 @@ function Fx.cue(name: string, seconds: number?)
 	end
 	if name == "roll" and seconds then
 		-- (started so its crash lands on the pick: later for a long spin, part-way in for a short one)
+		rolls += 1
+		local mine = rolls
 		local wait = math.max(0, seconds - Config.SOUND_ROLL_CRASH_AT)
 		task.delay(wait, function()
+			if mine ~= rolls then
+				return -- (stopped meanwhile)
+			end
 			local copy = template:Clone()
 			copy.TimePosition = math.max(0, Config.SOUND_ROLL_CRASH_AT - seconds)
 			copy.Parent = SoundService
 			copy:Play()
+			rolling = copy
 			Debris:AddItem(copy, 12)
 		end)
 		return
 	end
 	playCopy(template)
+end
+
+-- The roulette is over or stopped: no drum roll waiting, none playing on.
+function Fx.stopRoll()
+	rolls += 1
+	if rolling then
+		rolling:Stop()
+		rolling = nil
+	end
 end
 
 -- The bomb's ticking: on while the bomb goes round, off when it is over.
@@ -11782,7 +11824,6 @@ function Fx.splash(position: Vector3)
 	}, 18)
 end
 
--- Someone said a word: buzzer + red flash (the launch itself comes with the "Fling" signal).
 -- Someone went out: the buzzer, and a red flash unless `calm` (the device's reduced motion setting).
 -- The round's winners: a fanfare and confetti over each of them (owner 2026-10-26, the recommended choice: the result
 -- was one card and a toast).
@@ -11809,6 +11850,7 @@ function Fx.celebrate(winners: { Player })
 	end
 end
 
+-- Someone said a word: buzzer + red flash (the launch itself comes with the "Fling" signal).
 function Fx.elimination(calm: boolean?)
 	buzzer:Play()
 	if calm then
@@ -12089,6 +12131,7 @@ local function bind(camera: Camera)
 	bound = camera
 	table.insert(connections, camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 		if mode then
+			stopEasing() -- (the way back aimed at the old shape)
 			local at, fov = rig(camera)
 			if at then
 				camera.CFrame = at
@@ -14014,11 +14057,6 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		elseif shownButtons == 3 then UDim2.new(1 / 3, -6, 0, 44)
 		else UDim2.new(0.5, -4, 0, 44)
 	MissionPanel.tick(workspace:GetServerTimeNow())
-end
-
--- What I picked on the screen showing now (a choice number), or nil.
-function MissionPanel.myPick(): number?
-	return state.myPick
 end
 
 -- I rang my bell at `now` (server time): 물병 세우기's marker stops there on my screen.

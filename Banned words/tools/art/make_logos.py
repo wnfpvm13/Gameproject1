@@ -36,7 +36,9 @@ TEMPLATE = """<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
 html,body{{margin:0;padding:0;width:1024px;height:576px;overflow:hidden;background:#59C3F0}}
 svg{{display:block}}
-.t{{font-family:'Black Han Sans',sans-serif;paint-order:stroke fill;stroke:#222326;stroke-linejoin:round}}
+.t{{font-family:'Black Han Sans',sans-serif;paint-order:stroke fill;stroke-linejoin:round}}
+.edge{{stroke:#FFFFFF}}
+.ink{{stroke:#222326}}
 </style></head><body>
 <svg width="1024" height="576" viewBox="0 0 1024 576">
   <defs>
@@ -50,10 +52,10 @@ svg{{display:block}}
   <path d="M0 470 Q 128 440 256 470 T 512 470 T 768 470 T 1024 470 V576 H0 Z" fill="#2F80ED" stroke="#222326" stroke-width="8"/>
   {chair}
   <!-- the name: white sticker edge, then black outline, then colour -->
-  <text class="t" x="{x}" y="{y1}" font-size="{s1}" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="44" text-anchor="middle">{l1}</text>
-  <text class="t" x="{x}" y="{y1}" font-size="{s1}" fill="{c1}" stroke-width="16" text-anchor="middle">{l1}</text>
-  <text class="t" x="{x}" y="{y2}" font-size="{s2}" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="44" text-anchor="middle">{l2}</text>
-  <text class="t" x="{x}" y="{y2}" font-size="{s2}" fill="{c2}" stroke-width="16" text-anchor="middle">{l2}</text>
+  <text class="t edge" x="{x}" y="{y1}" font-size="{s1}" fill="#FFFFFF" stroke-width="44" text-anchor="middle">{l1}</text>
+  <text class="t ink" x="{x}" y="{y1}" font-size="{s1}" fill="{c1}" stroke-width="16" text-anchor="middle">{l1}</text>
+  <text class="t edge" x="{x}" y="{y2}" font-size="{s2}" fill="#FFFFFF" stroke-width="44" text-anchor="middle">{l2}</text>
+  <text class="t ink" x="{x}" y="{y2}" font-size="{s2}" fill="{c2}" stroke-width="16" text-anchor="middle">{l2}</text>
 </svg></body></html>
 """
 

@@ -385,7 +385,6 @@ Config.Knock = {
 	MinSeconds = 0.5, -- stiff at least this long
 	MaxSeconds = 2.5, -- and at most this long, landed or not
 	GroundReach = 0.6, -- the feet within this of something solid count as landed
-	PredictForget = 0.6, -- a hit the swinger's screen already showed is not shown again when the server's comes
 	-- A swing reaching the server this soon after its swinger was hit was pressed before the hit reached that player's
 	-- screen (about a round trip), so it is still taken; later, while the hit's stun lasts (Config.Hit.LightStun or
 	-- MinSeconds), the server refuses swings.

@@ -211,7 +211,8 @@ local function swing(step: number, finisher: boolean, k: number): { Key }
 		{ t = k, pose = hit, ease = "in" },
 		{ t = k + (1 - k) * 0.45, pose = spinning, ease = "linear" },
 		{ t = k + (1 - k) * 0.8, pose = round, ease = "linear" },
-		{ t = 1, pose = { Root = { y = 360 } }, ease = "out" }, -- a whole turn is the same as none
+		-- Half way back like any blow; the root keeps its whole turn (the same as none) instead of unwinding half of it.
+		{ t = 1, pose = with(blend(round, REST, SETTLE), { Root = { y = 360, shift = Vector3.new(0, 0, -0.15) } }), ease = "out" },
 	})
 end
 

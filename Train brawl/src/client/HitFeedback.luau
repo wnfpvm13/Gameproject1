@@ -22,8 +22,6 @@ local SoundBank = require(shared:WaitForChild("SoundBank"))
 
 local HitFeedback = {}
 
--- Victims the player's own swing already showed (os.clock); weak, so models that go away are dropped.
-local predicted: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
 -- Fighters launched lately, until when they cannot be hit (os.clock), from the server's word.
 local unhittable: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
 -- The camera kick running now: which way (world), how far at its peak, when it started, how much the view narrows,
@@ -116,7 +114,6 @@ function HitFeedback.predict(victim: Model, weapon: string, from: Vector3): bool
 	if endsAt and os.clock() < endsAt then
 		return false -- just launched: the server will not take this hit
 	end
-	predicted[victim] = os.clock()
 	show(victim, weapon)
 	local body = CharacterParts.body(victim)
 	if body then
@@ -125,20 +122,15 @@ function HitFeedback.predict(victim: Model, weapon: string, from: Vector3): bool
 	return true
 end
 
--- The server's word on a hit. mine: the attacker is the player; me: the victim is the player; kind: "light",
--- "launch" or "smash"; weapon: what hit; push: the knock's velocity. Returns whether the plain hit (thump, flash) was
--- shown now - not when this client showed it already from its own attack.
-function HitFeedback.hit(victim: Model, mine: boolean, me: boolean, kind: string, weapon: string, push: Vector3?): boolean
+-- The server's word on a hit. seen: this client showed it already from the player's own attack (OwnSwing knows); mine:
+-- the attacker is the player; me: the victim is the player; kind: "light", "launch" or "smash"; weapon: what hit; push:
+-- the knock's velocity. Returns whether the plain hit (thump, flash) was shown now - not when it was seen already.
+function HitFeedback.hit(victim: Model, seen: boolean, mine: boolean, me: boolean, kind: string, weapon: string, push: Vector3?): boolean
 	if kind == "launch" then
 		unhittable[victim] = os.clock() + Config.Hit.LaunchImmune
 	end
-	-- The player's own hit: the thump and flash were shown already if this client predicted it lately (one server word
-	-- per prediction); what the kind adds is shown either way.
-	local seen = if mine then predicted[victim] else nil
-	if mine then
-		predicted[victim] = nil
-	end
-	local shownNow = not (seen and os.clock() - seen < Config.Knock.PredictForget)
+	-- The player's own hit shown at once: what the kind adds is shown now either way.
+	local shownNow = not seen
 	if shownNow then
 		show(victim, weapon)
 	end

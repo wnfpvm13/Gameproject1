@@ -107,8 +107,9 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 	end
 
 	-- One hit of `weapon` by `attacker` on `victim` at `step` of the attacker's string, pushed away from `from` (or along
-	-- `facing` when on top of it).
-	local function land(victim: CharacterParts.Body, attacker: Model, weapon: string, from: Vector3, facing: Vector3, now: number, step: number)
+	-- `facing` when on top of it). `swingAt`: the server time the attack started (Names.SwingAt; nil for a blast), sent
+	-- with the hit so the attacker's screen knows which of its attacks it was.
+	local function land(victim: CharacterParts.Body, attacker: Model, weapon: string, from: Vector3, facing: Vector3, now: number, step: number, swingAt: number?)
 		local w = weapons[weapon]
 		local launch = w.launch == true or AttackString.launches(stringRules, step, w.style)
 		local kind, health, ganged = hooks.hit(victim.model, now, w.damage, launch, attacker)
@@ -135,7 +136,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		hitAt[victim.model] = now
 		stunUntil[victim.model] = now + (if kind == "light" then Config.Hit.LightStun else Config.Knock.MinSeconds)
 		hooks.knockHere(victim.model, velocity, kind)
-		hitRemote:FireAllClients(victim.model, velocity, attacker, kind, weapon, ganged)
+		hitRemote:FireAllClients(victim.model, velocity, attacker, kind, weapon, ganged, swingAt)
 		hooks.onHit(victim.model, attacker)
 		if kind == "smash" then
 			hooks.onSmash(victim.model)
@@ -157,7 +158,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		return list
 	end
 
-	local function strike(attacker: Model, weapon: string, facing: Vector3, step: number)
+	local function strike(attacker: Model, weapon: string, facing: Vector3, step: number, swingAt: number)
 		local body = CharacterParts.body(attacker)
 		if not (body and hooks.canSwing(attacker)) then
 			return
@@ -168,7 +169,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		if w.style == "slam" then
 			local center = from + facing * assert(w.ahead, weapon .. ".ahead")
 			for _, victim in around(center, assert(w.radius, weapon .. ".radius"), attacker) do
-				land(victim, attacker, weapon, from, facing, now, step)
+				land(victim, attacker, weapon, from, facing, now, step, swingAt)
 			end
 		elseif w.style == "throw" then
 			hooks.throw(from, facing, function(at: Vector3)
@@ -184,7 +185,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		else
 			local reach = assert(w.reach, weapon .. ".reach") + attack.ReachSlack
 			for _, victim in SwingTargets.find(body, hooks.fighters(), reach, facing, w.halfAngle) do
-				land(victim, attacker, weapon, from, facing, now, step)
+				land(victim, attacker, weapon, from, facing, now, step, swingAt)
 			end
 		end
 	end
@@ -237,7 +238,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 			model:SetAttribute(Names.WeaponUses, uses - 1)
 		end
 		task.delay(AttackString.hitAt(stringRules, w.hitAt, step, w.style), function()
-			strike(model, weapon, facing, step)
+			strike(model, weapon, facing, step, now)
 			if spent and holding(model) == weapon then
 				set(model, FIST)
 			end

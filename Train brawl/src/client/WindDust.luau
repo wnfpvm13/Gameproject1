@@ -1,7 +1,9 @@
 --!strict
 -- The wind of the run on the roofs, on this client: fine sand-coloured specks blowing backward off both edges of every
--- wide flat roof (not a locomotive's round boiler), at about twice the run's speed, drifting a little out and up, so standing on a roof feels like riding a moving train (the scenery
--- scrolls past, but the roofs themselves looked still). Few and faint: drawn only, nothing collides.
+-- wide flat roof (not a locomotive's round boiler), at about twice the run's speed, drifting a little out and up, so
+-- standing on a roof feels like riding a moving train (the scenery scrolls past, but the roofs themselves looked still).
+-- Few and faint: drawn only, nothing collides. NOT BUILT FOR NOW (init does not call it): in Studio it was nearly
+-- invisible, even three times as many, darker or drawn as streaks; to be redone (docs/FEEL_REVIEW_2026-10-26.md).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 

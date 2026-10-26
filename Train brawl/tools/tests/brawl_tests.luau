@@ -653,6 +653,40 @@ do
 	check("after a crowd launch the count starts again", after1 == "light" and after2 == "light")
 end
 
+-- 11. Attack poses (stage 5b, after review): no joint drops back to the walking animation part way through, and a
+-- blow settles only part way to rest (SwingPose blends the rest out to the animation).
+do
+	local function turned(keys: any): { [string]: boolean }
+		local names = {}
+		for _, key in keys do
+			for name in key.pose do
+				names[name] = true
+			end
+		end
+		return names
+	end
+	local whole, detail = true, ""
+	for _, case in { { "punch", 1, false }, { "punch", 2, false }, { "punch", 3, true }, { "swing", 1, false }, { "swing", 2, false }, { "swing", 3, true }, { "slam", 1, false }, { "throw", 1, false } } do
+		local keys = AttackPoses.keys(case[1], case[2], case[3], 0.4)
+		local names = turned(keys)
+		for i = 0, 20 do
+			local pose = AttackPoses.sample(keys, i / 20)
+			for name in names do
+				if not pose[name] then
+					whole = false
+					detail = case[1] .. " " .. case[2] .. " drops " .. name .. " at " .. i / 20
+				end
+			end
+		end
+	end
+	check("every joint an attack turns is drawn all through it", whole, detail)
+	local jab = AttackPoses.keys("punch", 1, false, 0.4)
+	local last, out = AttackPoses.sample(jab, 1), AttackPoses.sample(jab, 0.4)
+	check("a blow ends half way back to rest, not standing straight", near(last.LeftShoulder.x :: number, (out.LeftShoulder.x :: number) * 0.5, 1e-6) and (last.LeftShoulder.x :: number) > 0)
+	local spin = AttackPoses.sample(AttackPoses.keys("swing", 3, true, 0.4), 0.4 + 0.6 * 0.6)
+	check("the swing finisher's knees ease back to rest while it spins (not dropped)", spin.RightKnee ~= nil and spin.RightKnee.x == 0)
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed == 0 then
 	print("ALL PASS")

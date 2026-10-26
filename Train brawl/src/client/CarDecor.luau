@@ -123,7 +123,7 @@ local function boxcar(parent: Instance, x: number, place: ArenaLayout.CarPlace, 
 		piece(parent, "RoofSeam", Vector3.new(a.RoofWidth - 0.2, 0.05, 0.18), CFrame.new(x, top + 0.025, z), a.Colors.Roof:Lerp(BLACK, 0.3))
 		z += seam
 	end
-	piece(parent, "Walkway", Vector3.new(1.6 * DETAIL, 0.06, place.length - 0.6), CFrame.new(x, top + 0.03, place.middle), colors.Wood, WOOD)
+	piece(parent, "Walkway", Vector3.new(1.6 * DETAIL, 0.06, place.length - 0.6), CFrame.new(x, top + 0.03, place.middle), a.Colors.Plank, WOOD)
 end
 
 local function tender(parent: Instance, x: number, place: ArenaLayout.CarPlace, number: number)

@@ -104,6 +104,9 @@ local function fighters(): { Model }
 end
 
 local STRING = AttackString.rules(Config.Attack)
+-- The burst kind this client showed at once for each victim of the player's own attack, until the server's word on it
+-- (weak: victims that go away are dropped).
+local guessed: { [Model]: string } = setmetatable({}, { __mode = "k" }) :: any
 
 local own = OwnSwing.new(swingRemote, {
 	fighters = fighters,
@@ -114,16 +117,19 @@ local own = OwnSwing.new(swingRemote, {
 		SwingPose.play(model, at, weapon, step)
 		HitFeedback.swing(model, weapon, AttackString.launches(STRING, step, Config.Weapons[weapon].style))
 	end,
-	predict = function(victim: Model, weapon: string, finisher: boolean)
+	predict = function(victim: Model, weapon: string, finisher: boolean): boolean
 		local character = player.Character
 		local from = if character then character:GetPivot().Position else victim:GetPivot().Position
-		if HitFeedback.predict(victim, weapon, from) then
+		local shown = HitFeedback.predict(victim, weapon, from)
+		if shown then
 			local kind = if finisher then "launch" else "light"
+			guessed[victim] = kind
 			ImpactBurst.play(ImpactBurst.at(victim, from), kind, weapon, victim:GetPivot().Position - from)
 			if character then
 				SwingPose.hold(character, Config.Feedback.HitStop[kind])
 			end
 		end
+		return shown
 	end,
 })
 SwingInput.bind(function(mouse: boolean)
@@ -180,18 +186,29 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 	SwingPose.react(victim, hitKind, push)
 	local hitWeapon = if typeof(weapon) == "string" then weapon else WeaponRules.FIST
 	local mine = swinger == player.Character
+	local used = Config.Weapons[hitWeapon]
+	if mine and used and AttackString.uses(used.style) then
+		own:confirmHit() -- the server's longer reach may have landed what this screen showed as a miss
+	end
 	local shown = HitFeedback.hit(victim, mine, me, hitKind, hitWeapon, push)
 	local attacker = if typeof(swinger) == "Instance" and swinger:IsA("Model") then swinger else nil
 	local thrown = Config.Weapons[hitWeapon] ~= nil and Config.Weapons[hitWeapon].style == "throw"
-	local crowd = ganged == true
-	-- (A crowd's launch shows red even on the screen that showed its own hit at once: that showed only a light hit.)
-	if shown or crowd then
+	local burst = if ganged == true then "crowd" elseif hitKind == "light" then "light" else "launch"
+	-- The player's own hit shown at once as a lighter one than the server made it (a crowd's launch, or a light hit
+	-- that emptied health: a home run) shows the bigger burst and hold now too.
+	local guess = if mine then guessed[victim] else nil
+	if mine then
+		guessed[victim] = nil
+	end
+	local bigger = not shown and guess ~= burst
+	if shown or bigger then
 		-- A blast's burst is on the victim (its thrower is far away); a blow's toward whoever struck it.
 		local from = if attacker and not thrown then attacker:GetPivot().Position else nil
-		ImpactBurst.play(ImpactBurst.at(victim, from), if crowd then "crowd" elseif hitKind == "light" then "light" else "launch", hitWeapon, push)
+		ImpactBurst.play(ImpactBurst.at(victim, from), burst, hitWeapon, push)
 	end
-	if shown and attacker and not thrown then
-		-- The player's own hits shown at once were held then (one hold per attack either way); a thrower is long done.
+	if (shown or bigger) and attacker and not thrown then
+		-- The player's own hits shown at once were held then (one hold per attack, as long as the longest); a thrower
+		-- is long done.
 		SwingPose.hold(attacker, Config.Feedback.HitStop[hitKind] or 0)
 	end
 	if hitKind == "launch" then

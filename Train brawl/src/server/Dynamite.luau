@@ -1,9 +1,11 @@
 --!strict
 -- Thrown dynamite on the server: a lit stick tumbles along an arc (WeaponRules.arc) from the thrower and stops where it
--- first meets the arena (a roof, a crate, a plank, the sand), and it bursts when its fuse runs out
+-- first meets the arena (a roof, a crate, a plank, the sand; one that meets a wall drops down it to the floor below),
+-- and it bursts when its fuse runs out
 -- (Config.Weapons.Dynamite.fuse, counted from the throw), wherever it is. Where it will come down is marked at once
 -- with an invisible flat part as wide as the blast (Names.BlastMark, with the burst's server time and the fuse), on
--- which every client draws the warning (GroundMarks), so everyone sees it coming. The stick fizzes (FuseSparks). Who the burst reaches is the caller's to judge.
+-- which every client draws the warning (GroundMarks), so everyone sees it coming. The stick fizzes at its fuse end
+-- (FuseSparks). Who the burst reaches is the caller's to judge.
 -- clear() puts out every stick still burning (the round is over).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -21,6 +23,8 @@ local FuseSparks = require(shared:WaitForChild("FuseSparks"))
 local Dynamite = {}
 
 local STEP = 1 / 30 -- the arc is traced this finely to find where it lands
+local WALL = 0.7 -- a surface met whose normal points up less than this is a wall
+local OFF_WALL = 1 -- a stick that met a wall bounces this far back off it as it drops (not into a gap between cars)
 local RED = Color3.fromRGB(220, 50, 40)
 
 type Lit = { stick: BasePart, ring: BasePart?, connection: RBXScriptConnection }
@@ -52,8 +56,18 @@ local function arenaHit(a: Vector3, b: Vector3, arena: Instance, params: Raycast
 	return nil
 end
 
--- Where the arc first meets the arena within `limit` seconds, and when; nil when it is still flying by then.
-local function landing(from: Vector3, facing: Vector3, speed: number, lift: number, limit: number, arena: Instance): (Vector3?, number)
+-- The floor under a stick that met a wall at `at` (normal `normal`): straight down from just off the wall; nil when
+-- nothing of the arena is under it.
+local function floorBelow(at: Vector3, normal: Vector3, arena: Instance): Vector3?
+	local out = Vector3.new(normal.X, 0, normal.Z)
+	local start = at + (if out.Magnitude > 1e-3 then out.Unit * OFF_WALL else Vector3.zero)
+	local hit = arenaHit(start, start - Vector3.new(0, 200, 0), arena, passThrough())
+	return if hit then hit.Position else nil
+end
+
+-- Where the arc first meets the arena within `limit` seconds, and when; nil when it is still flying by then. When what
+-- it meets is a wall, also the floor it drops to.
+local function landing(from: Vector3, facing: Vector3, speed: number, lift: number, limit: number, arena: Instance): (Vector3?, number, Vector3?)
 	local params = passThrough()
 	local gravity = Workspace.Gravity
 	local previous = from
@@ -65,7 +79,8 @@ local function landing(from: Vector3, facing: Vector3, speed: number, lift: numb
 		local hit = arenaHit(previous, nextAt, arena, params)
 		if hit then
 			local share = (hit.Position - previous).Magnitude / math.max((nextAt - previous).Magnitude, 1e-6)
-			return hit.Position, t - STEP + STEP * share
+			local floor = if hit.Normal.Y < WALL then floorBelow(hit.Position, hit.Normal, arena) else nil
+			return hit.Position, t - STEP + STEP * share, floor
 		end
 		previous = nextAt
 	end
@@ -87,10 +102,11 @@ function Dynamite.throw(parent: Instance, arena: Instance, root: Vector3, facing
 	if blocked then
 		from = blocked.Position - (from - root).Unit * 0.4
 	end
-	local land, landAt = landing(from, facing, speed, lift, fuse, arena)
+	local land, landAt, floor = landing(from, facing, speed, lift, fuse, arena)
+	local rest = floor or land -- where it ends up
 	local ring: BasePart? = nil
-	if land then
-		local mark = PartUtil.decor(Names.BlastMark, Vector3.new(radius * 2, 0.05, radius * 2), CFrame.new(land + Vector3.new(0, 0.05, 0)), RED, Enum.Material.SmoothPlastic, nil)
+	if rest then
+		local mark = PartUtil.decor(Names.BlastMark, Vector3.new(radius * 2, 0.05, radius * 2), CFrame.new(rest + Vector3.new(0, 0.05, 0)), RED, Enum.Material.SmoothPlastic, nil)
 		mark.Transparency = 1
 		mark:SetAttribute(Names.MarkEndsAt, Workspace:GetServerTimeNow() + fuse)
 		mark:SetAttribute(Names.MarkSeconds, fuse)
@@ -98,7 +114,11 @@ function Dynamite.throw(parent: Instance, arena: Instance, root: Vector3, facing
 		ring = mark
 	end
 	local stick = PartUtil.decor("Dynamite", Vector3.new(1.3, 0.5, 0.5), CFrame.new(from), RED, Enum.Material.SmoothPlastic, parent, Enum.PartType.Cylinder)
-	FuseSparks.add(stick)
+	local fuseEnd = Instance.new("Attachment")
+	fuseEnd.Name = "Fuse"
+	fuseEnd.Position = Vector3.new(0.7, 0, 0) -- the cylinder lies along its X
+	fuseEnd.Parent = stick
+	FuseSparks.add(fuseEnd)
 	local started = os.clock()
 	local lit: Lit
 	local connection = RunService.Heartbeat:Connect(function()
@@ -106,11 +126,17 @@ function Dynamite.throw(parent: Instance, arena: Instance, root: Vector3, facing
 		local at: Vector3
 		if land and t >= landAt then
 			at = land + Vector3.new(0, 0.3, 0)
+			if floor then
+				-- Off the wall and falling down it to the floor.
+				local fell = t - landAt
+				local y = math.max(land.Y - Workspace.Gravity * fell * fell / 2, floor.Y)
+				at = Vector3.new(floor.X, y + 0.3, floor.Z)
+			end
 		else
 			local x, y, z = WeaponRules.arc(from.X, from.Y, from.Z, facing.X, facing.Z, speed, lift, Workspace.Gravity, t)
 			at = Vector3.new(x, y, z)
 		end
-		local tumble = if land and t >= landAt then 0 else t
+		local tumble = if rest and at.Y <= rest.Y + 0.3 + 1e-3 and t >= landAt then 0 else t
 		stick.CFrame = CFrame.new(at) * CFrame.Angles(tumble * 9, 0, tumble * 5)
 		if t >= fuse then
 			lit.connection:Disconnect()

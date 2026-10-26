@@ -15,9 +15,13 @@ local ACTION = "TrainBrawlSwing"
 
 -- Returns a function that removes the control.
 function SwingInput.bind(onSwing: (mouse: boolean) -> ()): () -> ()
+	local press: UIScale? = nil -- the touch button's press, once it is made
 	ContextActionService:BindActionAtPriority(ACTION, function(_, state: Enum.UserInputState, input: InputObject)
 		if state == Enum.UserInputState.Begin then
 			onSwing(input.UserInputType == Enum.UserInputType.MouseButton1)
+		end
+		if press and input.UserInputType == Enum.UserInputType.Touch then
+			press.Scale = if state == Enum.UserInputState.Begin then 0.9 else 1
 		end
 		return Enum.ContextActionResult.Pass -- clicks still reach the camera and the GUI
 	end, true, Enum.ContextActionPriority.High.Value, Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2)
@@ -30,6 +34,7 @@ function SwingInput.bind(onSwing: (mouse: boolean) -> ()): () -> ()
 		button.Position = UDim2.new(1, -110, 1, -230)
 		button.Image = ""
 		button.PressedImage = ""
+		button.ImageTransparency = 1 -- Roblox swaps its own pressed image in on a touch
 		button.BackgroundColor3 = UiStyle.PlateColor
 		button.BackgroundTransparency = 0.15
 		local round = Instance.new("UICorner")
@@ -40,17 +45,9 @@ function SwingInput.bind(onSwing: (mouse: boolean) -> ()): () -> ()
 		edge.Color = UiStyle.PlateEdge
 		edge.Thickness = 3
 		edge.Parent = button
-		local press = Instance.new("UIScale")
-		press.Parent = button
-		button.MouseButton1Down:Connect(function()
-			press.Scale = 0.9
-		end)
-		button.MouseButton1Up:Connect(function()
-			press.Scale = 1
-		end)
-		button.MouseLeave:Connect(function()
-			press.Scale = 1
-		end)
+		local scale = Instance.new("UIScale")
+		scale.Parent = button
+		press = scale
 		local title = button:FindFirstChild("ActionTitle")
 		if title and title:IsA("TextLabel") then
 			title.TextSize = 22 -- the default is small for a button this big

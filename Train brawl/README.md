@@ -8,7 +8,7 @@ MonCook, 금칙어 게임, Western train(지붕 위 오비)과 별개인 로블�
 [docs/HEALTH_AIM_2026-10-25.md](docs/HEALTH_AIM_2026-10-25.md), [docs/HOMERUN_SOUND_2026-10-25.md](docs/HOMERUN_SOUND_2026-10-25.md),
 [docs/MAP_GRAYBOX_2026-10-25.md](docs/MAP_GRAYBOX_2026-10-25.md), [docs/DECOR_2026-10-25.md](docs/DECOR_2026-10-25.md),
 [docs/SCALE_UP_2026-10-25.md](docs/SCALE_UP_2026-10-25.md), [docs/WEAPONS_2026-10-25.md](docs/WEAPONS_2026-10-25.md),
-[docs/FEEL_5A_2026-10-26.md](docs/FEEL_5A_2026-10-26.md), [docs/FEEL_5B_2026-10-26.md](docs/FEEL_5B_2026-10-26.md), [docs/FEEL_5C_2026-10-26.md](docs/FEEL_5C_2026-10-26.md), [docs/FEEL_5D_2026-10-26.md](docs/FEEL_5D_2026-10-26.md))
+[docs/FEEL_5A_2026-10-26.md](docs/FEEL_5A_2026-10-26.md), [docs/FEEL_5B_2026-10-26.md](docs/FEEL_5B_2026-10-26.md), [docs/FEEL_5C_2026-10-26.md](docs/FEEL_5C_2026-10-26.md), [docs/FEEL_5D_2026-10-26.md](docs/FEEL_5D_2026-10-26.md), 검토 뒤 고친 것 [docs/FEEL_REVIEW_2026-10-26.md](docs/FEEL_REVIEW_2026-10-26.md))
 - 큰 기차 3대(지붕 폭 15, 한 대 길이 약 95~100)가 틈 15스터드를 두고 나란히 선다. 기차마다 4칸(기관차, 석탄차, 화물칸, 평판차, 승무원차 중)이고 앞뒤로 조금씩
   어긋나 서서 옆 기차와 마주 보는 칸이 다르다. 평판차는 낮은 바닥(상자 2개가 계단), 승무원차 위 전망대와 기관차 굴뚝 위가
   높은 곳이다. 기차는 제자리이고 모래·자갈 바닥, 침목·선인장·바위·전신주와 양옆 협곡이 뒤로 흐른다. 판자는 같은 높이의 평평한 지붕이 마주
@@ -39,7 +39,7 @@ MonCook, 금칙어 게임, Western train(지붕 위 오비)과 별개인 로블�
     방향으로 세 대를 다 맞으면 약한 타격의 밀림이 더해져 첫 콤보에서도 지붕 가운데에서 떨어질 수 있다(지붕 15에서는 경계선).
     날린 뒤 0.9초는 안 맞는다.
   - 체력이 0이 되는 한 방(9번째) = 장외홈런: 무기마다 다른 끝내기 소리(방망이는 "딱!"), 맞은 자리에 "홈런!", 빛 꼬리를 남기며
-    하늘 높이 날아가 1.1초 뒤 "✦" 반짝("펑") 사라지고 관전석으로. 화면 위에 "A → B 홈런!"(떨어뜨리면 "A → B 하차") 알림. 홈런은 날아갈 때 만화식 슬라이드 휘슬도 난다.
+    하늘 높이 날아가 1.1초 뒤 금색 타격 효과선으로 반짝("펑") 사라지고 관전석으로. 화면 위에 "A → B 홈런!"(떨어뜨리면 "A → B 하차") 알림. 홈런은 날아갈 때 만화식 슬라이드 휘슬도 난다.
   - 머리 위와 화면 아래에 체력 막대(30% 이하면 빨갛게 깜박임). 판마다 다시 100.
 - 떨어지면 모래에 떨어져 누운 채 기차 뒤로 멀어지고, 1.6초 뒤 공중의 대기실(관전석)로 올라가 남은 사람을 관전한다. 떨어뜨린
   사람의 "KO"가 올라간다(맞힌 지 6초 안). 내가 떨어지면 화면 가운데에 "하차!"(그 순간 판이 끝나면 바로 결과가 덮음).
@@ -76,7 +76,7 @@ MonCook, 금칙어 게임, Western train(지붕 위 오비)과 별개인 로블�
   샌드백)
 - `src/client` — `init`(연결만), `Scenery`(흐르는 모래·자갈 바닥, 레일, 흐르는 침목·소품·전신주), `Canyon`(양옆 협곡), `CarDecor`(기관차 말고 칸 장식·판자 쇠띠), `LocomotiveDecor`(기관차 장식·도는 연결봉·굴뚝 연기), `Stands`(관전석 열기구·깃발·틀), `AimLock`(마우스 고정·어깨 카메라·Alt로 커서), `SwingInput`(클릭·버튼), `OwnSwing`(내 공격: 시작 조건·
   무기별 쿨다운·바로 그리기·맞힘 먼저 보여 주기·서버에 알림), `SwingPose`(전신 관절을 돌려 공격 자세(연타 단계마다 다름)와 맞는 자세를 그림),
-  `WeaponHud`(내 무기와 남은 횟수, 다른 사람 머리 위 무기), `DropShow`(상자·도화선 소리), `ExplosionShow`(다이너마이트 폭발), `KnockFlight`(맞은 내 캐릭터 멈칫·날아감·일어남), `HitFeedback`(소리·번쩍임·방향 카메라 킥), `ImpactBurst`(타격 효과선), `LaunchShow`(날림 꼬리·착지 먼지), `GroundMarks`(다이너마이트 경고 원·상자 그림자), `WindDust`(지붕 위 바람 모래), `HomeRunShow`(홈런 글자·빛 꼬리·반짝 별), `FeedHud`(떨어뜨림 알림), `RideCard`(처음 탄 판의 조작 안내 카드),
+  `WeaponHud`(내 무기와 남은 횟수, 다른 사람 머리 위 무기), `DropShow`(상자·도화선 소리), `ExplosionShow`(다이너마이트 폭발), `KnockFlight`(맞은 내 캐릭터 멈칫·날아감·일어남), `HitFeedback`(소리·번쩍임·방향 카메라 킥), `ImpactBurst`(타격 효과선), `LaunchShow`(날림 꼬리·착지 먼지), `GroundMarks`(다이너마이트 경고 원·상자 그림자), `WindDust`(지붕 위 바람 모래), `HomeRunShow`(홈런 글자·빛 꼬리·끝의 금색 반짝), `FeedHud`(떨어뜨림 알림), `RideCard`(처음 탄 판의 조작 안내 카드),
   `RoundAudio`(기차 소리·음악·카운트다운 트라이앵글·기적·승리 종, 음악 버튼), `HealthBars`(체력 막대), `FallDrift`(떨어진 내 캐릭터를
   눕혀 뒤로), `RoundHud`(화면 위 시간판·탑승객·KO, 가운데 큰 글자), `SpectateCam`(관전 카메라)
 - `tools/tests` — Studio 없이 도는 테스트, `tools/lint` — 정적 검사

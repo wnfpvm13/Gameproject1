@@ -35,18 +35,20 @@ export type Hooks = {
 	stunned: () -> boolean, -- the player's character is flinching or flying from a hit
 	-- Draw and sound an attack that started at server time `at`, at `step` of the string.
 	draw: (model: Model, at: number, weapon: string, step: number) -> (),
-	-- Show a hit the attack is about to land (`finisher`: the string's launching last step).
-	predict: (victim: Model, weapon: string, finisher: boolean) -> (),
+	-- Show a hit the attack is about to land (`finisher`: the string's launching last step); false when it was not
+	-- shown (the victim cannot be hit just now).
+	predict: (victim: Model, weapon: string, finisher: boolean) -> boolean,
 }
 
 -- last: when the player's own last attack started; ready: when the next may start (by the cooldown of the weapon that
 -- attack used, as the server counts it: running out of a slow weapon does not let a quick fist out sooner).
--- chain: the player's 1-2-3 string.
-type Fields = { remote: RemoteEvent, hooks: Hooks, last: number, ready: number, chain: AttackString.State }
+-- chain: the player's 1-2-3 string; weapon: what the last attack was made with (a new weapon starts the string over);
+-- strikeAt: how long after the last attack started it lands.
+type Fields = { remote: RemoteEvent, hooks: Hooks, last: number, ready: number, chain: AttackString.State, weapon: string?, strikeAt: number }
 export type Swing = typeof(setmetatable({} :: Fields, OwnSwing))
 
 function OwnSwing.new(remote: RemoteEvent, hooks: Hooks): Swing
-	local fields: Fields = { remote = remote, hooks = hooks, last = -math.huge, ready = -math.huge, chain = AttackString.new() }
+	local fields: Fields = { remote = remote, hooks = hooks, last = -math.huge, ready = -math.huge, chain = AttackString.new(), weapon = nil, strikeAt = 0 }
 	return setmetatable(fields, OwnSwing)
 end
 
@@ -64,7 +66,12 @@ function OwnSwing.press(self: Swing, model: Model?)
 	end
 	self.last = now
 	self.ready = now + w.cooldown
+	if weapon ~= self.weapon then
+		AttackString.reset(self.chain) -- a new weapon in hand starts the string over (as on the server)
+		self.weapon = weapon
+	end
 	local step = AttackString.take(self.chain, STRING, now, w.cooldown, w.style)
+	self.strikeAt = AttackString.hitAt(STRING, w.hitAt, step, w.style)
 	self.hooks.draw(body.model, now, weapon, step)
 	-- The server judges along this aim (taken now), so the hits shown at once use it too.
 	local aim = body.root.CFrame.LookVector
@@ -73,20 +80,32 @@ function OwnSwing.press(self: Swing, model: Model?)
 	if not reach then
 		return -- a slam or a throw: its hits are shown when the server says
 	end
-	task.delay(AttackString.hitAt(STRING, w.hitAt, step, w.style), function()
+	task.delay(self.strikeAt, function()
 		local me = CharacterParts.body(body.model)
 		-- Hit while attacking: the server judges from where the knock took the player, so show no hits of its own.
 		if me and not self.hooks.stunned() then
 			local victims = SwingTargets.find(me, self.hooks.fighters(), reach, aim, w.halfAngle)
-			local finisher = AttackString.launches(STRING, step, w.style)
+			-- The server's word may have corrected this attack's step meanwhile (settle): show the step it counts.
+			local counted = if self.last == now then self.chain.step else step
+			local finisher = AttackString.launches(STRING, counted, w.style)
+			local shown = false
 			for _, victim in victims do
-				self.hooks.predict(victim.model, weapon, finisher)
+				shown = self.hooks.predict(victim.model, weapon, finisher) or shown
 			end
-			if #victims > 0 then
+			if shown then
 				AttackString.landed(self.chain) -- it landed: the string may go on (as the server counts it)
 			end
 		end
 	end)
+end
+
+-- The server says an attack of the player's hit someone (its reach is a little longer than the hits shown at once):
+-- the latest attack landed, so the string may go on. A word that comes before the latest attack could have landed
+-- belongs to an earlier one and is left alone.
+function OwnSwing.confirmHit(self: Swing)
+	if Workspace:GetServerTimeNow() - self.last >= self.strikeAt then
+		AttackString.landed(self.chain)
+	end
 end
 
 -- The player was hit: the string is broken (the next attack is a 1, as on the server).

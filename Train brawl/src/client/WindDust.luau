@@ -1,6 +1,6 @@
 --!strict
 -- The wind of the run on the roofs, on this client: fine sand-coloured specks blowing backward off both edges of every
--- wide roof, at about twice the run's speed, so standing on a roof feels like riding a moving train (the scenery
+-- wide flat roof (not a locomotive's round boiler), at about twice the run's speed, drifting a little out and up, so standing on a roof feels like riding a moving train (the scenery
 -- scrolls past, but the roofs themselves looked still). Few and faint: drawn only, nothing collides.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -20,7 +20,7 @@ function WindDust.build(layout: ArenaLayout.Layout): Folder
 	local folder = Instance.new("Folder")
 	folder.Name = "TrainBrawlWind"
 	for _, surface in layout.surfaces do
-		if surface.width >= Config.Arena.RoofWidth * 0.6 and surface.length > 6 then
+		if surface.width >= Config.Arena.RoofWidth - 1e-6 and surface.length > 6 then
 			for _, side in { -1, 1 } do
 				local x = surface.x + side * (surface.width / 2 - 0.3)
 				local strip = PartUtil.decor("Wind", Vector3.new(0.2, 0.2, surface.length), CFrame.new(x, surface.top + 0.6, surface.z), Color3.new(1, 1, 1), Enum.Material.SmoothPlastic, folder)
@@ -37,6 +37,7 @@ function WindDust.build(layout: ArenaLayout.Layout): Folder
 				specks.EmissionDirection = Enum.NormalId.Back
 				specks.Speed = NumberRange.new(Config.Run.Speed * 1.6, Config.Run.Speed * 2.4)
 				specks.SpreadAngle = Vector2.new(12, 12)
+				specks.Acceleration = Vector3.new(side * 4, 3, 0)
 				specks.Parent = strip
 			end
 		end

@@ -2,15 +2,15 @@
 
   python -I tools/tests/run_tests.py
 
-  brawl   src/shared/Config.luau (real numbers), ArenaLayout.luau, BatMath.luau, HitRules.luau, CanyonLayout.luau, WeaponRules.luau, Words.luau, AttackString.luau: where the trains, cars,
-          planks and spawn spots are, the fall line, the cone a swing covers and the knock it gives, what a hit does
-          to health (light, launch, smash, the guard against a crowd, the unhittable moment), the attacker's 1-2-3 string,
-          and that the tuning keeps its promises
+  brawl   src/shared/Config.luau (real numbers), ArenaLayout.luau, BatMath.luau, HitRules.luau, CanyonLayout.luau, WeaponRules.luau, Words.luau, AttackString.luau, AttackPoses.luau: where the trains,
+          cars, planks and spawn spots are, the fall line, the cone a swing covers and the knock it gives, what a hit
+          does to health (light, launch, smash, the guard against a crowd, the unhittable moment), the attacker's 1-2-3
+          string and its poses, and that the tuning keeps its promises
           (the gap is wider than a jump, a light hit's stun ends before the next swing, a low-health launch goes off)
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
 
-The modules run unchanged; the only fakes are Color3.fromRGB and Vector3.new (Config's colours and sizes), which plain
-Luau lacks. (Taken over from Western train's runner, with this game's modules.)
+The modules run unchanged; the only fakes are Color3.fromRGB and Vector3 (new, zero and Lerp: Config's colours and
+sizes, AttackPoses' shifts), which plain Luau lacks. (Taken over from Western train's runner, with this game's modules.)
 """
 import io, os, subprocess, sys, tempfile
 
@@ -26,10 +26,15 @@ MODULES = [
     ("WeaponRules", "src/shared/WeaponRules.luau"),
     ("Words", "src/shared/Words.luau"),
     ("AttackString", "src/shared/AttackString.luau"),
+    ("AttackPoses", "src/shared/AttackPoses.luau"),
 ]
 PRELUDE = (
     "Color3 = { fromRGB = function(r, g, b) return { r = r, g = g, b = b } end }\n"
-    "Vector3 = { new = function(x, y, z) return { X = x, Y = y, Z = z } end }\n"
+    "local V3 = {}\n"
+    "V3.__index = V3\n"
+    "Vector3 = { new = function(x, y, z) return setmetatable({ X = x, Y = y, Z = z }, V3) end }\n"
+    "function V3.Lerp(a, b, s) return Vector3.new(a.X + (b.X - a.X) * s, a.Y + (b.Y - a.Y) * s, a.Z + (b.Z - a.Z) * s) end\n"
+    "Vector3.zero = Vector3.new(0, 0, 0)\n"
 )
 
 

@@ -329,7 +329,7 @@ Config.Weapons = {
 
 -- The weapon crates (WeaponDrops): the first some seconds into a fight, then one every few seconds while fewer are on
 -- the map than one for every three fighters left (at most MaxOnMap). Each floats down FallSeconds from FallHeight with
--- a ring marking where it lands; a crate nobody takes goes away after LifeSeconds.
+-- its shadow growing where it lands; a crate nobody takes goes away after LifeSeconds.
 Config.Drops = {
 	FirstAfter = 15,
 	Every = 15,

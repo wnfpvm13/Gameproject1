@@ -5,7 +5,8 @@
 --   as the fuse burns down and blinks faster near the end, so how long is left can be read at a glance;
 -- - where a crate will land: its shadow, small and faint when the crate is high, growing and darkening as it comes down.
 -- They replace the glowing Neon discs that read as debug markers. Drawn with a SurfaceGui on the part's top face (no
--- uploaded image); lying on the roof, they are hidden under whatever stands on them.
+-- uploaded image). A crate's shadow lies on the roof, under whatever stands on it; the blast warning is drawn over
+-- everything (it must be seen even where the ring runs into a taller car next to it or under the coal heap).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -19,6 +20,7 @@ local GroundMarks = {}
 local BLAST_RED = Color3.fromRGB(235, 64, 48)
 local SHADOW = Color3.fromRGB(28, 18, 12)
 local PIXELS_PER_STUD = 24
+local STROKE = 0.35 -- the blast ring's width, studs
 
 -- A mark being drawn: its part, its kind ("blast" or "landing"), and the frames that change.
 type Mark = { part: BasePart, kind: string, ring: Frame?, fill: Frame }
@@ -53,15 +55,19 @@ local function watch(part: Instance)
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = PIXELS_PER_STUD
 	gui.LightInfluence = if kind == "blast" then 0 else 1
+	gui.AlwaysOnTop = kind == "blast"
 	gui.Adornee = part
 	gui.Parent = part
 	local mark: Mark
 	if kind == "blast" then
 		local ring = circle(gui, BLAST_RED, 1)
+		-- The stroke is drawn outside the frame: shrink the frame by it so the ring is not cut flat at the canvas edges.
+		local inset = math.min(2 * STROKE / math.max(part.Size.X, 1), 0.5)
+		ring.Size = UDim2.fromScale(1 - inset, 1 - inset)
 		local edge = Instance.new("UIStroke")
 		edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		edge.Color = BLAST_RED
-		edge.Thickness = 0.35 * PIXELS_PER_STUD
+		edge.Thickness = STROKE * PIXELS_PER_STUD
 		edge.Parent = ring
 		mark = { part = part, kind = kind, ring = ring, fill = circle(gui, BLAST_RED, 0.55) }
 	else
@@ -83,9 +89,11 @@ local function update()
 		local left = math.clamp((ends - now) / seconds, 0, 1) -- 1 when it starts, 0 when it happens
 		if mark.kind == "blast" then
 			mark.fill.Size = UDim2.fromScale(left, left)
-			-- Blinks faster as the fuse runs out: about 3 a second at the start, 12 at the end.
-			local rate = 3 + 9 * (1 - left)
-			local on = math.floor(now * rate * 2) % 2 == 0
+			-- Blinks faster as the fuse runs out: about 3 a second at the start, 12 at the end (the blink count is the
+			-- rate summed over the time since it was lit).
+			local lit = seconds * (1 - left)
+			local blinks = 3 * lit + 4.5 * lit * lit / seconds
+			local on = math.floor(blinks * 2) % 2 == 0
 			mark.fill.BackgroundTransparency = if on then 0.45 else 0.7
 			if mark.ring then
 				local edge = mark.ring:FindFirstChildOfClass("UIStroke")

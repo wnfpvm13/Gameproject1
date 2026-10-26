@@ -1,7 +1,8 @@
 --!strict
 -- Weapon crates on the server (Config.Drops). While a fight runs, crates float down under parachutes onto random spots
 -- on the trains' wide tops (roofs and decks, never under a lookout or a crate), each holding a weapon picked by weight
--- (WeaponRules.pick) and showing its name. A ring on the top marks where one will land while it falls. A player with
+-- (WeaponRules.pick) and showing its name. Its shadow on the top shows where one will land while it falls (drawn by every
+-- client: GroundMarks). Coal tenders get none (a crate half sunk in coal, its shadow lost on it). A player with
 -- bare fists who walks into a landed crate takes its weapon (hooks.give). How many crates the map holds follows the
 -- fighters left (WeaponRules.cratesFor); a crate nobody takes blinks and goes away. Nothing here collides or is seen by
 -- raycasts. The crates carry their state as attributes (Names.CrateWeapon, CrateLanded, CrateTakenBy) for the clients'
@@ -44,7 +45,7 @@ end
 local function spot(surfaces: { ArenaLayout.Surface }): Vector3?
 	local wide = {}
 	for _, surface in surfaces do
-		if surface.width >= Config.Arena.RoofWidth - 1e-6 and surface.length > MARGIN * 2 then
+		if surface.width >= Config.Arena.RoofWidth - 1e-6 and surface.length > MARGIN * 2 and surface.kind ~= "Tender" then
 			table.insert(wide, surface)
 		end
 	end
@@ -121,13 +122,13 @@ function WeaponDrops.start(surfaces: { ArenaLayout.Surface }, folder: Instance, 
 		local vent = part("Vent", Vector3.new(3, 3, 3), Color3.fromRGB(240, 226, 196), Enum.Material.Fabric, Enum.PartType.Ball)
 		local cap = Instance.new("SpecialMesh")
 		cap.MeshType = Enum.MeshType.Sphere
-		cap.Scale = Vector3.new(1, 0.45, 1)
+		cap.Scale = Vector3.new(1, 0.3, 1)
 		cap.Parent = vent
-		vent.CFrame = canopy.CFrame + Vector3.new(0, 1.2, 0) -- its top shows above the canopy's
+		vent.CFrame = canopy.CFrame + Vector3.new(0, 1.1, 0) -- only its top shows, a pale patch on the canopy's crown
 		table.insert(chute, vent)
 		for _, corner in { Vector3.new(1, 0, 1), Vector3.new(1, 0, -1), Vector3.new(-1, 0, 1), Vector3.new(-1, 0, -1) } do
 			local a = box.Position + Vector3.new(corner.X * 1.2, CRATE / 2, corner.Z * 1.2)
-			local b = canopy.Position + Vector3.new(corner.X * 2.4, -0.9, corner.Z * 2.4) -- the canopy's rim
+			local b = canopy.Position + Vector3.new(corner.X * 2.3, -0.4, corner.Z * 2.3) -- just inside the canopy's underside
 			local cord = part("Cord", Vector3.new(0.1, 0.1, (b - a).Magnitude), Color3.fromRGB(230, 220, 200), Enum.Material.Fabric)
 			cord.CFrame = CFrame.lookAt((a + b) / 2, b)
 			table.insert(chute, cord)

@@ -46,12 +46,13 @@ local function lerp(a: number, b: number, s: number): number
 	return a + (b - a) * s
 end
 
--- `a` and `b` blended by `s` (a joint missing from a pose is at rest).
-local function blend(a: Pose, b: Pose, s: number): Pose
+-- `a` and `b` blended by `s` (a joint missing from a pose is at rest), with every joint in `also` even when neither
+-- names it (at rest then).
+local function blend(a: Pose, b: Pose, s: number, also: { [string]: boolean }?): Pose
 	local out: Pose = {}
 	for _, name in JOINTS do
 		local ja, jb = a[name], b[name]
-		if ja or jb then
+		if ja or jb or (also and also[name]) then
 			local pa: Joint = ja or {}
 			local pb: Joint = jb or {}
 			local shift: Vector3? = nil
@@ -69,17 +70,37 @@ local function blend(a: Pose, b: Pose, s: number): Pose
 	return out
 end
 
--- The pose at `u` (0..1) along keys (the first at 0, the last at 1).
+-- The joints any of `keys` turns, found once per set of keys.
+local used: { [{ Key }]: { [string]: boolean } } = setmetatable({}, { __mode = "k" }) :: any
+local function turned(keys: { Key }): { [string]: boolean }
+	local found = used[keys]
+	if not found then
+		local names: { [string]: boolean } = {}
+		for _, key in keys do
+			for name in key.pose do
+				names[name] = true
+			end
+		end
+		used[keys] = names
+		found = names
+	end
+	return found
+end
+
+-- The pose at `u` (0..1) along keys (the first at 0, the last at 1). It names every joint any key turns, all through
+-- the move (one the keys on both sides leave out is at rest), so no joint drops back to the walking animation part
+-- way through.
 function AttackPoses.sample(keys: { Key }, u: number): Pose
 	u = math.clamp(u, 0, 1)
+	local all = turned(keys)
 	for i = 2, #keys do
 		local a, b = keys[i - 1], keys[i]
 		if u <= b.t then
 			local span = b.t - a.t
-			return blend(a.pose, b.pose, if span > 0 then ease(b.ease, (u - a.t) / span) else 1)
+			return blend(a.pose, b.pose, if span > 0 then ease(b.ease, (u - a.t) / span) else 1, all)
 		end
 	end
-	return keys[#keys].pose
+	return blend(keys[#keys].pose, keys[#keys].pose, 1, all)
 end
 
 -- Keys in order whatever the timing gives (a key that would come before the one ahead of it moves just after it).
@@ -108,14 +129,18 @@ local function with(...: Pose): Pose
 	return out
 end
 
--- The usual shape of a blow: rest, wound up by `windUp`, speeding into the hit at `k`, held a moment, back to rest.
+-- How far toward rest the last key of a blow has come back: SwingPose blends the rest of the way out to the walking
+-- animation (a last key at rest would pull the body through standing straight on its way back to walking).
+local SETTLE = 0.5
+
+-- The usual shape of a blow: rest, wound up by `windUp`, speeding into the hit at `k`, held a moment, settling back.
 local function blow(cocked: Pose, out: Pose, follow: Pose, k: number, windUp: number, hold: number): { Key }
 	return ordered({
 		{ t = 0, pose = REST },
 		{ t = k * windUp, pose = cocked },
 		{ t = k, pose = out, ease = "in" },
 		{ t = k + hold, pose = follow, ease = "out" },
-		{ t = 1, pose = REST },
+		{ t = 1, pose = blend(follow, REST, SETTLE) },
 	})
 end
 
@@ -214,7 +239,7 @@ local function throw(k: number): { Key }
 		{ t = 0, pose = REST },
 		{ t = k, pose = back },
 		{ t = math.min(k + 0.3, 0.9), pose = out, ease = "in" },
-		{ t = 1, pose = REST },
+		{ t = 1, pose = blend(out, REST, SETTLE) },
 	})
 end
 

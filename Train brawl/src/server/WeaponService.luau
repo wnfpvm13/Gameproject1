@@ -89,6 +89,11 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 
 	local function set(model: Model, weapon: string)
 		local w = weapons[weapon]
+		local player = Players:GetPlayerFromCharacter(model)
+		local chain = if player and model:GetAttribute(Names.Weapon) ~= weapon then strings[player] else nil
+		if chain then
+			AttackString.reset(chain) -- a new weapon in hand starts the string over
+		end
 		model:SetAttribute(Names.Weapon, weapon)
 		model:SetAttribute(Names.WeaponUses, w.uses)
 		model:SetAttribute(Names.WeaponEndsAt, if w.heldSeconds then Workspace:GetServerTimeNow() + w.heldSeconds else nil)

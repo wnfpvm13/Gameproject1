@@ -71,7 +71,9 @@ local function kickAmount(s: number): number
 end
 
 -- Starts a camera kick along world `dir`, `studs` at its peak, narrowing the view `fov` degrees. A kick arriving while
--- one is still out carries on from where that one is (no jump back to the middle) and keeps the larger narrowing.
+-- one is still out carries on from where that one is (no jump back to the middle, nor out to the new peak at once:
+-- it starts part way along its way out) and reaches the larger of the two, with the larger narrowing (the old one's
+-- whole reach while it is still on its way out).
 local function startKick(dir: Vector3, studs: number, fov: number)
 	local flat = Vector3.new(dir.X, 0, dir.Z)
 	if flat.Magnitude < 1e-3 or studs <= 0 then
@@ -81,6 +83,7 @@ local function startKick(dir: Vector3, studs: number, fov: number)
 	local now = os.clock()
 	local s = (now - kick.start) / Config.Feedback.KickSeconds
 	local before = kickAmount(s)
+	local rising = s >= 0 and s < PEAK -- the kick running now is still on its way out
 	if not kick.narrowed then
 		kick.baseFov = camera.FieldOfView -- no narrowing on: this is the real width
 	end
@@ -88,10 +91,11 @@ local function startKick(dir: Vector3, studs: number, fov: number)
 	local wanted = flat.Unit * studs
 	local both = carried + wanted
 	kick.dir = if both.Magnitude > 1e-3 then both.Unit else flat.Unit
-	kick.studs = math.max(studs, carried.Magnitude)
-	kick.fov = math.max(fov, kick.fov * before)
-	-- Start at the peak when the old kick is still out, or from the middle when nothing is.
-	kick.start = if before > 0.05 then now - PEAK * Config.Feedback.KickSeconds else now
+	local reach = math.max(studs, if rising then kick.studs else carried.Magnitude)
+	kick.fov = math.max(fov, if rising then kick.fov else kick.fov * before)
+	kick.studs = reach
+	-- Start where the view is now along the new kick's way out (from the middle when nothing is out).
+	kick.start = now - PEAK * Config.Feedback.KickSeconds * math.clamp(carried.Magnitude / reach, 0, 1)
 	kick.narrowed = kick.narrowed or kick.fov > 0
 end
 

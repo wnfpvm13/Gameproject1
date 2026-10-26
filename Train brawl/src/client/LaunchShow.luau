@@ -1,10 +1,12 @@
 --!strict
 -- A launched body's flight on this client, for everyone launched (a home run has its own: HomeRunShow): a short pale
--- streak behind it while it flies (it tumbles too: BodyMotion), and a puff of sand-coloured dust where it comes down
--- (Config.Feedback.DustSeconds). The landing is watched each frame: once the body has risen (on another player's screen
--- it leaves the roof a moment late, after their client's hold and the network), falling no faster than a slow drop
--- with something solid just under it - not another fighter; a body that never lands (it fell off) just loses its
--- streak. A new launch before the last one landed starts the watch again.
+-- streak behind it while it flies, and a puff of sand-coloured dust where it comes down (Config.Feedback.DustSeconds).
+-- The landing is watched each frame: once the body is seen leaving the roof (higher than where it was hit, or rising
+-- fast: on another player's screen it leaves a moment late, after their client's hold and the network), then seen
+-- falling, it has landed when it no longer falls with something solid just under it - not another fighter (rising or
+-- at the top of its flight it never counts, whatever it passes over). A body never seen leaving the roof loses its
+-- streak after a moment; one that never lands (it fell off) loses it too. A new launch before the last one landed
+-- starts the watch again.
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -18,11 +20,13 @@ local LaunchShow = {}
 
 local SMOKE_TEXTURE = "rbxasset://textures/particles/smoke_main.dds"
 local DUST = ColorSequence.new(Color3.fromRGB(214, 180, 136), Color3.fromRGB(236, 214, 182))
-local RISE = 1 -- a body has left the roof once it is this much higher than where it was hit
-local MIN_AIR = 0.12 -- and counts as landed only after this long in the air
+local RISE = 0.5 -- a body has left the roof once it is this much higher than where it was hit
+local RISING = 6 -- or once it rises faster than this (studs a second)
+local LEAVE_WITHIN = 0.8 -- a body not seen leaving the roof by then was not thrown up (its streak goes)
+local FALLING = -6 -- it has come down from the top of its flight once it falls faster than this
+local STOPPED = 3 -- and has landed once its vertical speed is under this again
 local GIVE_UP = 2.5 -- and stops being watched after this long
 local DOWN = 4 -- something solid within this under the body's middle is the ground it landed on
-local SLOW_DROP = -3 -- falling slower than this (studs a second) is no longer flying down
 
 -- The watch running on each launched body (a newer launch replaces it).
 local watching: { [Model]: RBXScriptConnection } = setmetatable({}, { __mode = "k" }) :: any
@@ -97,15 +101,22 @@ function LaunchShow.play(victim: Model)
 	params.FilterDescendantsInstances = { victim }
 	local started = os.clock()
 	local startY = root.Position.Y
-	local airborne: number? = nil -- when it was first seen off the roof
+	local airborne = false -- seen off the roof
+	local fell = false -- seen falling after that
 	local watch: RBXScriptConnection
 	watch = RunService.Heartbeat:Connect(function()
 		local now = os.clock()
+		local vy = root.AssemblyLinearVelocity.Y
 		local done = not root.Parent or now - started > GIVE_UP
-		if not airborne and root.Position.Y > startY + RISE then
-			airborne = now
+		if not airborne and (root.Position.Y > startY + RISE or vy > RISING) then
+			airborne = true
+		elseif not airborne and now - started > LEAVE_WITHIN then
+			done = true
 		end
-		if not done and airborne and now - airborne > MIN_AIR and root.AssemblyLinearVelocity.Y > SLOW_DROP then
+		if airborne and vy < FALLING then
+			fell = true
+		end
+		if not done and fell and math.abs(vy) < STOPPED then
 			-- From above the body: a body lying on a roof can sink a little into it, and a ray starting inside a part
 			-- does not see that part.
 			local ground = Workspace:Raycast(root.Position + Vector3.new(0, 2, 0), Vector3.new(0, -(DOWN + 2), 0), params)

@@ -2,7 +2,8 @@
 -- Thrown dynamite on the server: a lit stick tumbles along an arc (WeaponRules.arc) from the thrower and stops where it
 -- first meets the arena (a roof, a crate, a plank, the sand), and it bursts when its fuse runs out
 -- (Config.Weapons.Dynamite.fuse, counted from the throw), wherever it is. Where it will come down is marked at once
--- with a red ring as wide as the blast, so everyone sees it coming. Who the burst reaches is the caller's to judge.
+-- with an invisible flat part as wide as the blast (Names.BlastMark, with the burst's server time and the fuse), on
+-- which every client draws the warning (GroundMarks), so everyone sees it coming. The stick fizzes (FuseSparks). Who the burst reaches is the caller's to judge.
 -- clear() puts out every stick still burning (the round is over).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -15,6 +16,7 @@ local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
 local WeaponRules = require(shared:WaitForChild("WeaponRules"))
+local FuseSparks = require(shared:WaitForChild("FuseSparks"))
 
 local Dynamite = {}
 
@@ -88,15 +90,15 @@ function Dynamite.throw(parent: Instance, arena: Instance, root: Vector3, facing
 	local land, landAt = landing(from, facing, speed, lift, fuse, arena)
 	local ring: BasePart? = nil
 	if land then
-		local at = CFrame.new(land + Vector3.new(0, 0.08, 0)) * CFrame.Angles(0, 0, math.pi / 2)
-		local mark = PartUtil.decor("BlastRing", Vector3.new(0.1, radius * 2, radius * 2), at, RED, Enum.Material.Neon, parent, Enum.PartType.Cylinder)
-		mark.Transparency = 0.55
+		local mark = PartUtil.decor(Names.BlastMark, Vector3.new(radius * 2, 0.05, radius * 2), CFrame.new(land + Vector3.new(0, 0.05, 0)), RED, Enum.Material.SmoothPlastic, nil)
+		mark.Transparency = 1
+		mark:SetAttribute(Names.MarkEndsAt, Workspace:GetServerTimeNow() + fuse)
+		mark:SetAttribute(Names.MarkSeconds, fuse)
+		mark.Parent = parent
 		ring = mark
 	end
 	local stick = PartUtil.decor("Dynamite", Vector3.new(1.3, 0.5, 0.5), CFrame.new(from), RED, Enum.Material.SmoothPlastic, parent, Enum.PartType.Cylinder)
-	local sparks = Instance.new("Sparkles")
-	sparks.SparkleColor = Color3.fromRGB(255, 200, 90)
-	sparks.Parent = stick
+	FuseSparks.add(stick)
 	local started = os.clock()
 	local lit: Lit
 	local connection = RunService.Heartbeat:Connect(function()

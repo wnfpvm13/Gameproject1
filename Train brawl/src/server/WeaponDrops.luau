@@ -108,14 +108,26 @@ function WeaponDrops.start(surfaces: { ArenaLayout.Surface }, folder: Instance, 
 		box.CFrame = landed + Vector3.new(0, d.FallHeight, 0)
 		box.Parent = model
 		model.PrimaryPart = box
-		-- The parachute: a canopy and four cords, welded to the box (they follow it down and go when it lands).
+		-- The parachute: a flattened dome canopy with a pale vent on top and four cords, welded to the box (they follow it
+		-- down and go when it lands). A plain ball read as a balloon.
 		local chute: { BasePart } = {}
-		local canopy = part("Canopy", Vector3.new(7, 7, 7), Color3.fromRGB(236, 72, 56), Enum.Material.Fabric, Enum.PartType.Ball)
+		local canopy = part("Canopy", Vector3.new(7, 7, 7), Color3.fromRGB(232, 84, 60), Enum.Material.Fabric, Enum.PartType.Ball)
+		local dome = Instance.new("SpecialMesh")
+		dome.MeshType = Enum.MeshType.Sphere
+		dome.Scale = Vector3.new(1, 0.42, 1)
+		dome.Parent = canopy
 		canopy.CFrame = box.CFrame + Vector3.new(0, 6.5, 0)
 		table.insert(chute, canopy)
+		local vent = part("Vent", Vector3.new(3, 3, 3), Color3.fromRGB(240, 226, 196), Enum.Material.Fabric, Enum.PartType.Ball)
+		local cap = Instance.new("SpecialMesh")
+		cap.MeshType = Enum.MeshType.Sphere
+		cap.Scale = Vector3.new(1, 0.45, 1)
+		cap.Parent = vent
+		vent.CFrame = canopy.CFrame + Vector3.new(0, 1.2, 0) -- its top shows above the canopy's
+		table.insert(chute, vent)
 		for _, corner in { Vector3.new(1, 0, 1), Vector3.new(1, 0, -1), Vector3.new(-1, 0, 1), Vector3.new(-1, 0, -1) } do
 			local a = box.Position + Vector3.new(corner.X * 1.2, CRATE / 2, corner.Z * 1.2)
-			local b = canopy.Position + Vector3.new(corner.X * 2.4, -2.2, corner.Z * 2.4)
+			local b = canopy.Position + Vector3.new(corner.X * 2.4, -0.9, corner.Z * 2.4) -- the canopy's rim
 			local cord = part("Cord", Vector3.new(0.1, 0.1, (b - a).Magnitude), Color3.fromRGB(230, 220, 200), Enum.Material.Fabric)
 			cord.CFrame = CFrame.lookAt((a + b) / 2, b)
 			table.insert(chute, cord)
@@ -138,10 +150,12 @@ function WeaponDrops.start(surfaces: { ArenaLayout.Surface }, folder: Instance, 
 		local label = UiStyle.label(tag, "Weapon", UDim2.fromScale(1, 1), 28, UiStyle.Gold)
 		label.Text = Words.Weapons[weapon] or weapon
 		tag.Parent = box
-		-- Where it will land.
-		local marker = part("LandingMark", Vector3.new(0.1, 4.5, 4.5), Color3.fromRGB(255, 214, 90), Enum.Material.Neon, Enum.PartType.Cylinder)
-		marker.Transparency = 0.45
-		marker.CFrame = CFrame.new(at + Vector3.new(0, 0.06, 0)) * CFrame.Angles(0, 0, math.pi / 2)
+		-- Where it will land: an invisible flat part every client draws the crate's shadow on (GroundMarks).
+		local marker = part(Names.LandingMark, Vector3.new(4.5, 0.05, 4.5), Color3.new(0, 0, 0), Enum.Material.SmoothPlastic)
+		marker.Transparency = 1
+		marker.CFrame = CFrame.new(at + Vector3.new(0, 0.05, 0))
+		marker:SetAttribute(Names.MarkEndsAt, Workspace:GetServerTimeNow() + d.FallSeconds)
+		marker:SetAttribute(Names.MarkSeconds, d.FallSeconds)
 		marker.Parent = folder
 		model.Parent = folder
 		TweenService:Create(box, TweenInfo.new(d.FallSeconds, Enum.EasingStyle.Linear), { CFrame = landed }):Play()

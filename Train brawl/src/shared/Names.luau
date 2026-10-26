@@ -30,6 +30,11 @@ return {
 	Weapon = "Weapon", -- the weapon a character holds (Config.Weapons; "Fist" or none = bare fists)
 	WeaponUses = "WeaponUses", -- attacks left with it (when it has uses)
 	WeaponEndsAt = "WeaponEndsAt", -- server time it runs out (when it lasts a time)
+	-- Ground marks (drawn on each client by GroundMarks over the server's invisible flat parts)
+	BlastMark = "BlastRing", -- where a thrown stick will burst (Dynamite), its radius as wide
+	LandingMark = "LandingMark", -- where a crate will land (WeaponDrops)
+	MarkEndsAt = "EndsAt", -- server time the burst or the landing happens
+	MarkSeconds = "Seconds", -- how long the mark shows in all
 	-- Crate attributes (WeaponDrops)
 	CrateWeapon = "Weapon", -- what is inside
 	CrateLanded = "Landed",

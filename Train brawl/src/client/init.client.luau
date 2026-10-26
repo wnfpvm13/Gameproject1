@@ -5,7 +5,9 @@
 -- camera unless the player shows the cursor (AimLock); the attack control (SwingInput) starts the player's own attack
 -- with fists or the weapon held (OwnSwing: drawn at once by SwingPose and HitFeedback, judged by the server; a mouse
 -- click attacks only while the mouse is locked); every character's attacks are drawn from their Names.SwingAt; what
--- everyone holds shows (WeaponHud), crates and lit sticks are heard (DropShow), dynamite bursts show (ExplosionShow);
+-- everyone holds shows (WeaponHud), crates and lit sticks are heard (DropShow), where a stick will burst and a crate
+-- will land is drawn on the roofs (GroundMarks), dynamite bursts show (ExplosionShow), the wind of the run blows sand
+-- off the roofs (WindDust);
 -- a hit from the server flinches or
 -- launches the player's own character (KnockFlight) and is shown for everyone (HitFeedback with the camera kick, a
 -- flinch or flail pose and the attacker's hold in SwingPose, a hit spark from ImpactBurst, a launch's streak and
@@ -50,6 +52,8 @@ local DropShow = require(script:WaitForChild("DropShow"))
 local ExplosionShow = require(script:WaitForChild("ExplosionShow"))
 local ImpactBurst = require(script:WaitForChild("ImpactBurst"))
 local LaunchShow = require(script:WaitForChild("LaunchShow"))
+local GroundMarks = require(script:WaitForChild("GroundMarks"))
+local WindDust = require(script:WaitForChild("WindDust"))
 local RideCard = require(script:WaitForChild("RideCard"))
 
 local player = Players.LocalPlayer
@@ -79,6 +83,8 @@ local audio = RoundAudio.new(playerGui)
 local weaponHud = WeaponHud.new(playerGui)
 local card = RideCard.new(playerGui)
 DropShow.start(Workspace:WaitForChild(Names.CratesFolder), Workspace:WaitForChild(Names.ArenaFolder))
+GroundMarks.start({ Workspace:WaitForChild(Names.ArenaFolder), Workspace:WaitForChild(Names.CratesFolder) })
+WindDust.build(layout)
 
 -- The characters still in the round, as this client sees them (players' and sandbags').
 local function fighters(): { Model }

@@ -11,6 +11,7 @@ local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
 local CharacterParts = require(shared:WaitForChild("CharacterParts"))
 local WeaponRules = require(shared:WaitForChild("WeaponRules"))
+local FuseSparks = require(shared:WaitForChild("FuseSparks"))
 
 local WeaponGear = {}
 
@@ -51,9 +52,7 @@ local function shapeOf(weapon: string): { { part: Part, at: CFrame } }
 	elseif weapon == "Dynamite" then
 		local stick = part("Stick", Vector3.new(1.3, 0.5, 0.5), RED, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 		local fuse = part("Fuse", Vector3.new(0.5, 0.1, 0.1), Color3.new(0.1, 0.1, 0.1), Enum.Material.Fabric, Enum.PartType.Cylinder)
-		local spark = Instance.new("Sparkles")
-		spark.SparkleColor = Color3.fromRGB(255, 200, 90)
-		spark.Parent = fuse
+		FuseSparks.add(fuse)
 		return {
 			{ part = stick, at = CFrame.new(0, 0.1, -0.2) * CFrame.Angles(0, 0, math.rad(90)) },
 			{ part = fuse, at = CFrame.new(0, 0.95, -0.2) * CFrame.Angles(0, 0, math.rad(90)) },

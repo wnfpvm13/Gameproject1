@@ -1,5 +1,5 @@
 --!strict
--- The swing control: click (the on-screen "때리기" button on touch screens, R2 on a gamepad). Calls onSwing(mouse) on
+-- The swing control: click (the on-screen attack button on touch screens, R2 on a gamepad). Calls onSwing(mouse) on
 -- each press (mouse: it was a mouse click); whether a swing may start is the caller's call.
 -- (The binding follows Western train's JumpInput.)
 local ContextActionService = game:GetService("ContextActionService")
@@ -22,11 +22,35 @@ function SwingInput.bind(onSwing: (mouse: boolean) -> ()): () -> ()
 		return Enum.ContextActionResult.Pass -- clicks still reach the camera and the GUI
 	end, true, Enum.ContextActionPriority.High.Value, Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2)
 	ContextActionService:SetTitle(ACTION, Words.AttackButton)
-	-- A big button where the thumb rests, above the jump button.
+	-- A big button where the thumb rests, above the jump button, in the game's look (a dark plate with a wooden edge and
+	-- bold text) instead of Roblox's grey circle, pressing in a little when touched.
 	local button = ContextActionService:GetButton(ACTION)
 	if button then
 		button.Size = UDim2.fromOffset(90, 90)
 		button.Position = UDim2.new(1, -110, 1, -230)
+		button.Image = ""
+		button.PressedImage = ""
+		button.BackgroundColor3 = UiStyle.PlateColor
+		button.BackgroundTransparency = 0.15
+		local round = Instance.new("UICorner")
+		round.CornerRadius = UDim.new(0.5, 0)
+		round.Parent = button
+		local edge = Instance.new("UIStroke")
+		edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		edge.Color = UiStyle.PlateEdge
+		edge.Thickness = 3
+		edge.Parent = button
+		local press = Instance.new("UIScale")
+		press.Parent = button
+		button.MouseButton1Down:Connect(function()
+			press.Scale = 0.9
+		end)
+		button.MouseButton1Up:Connect(function()
+			press.Scale = 1
+		end)
+		button.MouseLeave:Connect(function()
+			press.Scale = 1
+		end)
 		local title = button:FindFirstChild("ActionTitle")
 		if title and title:IsA("TextLabel") then
 			title.TextSize = 22 -- the default is small for a button this big

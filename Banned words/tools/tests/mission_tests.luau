@@ -2576,8 +2576,10 @@ do
 		Match.mode = nil
 		return found
 	end
-	check("20l the time budget counts the mode: the quiz fits a normal round's last 20 s, not an easy one's", offered(nil)
-		and not offered("easy") and offered("hard"))
+	local normalFits, easyFits = offered(nil), offered("easy")
+	budget = 12 + Config.FLING_RETURN_SECONDS
+	check("20l the time budget counts the mode: the quiz fits a normal round's last 20 s, not an easy one's; 17 s only"
+		.. " a hard one's", normalFits and not easyFits and offered("hard") and not offered(nil))
 end
 do
 	-- 20g: the O/X banks by mode.

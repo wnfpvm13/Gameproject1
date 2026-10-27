@@ -6,7 +6,7 @@ type Statement = { s: string, o: boolean, hard: boolean? } -- (as OXBank's: cont
 
 local OXBankEasy: { Statement } = {
 	{ s = "고양이는 '멍멍' 하고 운다", o = false },
-	{ s = "물고기는 물속에서 산다", o = true },
+	{ s = "비둘기는 날개가 있다", o = true },
 	{ s = "펭귄은 하늘을 훨훨 날아다닌다", o = false },
 	{ s = "눈사람은 여름 햇볕에 녹는다", o = true },
 	{ s = "개미는 코끼리보다 크다", o = false },
@@ -44,12 +44,12 @@ local OXBankEasy: { Statement } = {
 	{ s = "곰은 겨울잠을 자기도 한다", o = true },
 	{ s = "수박은 나무에 열린다", o = false },
 	{ s = "얼룩말은 줄무늬가 있다", o = true },
-	{ s = "피아노에는 건반이 하나뿐이다", o = false },
+	{ s = "기타에는 줄이 하나도 없다", o = false },
 	{ s = "해바라기 씨는 먹을 수 있다", o = true },
 	{ s = "눈은 여름에 가장 많이 내린다", o = false },
-	{ s = "새는 모두 알에서 태어난다", o = true },
+	{ s = "수박 속은 보통 빨간색이다", o = true },
 	{ s = "치약은 먹는 음식이다", o = false },
-	{ s = "공룡은 지금도 동네 공원에 산다", o = false },
+	{ s = "티라노사우루스는 지금도 야생에서 산다", o = false },
 }
 
 return OXBankEasy

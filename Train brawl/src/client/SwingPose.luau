@@ -136,17 +136,17 @@ end
 -- down or fighting, or the fighter is out of it. Flying, lying fallen or holding a weapon with no stance, it goes at
 -- once (another pose takes over, and would show a stance's bent elbow it does not turn).
 local function stanceOf(model: Model): (AttackPoses.Pose?, boolean)
+	local body = CharacterParts.body(model)
+	local now = drawing[model]
+	if body and (body.humanoid.PlatformStand or (now and now.kind == "flail")) then
+		return nil, false -- also when that hit put it out (the flail may come before the stiffness reaches this client)
+	end
 	local phase = Workspace:GetAttribute(Names.Phase)
 	if model:GetAttribute(Names.Alive) ~= true or (phase ~= "Fight" and phase ~= "Countdown") then
 		return nil, true
 	end
-	local body = CharacterParts.body(model)
 	if not body or body.humanoid.Health <= 0 then
 		return nil, true
-	end
-	local now = drawing[model]
-	if body.humanoid.PlatformStand or (now and now.kind == "flail") then
-		return nil, false -- the flail may come before the stiffness reaches this client
 	end
 	local weapon = WeaponRules.named(Config.Weapons, model:GetAttribute(Names.Weapon))
 	local stance = AttackPoses.stance(Config.Weapons[weapon].style)

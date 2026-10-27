@@ -27,6 +27,7 @@ local function standardize(model: Model, humanoid: Humanoid): boolean
 		return humanoid:GetAppliedDescription()
 	end)
 	if not read or not description then
+		warn("[TrainBrawl] could not read " .. model.Name .. "'s body to make it standard: " .. tostring(description))
 		return false
 	end
 	local changed = false

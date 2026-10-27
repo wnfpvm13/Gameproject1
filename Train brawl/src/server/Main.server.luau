@@ -97,29 +97,39 @@ WeaponDrops.start(arena.layout.surfaces, PartUtil.folder(Workspace, Names.Crates
 	give = weapons.give,
 })
 
+-- The avatar's own body parts arrive after the character and replace the default hand: the body is made standard,
+-- then the weapon goes on again. One at a time per character: an appearance arriving while its body is being made
+-- standard is made standard once more right after ("busy", then "again").
+local applying: { [Model]: string } = setmetatable({}, { __mode = "k" }) :: any
+local function onAppearance(model: Model)
+	if applying[model] then
+		applying[model] = "again"
+		return
+	end
+	repeat
+		applying[model] = "busy"
+		AvatarRules.apply(model)
+		equip(model)
+	until applying[model] == "busy"
+	applying[model] = nil
+end
+
 local function onCharacter(model: Model)
+	-- An appearance that never says it loaded (a failed asset) is made standard anyway after a while, so the player is
+	-- not kept out of the rounds (they take only standard bodies, Names.BodyReady).
+	task.delay(10, function()
+		if model.Parent and model:GetAttribute(Names.BodyReady) ~= true and not applying[model] then
+			onAppearance(model)
+		end
+	end)
 	if model:WaitForChild("RightHand", 10) or model:FindFirstChild("Right Arm") then
 		equip(model)
 	end
 end
 local function onPlayer(player: Player)
 	player.CharacterAdded:Connect(onCharacter)
-	-- The avatar's own body parts arrive after the character and replace the default hand: the body is made standard,
-	-- then the weapon goes on again (also for a character that loaded before this ran, as in a Studio test).
-	local function onAppearance(model: Model)
-		AvatarRules.apply(model)
-		equip(model)
-	end
+	-- (Also for a character that loaded before this ran, as in a Studio test.)
 	player.CharacterAppearanceLoaded:Connect(onAppearance)
-	-- An appearance that never says it loaded (a failed asset) is made standard anyway after a while, so the player is
-	-- not kept out of the rounds (they take only standard bodies, Names.BodyReady).
-	player.CharacterAdded:Connect(function(model: Model)
-		task.delay(10, function()
-			if model.Parent and model:GetAttribute(Names.BodyReady) ~= true then
-				onAppearance(model)
-			end
-		end)
-	end)
 	if player.Character then
 		task.spawn(onCharacter, player.Character)
 		if player:HasAppearanceLoaded() then

@@ -60,7 +60,8 @@ local OneWord = {
 	expectedSeconds = Config.BELL_ORDER_SECONDS
 		+ Config.ONE_WORD_MAX_PERFORMERS * (2 * Config.ONE_WORD_PREP_SECONDS + Config.ONE_WORD_CHAT_SECONDS)
 		+ Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS + Config.ONE_WORD_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.ONE_WORD_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,

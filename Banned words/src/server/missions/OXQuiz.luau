@@ -5,11 +5,17 @@
 -- while someone was launched or gone does not count for them, and only those still here and on the ground at the end
 -- are judged and shown. Who answered none missed an answer (the AFK rule). Statements never repeat until every clean
 -- one was asked, and one containing a banned word in play is skipped.
+-- Bundle 11b: the difficulty mode (Match.mode) picks the bank (easy: OXBankEasy; hard: OXBankHard and the normal bank's
+-- statements marked `hard`, the same tables) and the answer time Modes.value(mode, "OX_SECONDS").
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
-local OXBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("OXBank"))
+local content = script.Parent.Parent:WaitForChild("content")
+local OXBank = require(content:WaitForChild("OXBank"))
+local OXBankEasy = require(content:WaitForChild("OXBankEasy"))
+local OXBankHard = require(content:WaitForChild("OXBankHard"))
 
 -- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
 type Ctx = {
@@ -50,7 +56,8 @@ local OXQuiz = {
 	brief = string.format(Config.TEXT.OX_BRIEF, Config.OX_QUESTIONS), -- (the briefing before it)
 	expectedSeconds = Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
 		+ Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = nil :: number?,
 	maxPlayers = nil :: number?,
@@ -59,12 +66,36 @@ local OXQuiz = {
 
 local used: { [OXBank.Statement]: boolean } = {}
 
+local function oxSeconds(mode: string?): number
+	return Modes.value(mode, "OX_SECONDS") :: number
+end
+OXQuiz.expectedFor = function(_players: number, mode: string): number
+	return Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + oxSeconds(mode) + Config.OX_REVEAL_SECONDS)
+		+ Config.MINIGAME_RESULT_SECONDS
+end
+
+-- The statements of `mode` (read at each call: the tests swap the banks).
+local function bankFor(mode: string?): { OXBank.Statement }
+	if mode == "easy" then
+		return OXBankEasy
+	elseif mode == "hard" then
+		local bank = table.clone(OXBankHard)
+		for _, statement in OXBank do
+			if statement.hard then
+				table.insert(bank, statement)
+			end
+		end
+		return bank
+	end
+	return OXBank
+end
+
 -- `count` different statements free of the words in play: the ones not asked yet first; once those run out, the asked
 -- ones come back for the rest. Fewer if the bank has fewer clean ones. Exposed for the tests.
 function OXQuiz.draw(count: number, rng: Random): { OXBank.Statement }
 	local words = Match.wordsInPlay()
 	local clean, fresh = {}, {}
-	for _, statement in OXBank do
+	for _, statement in bankFor(Match.mode) do
 		local hit = false
 		for _, word in words do
 			hit = hit or string.find(statement.s, word, 1, true) ~= nil
@@ -99,7 +130,7 @@ function OXQuiz.draw(count: number, rng: Random): { OXBank.Statement }
 end
 
 function OXQuiz.available(final: boolean): boolean
-	return not final and #OXBank > 0
+	return not final and #bankFor(Match.mode) > 0
 end
 
 -- Who flies from the wrong counts: the most wrong (ties all), nobody when nobody got any wrong. Pure, for the tests.
@@ -154,7 +185,7 @@ function OXQuiz.run(ctx: Ctx): boolean?
 			return nil
 		end
 		local from = present()
-		local answers = ctx.ask(shown, #choices, Config.OX_SECONDS, from)
+		local answers = ctx.ask(shown, #choices, oxSeconds(Match.mode), from)
 		if ctx.cancelled() then
 			return nil
 		end

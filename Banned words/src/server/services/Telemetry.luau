@@ -49,6 +49,16 @@ function Telemetry.lifeLost(player: Player)
 	end
 end
 
+-- The round's difficulty mode was voted (bundle 11b): its console line with the votes per mode.
+function Telemetry.roundMode(round: number, mode: string, votes: { [string]: number })
+	local parts = {}
+	for id, count in votes do
+		table.insert(parts, string.format("%s %d", id, count))
+	end
+	table.sort(parts)
+	print(string.format("[BannedWords] stats round %d mode %s (%s)", round, mode, table.concat(parts, ", ")))
+end
+
 -- The mission is over: its console line (`entry`; nil when it had too few players to start).
 function Telemetry.gameEnded(entry: Game?)
 	current = ""

@@ -2509,4 +2509,75 @@ do
 	Settings.leave(p2)
 end
 
+---------------------------------------------------------------- 19. The difficulty mode vote (bundle 11b)
+-- During the assignment the seated players vote the round's mode on the vote screen (MissionRunner.voteMode).
+do
+	-- When the mode vote shows, `act(screen)` runs once (votes, a leave ...).
+	local function onModeVote(act)
+		local since = now
+		task.spawn(function()
+			while true do
+				local m = lastSent("Mission", since, nil, "nextVote")
+				if m and m.payload.title == Config.TEXT.MODE_VOTE then
+					act(m.payload)
+					return
+				end
+				task.wait(0.1)
+			end
+		end)
+	end
+	local answerListener = NetStub.listeners.MissionAnswer
+	-- 19a: two vote easy, one hard: the easy mode; everyone voted, so the vote ends at once and the result shows
+	-- MODE_RESULT_SECONDS; the mode goes out with the round state; the round's end clears it.
+	local ps = newPlayers(3)
+	local voteShown = nil
+	onModeVote(function(screen)
+		voteShown = screen
+		answerListener(ps[1], screen.id, 1)
+		answerListener(ps[2], screen.id, 1)
+		answerListener(ps[3], screen.id, 3)
+	end)
+	local since = now
+	begin(ps, 10, nil)
+	local list = phases(since)
+	local assign, play = phaseAt(list, "Assign"), phaseAt(list, "Play")
+	local resultText = string.format(Config.TEXT.MODE_RESULT, Config.TEXT.MODE_EASY)
+	local stateMode = nil
+	for _, m in sent("RoundState", since) do
+		stateMode = m.payload.mode or stateMode
+	end
+	check("19a the mode vote in the assignment: easy 2 - hard 1 -> the easy mode; all voted: over at once, then the result"
+		.. " MODE_RESULT_SECONDS; the round state carries it", voteShown ~= nil and #voteShown.choices == 3
+		and voteShown.choices[1] == Config.TEXT.MODE_EASY and voteShown.rules[3] == Config.TEXT.MODE_HARD_BRIEF
+		and Match.mode == "easy" and stateMode == "easy" and noticesWith(resultText, since) == 1 and assign ~= nil
+		and play ~= nil and play.at - assign.at < Config.MODE_VOTE_SECONDS
+		and play.at - assign.at >= Config.MODE_RESULT_SECONDS - 0.3)
+	finish(since)
+	check("19b the round's end clears the mode", Match.mode == nil)
+	-- 19c: nobody votes: the normal mode once MODE_VOTE_SECONDS are over.
+	local ps2 = newPlayers(2)
+	since = now
+	begin(ps2, 10, nil)
+	list = phases(since)
+	assign, play = phaseAt(list, "Assign"), phaseAt(list, "Play")
+	check("19c nobody votes: the normal mode after MODE_VOTE_SECONDS (then the result)", Match.mode == "normal"
+		and assign ~= nil and play ~= nil and play.at - assign.at >= Config.MODE_VOTE_SECONDS
+		and noticesWith(string.format(Config.TEXT.MODE_RESULT, Config.TEXT.MODE_NORMAL), since) == 1)
+	finish(since)
+	-- 19d: one of two leaves during the vote: the round is decided, no mode result, no mode.
+	local ps3 = newPlayers(2)
+	onModeVote(function(_screen)
+		leave(ps3[2], { ps3[1] })
+	end)
+	since = now
+	playerList = ps3
+	advanceUntil(function() return Match.phase == "Result" end, 120)
+	local noResult = noticesWith(string.format(Config.TEXT.MODE_RESULT, Config.TEXT.MODE_NORMAL), since) == 0
+	check("19d someone leaving decides the round during the vote: no mode result, no mode, the card goes",
+		Match.phase == "Result" and noResult and Match.mode == nil
+		and (lastSent("Mission", since) == nil or lastSent("Mission", since).payload.kind ~= "nextVote"))
+	playerList = {}
+	advanceUntil(function() return Match.phase == "Lobby" end, 60)
+end
+
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

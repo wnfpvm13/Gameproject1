@@ -48,7 +48,8 @@ local Crocodile = {
 	brief = Config.TEXT.CROC_BRIEF, -- (the briefing before it)
 	-- The longest run (capped in `run`): CROC_TEETH turns at the last moment, then the result.
 	expectedSeconds = Config.CROC_TEETH * Config.CROC_TURN_SECONDS + Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.CROC_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,

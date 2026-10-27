@@ -701,7 +701,8 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			end
 		end
 	elseif kind == "nextVote" or kind == "nextPick" then
-		title.Text = if kind == "nextVote" then TEXT.NEXT_VOTE else TEXT.PICKING
+		-- (`title`: the same vote for another thing, the round's difficulty mode — bundle 11b)
+		title.Text = if kind == "nextVote" then payload.title or TEXT.NEXT_VOTE else TEXT.PICKING
 		note.Text = payload.recap or "" -- (what the last game did; nothing before the first)
 		note.Visible = note.Text ~= ""
 		local choices = if kind == "nextVote" then payload.choices or {} else {}

@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
 local Config = require(shared:WaitForChild("Config"))
+local Modes = require(shared:WaitForChild("Modes"))
 local PressTiming = require(shared:WaitForChild("PressTiming"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 
@@ -50,14 +51,23 @@ local TimeGuess = {
 	id = "timeGuess",
 	title = Config.TEXT.TIMEGUESS_TITLE,
 	brief = string.format(Config.TEXT.TIMEGUESS_BRIEF, Config.TIMEGUESS_VISIBLE_SECONDS), -- (the briefing before it)
+	briefFor = nil :: ((mode: string) -> string)?, -- (the clock's time differs by mode, bundle 11b)
 	expectedSeconds = Config.TIMEGUESS_READ_SECONDS + Config.TIMEGUESS_MAX + Config.TIMEGUESS_LATE + Config.TIMING_GRACE
 		+ Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TIMEGUESS_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
+
+-- How long the clock shows in `mode` (bundle 11b: Modes, TIMEGUESS_VISIBLE_SECONDS), and the brief that says so.
+local function visibleFor(mode: string?): number
+	return Modes.value(mode, "TIMEGUESS_VISIBLE_SECONDS") :: number
+end
+TimeGuess.briefFor = function(mode: string): string
+	return string.format(Config.TEXT.TIMEGUESS_BRIEF, visibleFor(mode))
+end
 
 local function ids(list: { Player }): { number }
 	local out = {}
@@ -133,7 +143,7 @@ function TimeGuess.run(ctx: Ctx): boolean?
 	local target = ctx.rng:NextInteger(Config.TIMEGUESS_MIN * 100, Config.TIMEGUESS_MAX * 100) / 100
 	local startAt = Match.now() + Config.TIMEGUESS_READ_SECONDS
 	ctx.show(string.format(Config.TEXT.TIMEGUESS_START, target))
-	ctx.screen({ kind = "timeGuess", target = target, startAt = startAt, visibleFor = Config.TIMEGUESS_VISIBLE_SECONDS,
+	ctx.screen({ kind = "timeGuess", target = target, startAt = startAt, visibleFor = visibleFor(Match.mode),
 		ids = ids(players), endsAt = startAt + target + Config.TIMEGUESS_LATE })
 	if not ctx.wait(Config.TIMEGUESS_READ_SECONDS) then
 		return nil

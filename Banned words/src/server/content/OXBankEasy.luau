@@ -1,0 +1,55 @@
+--!strict
+-- The easy mode's O/X statements (바보 모드, bundle 11b/11c, owner 2026-10-27): very easy and a little silly, about
+-- half O and half X. None gives away an answer of the easy mode's quiz bank (QuizBank.easy). Data only; statements
+-- containing a banned word in play are skipped at run time (missions/OXQuiz).
+type Statement = { s: string, o: boolean, hard: boolean? } -- (as OXBank's: content modules do not require each other)
+
+local OXBankEasy: { Statement } = {
+	{ s = "고양이는 '멍멍' 하고 운다", o = false },
+	{ s = "물고기는 물속에서 산다", o = true },
+	{ s = "펭귄은 하늘을 훨훨 날아다닌다", o = false },
+	{ s = "눈사람은 여름 햇볕에 녹는다", o = true },
+	{ s = "개미는 코끼리보다 크다", o = false },
+	{ s = "1 더하기 1은 3이다", o = false },
+	{ s = "달은 낮에도 보일 때가 있다", o = true },
+	{ s = "소금은 단맛이 난다", o = false },
+	{ s = "토끼는 귀가 짧다", o = false },
+	{ s = "기린은 목이 길다", o = true },
+	{ s = "비는 하늘에서 땅으로 내린다", o = true },
+	{ s = "사과는 나무에 열린다", o = true },
+	{ s = "닭은 알을 낳는다", o = true },
+	{ s = "지우개로 연필 글씨를 지울 수 있다", o = true },
+	{ s = "한 시간은 100분이다", o = false },
+	{ s = "개구리는 어릴 때 올챙이다", o = true },
+	{ s = "나비는 애벌레가 자라서 된다", o = true },
+	{ s = "코끼리는 코가 짧다", o = false },
+	{ s = "바닷물은 짜다", o = true },
+	{ s = "우유는 검은색이다", o = false },
+	{ s = "눈을 감으면 앞이 더 잘 보인다", o = false },
+	{ s = "거북이는 등에 딱딱한 등딱지가 있다", o = true },
+	{ s = "하마는 하늘을 날 수 있다", o = false },
+	{ s = "초록색 사과도 있다", o = true },
+	{ s = "고래는 바다에 산다", o = true },
+	{ s = "오리는 물에 뜰 수 있다", o = true },
+	{ s = "강아지는 냄새를 잘 맡는다", o = true },
+	{ s = "초콜릿은 카카오로 만든다", o = true },
+	{ s = "사탕은 보통 쓴맛이 난다", o = false },
+	{ s = "머리카락은 자르면 다시 자란다", o = true },
+	{ s = "신호등의 빨간불은 '건너세요'라는 뜻이다", o = false },
+	{ s = "두발자전거의 바퀴는 두 개다", o = true },
+	{ s = "지렁이는 다리가 아주 많다", o = false },
+	{ s = "감자는 땅속에서 자란다", o = true },
+	{ s = "냉장고 안은 바깥보다 차갑다", o = true },
+	{ s = "물을 부으면 꺼지는 불도 있다", o = true },
+	{ s = "곰은 겨울잠을 자기도 한다", o = true },
+	{ s = "수박은 나무에 열린다", o = false },
+	{ s = "얼룩말은 줄무늬가 있다", o = true },
+	{ s = "피아노에는 건반이 하나뿐이다", o = false },
+	{ s = "해바라기 씨는 먹을 수 있다", o = true },
+	{ s = "눈은 여름에 가장 많이 내린다", o = false },
+	{ s = "새는 모두 알에서 태어난다", o = true },
+	{ s = "치약은 먹는 음식이다", o = false },
+	{ s = "공룡은 지금도 동네 공원에 산다", o = false },
+}
+
+return OXBankEasy

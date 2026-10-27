@@ -58,7 +58,8 @@ local Liar = {
 	expectedSeconds = Config.LIAR_READ_SECONDS + Config.LIAR_BELL_SECONDS
 		+ Config.MAX_PLAYERS * Config.LIAR_CLUE_CHAT_SECONDS + Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS
 		+ Config.LIAR_GUESS_SECONDS + Config.LEVER_SECONDS + Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.LIAR_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,

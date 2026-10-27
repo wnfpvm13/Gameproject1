@@ -27,6 +27,7 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 
 SERVER_MODULES = [
     ("Config", "src/shared/Config.luau"),
+    ("Modes", "src/shared/Modes.luau"),
     ("Judge", "src/shared/Judge.luau"),
     ("WordBank", "src/server/content/WordBank.luau"),
     ("WordAliases", "src/server/content/WordAliases.luau"),
@@ -37,6 +38,7 @@ SERVER_MODULES = [
 
 ROUND_MODULES = [
     ("Config", "src/shared/Config.luau"),
+    ("Modes", "src/shared/Modes.luau"),
     ("Match", "src/server/Match.luau"),
     ("Judge", "src/shared/Judge.luau"),
     ("WordBank", "src/server/content/WordBank.luau"),
@@ -72,6 +74,7 @@ ROUND_MODULES = [
 
 MISSION_MODULES = [
     ("Config", "src/shared/Config.luau"),
+    ("Modes", "src/shared/Modes.luau"),
     ("Match", "src/server/Match.luau"),
     ("QuizBank", "src/server/content/QuizBank.luau"),
     ("Quiz", "src/server/missions/Quiz.luau"),
@@ -95,6 +98,8 @@ MISSION_MODULES = [
     ("Hangul", "src/shared/Hangul.luau"),
     ("ChosungBank", "src/server/content/ChosungBank.luau"),
     ("OXBank", "src/server/content/OXBank.luau"),
+    ("OXBankEasy", "src/server/content/OXBankEasy.luau"),
+    ("OXBankHard", "src/server/content/OXBankHard.luau"),
     ("EstimateBank", "src/server/content/EstimateBank.luau"),
     ("OXQuiz", "src/server/missions/OXQuiz.luau"),
     ("Estimate", "src/server/missions/Estimate.luau"),

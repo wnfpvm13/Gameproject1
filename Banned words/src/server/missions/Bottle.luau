@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
 local Config = require(shared:WaitForChild("Config"))
+local Modes = require(shared:WaitForChild("Modes"))
 local PressTiming = require(shared:WaitForChild("PressTiming"))
 local PowerBar = require(shared:WaitForChild("PowerBar"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
@@ -53,7 +54,8 @@ local Bottle = {
 	brief = string.format(Config.TEXT.BOTTLE_BRIEF, #Config.BOTTLE_ZONES), -- (the briefing before it)
 	expectedSeconds = #Config.BOTTLE_ZONES * (Config.BOTTLE_LEAD_SECONDS + Config.BOTTLE_THROW_SECONDS
 		+ Config.TIMING_GRACE + Config.BOTTLE_SHOW_SECONDS) + Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BOTTLE_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -102,6 +104,9 @@ end
 
 -- Returns false when too few were on the ground to start.
 function Bottle.run(ctx: Ctx): boolean?
+	-- (the zones and the bar's speed of the round's mode, bundle 11b: Modes)
+	local zones = Modes.value(Match.mode, "BOTTLE_ZONES") :: { number }
+	local period = Modes.value(Match.mode, "BOTTLE_PERIOD") :: number
 	local players = {}
 	for _, player in ctx.players() do
 		if not ctx.flying(player) then
@@ -139,11 +144,11 @@ function Bottle.run(ctx: Ctx): boolean?
 		return false
 	end
 	ctx.show(Config.TEXT.BOTTLE_START)
-	for throw, width in Config.BOTTLE_ZONES do
+	for throw, width in zones do
 		local center = ctx.rng:NextNumber(width / 2 + Config.BOTTLE_EDGE, 1 - width / 2 - Config.BOTTLE_EDGE)
 		local barStartAt = Match.now() + Config.BOTTLE_LEAD_SECONDS
-		ctx.screen({ kind = "bottle", throw = throw, throws = #Config.BOTTLE_ZONES, center = center, width = width,
-			barStartAt = barStartAt, period = Config.BOTTLE_PERIOD, ids = ids(players), stood = counts(),
+		ctx.screen({ kind = "bottle", throw = throw, throws = #zones, center = center, width = width,
+			barStartAt = barStartAt, period = period, ids = ids(players), stood = counts(),
 			endsAt = barStartAt + Config.BOTTLE_THROW_SECONDS })
 		if not ctx.wait(Config.BOTTLE_LEAD_SECONDS) then
 			return nil
@@ -170,7 +175,7 @@ function Bottle.run(ctx: Ctx): boolean?
 				touched[player] = true
 				local t = timing.pressedAt(player, at) - barStartAt
 				standing = t <= Config.BOTTLE_THROW_SECONDS
-					and math.abs(PowerBar.at(t, Config.BOTTLE_PERIOD) - center) <= width / 2
+					and math.abs(PowerBar.at(t, period) - center) <= width / 2
 			end
 			if standing then
 				stood[player] = (stood[player] or 0) + 1
@@ -180,7 +185,7 @@ function Bottle.run(ctx: Ctx): boolean?
 		if tooFew() then
 			return nil
 		end
-		ctx.screen({ kind = "bottleThrow", throw = throw, throws = #Config.BOTTLE_ZONES, ids = ids(players),
+		ctx.screen({ kind = "bottleThrow", throw = throw, throws = #zones, ids = ids(players),
 			landed = landed, stood = counts() })
 		if not ctx.wait(Config.BOTTLE_SHOW_SECONDS) then
 			return nil

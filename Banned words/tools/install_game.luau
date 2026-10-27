@@ -28,7 +28,6 @@ return {
 
 	LOBBY_COUNTDOWN = 15,
 	REMATCH_COUNTDOWN = 8, -- the next round right after a result
-	ASSIGN_TIME = 8,
 	RESULT_TIME = 10,
 
 	-- Round (docs/DESIGN_V3.md §2, §4; minigame overhaul 2026-10-23; owner 2026-10-24: a number of games, like the
@@ -45,6 +44,37 @@ return {
 	NEXT_VOTE_CHOICES = 3,
 	NEXT_VOTE_SECONDS = 7,
 	BRIEF_SECONDS = 3,
+	-- Difficulty modes (bundle 11b, owner 2026-10-27; shared/Modes, docs/BUNDLE11_2026-10-27.md): the seated players vote
+	-- one during the assignment (MODE_VOTE_SECONDS, over once all voted), then the result shows MODE_RESULT_SECONDS.
+	-- MODE_TUNING: the numbers a mode changes (every other number stays as below). Quiz banks: missions/Quiz, OXQuiz.
+	MODE_VOTE_SECONDS = 8,
+	MODE_RESULT_SECONDS = 2,
+	MODE_TUNING = {
+		easy = {
+			QUIZ_SECONDS = 15,
+			OX_SECONDS = 7,
+			REDLIGHT_GOAL = 20,
+			REDLIGHT_GRACE = 0.5,
+			TIMEGUESS_VISIBLE_SECONDS = 4, -- (not 5: a target of 5.0 s would show on the clock itself)
+			BOTTLE_ZONES = { 0.28, 0.2, 0.13 },
+			BOTTLE_PERIOD = 1.4,
+			NUNCHI_WINDOW = 0.35,
+			CHOSUNG_FAR_DECOYS = true,
+		},
+		normal = {},
+		hard = {
+			QUIZ_SECONDS = 7,
+			OX_SECONDS = 4,
+			REDLIGHT_GOAL = 30,
+			REDLIGHT_GRACE = 0.2,
+			TIMEGUESS_VISIBLE_SECONDS = 2,
+			BOTTLE_ZONES = { 0.17, 0.11, 0.07 }, -- (the bar's speed stays: narrower and faster left one 30 fps frame)
+			NUNCHI_WINDOW = 0.6, -- (wider and a ring seen on screen could no longer be dodged)
+		},
+	},
+	-- 초성 퀴즈's wrong choices (bundle 11b): the words of as many syllables whose initials are the least alike (the
+	-- easy mode) instead of the most alike.
+	CHOSUNG_FAR_DECOYS = false,
 	AFK_MISSES = 2, -- answer missions missed in a row -> out (a spectator)
 	SUBJECTIVE_FLINGS = 1, -- public servers: launches by the presenter or a vote, per player per round
 	-- Studio has no private servers: this says which rules a Studio round plays (workspace attribute BW_ServerKind =
@@ -359,6 +389,15 @@ return {
 		NEXT_GAME = "다음: %s",
 		GAME_COUNT = "미션 %d/%d", -- the status board during the main game: the game now / games in a round
 		NEXT_VOTE = "다음 미션 투표!",
+		-- Difficulty modes (bundle 11b; names from the owner).
+		MODE_VOTE = "이번 판 난이도 투표!",
+		MODE_EASY = "바보 모드",
+		MODE_EASY_BRIEF = "넌센스 퀴즈, 넉넉한 시간",
+		MODE_NORMAL = "일반 모드",
+		MODE_NORMAL_BRIEF = "고1 수준",
+		MODE_HARD = "똑똑이 모드",
+		MODE_HARD_BRIEF = "어려운 문제, 빠듯한 시간",
+		MODE_RESULT = "이번 판은 %s!",
 		RECAP_LOST = "%s 목숨 잃음",
 		RECAP_OUT = "%s 탈락",
 		RECAP_NONE = "모두 무사!",
@@ -939,6 +978,70 @@ end
 
 return Judge
 ]====]; s.Parent = n1 end
+do local s = Instance.new("ModuleScript"); s.Name = "Modes"; s.Source = [====[--!strict
+-- Difficulty modes (bundle 11b, owner 2026-10-27: "바보모드, 일반모드(고1수준), 똑똑이모드를 투표로"; docs/
+-- BUNDLE11_2026-10-27.md): the players vote one at the start of each round. Here: the modes (id, name, one-line rule),
+-- the vote's rule (Modes.decide) and the numbers a mode changes (Config.MODE_TUNING over Config). Shared: the server
+-- plays by it, the client names the mode.
+local Config = require(script.Parent:WaitForChild("Config"))
+
+local Modes = {}
+
+export type Entry = { id: string, title: string, brief: string }
+
+Modes.DEFAULT = "normal"
+
+-- In the vote's order.
+Modes.LIST = {
+	{ id = "easy", title = Config.TEXT.MODE_EASY, brief = Config.TEXT.MODE_EASY_BRIEF },
+	{ id = "normal", title = Config.TEXT.MODE_NORMAL, brief = Config.TEXT.MODE_NORMAL_BRIEF },
+	{ id = "hard", title = Config.TEXT.MODE_HARD, brief = Config.TEXT.MODE_HARD_BRIEF },
+} :: { Entry }
+
+-- The mode's name ("" for none).
+function Modes.title(mode: string?): string
+	for _, entry in Modes.LIST do
+		if entry.id == mode then
+			return entry.title
+		end
+	end
+	return ""
+end
+
+-- `key`'s number in `mode`: its Config.MODE_TUNING entry, else Config's own.
+function Modes.value(mode: string?, key: string): any
+	local tuning = (Config.MODE_TUNING :: any)[mode or Modes.DEFAULT]
+	local value = if tuning then tuning[key] else nil
+	if value ~= nil then
+		return value
+	end
+	return (Config :: any)[key]
+end
+
+-- The vote's result from the votes per mode id: the most votes; a tie with the normal mode in it is the normal mode,
+-- another tie is drawn; no votes at all is the normal mode.
+function Modes.decide(counts: { [string]: number }, rng: Random): string
+	local best, tied = 0, {}
+	for _, entry in Modes.LIST do
+		local votes = counts[entry.id] or 0
+		if votes > best then
+			best, tied = votes, { entry.id }
+		elseif votes == best and votes > 0 then
+			table.insert(tied, entry.id)
+		end
+	end
+	if best == 0 then
+		return Modes.DEFAULT
+	elseif #tied == 1 then
+		return tied[1]
+	elseif table.find(tied, Modes.DEFAULT) then
+		return Modes.DEFAULT
+	end
+	return tied[rng:NextInteger(1, #tied)]
+end
+
+return Modes
+]====]; s.Parent = n1 end
 do local s = Instance.new("ModuleScript"); s.Name = "PowerBar"; s.Source = [====[--!strict
 -- 물병 세우기's power bar (bundle 8b): where the marker is, 0 = left end, 1 = right end, `t` seconds after the bar
 -- started: there and back once every `period` seconds. The server judges with it and every screen draws with it.
@@ -1114,6 +1217,9 @@ local Match = {
 	participants = {} :: { [Player]: Participant },
 	startedWith = 0,
 	game = 0, -- the main game's mission being briefed or played, 1..Config.ROUND_GAMES (0 before the first)
+	-- The round's difficulty mode (bundle 11b, shared/Modes): set once voted during the assignment, nil before and between
+	-- rounds (the normal mode's numbers then: Modes.value). Missions read it for their numbers and banks.
+	mode = nil :: string?,
 	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
 	voiceLinked = {} :: { [Player]: boolean }, -- voice connected, muted or not (the client says so, with "Ready")
 	voiceAccount = {} :: { [Player]: boolean }, -- the server found voice on the account (ChatService, owner 2026-10-25)
@@ -1207,6 +1313,7 @@ function Match.payload()
 		requireReady = Config.REQUIRE_VOICE_READY,
 		serverKind = Match.serverKind,
 		talk = Match.talk,
+		mode = Match.mode,
 		presenter = if Match.presenter then Match.presenter.UserId else nil,
 		presenterPending = Match.presenterPending,
 	}
@@ -1234,6 +1341,7 @@ function Match.resetRound()
 	table.clear(Match.participants)
 	Match.startedWith = 0
 	Match.game = 0
+	Match.mode = nil
 	Match.presenter = nil
 	Match.presenterPending = false
 	Match.talk = nil
@@ -1358,6 +1466,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
 local Judge = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Judge"))
 local Match = require(script.Parent:WaitForChild("Match"))
 local Net = require(script.Parent:WaitForChild("Net"))
@@ -2108,9 +2217,23 @@ local function runRound()
 	SpectatorService.beginRound()
 	VoiceService.setSilenced(chatIds)
 	refreshSpeakers()
-	Match.setPhase("Assign", Config.ASSIGN_TIME, string.format(Config.TEXT.ASSIGN, Config.LIVES))
+	-- The difficulty mode (bundle 11b, docs/BUNDLE11_2026-10-27.md): the seated players vote while the chairs are
+	-- assigned (the vote is the assignment's wait), then the result shows. Players leaving decide the round: no result.
+	Match.setPhase("Assign", Config.MODE_VOTE_SECONDS, string.format(Config.TEXT.ASSIGN, Config.LIVES))
 	WordService.sendAll() -- (nobody has a word: clients clear what they had)
-	waitPhase()
+	local function voteOver(): boolean
+		return Match.roundId ~= myRound or decided()
+	end
+	local mode, modeVotes = MissionRunner.voteMode(Match.aliveList(), rng, voteOver)
+	MissionRunner.clearScreen()
+	if not voteOver() then
+		Match.mode = mode
+		local text = string.format(Config.TEXT.MODE_RESULT, Modes.title(mode))
+		Match.setPhase("Assign", Config.MODE_RESULT_SECONDS, text)
+		Net.notice(text)
+		Telemetry.roundMode(myRound, mode, modeVotes)
+		waitPhase(voteOver)
+	end
 
 	playMain(myRound)
 	MissionRunner.clearScreen() -- (a between-games screen when the main game ended during it)
@@ -2679,7 +2802,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "OXBank"; s.Source = [====[-
 -- None repeats a fact of the quiz bank or the number bank (one game would give another's answer away). Statements
 -- containing a banned word in play are skipped at run time.
 
-export type Statement = { s: string, o: boolean }
+-- `hard`: the hard mode asks it too (with OXBankHard's; bundle 11b).
+export type Statement = { s: string, o: boolean, hard: boolean? }
 
 local OXBank: { Statement } = {
 	-- Animals and plants
@@ -2691,38 +2815,38 @@ local OXBank: { Statement } = {
 	{ s = "물고기는 모두 알을 낳는다", o = false },
 	{ s = "닭은 하늘을 오래 날 수 있다", o = false },
 	{ s = "남극에는 북극곰이 산다", o = false },
-	{ s = "고래상어는 고래가 아니라 상어다", o = true },
-	{ s = "달팽이는 이빨이 있다", o = true },
+	{ s = "고래상어는 고래가 아니라 상어다", o = true, hard = true },
+	{ s = "달팽이는 이빨이 있다", o = true, hard = true },
 	{ s = "코끼리는 육지에서 가장 무거운 동물이다", o = true },
 	{ s = "카멜레온은 몸 색을 바꿀 수 있다", o = true },
 	{ s = "꿀벌은 춤으로 꽃이 있는 곳을 알린다", o = true },
-	{ s = "금붕어의 기억력은 3초뿐이다", o = false },
-	{ s = "타조는 위험하면 머리를 모래에 묻는다", o = false },
-	{ s = "황소는 빨간색을 보면 흥분한다", o = false },
-	{ s = "토마토는 식물학적으로 열매(과실)다", o = true },
-	{ s = "바나나는 나무가 아니라 풀에서 자란다", o = true },
-	{ s = "당근은 원래 모두 주황색이었다", o = false },
+	{ s = "금붕어의 기억력은 3초뿐이다", o = false, hard = true },
+	{ s = "타조는 위험하면 머리를 모래에 묻는다", o = false, hard = true },
+	{ s = "황소는 빨간색을 보면 흥분한다", o = false, hard = true },
+	{ s = "토마토는 식물학적으로 열매(과실)다", o = true, hard = true },
+	{ s = "바나나는 나무가 아니라 풀에서 자란다", o = true, hard = true },
+	{ s = "당근은 원래 모두 주황색이었다", o = false, hard = true },
 	{ s = "식물도 호흡을 한다", o = true },
 	-- Science and the sky
 	{ s = "1기압에서 물은 섭씨 0도에 끓는다", o = false },
 	{ s = "빛은 소리보다 빠르다", o = true },
-	{ s = "북극은 남극보다 더 춥다", o = false },
+	{ s = "북극은 남극보다 더 춥다", o = false, hard = true },
 	{ s = "번개는 전기 현상이다", o = true },
-	{ s = "번개는 같은 곳에 두 번 치지 않는다", o = false },
+	{ s = "번개는 같은 곳에 두 번 치지 않는다", o = false, hard = true },
 	{ s = "화산은 바닷속에도 있다", o = true },
 	{ s = "달은 스스로 빛을 낸다", o = false },
 	{ s = "달에는 공기가 거의 없다", o = true },
 	{ s = "해는 서쪽에서 뜬다", o = false },
-	{ s = "만리장성은 달에서 맨눈으로 보인다", o = false },
+	{ s = "만리장성은 달에서 맨눈으로 보인다", o = false, hard = true },
 	{ s = "얼음은 같은 부피의 물보다 가벼워서 물에 뜬다", o = true },
-	{ s = "사과는 물에 뜬다", o = true },
+	{ s = "사과는 물에 뜬다", o = true, hard = true },
 	{ s = "1kg짜리 쇠가 1kg짜리 솜보다 무겁다", o = false },
 	{ s = "자석의 같은 극끼리는 서로 밀어낸다", o = true },
 	{ s = "다이아몬드는 탄소로 이루어져 있다", o = true },
 	{ s = "금은 자석에 잘 붙는다", o = false },
 	{ s = "사막에도 비가 내린다", o = true },
-	{ s = "몸속 정맥을 흐르는 피는 파란색이다", o = false },
-	{ s = "사람은 뇌의 10%만 쓴다", o = false },
+	{ s = "몸속 정맥을 흐르는 피는 파란색이다", o = false, hard = true },
+	{ s = "사람은 뇌의 10%만 쓴다", o = false, hard = true },
 	-- Places, culture and numbers
 	{ s = "한글을 만든 왕은 세종대왕이다", o = true },
 	{ s = "올림픽 금메달은 순금으로 만든다", o = false },
@@ -2732,12 +2856,109 @@ local OXBank: { Statement } = {
 	{ s = "이집트에는 피라미드가 있다", o = true },
 	{ s = "손톱은 발톱보다 빨리 자란다", o = true },
 	{ s = "하계 올림픽은 4년마다 열린다", o = true },
-	{ s = "해바라기는 다 자란 뒤에도 하루 종일 해를 따라 돈다", o = false },
+	{ s = "해바라기는 다 자란 뒤에도 하루 종일 해를 따라 돈다", o = false, hard = true },
 	{ s = "모든 소수는 홀수다", o = false },
 	{ s = "0은 짝수다", o = true },
 }
 
 return OXBank
+]====]; s.Parent = n3 end
+do local s = Instance.new("ModuleScript"); s.Name = "OXBankEasy"; s.Source = [====[--!strict
+-- The easy mode's O/X statements (바보 모드, bundle 11b/11c, owner 2026-10-27): very easy and a little silly, about
+-- half O and half X. None gives away an answer of the easy mode's quiz bank (QuizBank.easy). Data only; statements
+-- containing a banned word in play are skipped at run time (missions/OXQuiz).
+type Statement = { s: string, o: boolean, hard: boolean? } -- (as OXBank's: content modules do not require each other)
+
+local OXBankEasy: { Statement } = {
+	{ s = "고양이는 '멍멍' 하고 운다", o = false },
+	{ s = "물고기는 물속에서 산다", o = true },
+	{ s = "펭귄은 하늘을 훨훨 날아다닌다", o = false },
+	{ s = "눈사람은 여름 햇볕에 녹는다", o = true },
+	{ s = "개미는 코끼리보다 크다", o = false },
+	{ s = "1 더하기 1은 3이다", o = false },
+	{ s = "달은 낮에도 보일 때가 있다", o = true },
+	{ s = "소금은 단맛이 난다", o = false },
+	{ s = "토끼는 귀가 짧다", o = false },
+	{ s = "기린은 목이 길다", o = true },
+	{ s = "비는 하늘에서 땅으로 내린다", o = true },
+	{ s = "사과는 나무에 열린다", o = true },
+	{ s = "닭은 알을 낳는다", o = true },
+	{ s = "지우개로 연필 글씨를 지울 수 있다", o = true },
+	{ s = "한 시간은 100분이다", o = false },
+	{ s = "개구리는 어릴 때 올챙이다", o = true },
+	{ s = "나비는 애벌레가 자라서 된다", o = true },
+	{ s = "코끼리는 코가 짧다", o = false },
+	{ s = "바닷물은 짜다", o = true },
+	{ s = "우유는 검은색이다", o = false },
+	{ s = "눈을 감으면 앞이 더 잘 보인다", o = false },
+	{ s = "거북이는 등에 딱딱한 등딱지가 있다", o = true },
+	{ s = "하마는 하늘을 날 수 있다", o = false },
+	{ s = "초록색 사과도 있다", o = true },
+	{ s = "고래는 바다에 산다", o = true },
+	{ s = "오리는 물에 뜰 수 있다", o = true },
+	{ s = "강아지는 냄새를 잘 맡는다", o = true },
+	{ s = "초콜릿은 카카오로 만든다", o = true },
+	{ s = "사탕은 보통 쓴맛이 난다", o = false },
+	{ s = "머리카락은 자르면 다시 자란다", o = true },
+	{ s = "신호등의 빨간불은 '건너세요'라는 뜻이다", o = false },
+	{ s = "두발자전거의 바퀴는 두 개다", o = true },
+	{ s = "지렁이는 다리가 아주 많다", o = false },
+	{ s = "감자는 땅속에서 자란다", o = true },
+	{ s = "냉장고 안은 바깥보다 차갑다", o = true },
+	{ s = "물을 부으면 꺼지는 불도 있다", o = true },
+	{ s = "곰은 겨울잠을 자기도 한다", o = true },
+	{ s = "수박은 나무에 열린다", o = false },
+	{ s = "얼룩말은 줄무늬가 있다", o = true },
+	{ s = "피아노에는 건반이 하나뿐이다", o = false },
+	{ s = "해바라기 씨는 먹을 수 있다", o = true },
+	{ s = "눈은 여름에 가장 많이 내린다", o = false },
+	{ s = "새는 모두 알에서 태어난다", o = true },
+	{ s = "치약은 먹는 음식이다", o = false },
+	{ s = "공룡은 지금도 동네 공원에 산다", o = false },
+}
+
+return OXBankEasy
+]====]; s.Parent = n3 end
+do local s = Instance.new("ModuleScript"); s.Name = "OXBankHard"; s.Source = [====[--!strict
+-- The hard mode's new O/X statements (똑똑이 모드, bundle 11b/11c, owner 2026-10-27): facts easy to get wrong, stable over
+-- time. The mode also asks the normal bank's statements marked `hard` (missions/OXQuiz; the same tables). None gives
+-- away an answer of the hard mode's quizzes or the number bank. Data only.
+type Statement = { s: string, o: boolean, hard: boolean? } -- (as OXBank's: content modules do not require each other)
+
+local OXBankHard: { Statement } = {
+	{ s = "박쥐는 앞을 전혀 보지 못한다", o = false },
+	{ s = "문어의 피는 파란빛을 띤다", o = true },
+	{ s = "낙타의 혹에는 주로 물이 들어 있다", o = false },
+	{ s = "지구는 완전한 공 모양이다", o = false },
+	{ s = "다이아몬드도 아주 높은 온도에서는 불에 탄다", o = true },
+	{ s = "유리창은 오랜 세월이 지나면 아래로 흘러내린다", o = false },
+	{ s = "혀는 부위마다 느끼는 맛이 따로 정해져 있다", o = false },
+	{ s = "삼킨 껌은 7년 동안 배 속에 남는다", o = false },
+	{ s = "모기는 수컷도 사람의 피를 빤다", o = false },
+	{ s = "고양이는 단맛을 느끼지 못한다", o = true },
+	{ s = "개미는 자기 몸무게보다 훨씬 무거운 것을 들 수 있다", o = true },
+	{ s = "해마는 수컷이 새끼를 낳는다", o = true },
+	{ s = "펭귄은 북극에도 산다", o = false },
+	{ s = "금성에서는 해가 서쪽에서 뜬다", o = true },
+	{ s = "달은 늘 같은 면만 지구를 향한다", o = true },
+	{ s = "물은 섭씨 4도 근처에서 밀도가 가장 크다", o = true },
+	{ s = "알루미늄은 자석에 붙지 않는다", o = true },
+	{ s = "갓난아기는 어른보다 뼈의 개수가 많다", o = true },
+	{ s = "일란성 쌍둥이도 지문은 서로 다르다", o = true },
+	{ s = "에베레스트산은 지금도 해마다 조금씩 높아진다", o = true },
+	{ s = "훈민정음은 처음 만들었을 때 28자였다", o = true },
+	{ s = "자유의 여신상은 프랑스가 미국에 선물했다", o = true },
+	{ s = "에펠탑은 여름에 조금 더 높아진다", o = true },
+	{ s = "바나나는 아주 약한 방사선을 낸다", o = true },
+	{ s = "상어의 뼈대는 연골로 되어 있다", o = true },
+	{ s = "거미는 곤충이다", o = false },
+	{ s = "감자는 뿌리가 아니라 줄기가 변한 것이다", o = true },
+	{ s = "소의 위는 하나다", o = false },
+	{ s = "사람의 머리카락은 죽은 뒤에도 계속 자란다", o = false },
+	{ s = "물고기는 잠을 자지 않는다", o = false },
+}
+
+return OXBankHard
 ]====]; s.Parent = n3 end
 do local s = Instance.new("ModuleScript"); s.Name = "OneWordTopics"; s.Source = [====[--!strict
 -- One-word topics (docs/DESIGN_V3.md §5; bundle 4b, owner 2026-10-23: mostly about yourself — tastes, habits, small
@@ -2816,7 +3037,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "QuizBank"; s.Source = [====
 -- for the sudden-death final. Questions whose text or any choice contains a banned word in play are skipped at run
 -- time (missions/Quiz). `answer` is the index of the right choice.
 
-export type Question = { q: string, choices: { string }, answer: number }
+-- `nonsense`: a 넌센스 question (the easy mode's bank; the bell quiz leaves those out, bundle 11b).
+export type Question = { q: string, choices: { string }, answer: number, nonsense: boolean? }
 
 local QuizBank = {}
 
@@ -2990,6 +3212,175 @@ QuizBank.final = {
 	{ q = "볼링 한 게임의 최고 점수는?", choices = { "100점", "200점", "300점", "500점" }, answer = 3 },
 	{ q = "애국가는 모두 몇 절까지 있을까?", choices = { "2절", "3절", "4절", "5절" }, answer = 3 },
 	{ q = "5만 원권 지폐에 그려진 인물은?", choices = { "유관순", "신사임당", "허난설헌", "선덕여왕" }, answer = 2 },
+} :: { Question }
+
+-- The difficulty modes' banks (bundle 11b/11c, owner 2026-10-27, docs/BUNDLE11_2026-10-27.md). The normal mode plays
+-- `main` and `final` as before.
+-- `easy` (바보 모드, owner: "넌센스 위주"): well-known 넌센스 (one answer only: the other three cannot be read as the
+-- joke either; answers are plain words chat shows) and riddles, `nonsense = true`, plus very easy common sense — the
+-- only ones the bell quiz asks (said without choices, a joke's answer splits). Its final asks the same bank, never a
+-- question of that round again (missions/Quiz).
+QuizBank.easy = {
+	-- 넌센스
+	{ q = "세상에서 가장 뜨거운 바다는?", choices = { "열바다", "남해", "북해", "지중해" }, answer = 1, nonsense = true },
+	{ q = "세상에서 가장 차가운 바다는?", choices = { "지중해", "썰렁해", "홍해", "황해" }, answer = 2, nonsense = true },
+	{ q = "왕이 넘어지면?", choices = { "왕눈이", "왕자", "킹콩", "왕관" }, answer = 3, nonsense = true },
+	{ q = "아몬드가 죽으면?", choices = { "땅콩", "호두", "피스타치오", "다이아몬드" }, answer = 4, nonsense = true },
+	{ q = "오리가 얼면?", choices = { "언덕", "얼음", "오리털", "빙수" }, answer = 1, nonsense = true },
+	{ q = "깨가 죽으면?", choices = { "참깨", "주근깨", "들깨", "깨소금" }, answer = 2, nonsense = true },
+	{ q = "물고기의 반대말은?", choices = { "새고기", "돼지고기", "불고기", "생선" }, answer = 3, nonsense = true },
+	{ q = "미소의 반대말은?", choices = { "밀가루", "미소국", "소금", "당기소" }, answer = 4, nonsense = true },
+	{ q = "소가 웃는 소리는?", choices = { "우하하", "깔깔", "호호", "킥킥" }, answer = 1, nonsense = true },
+	{ q = "세상에서 가장 빠른 닭은?", choices = { "통닭", "후다닥", "치킨", "장닭" }, answer = 2, nonsense = true },
+	{ q = "개가 사람을 가르치면?", choices = { "개나리", "개구리", "개인지도", "개미" }, answer = 3, nonsense = true },
+	{ q = "왕이 궁에 들어가기 싫을 때 하는 말은?", choices = { "안녕하세요", "배고파", "졸려", "궁시렁궁시렁" }, answer = 4, nonsense = true },
+	{ q = "세상에서 가장 지루한 중학교는?", choices = { "로딩중", "여자중", "남자중", "국제중" }, answer = 1, nonsense = true },
+	{ q = "세상에서 가장 착한 사자는?", choices = { "사자왕", "자원봉사자", "아기 사자", "숫사자" }, answer = 2, nonsense = true },
+	{ q = "딸기가 직장을 잃으면?", choices = { "딸기잼", "딸기우유", "딸기시럽", "딸기맛" }, answer = 3, nonsense = true },
+	{ q = "반성문을 영어로 하면?", choices = { "리포트", "레터", "에세이", "글로벌" }, answer = 4, nonsense = true },
+	{ q = "사과가 웃으면?", choices = { "풋사과", "사과잼", "사과즙", "꿀사과" }, answer = 1, nonsense = true },
+	{ q = "세상에서 가장 큰 코는?", choices = { "콧물", "멕시코", "코피", "코감기" }, answer = 2, nonsense = true },
+	{ q = "펭귄이 다니는 중학교는?", choices = { "수영중", "식사중", "냉방중", "공사중" }, answer = 3, nonsense = true },
+	{ q = "거짓말을 절대 안 하는 새는?", choices = { "까치", "독수리", "비둘기", "참새" }, answer = 4, nonsense = true },
+	{ q = "세상에서 가장 가난한 왕은?", choices = { "최저임금", "사자왕", "해적왕", "발명왕" }, answer = 1, nonsense = true },
+	{ q = "세상에서 가장 아름다운 개는?", choices = { "진돗개", "무지개", "푸들", "삽살개" }, answer = 2, nonsense = true },
+	{ q = "세상에서 가장 긴 음식은?", choices = { "간장", "식초", "참기름", "고추장" }, answer = 3, nonsense = true },
+	{ q = "세상에서 가장 억울한 도형은?", choices = { "삼각형", "사각형", "별", "원통" }, answer = 4, nonsense = true },
+	{ q = "사람의 몸무게가 가장 많이 나갈 때는?", choices = { "철들 때", "잠잘 때", "웃을 때", "노래할 때" }, answer = 1, nonsense = true },
+	{ q = "소가 계단을 오르면?", choices = { "소고기", "소오름", "소풍", "소나기" }, answer = 2, nonsense = true },
+	{ q = "소가 노래를 부르면?", choices = { "소금", "소매", "소송", "소파" }, answer = 3, nonsense = true },
+	{ q = "별 중에서 가장 슬픈 별은?", choices = { "북극성", "샛별", "별똥별", "이별" }, answer = 4, nonsense = true },
+	{ q = "아홉 명의 자식을 세 글자로 하면?", choices = { "아이구", "어머나", "아이참", "에구머니" }, answer = 1, nonsense = true },
+	{ q = "세상에서 가장 비싼 새는?", choices = { "참새", "백조", "비둘기", "까마귀" }, answer = 2, nonsense = true },
+	{ q = "경찰서의 반대말은?", choices = { "우체국", "시청", "경찰앉아", "학교" }, answer = 3, nonsense = true },
+	{ q = "미국에서 비가 내리면?", choices = { "우산", "홍수", "무지개", "USB" }, answer = 4, nonsense = true },
+	{ q = "고기 먹을 때 따라오는 개는?", choices = { "이쑤시개", "진돗개", "강아지", "불독" }, answer = 1, nonsense = true },
+	{ q = "소금 장수가 싫어하는 사람은?", choices = { "키 큰 사람", "싱거운 사람", "웃는 사람", "노래하는 사람" }, answer = 2, nonsense = true },
+	{ q = "추장보다 높은 사람은?", choices = { "된장", "쌈장", "고추장", "간장" }, answer = 3, nonsense = true },
+	{ q = "오리를 생으로 먹으면?", choices = { "오리구이", "훈제오리", "오리탕", "회오리" }, answer = 4, nonsense = true },
+	{ q = "세 사람만 탈 수 있는 차는?", choices = { "인삼차", "유자차", "녹차", "보리차" }, answer = 1, nonsense = true },
+	{ q = "모든 사람을 일으켜 세우는 숫자는?", choices = { "하나", "다섯", "열", "백" }, answer = 2, nonsense = true },
+	{ q = "책은 책인데 읽을 수 없는 책은?", choices = { "동화책", "교과서", "산책", "만화책" }, answer = 3, nonsense = true },
+	{ q = "물은 물인데 마실 수 없는 물은?", choices = { "생수", "약수", "탄산수", "건물" }, answer = 4, nonsense = true },
+	{ q = "말은 말인데 탈 수 없는 말은?", choices = { "거짓말", "조랑말", "얼룩말", "흰말" }, answer = 1, nonsense = true },
+	{ q = "차는 차인데 탈 수 없는 차는?", choices = { "기차", "녹차", "마차", "전차" }, answer = 2, nonsense = true },
+	{ q = "새는 새인데 날지 못하는 새는?", choices = { "참새", "까치", "냄새", "제비" }, answer = 3, nonsense = true },
+	{ q = "눈은 눈인데 볼 수 없는 눈은?", choices = { "왼눈", "오른눈", "실눈", "함박눈" }, answer = 4, nonsense = true },
+	{ q = "개는 개인데 짖지 못하는 개는?", choices = { "안개", "진돗개", "삽살개", "풍산개" }, answer = 1, nonsense = true },
+	{ q = "자는 자인데 길이를 잴 수 없는 자는?", choices = { "줄자", "모자", "30cm 자", "삼각자" }, answer = 2, nonsense = true },
+	{ q = "닭은 닭인데 먹을 수 없는 닭은?", choices = { "통닭", "찜닭", "까닭", "불닭" }, answer = 3, nonsense = true },
+	{ q = "꽃은 꽃인데 향기가 없는 꽃은?", choices = { "장미꽃", "국화꽃", "백합꽃", "불꽃" }, answer = 4, nonsense = true },
+	{ q = "물고기 중에서 학벌이 가장 좋은 물고기는?", choices = { "고등어", "꽁치", "갈치", "연어" }, answer = 1, nonsense = true },
+	{ q = "때리면 살고 안 때리면 죽는 것은?", choices = { "북", "팽이", "공", "종" }, answer = 2, nonsense = true },
+	-- 수수께끼(넌센스로 친다)
+	{ q = "아무리 먹어도 배가 부르지 않는 것은?", choices = { "밥", "빵", "나이", "물" }, answer = 3, nonsense = true },
+	{ q = "주인은 별로 안 쓰고 남들이 더 많이 쓰는 것은?", choices = { "연필", "우산", "모자", "이름" }, answer = 4, nonsense = true },
+	{ q = "깨뜨려야 먹을 수 있는 것은?", choices = { "달걀", "사과", "식빵", "우유" }, answer = 1, nonsense = true },
+	-- 아주 쉬운 상식 (벨 퀴즈는 이것만)
+	{ q = "고양이의 다리는 모두 몇 개?", choices = { "2개", "4개", "6개", "8개" }, answer = 2 },
+	{ q = "일주일은 며칠?", choices = { "5일", "6일", "7일", "10일" }, answer = 3 },
+	{ q = "해가 뜨는 쪽은?", choices = { "서쪽", "남쪽", "북쪽", "동쪽" }, answer = 4 },
+	{ q = "빨강과 노랑을 섞으면 어떤 색?", choices = { "주황", "보라", "초록", "검정" }, answer = 1 },
+	{ q = "파랑과 노랑을 섞으면 어떤 색?", choices = { "빨강", "초록", "분홍", "갈색" }, answer = 2 },
+	{ q = "1년은 몇 달?", choices = { "10달", "11달", "12달", "13달" }, answer = 3 },
+	{ q = "소가 내는 울음소리는?", choices = { "멍멍", "야옹", "꿀꿀", "음메" }, answer = 4 },
+	{ q = "거미의 다리는 모두 몇 개?", choices = { "8개", "6개", "4개", "10개" }, answer = 1 },
+	{ q = "한 손의 손가락은 몇 개?", choices = { "4개", "5개", "6개", "10개" }, answer = 2 },
+	{ q = "잘 익은 바나나는 무슨 색?", choices = { "빨간색", "보라색", "노란색", "파란색" }, answer = 3 },
+	{ q = "개구리가 우는 소리는?", choices = { "삐약삐약", "꿀꿀", "음메", "개굴개굴" }, answer = 4 },
+	{ q = "꿀을 모으는 곤충은?", choices = { "꿀벌", "모기", "파리", "나비" }, answer = 1 },
+	{ q = "하루는 몇 시간?", choices = { "12시간", "24시간", "30시간", "48시간" }, answer = 2 },
+	{ q = "세모(삼각형)의 변은 몇 개?", choices = { "1개", "2개", "3개", "4개" }, answer = 3 },
+	{ q = "10 + 10 = ?", choices = { "10", "15", "100", "20" }, answer = 4 },
+	{ q = "5 × 2 = ?", choices = { "10", "7", "25", "52" }, answer = 1 },
+	{ q = "겨울 다음에 오는 계절은?", choices = { "가을", "봄", "여름", "겨울" }, answer = 2 },
+	{ q = "우리나라의 수도는?", choices = { "부산", "대구", "서울", "광주" }, answer = 3 },
+	{ q = "비 오는 날 머리 위에 쓰는 것은?", choices = { "장갑", "양말", "목도리", "우산" }, answer = 4 },
+	{ q = "물고기가 물속에서 숨 쉬는 곳은?", choices = { "아가미", "지느러미", "비늘", "꼬리" }, answer = 1 },
+	{ q = "이를 닦을 때 쓰는 것은?", choices = { "빗", "칫솔", "수건", "숟가락" }, answer = 2 },
+	{ q = "다리가 없는 동물은?", choices = { "개", "닭", "뱀", "개미" }, answer = 3 },
+	{ q = "얼음이 녹으면 무엇이 될까?", choices = { "돌", "불", "모래", "물" }, answer = 4 },
+	{ q = "남극에 사는 새로 유명한 것은?", choices = { "펭귄", "앵무새", "공작", "타조" }, answer = 1 },
+	{ q = "시계의 짧은바늘이 가리키는 것은?", choices = { "분", "시", "초", "날짜" }, answer = 2 },
+} :: { Question }
+
+-- 똑똑이 모드: its main game asks `final` and `hardMain` together (the same question tables: one history), its final
+-- `hardFinal` — harder general knowledge, facts that stay put, nothing that changes with the news, nothing sensitive.
+-- Within the mode no question gives another one's answer away (the number bank included).
+QuizBank.hardMain = {
+	{ q = "원소 기호 'Fe'는 무엇일까?", choices = { "납", "아연", "주석", "철" }, answer = 4 },
+	{ q = "물의 끓는점이 100도보다 낮아지는 곳은?", choices = { "높은 산 위", "바닷가", "깊은 지하 동굴", "사막" }, answer = 1 },
+	{ q = "소리가 가장 빠르게 전해지는 것은?", choices = { "공기", "철", "물", "나무" }, answer = 2 },
+	{ q = "직각삼각형의 두 짧은 변이 3과 4일 때 빗변의 길이는?", choices = { "6", "7", "5", "12" }, answer = 3 },
+	{ q = "육각형의 내각을 모두 더하면?", choices = { "360도", "540도", "1080도", "720도" }, answer = 4 },
+	{ q = "몸속 장기 가운데 가장 무거운 것은?", choices = { "간", "폐", "뇌", "심장" }, answer = 1 },
+	{ q = "빛의 삼원색을 모두 섞으면 어떤 색?", choices = { "검은색", "흰색", "회색", "갈색" }, answer = 2 },
+	{ q = "DNA는 어떤 모양의 구조일까?", choices = { "고리 모양", "삼중 나선", "이중 나선", "그물 모양" }, answer = 3 },
+	{ q = "식물 세포에는 있고 동물 세포에는 없는 것은?", choices = { "핵", "세포막", "미토콘드리아", "세포벽" }, answer = 4 },
+	{ q = "지구 대기에서 두 번째로 많은 기체는?", choices = { "산소", "이산화탄소", "아르곤", "수소" }, answer = 1 },
+	{ q = "1기압에서 물이 끓는 온도는 화씨로 몇 도?", choices = { "100도", "212도", "180도", "273도" }, answer = 2 },
+	{ q = "절대 영도는 섭씨로 약 몇 도?", choices = { "-100도", "-173도", "-273도", "-373도" }, answer = 3 },
+	{ q = "태양계 행성 가운데 가장 작은 것은?", choices = { "화성", "금성", "지구", "수성" }, answer = 4 },
+	{ q = "세계에서 가장 깊은 해구는?", choices = { "마리아나 해구", "통가 해구", "일본 해구", "쿠릴 해구" }, answer = 1 },
+	{ q = "극지방을 빼면 세계에서 가장 넓은 사막은?", choices = { "고비 사막", "사하라 사막", "아타카마 사막", "칼라하리 사막" }, answer = 2 },
+	{ q = "남아메리카에서 가장 넓은 나라는?", choices = { "아르헨티나", "페루", "브라질", "콜롬비아" }, answer = 3 },
+	{ q = "모로코의 수도는?", choices = { "카사블랑카", "마라케시", "탕헤르", "라바트" }, answer = 4 },
+	{ q = "베트남의 수도는?", choices = { "하노이", "호찌민", "다낭", "후에" }, answer = 1 },
+	{ q = "셰익스피어의 4대 비극이 아닌 것은?", choices = { "햄릿", "로미오와 줄리엣", "오셀로", "맥베스" }, answer = 2 },
+	{ q = "'삼고초려'에서 세 번 찾아간 사람은?", choices = { "조조", "손권", "유비", "관우" }, answer = 3 },
+	{ q = "'토사구팽'의 뜻은?", choices = { "토끼가 개를 이김", "열심히 일하면 복이 옴", "작은 일에 목숨 걺", "쓸모가 없어지면 버림" }, answer = 4 },
+	{ q = "'타산지석'의 뜻은?", choices = { "남의 잘못도 나에게 교훈이 됨", "돌을 쌓아 산을 만듦", "남의 산에서 돌을 캠", "단단한 마음" }, answer = 1 },
+	{ q = "맞춤법이 바른 것은?", choices = { "일부로", "일부러", "일브러", "일부루" }, answer = 2 },
+	{ q = "오케스트라 현악기 가운데 가장 낮은 소리를 내는 것은?", choices = { "바이올린", "비올라", "더블베이스", "첼로" }, answer = 3 },
+	{ q = "4분음표 두 개와 길이가 같은 음표는?", choices = { "8분음표", "16분음표", "온음표", "2분음표" }, answer = 4 },
+	{ q = "컴퓨터에서 1바이트는 몇 비트?", choices = { "8비트", "2비트", "4비트", "16비트" }, answer = 1 },
+	{ q = "2진수 1010을 10진수로 바꾸면?", choices = { "8", "10", "12", "1010" }, answer = 2 },
+	{ q = "피를 굳게 해 상처를 막는 혈액 성분은?", choices = { "적혈구", "백혈구", "혈소판", "혈장" }, answer = 3 },
+	{ q = "사람의 염색체는 모두 몇 개?", choices = { "23개", "44개", "48개", "46개" }, answer = 4 },
+	{ q = "고려를 세운 사람은?", choices = { "왕건", "이성계", "궁예", "견훤" }, answer = 1 },
+} :: { Question }
+
+QuizBank.hardFinal = {
+	{ q = "원자 번호 1번 원소는?", choices = { "헬륨", "수소", "리튬", "탄소" }, answer = 2 },
+	{ q = "물 분자 하나는 원자 몇 개로 이루어져 있을까?", choices = { "1개", "2개", "3개", "4개" }, answer = 3 },
+	{ q = "소금(염화나트륨)의 화학식은?", choices = { "KCl", "NaOH", "HCl", "NaCl" }, answer = 4 },
+	{ q = "땅껍질(지각)에 가장 많은 원소는?", choices = { "산소", "규소", "철", "알루미늄" }, answer = 1 },
+	{ q = "토성의 고리는 주로 무엇으로 되어 있을까?", choices = { "뜨거운 가스", "얼음과 암석 조각", "쇳가루", "구름" }, answer = 2 },
+	{ q = "태양계에서 가장 큰 화산(올림푸스산)이 있는 행성은?", choices = { "금성", "목성", "화성", "수성" }, answer = 3 },
+	{ q = "빛이 달에서 지구까지 오는 데 걸리는 시간은?", choices = { "약 13초", "약 1분", "약 8분", "약 1.3초" }, answer = 4 },
+	{ q = "사람 몸에서 가장 작은 뼈가 있는 곳은?", choices = { "귀", "손가락", "발가락", "코" }, answer = 1 },
+	{ q = "혀에서 맛을 느끼는 작은 기관은?", choices = { "융모", "미뢰", "섬모", "폐포" }, answer = 2 },
+	{ q = "침에 들어 있어 녹말을 분해하는 효소는?", choices = { "펩신", "리페이스", "아밀레이스", "트립신" }, answer = 3 },
+	{ q = "멘델이 유전 실험에 쓴 식물은?", choices = { "옥수수", "강낭콩", "감자", "완두" }, answer = 4 },
+	{ q = "지진의 세기를 숫자로 나타내는 말은?", choices = { "규모", "노트", "헥토파스칼", "칸델라" }, answer = 1 },
+	{ q = "소리의 크기를 나타내는 단위는?", choices = { "헤르츠", "데시벨", "루멘", "줄" }, answer = 2 },
+	{ q = "1헥타르는 몇 제곱미터?", choices = { "100", "1,000", "10,000", "100,000" }, answer = 3 },
+	{ q = "정다면체는 모두 몇 종류일까?", choices = { "3가지", "7가지", "9가지", "5가지" }, answer = 4 },
+	{ q = "반지름이 r인 원의 넓이는?", choices = { "πr²", "2πr", "πd", "2r²" }, answer = 1 },
+	{ q = "0!(0의 계승)의 값은?", choices = { "0", "1", "무한대", "정할 수 없다" }, answer = 2 },
+	{ q = "1부터 10까지의 수 가운데 소수는 몇 개?", choices = { "3개", "5개", "4개", "6개" }, answer = 3 },
+	{ q = "세계에서 가장 큰 섬은?", choices = { "마다가스카르", "보르네오", "뉴기니", "그린란드" }, answer = 4 },
+	{ q = "세계에서 면적이 가장 작은 나라는?", choices = { "바티칸 시국", "모나코", "산마리노", "리히텐슈타인" }, answer = 1 },
+	{ q = "아프리카에서 가장 높은 산은?", choices = { "케냐산", "킬리만자로산", "아틀라스산", "몽블랑" }, answer = 2 },
+	{ q = "남극점에 처음 도착한 탐험가는?", choices = { "스콧", "섀클턴", "아문센", "피어리" }, answer = 3 },
+	{ q = "영국 국기를 부르는 이름은?", choices = { "성조기", "삼색기", "일장기", "유니언 잭" }, answer = 4 },
+	{ q = "'돈키호테'를 쓴 작가는?", choices = { "세르반테스", "괴테", "톨스토이", "위고" }, answer = 1 },
+	{ q = "'홍길동전'을 지은 사람으로 알려진 인물은?", choices = { "김만중", "허균", "박지원", "정약용" }, answer = 2 },
+	{ q = "고려 때 금속 활자로 찍어 지금 남아 있는 가장 오래된 책은?", choices = { "팔만대장경", "동의보감", "직지심체요절", "훈민정음" }, answer = 3 },
+	{ q = "팔만대장경을 보관하는 절은?", choices = { "불국사", "통도사", "송광사", "해인사" }, answer = 4 },
+	{ q = "이순신 장군이 배 13척으로 크게 이긴 해전은?", choices = { "명량 해전", "한산도 대첩", "노량 해전", "옥포 해전" }, answer = 1 },
+	{ q = "3·1 운동이 일어난 해는?", choices = { "1910년", "1919년", "1945년", "1950년" }, answer = 2 },
+	{ q = "대한민국 임시 정부가 처음 세워진 도시는?", choices = { "베이징", "충칭", "상하이", "도쿄" }, answer = 3 },
+	{ q = "'음악의 아버지'라고 불리는 작곡가는?", choices = { "헨델", "모차르트", "베토벤", "바흐" }, answer = 4 },
+	{ q = "베토벤 교향곡 제9번 마지막 악장의 합창 이름은?", choices = { "환희의 송가", "운명", "영웅", "전원" }, answer = 1 },
+	{ q = "'별이 빛나는 밤'을 그린 화가는?", choices = { "고갱", "고흐", "모네", "세잔" }, answer = 2 },
+	{ q = "올림픽 오륜기의 고리 색이 아닌 것은?", choices = { "파랑", "노랑", "보라", "초록" }, answer = 3 },
+	{ q = "배드민턴 깃털 셔틀콕의 깃털은 몇 개?", choices = { "8개", "12개", "20개", "16개" }, answer = 4 },
+	{ q = "1년 가운데 낮이 가장 짧은 절기는?", choices = { "동지", "하지", "춘분", "추분" }, answer = 1 },
+	{ q = "인터넷 주소의 'www'는 무엇을 줄인 말일까?", choices = { "Wide World Web", "World Wide Web", "World Web Wide", "Web World Wide" }, answer = 2 },
+	{ q = "'GPS'의 G는 무엇을 줄인 말일까?", choices = { "General", "Great", "Global", "Ground" }, answer = 3 },
+	{ q = "북두칠성은 어느 별자리의 일부일까?", choices = { "작은곰자리", "카시오페이아자리", "오리온자리", "큰곰자리" }, answer = 4 },
+	{ q = "달이 지구를 한 바퀴 도는(공전) 데 걸리는 시간은?", choices = { "약 27일", "약 7일", "약 15일", "약 365일" }, answer = 1 },
 } :: { Question }
 
 return QuizBank
@@ -3203,7 +3594,8 @@ local Balance = {
 	brief = Config.TEXT.BALANCE_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.BALANCE_BELL_SECONDS + Config.BALANCE_TALKERS * Config.BALANCE_TALK_CHAT_SECONDS
 		+ Config.BALANCE_PICK_SECONDS + Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BALANCE_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -3432,7 +3824,8 @@ local BannedTalk = {
 	-- rescue still waiting).
 	expectedSeconds = Config.TALK_REROLL_SECONDS + Config.TALK_SECONDS + Config.SETTLE_MAX + Config.RESCUE_SECONDS
 		+ Config.LEVER_SECONDS + Config.SETTLE_SLACK, -- (the settle stage's longest wait, RoundService.settleTalk)
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TALK_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -3514,7 +3907,8 @@ local BombPass = {
 	title = Config.TEXT.BOMB_TITLE,
 	brief = Config.TEXT.BOMB_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.BOMB_MAX_SECONDS + Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BOMB_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -3631,6 +4025,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
 local Config = require(shared:WaitForChild("Config"))
+local Modes = require(shared:WaitForChild("Modes"))
 local PressTiming = require(shared:WaitForChild("PressTiming"))
 local PowerBar = require(shared:WaitForChild("PowerBar"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
@@ -3674,7 +4069,8 @@ local Bottle = {
 	brief = string.format(Config.TEXT.BOTTLE_BRIEF, #Config.BOTTLE_ZONES), -- (the briefing before it)
 	expectedSeconds = #Config.BOTTLE_ZONES * (Config.BOTTLE_LEAD_SECONDS + Config.BOTTLE_THROW_SECONDS
 		+ Config.TIMING_GRACE + Config.BOTTLE_SHOW_SECONDS) + Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BOTTLE_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -3723,6 +4119,9 @@ end
 
 -- Returns false when too few were on the ground to start.
 function Bottle.run(ctx: Ctx): boolean?
+	-- (the zones and the bar's speed of the round's mode, bundle 11b: Modes)
+	local zones = Modes.value(Match.mode, "BOTTLE_ZONES") :: { number }
+	local period = Modes.value(Match.mode, "BOTTLE_PERIOD") :: number
 	local players = {}
 	for _, player in ctx.players() do
 		if not ctx.flying(player) then
@@ -3760,11 +4159,11 @@ function Bottle.run(ctx: Ctx): boolean?
 		return false
 	end
 	ctx.show(Config.TEXT.BOTTLE_START)
-	for throw, width in Config.BOTTLE_ZONES do
+	for throw, width in zones do
 		local center = ctx.rng:NextNumber(width / 2 + Config.BOTTLE_EDGE, 1 - width / 2 - Config.BOTTLE_EDGE)
 		local barStartAt = Match.now() + Config.BOTTLE_LEAD_SECONDS
-		ctx.screen({ kind = "bottle", throw = throw, throws = #Config.BOTTLE_ZONES, center = center, width = width,
-			barStartAt = barStartAt, period = Config.BOTTLE_PERIOD, ids = ids(players), stood = counts(),
+		ctx.screen({ kind = "bottle", throw = throw, throws = #zones, center = center, width = width,
+			barStartAt = barStartAt, period = period, ids = ids(players), stood = counts(),
 			endsAt = barStartAt + Config.BOTTLE_THROW_SECONDS })
 		if not ctx.wait(Config.BOTTLE_LEAD_SECONDS) then
 			return nil
@@ -3791,7 +4190,7 @@ function Bottle.run(ctx: Ctx): boolean?
 				touched[player] = true
 				local t = timing.pressedAt(player, at) - barStartAt
 				standing = t <= Config.BOTTLE_THROW_SECONDS
-					and math.abs(PowerBar.at(t, Config.BOTTLE_PERIOD) - center) <= width / 2
+					and math.abs(PowerBar.at(t, period) - center) <= width / 2
 			end
 			if standing then
 				stood[player] = (stood[player] or 0) + 1
@@ -3801,7 +4200,7 @@ function Bottle.run(ctx: Ctx): boolean?
 		if tooFew() then
 			return nil
 		end
-		ctx.screen({ kind = "bottleThrow", throw = throw, throws = #Config.BOTTLE_ZONES, ids = ids(players),
+		ctx.screen({ kind = "bottleThrow", throw = throw, throws = #zones, ids = ids(players),
 			landed = landed, stood = counts() })
 		if not ctx.wait(Config.BOTTLE_SHOW_SECONDS) then
 			return nil
@@ -3876,7 +4275,8 @@ local Crocodile = {
 	brief = Config.TEXT.CROC_BRIEF, -- (the briefing before it)
 	-- The longest run (capped in `run`): CROC_TEETH turns at the last moment, then the result.
 	expectedSeconds = Config.CROC_TEETH * Config.CROC_TURN_SECONDS + Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.CROC_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -4038,7 +4438,8 @@ local Duel = {
 	brief = Config.TEXT.DUEL_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.DUEL_READY_MAX + Config.DUEL_WINDOW + Config.TIMING_PING_CAP + Config.TIMING_GRACE
 		+ Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.DUEL_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -4265,7 +4666,8 @@ local Estimate = {
 	title = Config.TEXT.ESTIMATE_TITLE,
 	brief = Config.TEXT.ESTIMATE_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.ESTIMATE_INTRO_SECONDS + Config.ESTIMATE_SECONDS + Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.ESTIMATE_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -4456,7 +4858,8 @@ local Liar = {
 	expectedSeconds = Config.LIAR_READ_SECONDS + Config.LIAR_BELL_SECONDS
 		+ Config.MAX_PLAYERS * Config.LIAR_CLUE_CHAT_SECONDS + Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS
 		+ Config.LIAR_GUESS_SECONDS + Config.LEVER_SECONDS + Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.LIAR_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -4736,6 +5139,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "Nunchi"; s.Source = [====[-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 
 -- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
@@ -4775,12 +5179,18 @@ local Nunchi = {
 	title = Config.TEXT.NUNCHI_TITLE,
 	brief = Config.TEXT.NUNCHI_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.NUNCHI_MAX_SECONDS + Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.NUNCHI_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
+
+-- Rings this close to the first of a number clash, in the round's mode (bundle 11b: Modes, NUNCHI_WINDOW).
+local function window(): number
+	return Modes.value(Match.mode, "NUNCHI_WINDOW") :: number
+end
 
 local function ids(list: { Player }): { number }
 	local out = {}
@@ -4798,7 +5208,7 @@ function Nunchi.clash(rung: { Player }, times: { [Player]: number }): ({ Player 
 		local first = rung[k]
 		local group = { first }
 		local j = k + 1
-		while j <= #rung and times[rung[j]] - times[first] <= Config.NUNCHI_WINDOW do
+		while j <= #rung and times[rung[j]] - times[first] <= window() do
 			table.insert(group, rung[j])
 			j += 1
 		end
@@ -4862,13 +5272,13 @@ function Nunchi.run(ctx: Ctx): boolean?
 		local now = Match.now()
 		local clash, firstAt = Nunchi.clash(rung, times)
 		if clash and firstAt then
-			return now - firstAt > Config.NUNCHI_WINDOW -- (the clash window is over: everyone in it is in the clash)
+			return now - firstAt > window() -- (the clash window is over: everyone in it is in the clash)
 		end
 		if #present() < Config.NUNCHI_MIN_PLAYERS then
 			return true
 		end
 		local quiet = now - lastAtOf(rung, times)
-		return (allButOne(rung) and quiet > Config.NUNCHI_WINDOW) or quiet >= Config.NUNCHI_IDLE_SECONDS
+		return (allButOne(rung) and quiet > window()) or quiet >= Config.NUNCHI_IDLE_SECONDS
 	end
 	local rung, times = ctx.bell(from, Config.NUNCHI_MAX_SECONDS, false, settled)
 	if ctx.cancelled() then
@@ -4926,11 +5336,17 @@ do local s = Instance.new("ModuleScript"); s.Name = "OXQuiz"; s.Source = [====[-
 -- while someone was launched or gone does not count for them, and only those still here and on the ground at the end
 -- are judged and shown. Who answered none missed an answer (the AFK rule). Statements never repeat until every clean
 -- one was asked, and one containing a banned word in play is skipped.
+-- Bundle 11b: the difficulty mode (Match.mode) picks the bank (easy: OXBankEasy; hard: OXBankHard and the normal bank's
+-- statements marked `hard`, the same tables) and the answer time Modes.value(mode, "OX_SECONDS").
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
-local OXBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("OXBank"))
+local content = script.Parent.Parent:WaitForChild("content")
+local OXBank = require(content:WaitForChild("OXBank"))
+local OXBankEasy = require(content:WaitForChild("OXBankEasy"))
+local OXBankHard = require(content:WaitForChild("OXBankHard"))
 
 -- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
 type Ctx = {
@@ -4971,7 +5387,8 @@ local OXQuiz = {
 	brief = string.format(Config.TEXT.OX_BRIEF, Config.OX_QUESTIONS), -- (the briefing before it)
 	expectedSeconds = Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
 		+ Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = nil :: number?,
 	maxPlayers = nil :: number?,
@@ -4980,12 +5397,36 @@ local OXQuiz = {
 
 local used: { [OXBank.Statement]: boolean } = {}
 
+local function oxSeconds(mode: string?): number
+	return Modes.value(mode, "OX_SECONDS") :: number
+end
+OXQuiz.expectedFor = function(_players: number, mode: string): number
+	return Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + oxSeconds(mode) + Config.OX_REVEAL_SECONDS)
+		+ Config.MINIGAME_RESULT_SECONDS
+end
+
+-- The statements of `mode` (read at each call: the tests swap the banks).
+local function bankFor(mode: string?): { OXBank.Statement }
+	if mode == "easy" then
+		return OXBankEasy
+	elseif mode == "hard" then
+		local bank = table.clone(OXBankHard)
+		for _, statement in OXBank do
+			if statement.hard then
+				table.insert(bank, statement)
+			end
+		end
+		return bank
+	end
+	return OXBank
+end
+
 -- `count` different statements free of the words in play: the ones not asked yet first; once those run out, the asked
 -- ones come back for the rest. Fewer if the bank has fewer clean ones. Exposed for the tests.
 function OXQuiz.draw(count: number, rng: Random): { OXBank.Statement }
 	local words = Match.wordsInPlay()
 	local clean, fresh = {}, {}
-	for _, statement in OXBank do
+	for _, statement in bankFor(Match.mode) do
 		local hit = false
 		for _, word in words do
 			hit = hit or string.find(statement.s, word, 1, true) ~= nil
@@ -5020,7 +5461,7 @@ function OXQuiz.draw(count: number, rng: Random): { OXBank.Statement }
 end
 
 function OXQuiz.available(final: boolean): boolean
-	return not final and #OXBank > 0
+	return not final and #bankFor(Match.mode) > 0
 end
 
 -- Who flies from the wrong counts: the most wrong (ties all), nobody when nobody got any wrong. Pure, for the tests.
@@ -5075,7 +5516,7 @@ function OXQuiz.run(ctx: Ctx): boolean?
 			return nil
 		end
 		local from = present()
-		local answers = ctx.ask(shown, #choices, Config.OX_SECONDS, from)
+		local answers = ctx.ask(shown, #choices, oxSeconds(Match.mode), from)
 		if ctx.cancelled() then
 			return nil
 		end
@@ -5195,7 +5636,8 @@ local OneWord = {
 	expectedSeconds = Config.BELL_ORDER_SECONDS
 		+ Config.ONE_WORD_MAX_PERFORMERS * (2 * Config.ONE_WORD_PREP_SECONDS + Config.ONE_WORD_CHAT_SECONDS)
 		+ Config.PRESENTER_JUDGE_SECONDS + Config.VOTE_SECONDS + Config.ONE_WORD_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.ONE_WORD_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -5512,6 +5954,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "Quiz"; s.Source = [====[--!
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local QuizBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("QuizBank"))
 local ChosungBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("ChosungBank"))
@@ -5549,12 +5992,16 @@ type Ctx = {
 	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
+-- The difficulty modes (bundle 11b, docs/BUNDLE11_2026-10-27.md; Match.mode): each has its banks (bankFor) and the
+-- answer time Modes.value(mode, "QUIZ_SECONDS"). A question asked in this round is not asked again in it, even when the
+-- server's history of a bank runs out and starts over (the easy mode's final asks the main game's bank).
 local Quiz = {
 	id = "quiz",
 	title = Config.TEXT.QUIZ_TITLE,
 	brief = Config.TEXT.QUIZ_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.QUIZ_REVEAL_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = nil :: number?, -- the basic mission: no limit (§5)
 	minPlayers = nil :: number?,
 	maxPlayers = nil :: number?,
@@ -5562,6 +6009,44 @@ local Quiz = {
 }
 
 local used: { [QuizBank.Question]: boolean } = {} -- asked on this server (main and final banks alike)
+local usedThisRound: { [QuizBank.Question]: boolean } = {} -- asked in the round `usedRound`
+local usedRound = -1
+
+-- The answer time of a four-choice question in `mode`, and the quiz's time budget with it.
+local function quizSeconds(mode: string?): number
+	return Modes.value(mode, "QUIZ_SECONDS") :: number
+end
+local function quizExpected(_players: number, mode: string): number
+	return Config.QUIZ_INTRO_SECONDS + quizSeconds(mode) + Config.QUIZ_REVEAL_SECONDS
+end
+Quiz.expectedFor = quizExpected
+
+-- The bank a question comes from in `mode` (read at each call: the tests swap the banks). `bell`: the bell quiz,
+-- which asks no 넌센스 (said without choices, a joke's answer splits).
+local function bankFor(mode: string?, final: boolean, bell: boolean?): { QuizBank.Question }
+	if mode == "easy" then
+		if bell then
+			local plain = {}
+			for _, question in QuizBank.easy do
+				if not question.nonsense then
+					table.insert(plain, question)
+				end
+			end
+			return plain
+		end
+		return QuizBank.easy
+	elseif mode == "hard" then
+		if final then
+			return QuizBank.hardFinal
+		end
+		local bank = table.clone(QuizBank.final) -- (the same question tables: one history with the normal final)
+		for _, question in QuizBank.hardMain do
+			table.insert(bank, question)
+		end
+		return bank
+	end
+	return if final then QuizBank.final else QuizBank.main
+end
 
 local function mentions(question: QuizBank.Question, words: { string }): boolean
 	for _, word in words do
@@ -5579,7 +6064,13 @@ end
 
 -- A question from `bank` not asked yet and free of the words in play; when every clean one was asked, they may come
 -- again. nil if none is clean.
+-- (When the clean ones come again, those of this round still wait: a question is never asked twice in one round
+-- unless the bank has nothing else.)
 local function pick(bank: { QuizBank.Question }, rng: Random): QuizBank.Question?
+	if Match.roundId ~= usedRound then
+		usedRound = Match.roundId
+		table.clear(usedThisRound)
+	end
 	local words = Match.wordsInPlay()
 	local clean, fresh = {}, {}
 	for _, question in bank do
@@ -5593,19 +6084,25 @@ local function pick(bank: { QuizBank.Question }, rng: Random): QuizBank.Question
 	if #fresh == 0 then
 		for _, question in clean do
 			used[question] = nil
+			if not usedThisRound[question] then
+				table.insert(fresh, question)
+			end
 		end
-		fresh = clean
+		if #fresh == 0 then
+			fresh = clean
+		end
 	end
 	if #fresh == 0 then
 		return nil
 	end
 	local question = fresh[rng:NextInteger(1, #fresh)]
 	used[question] = true
+	usedThisRound[question] = true
 	return question
 end
 
 function Quiz.available(final: boolean): boolean
-	return #(if final then QuizBank.final else QuizBank.main) > 0
+	return #bankFor(Match.mode, final) > 0
 end
 
 -- `question`'s choices in a new order for this asking, and where the right one is now (review 2026-10-25: it sat in
@@ -5653,7 +6150,7 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 			table.insert(asked, player)
 		end
 	end
-	local answers = ctx.ask(shown, #choices, Config.QUIZ_SECONDS, asked)
+	local answers = ctx.ask(shown, #choices, quizSeconds(Match.mode), asked)
 	if ctx.cancelled() then
 		return false
 	end
@@ -5686,7 +6183,7 @@ end
 
 -- Returns false when no clean question is left (nothing was asked).
 function Quiz.run(ctx: Ctx): boolean?
-	local question = pick(if ctx.final then QuizBank.final else QuizBank.main, ctx.rng)
+	local question = pick(bankFor(Match.mode, ctx.final), ctx.rng)
 	if not question then
 		return false
 	end
@@ -5702,7 +6199,8 @@ local BellQuiz = {
 	-- last moment).
 	expectedSeconds = Config.BELL_QUIZ_QUESTIONS * (Config.BELL_TRIES
 		* (Config.BELL_WAIT_SECONDS + Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS) + Config.QUIZ_REVEAL_SECONDS),
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BELL_QUIZ_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -5710,7 +6208,7 @@ local BellQuiz = {
 }
 
 function BellQuiz.available(final: boolean): boolean
-	return not final and #QuizBank.main > 0
+	return not final and #bankFor(Match.mode, false, true) > 0
 end
 
 -- One question by the bells. Returns false if cancelled.
@@ -5780,7 +6278,7 @@ function BellQuiz.run(ctx: Ctx): boolean?
 	ctx.show(Config.TEXT.BELL_QUIZ_START)
 	local asked = 0
 	for number = 1, Config.BELL_QUIZ_QUESTIONS do
-		local question = pick(QuizBank.main, ctx.rng)
+		local question = pick(bankFor(Match.mode, false, true), ctx.rng)
 		if not question then
 			break
 		end
@@ -5806,12 +6304,15 @@ local ChosungQuiz = {
 	title = Config.TEXT.CHOSUNG_TITLE,
 	brief = Config.TEXT.CHOSUNG_BRIEF, -- (the briefing before it)
 	expectedSeconds = Quiz.expectedSeconds,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = nil :: number?,
 	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
+
+ChosungQuiz.expectedFor = quizExpected -- (its answer time is the quiz's, by mode)
 
 local usedWords: { [string]: boolean } = {} -- by "category/word" (a word may sit in two categories)
 type Candidate = { key: string, category: string, word: string, initials: string, decoys: { string } }
@@ -5830,11 +6331,13 @@ local function letters(initials: string): { number }
 end
 
 -- How close a wrong choice's initials are to the right ones: as many syllables first, then initials in the same places.
-local function likeness(right: { number }, other: { number }): number
+-- `far` (the easy mode, Config.CHOSUNG_FAR_DECOYS): as many syllables first, then the fewest initials in the same
+-- places — told apart at a glance, yet not by length alone; a category short of such words fills up with the next best.
+local function likeness(right: { number }, other: { number }, far: boolean): number
 	local score = if #other == #right then 100 else 0
 	for i = 1, math.min(#right, #other) do
 		if right[i] == other[i] then
-			score += 1
+			score += if far then -1 else 1
 		end
 	end
 	return score
@@ -5889,11 +6392,12 @@ function ChosungQuiz.question(rng: Random, words: { string }): QuizBank.Question
 	end
 	local candidate = fresh[rng:NextInteger(1, #fresh)]
 	usedWords[candidate.key] = true
-	-- The three closest wrong choices (a random pick among equally close ones).
+	-- The three closest wrong choices (a random pick among equally close ones; the easy mode: the least alike).
 	local right = letters(candidate.initials)
+	local far = Modes.value(Match.mode, "CHOSUNG_FAR_DECOYS") == true
 	local ranked = {}
 	for _, other in candidate.decoys do
-		table.insert(ranked, { word = other, score = likeness(right, letters(Hangul.initials(other))) + rng:NextNumber() * 0.5 })
+		table.insert(ranked, { word = other, score = likeness(right, letters(Hangul.initials(other)), far) + rng:NextNumber() * 0.5 })
 	end
 	table.sort(ranked, function(a, b)
 		return a.score > b.score
@@ -5935,6 +6439,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "RedLight"; s.Source = [====
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 
 -- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
@@ -5974,7 +6479,8 @@ local RedLight = {
 	title = Config.TEXT.REDLIGHT_TITLE,
 	brief = Config.TEXT.REDLIGHT_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.REDLIGHT_SECONDS + Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.REDLIGHT_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -6009,14 +6515,19 @@ local function lightAt(phases: { Phase }, at: number): (string, number)
 	return last.light, last.from
 end
 
--- A press on red this long after the light changed is caught: REDLIGHT_GRACE, plus the player's round trip (the light
+-- The steps that reach the goal in the round's mode (bundle 11b: Modes, REDLIGHT_GOAL).
+local function goal(): number
+	return Modes.value(Match.mode, "REDLIGHT_GOAL") :: number
+end
+
+-- A press on red this long after the light changed is caught: REDLIGHT_GRACE (by mode), plus the player's round trip (the light
 -- reaches their screen late and the press comes back late), up to REDLIGHT_PING_CAP.
 local function graceOf(player: Player): number
 	local ok, ping = pcall(function(): number
 		return player:GetNetworkPing()
 	end)
 	local extra = if ok and type(ping) == "number" then math.clamp(ping, 0, Config.REDLIGHT_PING_CAP) else 0
-	return Config.REDLIGHT_GRACE + extra
+	return (Modes.value(Match.mode, "REDLIGHT_GRACE") :: number) + extra
 end
 
 local function ids(list: { Player }): { number }
@@ -6062,7 +6573,7 @@ function RedLight.run(ctx: Ctx): boolean?
 	local function progress(): { number }
 		local list = {}
 		for _, player in players do
-			table.insert(list, math.min(steps[player] or 0, Config.REDLIGHT_GOAL))
+			table.insert(list, math.min(steps[player] or 0, goal()))
 		end
 		return list
 	end
@@ -6093,7 +6604,7 @@ function RedLight.run(ctx: Ctx): boolean?
 			local press = presses[i]
 			local player = press.player
 			touched[player] = true
-			if not caught[player] and (steps[player] or 0) < Config.REDLIGHT_GOAL then
+			if not caught[player] and (steps[player] or 0) < goal() then
 				local light, since = lightAt(phases, press.at)
 				if light == "green" then
 					steps[player] = (steps[player] or 0) + 1
@@ -6106,14 +6617,14 @@ function RedLight.run(ctx: Ctx): boolean?
 		local light = lightAt(phases, now)
 		if light ~= shownLight or now - shownAt >= Config.REDLIGHT_UPDATE then
 			shownLight, shownAt = light, now
-			ctx.screen({ kind = "redLight", light = light, goal = Config.REDLIGHT_GOAL, ids = ids(players),
+			ctx.screen({ kind = "redLight", light = light, goal = goal(), ids = ids(players),
 				steps = progress(), caught = caughtIds(), endsAt = endsAt })
 		end
 		if tooFew() then
 			return true
 		end
 		for _, player in players do
-			if not caught[player] and (steps[player] or 0) < Config.REDLIGHT_GOAL and table.find(ctx.players(), player) then
+			if not caught[player] and (steps[player] or 0) < goal() and table.find(ctx.players(), player) then
 				return false
 			end
 		end
@@ -6134,7 +6645,7 @@ function RedLight.run(ctx: Ctx): boolean?
 		if table.find(ctx.players(), player) then
 			if caught[player] then
 				table.insert(caughtList, player)
-			elseif (steps[player] or 0) < Config.REDLIGHT_GOAL then
+			elseif (steps[player] or 0) < goal() then
 				table.insert(short, player)
 			end
 			table.insert(if touched[player] then pressed else never, player)
@@ -6144,7 +6655,7 @@ function RedLight.run(ctx: Ctx): boolean?
 	for _, player in short do
 		table.insert(losers, player)
 	end
-	ctx.screen({ kind = "redLightResult", goal = Config.REDLIGHT_GOAL, ids = ids(players), steps = progress(),
+	ctx.screen({ kind = "redLightResult", goal = goal(), ids = ids(players), steps = progress(),
 		caught = caughtIds() })
 	local lines = {}
 	if #caughtList > 0 then
@@ -6208,7 +6719,8 @@ local Roulette = {
 	title = Config.TEXT.ROULETTE_TITLE,
 	brief = Config.TEXT.ROULETTE_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.ROULETTE_SPIN_SECONDS + Config.ROULETTE_REVEAL_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.ROULETTE_PER_ROUND :: number?,
 	minPlayers = Config.ROULETTE_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -6298,7 +6810,8 @@ local TestMission = {
 	title = Config.TEXT.TEST_MISSION_TITLE,
 	brief = Config.TEXT.TEST_MISSION_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.TEST_MISSION_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = nil :: number?, -- like the quiz: no limit
 	minPlayers = nil :: number?,
 	maxPlayers = nil :: number?,
@@ -6338,6 +6851,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
 local Config = require(shared:WaitForChild("Config"))
+local Modes = require(shared:WaitForChild("Modes"))
 local PressTiming = require(shared:WaitForChild("PressTiming"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 
@@ -6378,14 +6892,23 @@ local TimeGuess = {
 	id = "timeGuess",
 	title = Config.TEXT.TIMEGUESS_TITLE,
 	brief = string.format(Config.TEXT.TIMEGUESS_BRIEF, Config.TIMEGUESS_VISIBLE_SECONDS), -- (the briefing before it)
+	briefFor = nil :: ((mode: string) -> string)?, -- (the clock's time differs by mode, bundle 11b)
 	expectedSeconds = Config.TIMEGUESS_READ_SECONDS + Config.TIMEGUESS_MAX + Config.TIMEGUESS_LATE + Config.TIMING_GRACE
 		+ Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TIMEGUESS_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
+
+-- How long the clock shows in `mode` (bundle 11b: Modes, TIMEGUESS_VISIBLE_SECONDS), and the brief that says so.
+local function visibleFor(mode: string?): number
+	return Modes.value(mode, "TIMEGUESS_VISIBLE_SECONDS") :: number
+end
+TimeGuess.briefFor = function(mode: string): string
+	return string.format(Config.TEXT.TIMEGUESS_BRIEF, visibleFor(mode))
+end
 
 local function ids(list: { Player }): { number }
 	local out = {}
@@ -6461,7 +6984,7 @@ function TimeGuess.run(ctx: Ctx): boolean?
 	local target = ctx.rng:NextInteger(Config.TIMEGUESS_MIN * 100, Config.TIMEGUESS_MAX * 100) / 100
 	local startAt = Match.now() + Config.TIMEGUESS_READ_SECONDS
 	ctx.show(string.format(Config.TEXT.TIMEGUESS_START, target))
-	ctx.screen({ kind = "timeGuess", target = target, startAt = startAt, visibleFor = Config.TIMEGUESS_VISIBLE_SECONDS,
+	ctx.screen({ kind = "timeGuess", target = target, startAt = startAt, visibleFor = visibleFor(Match.mode),
 		ids = ids(players), endsAt = startAt + target + Config.TIMEGUESS_LATE })
 	if not ctx.wait(Config.TIMEGUESS_READ_SECONDS) then
 		return nil
@@ -6575,7 +7098,8 @@ local Twenty = {
 	brief = Config.TEXT.TWENTY_BRIEF, -- (the briefing before it)
 	-- (the longest run with MAX_PLAYERS: every turn used to the end; expectedFor counts the players there are)
 	expectedSeconds = 0,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TWENTY_MIN_PLAYERS :: number?,
 	-- (owner 2026-10-26, the recommended choice: with more alive a game runs long, up to about 7 minutes with ten)
@@ -7799,10 +8323,13 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionRunner"; s.Source = 
 -- 결투, 물병 세우기; bundle 8c: the 초성 quiz (Quiz.chosung), the O/X quiz, the number quiz; bundle 9c: 머리 위
 -- 스무고개 instead of the banned-word talk (its code stays, off: Config.TALK_GAME_ON); and the Studio-only test mission.
 -- A question may also take a short text instead of a choice (askText: 스무고개's answer).
+-- Bundle 11b: the round's difficulty mode (Match.mode, voted with voteMode during the assignment) changes some numbers
+-- and quiz banks; the time budget and the briefs here count it too.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local Net = require(script.Parent.Parent:WaitForChild("Net"))
 local missionFolder = script.Parent.Parent:WaitForChild("missions")
@@ -7921,8 +8448,10 @@ export type Mission = {
 	id: string,
 	title: string, -- shown in the presenter's menu
 	brief: string?, -- its one-line rule for the briefing before it (owner 2026-10-24)
+	briefFor: ((mode: string) -> string)?, -- the rule in a mode, when the mode changes it (bundle 11b)
 	expectedSeconds: number, -- for the time budget, without the launches afterwards
-	expectedFor: ((players: number) -> number)?, -- the same for this many alive players, when it depends on them
+	-- The same for this many alive players in a mode, when it depends on them or on the mode (bundle 11b).
+	expectedFor: ((players: number, mode: string) -> number)?,
 	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
 	minPlayers: number?, -- alive participants it needs (nil = any)
 	maxPlayers: number?, -- at most this many alive (nil = any; 머리 위 스무고개 runs long with many)
@@ -7949,8 +8478,14 @@ local questions = 0 -- question numbers so far (an answer sent for an older ques
 
 local function fits(mission: Mission, secondsLeft: number, alive: number): boolean
 	local byPlayers = mission.expectedFor
-	local expected = if byPlayers then byPlayers(alive) else mission.expectedSeconds
+	local expected = if byPlayers then byPlayers(alive, Match.mode or Modes.DEFAULT) else mission.expectedSeconds
 	return expected + Config.FLING_RETURN_SECONDS <= secondsLeft
+end
+
+-- A mission's one-line rule in the round's mode.
+local function briefOf(mission: Mission): string
+	local inMode = mission.briefFor
+	return if inMode then inMode(Match.mode or Modes.DEFAULT) else mission.brief or ""
 end
 
 -- A new round: nothing played yet.
@@ -8258,26 +8793,21 @@ function MissionRunner.run(mission: Mission, ctx: Ctx): (boolean, boolean)
 	return ok, didPlay
 end
 
--- Between games (owner 2026-10-24): `voters` vote for the next game among `ballot` (2+ missions) on a screen that also
--- shows `recap` (what the last game did), for NEXT_VOTE_SECONDS or until every voter still here voted, or until
--- `stop`. The most votes win; a tie or no vote at all: at random among the tied (or all). No penalty for not voting.
--- Also returns the count per mission id (the beta's measurements).
-function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player }, rng: Random, stop: () -> boolean):
-	(Mission, { [string]: number })
+-- A vote on everyone's screen (the "nextVote" screen; `title` replaces its heading): `voters` pick one of `titles`
+-- (with `rules` under each) for `seconds` or until every voter still here voted, or until `stop`. Returns the votes
+-- per choice number. Shared by the vote for the next game and the vote for the round's mode (bundle 11b).
+local function poll(titles: { string }, rules: { string }, recap: string, title: string?, voters: { Player },
+	seconds: number, stop: () -> boolean): { [number]: number }
 	questions += 1
-	local open: Question = { id = questions, from = {}, choices = #ballot, endsAt = Match.now() + Config.NEXT_VOTE_SECONDS,
+	local open: Question = { id = questions, from = {}, choices = #titles, endsAt = Match.now() + seconds,
 		answers = {}, changeable = false, text = false, texts = {} }
 	for _, player in voters do
 		open.from[player] = true
 	end
 	question = open
-	local titles, rules = {}, {}
-	for _, mission in ballot do
-		table.insert(titles, mission.title)
-		table.insert(rules, mission.brief or "") -- (under each name: a first-time player knows what they vote for)
-	end
-	setScreen({ kind = "nextVote", recap = recap, choices = titles, rules = rules, id = open.id, endsAt = open.endsAt })
-	local untilAt = os.clock() + Config.NEXT_VOTE_SECONDS
+	setScreen({ kind = "nextVote", title = title, recap = recap, choices = titles, rules = rules, id = open.id,
+		endsAt = open.endsAt })
+	local untilAt = os.clock() + seconds
 	while os.clock() < untilAt and not stop() do
 		local waiting = false
 		for player in open.from do
@@ -8298,6 +8828,21 @@ function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player
 	for _, choice in open.answers do
 		counts[choice] = (counts[choice] or 0) + 1
 	end
+	return counts
+end
+
+-- Between games (owner 2026-10-24): `voters` vote for the next game among `ballot` (2+ missions) on a screen that also
+-- shows `recap` (what the last game did), for NEXT_VOTE_SECONDS or until every voter still here voted, or until
+-- `stop`. The most votes win; a tie or no vote at all: at random among the tied (or all). No penalty for not voting.
+-- Also returns the count per mission id (the beta's measurements).
+function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player }, rng: Random, stop: () -> boolean):
+	(Mission, { [string]: number })
+	local titles, rules = {}, {}
+	for _, mission in ballot do
+		table.insert(titles, mission.title)
+		table.insert(rules, briefOf(mission)) -- (under each name: a first-time player knows what they vote for)
+	end
+	local counts = poll(titles, rules, recap, nil, voters, Config.NEXT_VOTE_SECONDS, stop)
 	local best, tied = -1, {}
 	local byId: { [string]: number } = {}
 	for i = 1, #ballot do
@@ -8310,6 +8855,23 @@ function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player
 		end
 	end
 	return ballot[tied[rng:NextInteger(1, #tied)]], byId
+end
+
+-- The round's difficulty mode (bundle 11b, docs/BUNDLE11_2026-10-27.md): `voters` (the seated players) vote among
+-- Modes.LIST for MODE_VOTE_SECONDS or until all voted, or until `stop`; Modes.decide picks (a tie with the normal mode
+-- in it is normal, no votes is normal). Returns the mode and the votes per mode id. The screen stays until the next one.
+function MissionRunner.voteMode(voters: { Player }, rng: Random, stop: () -> boolean): (string, { [string]: number })
+	local titles, rules = {}, {}
+	for _, entry in Modes.LIST do
+		table.insert(titles, entry.title)
+		table.insert(rules, entry.brief)
+	end
+	local counts = poll(titles, rules, "", Config.TEXT.MODE_VOTE, voters, Config.MODE_VOTE_SECONDS, stop)
+	local byId: { [string]: number } = {}
+	for i, entry in Modes.LIST do
+		byId[entry.id] = counts[i] or 0
+	end
+	return Modes.decide(byId, rng), byId
 end
 
 -- The round's result on everyone's screen: who won and the round awards (owner 2026-10-24); `winners` (userIds) get
@@ -8334,7 +8896,7 @@ end
 -- and `recap` (what the last game did) when no vote or picking screen showed it. False if `stop` came meanwhile. The
 -- screen is cleared for the game's own.
 function MissionRunner.brief(mission: Mission, game: number, games: number, recap: string, stop: () -> boolean): boolean
-	setScreen({ kind = "brief", title = mission.title, rule = mission.brief or "", game = game, games = games,
+	setScreen({ kind = "brief", title = mission.title, rule = briefOf(mission), game = game, games = games,
 		recap = recap, endsAt = Match.now() + Config.BRIEF_SECONDS })
 	local untilAt = os.clock() + Config.BRIEF_SECONDS
 	while os.clock() < untilAt do
@@ -10123,6 +10685,16 @@ function Telemetry.lifeLost(player: Player)
 	end
 end
 
+-- The round's difficulty mode was voted (bundle 11b): its console line with the votes per mode.
+function Telemetry.roundMode(round: number, mode: string, votes: { [string]: number })
+	local parts = {}
+	for id, count in votes do
+		table.insert(parts, string.format("%s %d", id, count))
+	end
+	table.sort(parts)
+	print(string.format("[BannedWords] stats round %d mode %s (%s)", round, mode, table.concat(parts, ", ")))
+end
+
 -- The mission is over: its console line (`entry`; nil when it had too few players to start).
 function Telemetry.gameEnded(entry: Game?)
 	current = ""
@@ -10515,6 +11087,7 @@ local UserInputService = game:GetService("UserInputService")
 local shared = ReplicatedStorage:WaitForChild("BannedWords")
 local remotes = shared:WaitForChild("Remotes")
 local Config = require(shared:WaitForChild("Config"))
+local Modes = require(shared:WaitForChild("Modes"))
 local State = require(script:WaitForChild("State"))
 local Speech = require(script:WaitForChild("Speech"))
 local FlatVoice = require(script:WaitForChild("FlatVoice"))
@@ -10638,6 +11211,7 @@ local function refresh()
 	local me = State.myId()
 	local presenting = State.mePresenting()
 	Hud.setStatus(round.phase, round.message)
+	Hud.setMode(if State.inRound() and round.mode then Modes.title(round.mode) else nil) -- (once voted, bundle 11b)
 	Hud.setAlive(#round.alive, round.total)
 	Hud.setMyLives(if State.inRound() and State.isParticipant(me) then State.livesOf(me) else nil, round.maxLives,
 		if presenting then Config.TEXT.ME_PRESENTER else nil)
@@ -13363,6 +13937,7 @@ local PHASE_TITLE = {
 }
 
 local statusL: TextLabel
+local modeL: TextLabel -- the round's difficulty mode, a tag on the board's top edge (bundle 11b)
 local timerL: TextLabel
 local aliveL: TextLabel
 local livesL: TextLabel
@@ -13425,7 +14000,34 @@ function Hud.build(): Frame
 	aliveL.Position = UDim2.fromScale(0.68, 0.55)
 	aliveL.Size = UDim2.new(0.28, -30, 0.38, 0)
 	aliveL.TextXAlignment = Enum.TextXAlignment.Right
+	-- (on the top edge, mostly above it: the board's two lines stay as they are)
+	modeL = Instance.new("TextLabel")
+	modeL.Name = "Mode"
+	modeL.AnchorPoint = Vector2.new(0.5, 1)
+	modeL.Position = UDim2.fromOffset(0, 5) + UDim2.fromScale(0.5, 0)
+	modeL.Size = UDim2.fromOffset(0, 20)
+	modeL.AutomaticSize = Enum.AutomaticSize.X
+	modeL.BackgroundColor3 = Style.KEY
+	modeL.BorderSizePixel = 0
+	modeL.FontFace = Style.BOLD
+	modeL.TextSize = 14
+	modeL.TextColor3 = Style.INK
+	modeL.Text = ""
+	modeL.Visible = false
+	modeL.ZIndex = 2
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 10)
+	pad.PaddingRight = UDim.new(0, 10)
+	pad.Parent = modeL
+	Style.round(modeL, 10)
+	modeL.Parent = top
 	return top
+end
+
+-- The round's mode name, or nil / "" for none (between rounds).
+function Hud.setMode(text: string?)
+	modeL.Text = text or ""
+	modeL.Visible = modeL.Text ~= ""
 end
 
 -- The message alone, or the phase's name when there is none (review 2026-10-25: "본 경기 · 본 경기 시작!", "결승 ·
@@ -14302,7 +14904,8 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 			end
 		end
 	elseif kind == "nextVote" or kind == "nextPick" then
-		title.Text = if kind == "nextVote" then TEXT.NEXT_VOTE else TEXT.PICKING
+		-- (`title`: the same vote for another thing, the round's difficulty mode — bundle 11b)
+		title.Text = if kind == "nextVote" then payload.title or TEXT.NEXT_VOTE else TEXT.PICKING
 		note.Text = payload.recap or "" -- (what the last game did; nothing before the first)
 		note.Visible = note.Text ~= ""
 		local choices = if kind == "nextVote" then payload.choices or {} else {}

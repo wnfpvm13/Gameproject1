@@ -2477,4 +2477,257 @@ do
 	QuizBank.main = realMain
 end
 
+---------------------------------------------------------------- 20. difficulty modes (bundle 11b, owner 2026-10-27)
+local Modes = require(node("Modes"))
+local OXBankEasy = require(node("OXBankEasy"))
+local OXBankHard = require(node("OXBankHard"))
+do
+	local rng = Random.new(3)
+	local tiedOthers = {}
+	for _ = 1, 30 do
+		tiedOthers[Modes.decide({ easy = 2, hard = 2 }, rng)] = true
+	end
+	check("20a the mode vote: the most votes win; a tie with the normal mode is normal, another tie is drawn; no votes:"
+		.. " normal", Modes.decide({ easy = 2, normal = 1 }, rng) == "easy"
+		and Modes.decide({ easy = 1, normal = 1, hard = 1 }, rng) == "normal" and Modes.decide({}, rng) == "normal"
+		and tiedOthers.easy == true and tiedOthers.hard == true and tiedOthers.normal == nil)
+	check("20b a mode's numbers come from MODE_TUNING, any other (and no mode) from Config",
+		Modes.value("easy", "QUIZ_SECONDS") == 15 and Modes.value("hard", "QUIZ_SECONDS") == 7
+		and Modes.value("normal", "QUIZ_SECONDS") == Config.QUIZ_SECONDS and Modes.value(nil, "QUIZ_SECONDS") == Config.QUIZ_SECONDS
+		and Modes.value("easy", "LIVES") == Config.LIVES and Modes.title("hard") == Config.TEXT.MODE_HARD)
+	check("20c the time budget counts the mode: a quiz 20/15/12 s, the O/X quiz 33/27/24 s, 초성 like the quiz",
+		Quiz.expectedFor(5, "easy") == 20 and Quiz.expectedFor(5, "normal") == 15 and Quiz.expectedFor(5, "hard") == 12
+		and OXQuiz.expectedFor(5, "easy") == 33 and OXQuiz.expectedFor(5, "normal") == 27
+		and OXQuiz.expectedFor(5, "hard") == 24 and Quiz.chosung.expectedFor(5, "hard") == 12)
+end
+-- One question of `mission` in `mode`: its text and how long its buttons were open.
+local function askedIn(mode, final, mission)
+	Match.mode = mode
+	local ps = newPlayers(2)
+	local record = fakeCtx(ps, final, nil)
+	local since = now
+	local run = start(mission or Quiz, record)
+	at(now + Config.QUIZ_INTRO_SECONDS + 0.1)
+	local opened = now - 0.1
+	local screen = nil
+	for _, m in screens(since) do
+		if m.payload.kind == "quiz" and m.payload.endsAt then
+			screen = m.payload
+		end
+	end
+	at(now + 30)
+	record.cancel = true
+	at(now + 30)
+	Match.mode = nil
+	return screen and screen.question, screen and (screen.endsAt - opened), run.done
+end
+local function inBank(text, bank)
+	for _, question in bank do
+		if question.q == text then
+			return question
+		end
+	end
+	return nil
+end
+do
+	local okEasy, okEasyFinal, okHard, okHardFinal, okBell = true, true, true, true, true
+	for _ = 1, 6 do
+		okEasy = okEasy and inBank(askedIn("easy", false), QuizBank.easy) ~= nil
+		okEasyFinal = okEasyFinal and inBank(askedIn("easy", true), QuizBank.easy) ~= nil
+		local hard = askedIn("hard", false)
+		okHard = okHard and (inBank(hard, QuizBank.final) ~= nil or inBank(hard, QuizBank.hardMain) ~= nil)
+		okHardFinal = okHardFinal and inBank(askedIn("hard", true), QuizBank.hardFinal) ~= nil
+		-- (no presenter: the bell quiz asks everyone with four choices — from the same bank it would ring for)
+		local bell = inBank(askedIn("easy", false, Quiz.bell), QuizBank.easy)
+		okBell = okBell and bell ~= nil and not bell.nonsense
+	end
+	check("20d the easy mode asks its own bank (the final too), the bell quiz no 넌센스 of it; the hard mode's main game"
+		.. " asks the normal final's and hardMain's questions, its final hardFinal's", okEasy and okEasyFinal and okHard
+		and okHardFinal and okBell)
+	local _, easySeconds = askedIn("easy", false)
+	local _, normalSeconds = askedIn(nil, false)
+	local _, hardSeconds = askedIn("hard", false)
+	check("20e the answer time by mode: 15 / 10 / 7 s", easySeconds ~= nil and math.abs(easySeconds - 15) < 0.3
+		and math.abs(normalSeconds - Config.QUIZ_SECONDS) < 0.3 and math.abs(hardSeconds - 7) < 0.3,
+		tostring(easySeconds) .. " " .. tostring(normalSeconds) .. " " .. tostring(hardSeconds))
+end
+do
+	-- 20f: a question asked in this round is not asked again in it, even when the server's history starts over.
+	local saved = QuizBank.main
+	QuizBank.main = { q("하나", "1", "2", "3", "4"), q("둘", "1", "2", "3", "4"), q("셋", "1", "2", "3", "4") }
+	Match.roundId = 900
+	local first = { askedIn(nil, false), askedIn(nil, false) }
+	Match.roundId = 901
+	local third = askedIn(nil, false)
+	local fourth = askedIn(nil, false)
+	QuizBank.main = saved
+	check("20f a round never asks a question twice: the bank's last fresh one, then (history over) not that one again",
+		third ~= nil and not table.find(first, third) and fourth ~= nil and fourth ~= third)
+end
+do
+	-- 20g: the O/X banks by mode.
+	local inEasy, inHard = true, true
+	local rng = Random.new(5)
+	for _ = 1, 20 do
+		Match.mode = "easy"
+		for _, statement in OXQuiz.draw(Config.OX_QUESTIONS, rng) do
+			inEasy = inEasy and table.find(OXBankEasy, statement) ~= nil
+		end
+		Match.mode = "hard"
+		for _, statement in OXQuiz.draw(Config.OX_QUESTIONS, rng) do
+			inHard = inHard and (table.find(OXBankHard, statement) ~= nil or statement.hard == true)
+		end
+	end
+	Match.mode = nil
+	check("20g the O/X quiz: the easy mode asks OXBankEasy, the hard mode OXBankHard and the normal statements marked hard",
+		inEasy and inHard)
+end
+do
+	-- 20h: 초성 in the easy mode: wrong choices of as many syllables with fewer initials in the same places.
+	local function sameSpots(word, other)
+		local a, b = {}, {}
+		for _, code in utf8.codes(Hangul.initials(word)) do
+			table.insert(a, code)
+		end
+		for _, code in utf8.codes(Hangul.initials(other)) do
+			table.insert(b, code)
+		end
+		local n = 0
+		for i = 1, math.min(#a, #b) do
+			if a[i] == b[i] then
+				n += 1
+			end
+		end
+		return n, #a == #b
+	end
+	local function measure(mode)
+		Match.mode = mode
+		local rng = Random.new(11)
+		local spots, sameLength, total = 0, 0, 0
+		for _ = 1, 150 do
+			local question = Quiz.chosung.question(rng, {})
+			if question then
+				local right = question.choices[question.answer]
+				for i, choice in question.choices do
+					if i ~= question.answer then
+						local n, same = sameSpots(right, choice)
+						spots += n
+						sameLength += if same then 1 else 0
+						total += 1
+					end
+				end
+			end
+		end
+		Match.mode = nil
+		return spots / total, sameLength / total
+	end
+	local easySpots, easySame = measure("easy")
+	local normalSpots, normalSame = measure(nil)
+	check("20h 초성 in the easy mode: wrong choices share fewer initials with the answer, mostly of as many syllables",
+		easySpots < normalSpots and easySame > 0.6, string.format("%.2f %.2f / %.2f %.2f", easySpots, easySame,
+			normalSpots, normalSame))
+end
+do
+	-- 20i: the timing games' numbers by mode, on their screens.
+	local function firstScreen(mission, kind, mode)
+		Match.mode = mode
+		local ps = newPlayers(3)
+		local record = fakeCtx(ps, false, nil)
+		local since = now
+		local run = start(mission, record)
+		at(now + 0.5)
+		local screen = lastScreenOf(since, kind)
+		record.cancel = true
+		at(now + 60)
+		Match.mode = nil
+		return screen, run.done
+	end
+	local timeEasy = firstScreen(TimeGuess, "timeGuess", "easy")
+	local timeHard = firstScreen(TimeGuess, "timeGuess", "hard")
+	local redEasy = firstScreen(RedLight, "redLight", "easy")
+	local redHard = firstScreen(RedLight, "redLight", "hard")
+	local bottleEasy = firstScreen(Bottle, "bottle", "easy")
+	local bottleHard = firstScreen(Bottle, "bottle", "hard")
+	check("20i the timing games by mode: 숫자 맞추기's clock 4 / 2 s (and its brief), 무궁화's goal 20 / 30, 물병's first"
+		.. " zone 0.28 / 0.17 with the easy bar slower", timeEasy ~= nil and timeEasy.visibleFor == 4
+		and timeHard ~= nil and timeHard.visibleFor == 2 and string.find(TimeGuess.briefFor("easy"), "4", 1, true) ~= nil
+		and redEasy ~= nil and redEasy.goal == 20 and redHard ~= nil and redHard.goal == 30 and bottleEasy ~= nil
+		and bottleEasy.width == 0.28 and bottleEasy.period == 1.4 and bottleHard ~= nil and bottleHard.width == 0.17
+		and bottleHard.period == Config.BOTTLE_PERIOD)
+	local a, b = table.unpack(newPlayers(2))
+	local times = { [a] = 10, [b] = 10.45 }
+	Match.mode = "easy"
+	local easyClash = Nunchi.clash({ a, b }, times)
+	Match.mode = nil
+	local normalClash = Nunchi.clash({ a, b }, times)
+	Match.mode = "hard"
+	local hardClash = Nunchi.clash({ a, b }, { [a] = 10, [b] = 10.55 })
+	Match.mode = nil
+	check("20j 눈치 게임's clash window by mode: 0.45 s apart clash in the normal mode, not in the easy one; 0.55 s in the"
+		.. " hard one", easyClash == nil and normalClash ~= nil and hardClash ~= nil)
+end
+do
+	-- 20k: the new banks are well formed: four different choices, the answer among them, no question twice in any bank;
+	-- the easy bank mostly 넌센스 with enough plain ones for the bell quiz; the O/X banks balanced.
+	local seen, okForm, dup = {}, true, nil
+	local nonsense, plain = 0, 0
+	for _, bank in { QuizBank.main, QuizBank.final, QuizBank.easy, QuizBank.hardMain, QuizBank.hardFinal } do
+		for _, question in bank do
+			local distinct = {}
+			for _, choice in question.choices do
+				distinct[choice] = true
+			end
+			local count = 0
+			for _ in distinct do
+				count += 1
+			end
+			okForm = okForm and #question.choices == 4 and count == 4 and question.answer >= 1 and question.answer <= 4
+			if seen[question.q] then
+				dup = dup or question.q
+			end
+			seen[question.q] = true
+		end
+	end
+	for _, question in QuizBank.easy do
+		if question.nonsense then
+			nonsense += 1
+		else
+			plain += 1
+		end
+	end
+	local function balanced(list)
+		local o, x = 0, 0
+		for _, statement in list do
+			if statement.o then
+				o += 1
+			else
+				x += 1
+			end
+		end
+		return o, x
+	end
+	local hardAll = table.clone(OXBankHard)
+	for _, statement in OXBank do
+		if statement.hard then
+			table.insert(hardAll, statement)
+		end
+	end
+	local eo, ex = balanced(OXBankEasy)
+	local ho, hx = balanced(hardAll)
+	local seenS, dupS = {}, nil
+	for _, list in { OXBank, OXBankEasy, OXBankHard } do
+		for _, statement in list do
+			if seenS[statement.s] then
+				dupS = dupS or statement.s
+			end
+			seenS[statement.s] = true
+		end
+	end
+	check("20k the mode banks: well formed, no question or statement twice; easy = mostly 넌센스 (50+) with 20+ plain; the"
+		.. " hard main game 70+, its final 40, O/X easy 45 and hard 45, both answers 12+ each", okForm and dup == nil
+		and dupS == nil and nonsense >= 50 and plain >= 20 and #QuizBank.final + #QuizBank.hardMain >= 70
+		and #QuizBank.hardFinal >= 40 and #OXBankEasy >= 45 and #hardAll >= 45 and eo >= 12 and ex >= 12 and ho >= 12
+		and hx >= 12, tostring(dup) .. " " .. tostring(dupS) .. string.format(" %d/%d %d/%d %d/%d", nonsense, plain, eo, ex, ho, hx))
+end
+
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

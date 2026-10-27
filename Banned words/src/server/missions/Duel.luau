@@ -53,7 +53,8 @@ local Duel = {
 	brief = Config.TEXT.DUEL_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.DUEL_READY_MAX + Config.DUEL_WINDOW + Config.TIMING_PING_CAP + Config.TIMING_GRACE
 		+ Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.DUEL_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,

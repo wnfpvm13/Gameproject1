@@ -15,7 +15,6 @@ return {
 
 	LOBBY_COUNTDOWN = 15,
 	REMATCH_COUNTDOWN = 8, -- the next round right after a result
-	ASSIGN_TIME = 8,
 	RESULT_TIME = 10,
 
 	-- Round (docs/DESIGN_V3.md §2, §4; minigame overhaul 2026-10-23; owner 2026-10-24: a number of games, like the
@@ -32,6 +31,37 @@ return {
 	NEXT_VOTE_CHOICES = 3,
 	NEXT_VOTE_SECONDS = 7,
 	BRIEF_SECONDS = 3,
+	-- Difficulty modes (bundle 11b, owner 2026-10-27; shared/Modes, docs/BUNDLE11_2026-10-27.md): the seated players vote
+	-- one during the assignment (MODE_VOTE_SECONDS, over once all voted), then the result shows MODE_RESULT_SECONDS.
+	-- MODE_TUNING: the numbers a mode changes (every other number stays as below). Quiz banks: missions/Quiz, OXQuiz.
+	MODE_VOTE_SECONDS = 8,
+	MODE_RESULT_SECONDS = 2,
+	MODE_TUNING = {
+		easy = {
+			QUIZ_SECONDS = 15,
+			OX_SECONDS = 7,
+			REDLIGHT_GOAL = 20,
+			REDLIGHT_GRACE = 0.5,
+			TIMEGUESS_VISIBLE_SECONDS = 4, -- (not 5: a target of 5.0 s would show on the clock itself)
+			BOTTLE_ZONES = { 0.28, 0.2, 0.13 },
+			BOTTLE_PERIOD = 1.4,
+			NUNCHI_WINDOW = 0.35,
+			CHOSUNG_FAR_DECOYS = true,
+		},
+		normal = {},
+		hard = {
+			QUIZ_SECONDS = 7,
+			OX_SECONDS = 4,
+			REDLIGHT_GOAL = 30,
+			REDLIGHT_GRACE = 0.2,
+			TIMEGUESS_VISIBLE_SECONDS = 2,
+			BOTTLE_ZONES = { 0.17, 0.11, 0.07 }, -- (the bar's speed stays: narrower and faster left one 30 fps frame)
+			NUNCHI_WINDOW = 0.6, -- (wider and a ring seen on screen could no longer be dodged)
+		},
+	},
+	-- 초성 퀴즈's wrong choices (bundle 11b): the words of as many syllables whose initials are the least alike (the
+	-- easy mode) instead of the most alike.
+	CHOSUNG_FAR_DECOYS = false,
 	AFK_MISSES = 2, -- answer missions missed in a row -> out (a spectator)
 	SUBJECTIVE_FLINGS = 1, -- public servers: launches by the presenter or a vote, per player per round
 	-- Studio has no private servers: this says which rules a Studio round plays (workspace attribute BW_ServerKind =
@@ -346,6 +376,15 @@ return {
 		NEXT_GAME = "다음: %s",
 		GAME_COUNT = "미션 %d/%d", -- the status board during the main game: the game now / games in a round
 		NEXT_VOTE = "다음 미션 투표!",
+		-- Difficulty modes (bundle 11b; names from the owner).
+		MODE_VOTE = "이번 판 난이도 투표!",
+		MODE_EASY = "바보 모드",
+		MODE_EASY_BRIEF = "넌센스 퀴즈, 넉넉한 시간",
+		MODE_NORMAL = "일반 모드",
+		MODE_NORMAL_BRIEF = "고1 수준",
+		MODE_HARD = "똑똑이 모드",
+		MODE_HARD_BRIEF = "어려운 문제, 빠듯한 시간",
+		MODE_RESULT = "이번 판은 %s!",
 		RECAP_LOST = "%s 목숨 잃음",
 		RECAP_OUT = "%s 탈락",
 		RECAP_NONE = "모두 무사!",

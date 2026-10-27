@@ -15,6 +15,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local QuizBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("QuizBank"))
 local ChosungBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("ChosungBank"))
@@ -52,12 +53,16 @@ type Ctx = {
 	chat: (handler: ((Player, string) -> ())?) -> (),
 }
 
+-- The difficulty modes (bundle 11b, docs/BUNDLE11_2026-10-27.md; Match.mode): each has its banks (bankFor) and the
+-- answer time Modes.value(mode, "QUIZ_SECONDS"). A question asked in this round is not asked again in it, even when the
+-- server's history of a bank runs out and starts over (the easy mode's final asks the main game's bank).
 local Quiz = {
 	id = "quiz",
 	title = Config.TEXT.QUIZ_TITLE,
 	brief = Config.TEXT.QUIZ_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.QUIZ_REVEAL_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = nil :: number?, -- the basic mission: no limit (§5)
 	minPlayers = nil :: number?,
 	maxPlayers = nil :: number?,
@@ -65,6 +70,44 @@ local Quiz = {
 }
 
 local used: { [QuizBank.Question]: boolean } = {} -- asked on this server (main and final banks alike)
+local usedThisRound: { [QuizBank.Question]: boolean } = {} -- asked in the round `usedRound`
+local usedRound = -1
+
+-- The answer time of a four-choice question in `mode`, and the quiz's time budget with it.
+local function quizSeconds(mode: string?): number
+	return Modes.value(mode, "QUIZ_SECONDS") :: number
+end
+local function quizExpected(_players: number, mode: string): number
+	return Config.QUIZ_INTRO_SECONDS + quizSeconds(mode) + Config.QUIZ_REVEAL_SECONDS
+end
+Quiz.expectedFor = quizExpected
+
+-- The bank a question comes from in `mode` (read at each call: the tests swap the banks). `bell`: the bell quiz,
+-- which asks no 넌센스 (said without choices, a joke's answer splits).
+local function bankFor(mode: string?, final: boolean, bell: boolean?): { QuizBank.Question }
+	if mode == "easy" then
+		if bell then
+			local plain = {}
+			for _, question in QuizBank.easy do
+				if not question.nonsense then
+					table.insert(plain, question)
+				end
+			end
+			return plain
+		end
+		return QuizBank.easy
+	elseif mode == "hard" then
+		if final then
+			return QuizBank.hardFinal
+		end
+		local bank = table.clone(QuizBank.final) -- (the same question tables: one history with the normal final)
+		for _, question in QuizBank.hardMain do
+			table.insert(bank, question)
+		end
+		return bank
+	end
+	return if final then QuizBank.final else QuizBank.main
+end
 
 local function mentions(question: QuizBank.Question, words: { string }): boolean
 	for _, word in words do
@@ -82,7 +125,13 @@ end
 
 -- A question from `bank` not asked yet and free of the words in play; when every clean one was asked, they may come
 -- again. nil if none is clean.
+-- (When the clean ones come again, those of this round still wait: a question is never asked twice in one round
+-- unless the bank has nothing else.)
 local function pick(bank: { QuizBank.Question }, rng: Random): QuizBank.Question?
+	if Match.roundId ~= usedRound then
+		usedRound = Match.roundId
+		table.clear(usedThisRound)
+	end
 	local words = Match.wordsInPlay()
 	local clean, fresh = {}, {}
 	for _, question in bank do
@@ -96,19 +145,25 @@ local function pick(bank: { QuizBank.Question }, rng: Random): QuizBank.Question
 	if #fresh == 0 then
 		for _, question in clean do
 			used[question] = nil
+			if not usedThisRound[question] then
+				table.insert(fresh, question)
+			end
 		end
-		fresh = clean
+		if #fresh == 0 then
+			fresh = clean
+		end
 	end
 	if #fresh == 0 then
 		return nil
 	end
 	local question = fresh[rng:NextInteger(1, #fresh)]
 	used[question] = true
+	usedThisRound[question] = true
 	return question
 end
 
 function Quiz.available(final: boolean): boolean
-	return #(if final then QuizBank.final else QuizBank.main) > 0
+	return #bankFor(Match.mode, final) > 0
 end
 
 -- `question`'s choices in a new order for this asking, and where the right one is now (review 2026-10-25: it sat in
@@ -156,7 +211,7 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 			table.insert(asked, player)
 		end
 	end
-	local answers = ctx.ask(shown, #choices, Config.QUIZ_SECONDS, asked)
+	local answers = ctx.ask(shown, #choices, quizSeconds(Match.mode), asked)
 	if ctx.cancelled() then
 		return false
 	end
@@ -189,7 +244,7 @@ end
 
 -- Returns false when no clean question is left (nothing was asked).
 function Quiz.run(ctx: Ctx): boolean?
-	local question = pick(if ctx.final then QuizBank.final else QuizBank.main, ctx.rng)
+	local question = pick(bankFor(Match.mode, ctx.final), ctx.rng)
 	if not question then
 		return false
 	end
@@ -205,7 +260,8 @@ local BellQuiz = {
 	-- last moment).
 	expectedSeconds = Config.BELL_QUIZ_QUESTIONS * (Config.BELL_TRIES
 		* (Config.BELL_WAIT_SECONDS + Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS) + Config.QUIZ_REVEAL_SECONDS),
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.BELL_QUIZ_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -213,7 +269,7 @@ local BellQuiz = {
 }
 
 function BellQuiz.available(final: boolean): boolean
-	return not final and #QuizBank.main > 0
+	return not final and #bankFor(Match.mode, false, true) > 0
 end
 
 -- One question by the bells. Returns false if cancelled.
@@ -283,7 +339,7 @@ function BellQuiz.run(ctx: Ctx): boolean?
 	ctx.show(Config.TEXT.BELL_QUIZ_START)
 	local asked = 0
 	for number = 1, Config.BELL_QUIZ_QUESTIONS do
-		local question = pick(QuizBank.main, ctx.rng)
+		local question = pick(bankFor(Match.mode, false, true), ctx.rng)
 		if not question then
 			break
 		end
@@ -309,12 +365,15 @@ local ChosungQuiz = {
 	title = Config.TEXT.CHOSUNG_TITLE,
 	brief = Config.TEXT.CHOSUNG_BRIEF, -- (the briefing before it)
 	expectedSeconds = Quiz.expectedSeconds,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = nil :: number?,
 	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
+
+ChosungQuiz.expectedFor = quizExpected -- (its answer time is the quiz's, by mode)
 
 local usedWords: { [string]: boolean } = {} -- by "category/word" (a word may sit in two categories)
 type Candidate = { key: string, category: string, word: string, initials: string, decoys: { string } }
@@ -333,11 +392,13 @@ local function letters(initials: string): { number }
 end
 
 -- How close a wrong choice's initials are to the right ones: as many syllables first, then initials in the same places.
-local function likeness(right: { number }, other: { number }): number
+-- `far` (the easy mode, Config.CHOSUNG_FAR_DECOYS): as many syllables first, then the fewest initials in the same
+-- places — told apart at a glance, yet not by length alone; a category short of such words fills up with the next best.
+local function likeness(right: { number }, other: { number }, far: boolean): number
 	local score = if #other == #right then 100 else 0
 	for i = 1, math.min(#right, #other) do
 		if right[i] == other[i] then
-			score += 1
+			score += if far then -1 else 1
 		end
 	end
 	return score
@@ -392,11 +453,12 @@ function ChosungQuiz.question(rng: Random, words: { string }): QuizBank.Question
 	end
 	local candidate = fresh[rng:NextInteger(1, #fresh)]
 	usedWords[candidate.key] = true
-	-- The three closest wrong choices (a random pick among equally close ones).
+	-- The three closest wrong choices (a random pick among equally close ones; the easy mode: the least alike).
 	local right = letters(candidate.initials)
+	local far = Modes.value(Match.mode, "CHOSUNG_FAR_DECOYS") == true
 	local ranked = {}
 	for _, other in candidate.decoys do
-		table.insert(ranked, { word = other, score = likeness(right, letters(Hangul.initials(other))) + rng:NextNumber() * 0.5 })
+		table.insert(ranked, { word = other, score = likeness(right, letters(Hangul.initials(other)), far) + rng:NextNumber() * 0.5 })
 	end
 	table.sort(ranked, function(a, b)
 		return a.score > b.score

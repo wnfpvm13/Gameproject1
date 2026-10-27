@@ -10,6 +10,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 
 -- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
@@ -49,12 +50,18 @@ local Nunchi = {
 	title = Config.TEXT.NUNCHI_TITLE,
 	brief = Config.TEXT.NUNCHI_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.NUNCHI_MAX_SECONDS + Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.NUNCHI_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
 	needsPresenter = nil :: boolean?,
 }
+
+-- Rings this close to the first of a number clash, in the round's mode (bundle 11b: Modes, NUNCHI_WINDOW).
+local function window(): number
+	return Modes.value(Match.mode, "NUNCHI_WINDOW") :: number
+end
 
 local function ids(list: { Player }): { number }
 	local out = {}
@@ -72,7 +79,7 @@ function Nunchi.clash(rung: { Player }, times: { [Player]: number }): ({ Player 
 		local first = rung[k]
 		local group = { first }
 		local j = k + 1
-		while j <= #rung and times[rung[j]] - times[first] <= Config.NUNCHI_WINDOW do
+		while j <= #rung and times[rung[j]] - times[first] <= window() do
 			table.insert(group, rung[j])
 			j += 1
 		end
@@ -136,13 +143,13 @@ function Nunchi.run(ctx: Ctx): boolean?
 		local now = Match.now()
 		local clash, firstAt = Nunchi.clash(rung, times)
 		if clash and firstAt then
-			return now - firstAt > Config.NUNCHI_WINDOW -- (the clash window is over: everyone in it is in the clash)
+			return now - firstAt > window() -- (the clash window is over: everyone in it is in the clash)
 		end
 		if #present() < Config.NUNCHI_MIN_PLAYERS then
 			return true
 		end
 		local quiet = now - lastAtOf(rung, times)
-		return (allButOne(rung) and quiet > Config.NUNCHI_WINDOW) or quiet >= Config.NUNCHI_IDLE_SECONDS
+		return (allButOne(rung) and quiet > window()) or quiet >= Config.NUNCHI_IDLE_SECONDS
 	end
 	local rung, times = ctx.bell(from, Config.NUNCHI_MAX_SECONDS, false, settled)
 	if ctx.cancelled() then

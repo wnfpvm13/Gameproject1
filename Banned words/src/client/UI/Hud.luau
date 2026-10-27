@@ -20,6 +20,7 @@ local PHASE_TITLE = {
 }
 
 local statusL: TextLabel
+local modeL: TextLabel -- the round's difficulty mode, a tag on the board's top edge (bundle 11b)
 local timerL: TextLabel
 local aliveL: TextLabel
 local livesL: TextLabel
@@ -82,7 +83,34 @@ function Hud.build(): Frame
 	aliveL.Position = UDim2.fromScale(0.68, 0.55)
 	aliveL.Size = UDim2.new(0.28, -30, 0.38, 0)
 	aliveL.TextXAlignment = Enum.TextXAlignment.Right
+	-- (on the top edge, mostly above it: the board's two lines stay as they are)
+	modeL = Instance.new("TextLabel")
+	modeL.Name = "Mode"
+	modeL.AnchorPoint = Vector2.new(0.5, 1)
+	modeL.Position = UDim2.fromOffset(0, 5) + UDim2.fromScale(0.5, 0)
+	modeL.Size = UDim2.fromOffset(0, 20)
+	modeL.AutomaticSize = Enum.AutomaticSize.X
+	modeL.BackgroundColor3 = Style.KEY
+	modeL.BorderSizePixel = 0
+	modeL.FontFace = Style.BOLD
+	modeL.TextSize = 14
+	modeL.TextColor3 = Style.INK
+	modeL.Text = ""
+	modeL.Visible = false
+	modeL.ZIndex = 2
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 10)
+	pad.PaddingRight = UDim.new(0, 10)
+	pad.Parent = modeL
+	Style.round(modeL, 10)
+	modeL.Parent = top
 	return top
+end
+
+-- The round's mode name, or nil / "" for none (between rounds).
+function Hud.setMode(text: string?)
+	modeL.Text = text or ""
+	modeL.Visible = modeL.Text ~= ""
 end
 
 -- The message alone, or the phase's name when there is none (review 2026-10-25: "본 경기 · 본 경기 시작!", "결승 ·

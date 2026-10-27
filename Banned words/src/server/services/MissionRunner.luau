@@ -16,10 +16,13 @@
 -- 결투, 물병 세우기; bundle 8c: the 초성 quiz (Quiz.chosung), the O/X quiz, the number quiz; bundle 9c: 머리 위
 -- 스무고개 instead of the banned-word talk (its code stays, off: Config.TALK_GAME_ON); and the Studio-only test mission.
 -- A question may also take a short text instead of a choice (askText: 스무고개's answer).
+-- Bundle 11b: the round's difficulty mode (Match.mode, voted with voteMode during the assignment) changes some numbers
+-- and quiz banks; the time budget and the briefs here count it too.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local Net = require(script.Parent.Parent:WaitForChild("Net"))
 local missionFolder = script.Parent.Parent:WaitForChild("missions")
@@ -138,8 +141,10 @@ export type Mission = {
 	id: string,
 	title: string, -- shown in the presenter's menu
 	brief: string?, -- its one-line rule for the briefing before it (owner 2026-10-24)
+	briefFor: ((mode: string) -> string)?, -- the rule in a mode, when the mode changes it (bundle 11b)
 	expectedSeconds: number, -- for the time budget, without the launches afterwards
-	expectedFor: ((players: number) -> number)?, -- the same for this many alive players, when it depends on them
+	-- The same for this many alive players in a mode, when it depends on them or on the mode (bundle 11b).
+	expectedFor: ((players: number, mode: string) -> number)?,
 	maxPerRound: number?, -- nil = no limit (docs/DESIGN_V3.md §5: the quiz; others 2, the roulette 1)
 	minPlayers: number?, -- alive participants it needs (nil = any)
 	maxPlayers: number?, -- at most this many alive (nil = any; 머리 위 스무고개 runs long with many)
@@ -166,8 +171,14 @@ local questions = 0 -- question numbers so far (an answer sent for an older ques
 
 local function fits(mission: Mission, secondsLeft: number, alive: number): boolean
 	local byPlayers = mission.expectedFor
-	local expected = if byPlayers then byPlayers(alive) else mission.expectedSeconds
+	local expected = if byPlayers then byPlayers(alive, Match.mode or Modes.DEFAULT) else mission.expectedSeconds
 	return expected + Config.FLING_RETURN_SECONDS <= secondsLeft
+end
+
+-- A mission's one-line rule in the round's mode.
+local function briefOf(mission: Mission): string
+	local inMode = mission.briefFor
+	return if inMode then inMode(Match.mode or Modes.DEFAULT) else mission.brief or ""
 end
 
 -- A new round: nothing played yet.
@@ -475,26 +486,21 @@ function MissionRunner.run(mission: Mission, ctx: Ctx): (boolean, boolean)
 	return ok, didPlay
 end
 
--- Between games (owner 2026-10-24): `voters` vote for the next game among `ballot` (2+ missions) on a screen that also
--- shows `recap` (what the last game did), for NEXT_VOTE_SECONDS or until every voter still here voted, or until
--- `stop`. The most votes win; a tie or no vote at all: at random among the tied (or all). No penalty for not voting.
--- Also returns the count per mission id (the beta's measurements).
-function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player }, rng: Random, stop: () -> boolean):
-	(Mission, { [string]: number })
+-- A vote on everyone's screen (the "nextVote" screen; `title` replaces its heading): `voters` pick one of `titles`
+-- (with `rules` under each) for `seconds` or until every voter still here voted, or until `stop`. Returns the votes
+-- per choice number. Shared by the vote for the next game and the vote for the round's mode (bundle 11b).
+local function poll(titles: { string }, rules: { string }, recap: string, title: string?, voters: { Player },
+	seconds: number, stop: () -> boolean): { [number]: number }
 	questions += 1
-	local open: Question = { id = questions, from = {}, choices = #ballot, endsAt = Match.now() + Config.NEXT_VOTE_SECONDS,
+	local open: Question = { id = questions, from = {}, choices = #titles, endsAt = Match.now() + seconds,
 		answers = {}, changeable = false, text = false, texts = {} }
 	for _, player in voters do
 		open.from[player] = true
 	end
 	question = open
-	local titles, rules = {}, {}
-	for _, mission in ballot do
-		table.insert(titles, mission.title)
-		table.insert(rules, mission.brief or "") -- (under each name: a first-time player knows what they vote for)
-	end
-	setScreen({ kind = "nextVote", recap = recap, choices = titles, rules = rules, id = open.id, endsAt = open.endsAt })
-	local untilAt = os.clock() + Config.NEXT_VOTE_SECONDS
+	setScreen({ kind = "nextVote", title = title, recap = recap, choices = titles, rules = rules, id = open.id,
+		endsAt = open.endsAt })
+	local untilAt = os.clock() + seconds
 	while os.clock() < untilAt and not stop() do
 		local waiting = false
 		for player in open.from do
@@ -515,6 +521,21 @@ function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player
 	for _, choice in open.answers do
 		counts[choice] = (counts[choice] or 0) + 1
 	end
+	return counts
+end
+
+-- Between games (owner 2026-10-24): `voters` vote for the next game among `ballot` (2+ missions) on a screen that also
+-- shows `recap` (what the last game did), for NEXT_VOTE_SECONDS or until every voter still here voted, or until
+-- `stop`. The most votes win; a tie or no vote at all: at random among the tied (or all). No penalty for not voting.
+-- Also returns the count per mission id (the beta's measurements).
+function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player }, rng: Random, stop: () -> boolean):
+	(Mission, { [string]: number })
+	local titles, rules = {}, {}
+	for _, mission in ballot do
+		table.insert(titles, mission.title)
+		table.insert(rules, briefOf(mission)) -- (under each name: a first-time player knows what they vote for)
+	end
+	local counts = poll(titles, rules, recap, nil, voters, Config.NEXT_VOTE_SECONDS, stop)
 	local best, tied = -1, {}
 	local byId: { [string]: number } = {}
 	for i = 1, #ballot do
@@ -527,6 +548,23 @@ function MissionRunner.vote(ballot: { Mission }, recap: string, voters: { Player
 		end
 	end
 	return ballot[tied[rng:NextInteger(1, #tied)]], byId
+end
+
+-- The round's difficulty mode (bundle 11b, docs/BUNDLE11_2026-10-27.md): `voters` (the seated players) vote among
+-- Modes.LIST for MODE_VOTE_SECONDS or until all voted, or until `stop`; Modes.decide picks (a tie with the normal mode
+-- in it is normal, no votes is normal). Returns the mode and the votes per mode id. The screen stays until the next one.
+function MissionRunner.voteMode(voters: { Player }, rng: Random, stop: () -> boolean): (string, { [string]: number })
+	local titles, rules = {}, {}
+	for _, entry in Modes.LIST do
+		table.insert(titles, entry.title)
+		table.insert(rules, entry.brief)
+	end
+	local counts = poll(titles, rules, "", Config.TEXT.MODE_VOTE, voters, Config.MODE_VOTE_SECONDS, stop)
+	local byId: { [string]: number } = {}
+	for i, entry in Modes.LIST do
+		byId[entry.id] = counts[i] or 0
+	end
+	return Modes.decide(byId, rng), byId
 end
 
 -- The round's result on everyone's screen: who won and the round awards (owner 2026-10-24); `winners` (userIds) get
@@ -551,7 +589,7 @@ end
 -- and `recap` (what the last game did) when no vote or picking screen showed it. False if `stop` came meanwhile. The
 -- screen is cleared for the game's own.
 function MissionRunner.brief(mission: Mission, game: number, games: number, recap: string, stop: () -> boolean): boolean
-	setScreen({ kind = "brief", title = mission.title, rule = mission.brief or "", game = game, games = games,
+	setScreen({ kind = "brief", title = mission.title, rule = briefOf(mission), game = game, games = games,
 		recap = recap, endsAt = Match.now() + Config.BRIEF_SECONDS })
 	local untilAt = os.clock() + Config.BRIEF_SECONDS
 	while os.clock() < untilAt do

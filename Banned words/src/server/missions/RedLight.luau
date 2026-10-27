@@ -9,6 +9,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 
 -- MissionRunner.MissionCtx (missions cannot require services, so the shape is repeated here).
@@ -48,7 +49,8 @@ local RedLight = {
 	title = Config.TEXT.REDLIGHT_TITLE,
 	brief = Config.TEXT.REDLIGHT_BRIEF, -- (the briefing before it)
 	expectedSeconds = Config.REDLIGHT_SECONDS + Config.MINIGAME_RESULT_SECONDS,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.REDLIGHT_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,
@@ -83,14 +85,19 @@ local function lightAt(phases: { Phase }, at: number): (string, number)
 	return last.light, last.from
 end
 
--- A press on red this long after the light changed is caught: REDLIGHT_GRACE, plus the player's round trip (the light
+-- The steps that reach the goal in the round's mode (bundle 11b: Modes, REDLIGHT_GOAL).
+local function goal(): number
+	return Modes.value(Match.mode, "REDLIGHT_GOAL") :: number
+end
+
+-- A press on red this long after the light changed is caught: REDLIGHT_GRACE (by mode), plus the player's round trip (the light
 -- reaches their screen late and the press comes back late), up to REDLIGHT_PING_CAP.
 local function graceOf(player: Player): number
 	local ok, ping = pcall(function(): number
 		return player:GetNetworkPing()
 	end)
 	local extra = if ok and type(ping) == "number" then math.clamp(ping, 0, Config.REDLIGHT_PING_CAP) else 0
-	return Config.REDLIGHT_GRACE + extra
+	return (Modes.value(Match.mode, "REDLIGHT_GRACE") :: number) + extra
 end
 
 local function ids(list: { Player }): { number }
@@ -136,7 +143,7 @@ function RedLight.run(ctx: Ctx): boolean?
 	local function progress(): { number }
 		local list = {}
 		for _, player in players do
-			table.insert(list, math.min(steps[player] or 0, Config.REDLIGHT_GOAL))
+			table.insert(list, math.min(steps[player] or 0, goal()))
 		end
 		return list
 	end
@@ -167,7 +174,7 @@ function RedLight.run(ctx: Ctx): boolean?
 			local press = presses[i]
 			local player = press.player
 			touched[player] = true
-			if not caught[player] and (steps[player] or 0) < Config.REDLIGHT_GOAL then
+			if not caught[player] and (steps[player] or 0) < goal() then
 				local light, since = lightAt(phases, press.at)
 				if light == "green" then
 					steps[player] = (steps[player] or 0) + 1
@@ -180,14 +187,14 @@ function RedLight.run(ctx: Ctx): boolean?
 		local light = lightAt(phases, now)
 		if light ~= shownLight or now - shownAt >= Config.REDLIGHT_UPDATE then
 			shownLight, shownAt = light, now
-			ctx.screen({ kind = "redLight", light = light, goal = Config.REDLIGHT_GOAL, ids = ids(players),
+			ctx.screen({ kind = "redLight", light = light, goal = goal(), ids = ids(players),
 				steps = progress(), caught = caughtIds(), endsAt = endsAt })
 		end
 		if tooFew() then
 			return true
 		end
 		for _, player in players do
-			if not caught[player] and (steps[player] or 0) < Config.REDLIGHT_GOAL and table.find(ctx.players(), player) then
+			if not caught[player] and (steps[player] or 0) < goal() and table.find(ctx.players(), player) then
 				return false
 			end
 		end
@@ -208,7 +215,7 @@ function RedLight.run(ctx: Ctx): boolean?
 		if table.find(ctx.players(), player) then
 			if caught[player] then
 				table.insert(caughtList, player)
-			elseif (steps[player] or 0) < Config.REDLIGHT_GOAL then
+			elseif (steps[player] or 0) < goal() then
 				table.insert(short, player)
 			end
 			table.insert(if touched[player] then pressed else never, player)
@@ -218,7 +225,7 @@ function RedLight.run(ctx: Ctx): boolean?
 	for _, player in short do
 		table.insert(losers, player)
 	end
-	ctx.screen({ kind = "redLightResult", goal = Config.REDLIGHT_GOAL, ids = ids(players), steps = progress(),
+	ctx.screen({ kind = "redLightResult", goal = goal(), ids = ids(players), steps = progress(),
 		caught = caughtIds() })
 	local lines = {}
 	if #caughtList > 0 then

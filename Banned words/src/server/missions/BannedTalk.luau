@@ -53,7 +53,8 @@ local BannedTalk = {
 	-- rescue still waiting).
 	expectedSeconds = Config.TALK_REROLL_SECONDS + Config.TALK_SECONDS + Config.SETTLE_MAX + Config.RESCUE_SECONDS
 		+ Config.LEVER_SECONDS + Config.SETTLE_SLACK, -- (the settle stage's longest wait, RoundService.settleTalk)
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TALK_MIN_PLAYERS :: number?,
 	maxPlayers = nil :: number?,

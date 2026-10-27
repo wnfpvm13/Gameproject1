@@ -62,7 +62,8 @@ local Twenty = {
 	brief = Config.TEXT.TWENTY_BRIEF, -- (the briefing before it)
 	-- (the longest run with MAX_PLAYERS: every turn used to the end; expectedFor counts the players there are)
 	expectedSeconds = 0,
-	expectedFor = nil :: ((players: number) -> number)?,
+	briefFor = nil :: ((mode: string) -> string)?,
+	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
 	minPlayers = Config.TWENTY_MIN_PLAYERS :: number?,
 	-- (owner 2026-10-26, the recommended choice: with more alive a game runs long, up to about 7 minutes with ten)

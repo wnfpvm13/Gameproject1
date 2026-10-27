@@ -18,6 +18,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
 local Judge = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Judge"))
 local Match = require(script.Parent:WaitForChild("Match"))
 local Net = require(script.Parent:WaitForChild("Net"))
@@ -768,9 +769,23 @@ local function runRound()
 	SpectatorService.beginRound()
 	VoiceService.setSilenced(chatIds)
 	refreshSpeakers()
-	Match.setPhase("Assign", Config.ASSIGN_TIME, string.format(Config.TEXT.ASSIGN, Config.LIVES))
+	-- The difficulty mode (bundle 11b, docs/BUNDLE11_2026-10-27.md): the seated players vote while the chairs are
+	-- assigned (the vote is the assignment's wait), then the result shows. Players leaving decide the round: no result.
+	Match.setPhase("Assign", Config.MODE_VOTE_SECONDS, string.format(Config.TEXT.ASSIGN, Config.LIVES))
 	WordService.sendAll() -- (nobody has a word: clients clear what they had)
-	waitPhase()
+	local function voteOver(): boolean
+		return Match.roundId ~= myRound or decided()
+	end
+	local mode, modeVotes = MissionRunner.voteMode(Match.aliveList(), rng, voteOver)
+	MissionRunner.clearScreen()
+	if not voteOver() then
+		Match.mode = mode
+		local text = string.format(Config.TEXT.MODE_RESULT, Modes.title(mode))
+		Match.setPhase("Assign", Config.MODE_RESULT_SECONDS, text)
+		Net.notice(text)
+		Telemetry.roundMode(myRound, mode, modeVotes)
+		waitPhase(voteOver)
+	end
 
 	playMain(myRound)
 	MissionRunner.clearScreen() -- (a between-games screen when the main game ended during it)

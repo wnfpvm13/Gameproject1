@@ -39,6 +39,9 @@ local Match = {
 	participants = {} :: { [Player]: Participant },
 	startedWith = 0,
 	game = 0, -- the main game's mission being briefed or played, 1..Config.ROUND_GAMES (0 before the first)
+	-- The round's difficulty mode (bundle 11b, shared/Modes): set once voted during the assignment, nil before and between
+	-- rounds (the normal mode's numbers then: Modes.value). Missions read it for their numbers and banks.
+	mode = nil :: string?,
 	ready = {} :: { [Player]: boolean }, -- voice connected + mic test passed (the client says so)
 	voiceLinked = {} :: { [Player]: boolean }, -- voice connected, muted or not (the client says so, with "Ready")
 	voiceAccount = {} :: { [Player]: boolean }, -- the server found voice on the account (ChatService, owner 2026-10-25)
@@ -132,6 +135,7 @@ function Match.payload()
 		requireReady = Config.REQUIRE_VOICE_READY,
 		serverKind = Match.serverKind,
 		talk = Match.talk,
+		mode = Match.mode,
 		presenter = if Match.presenter then Match.presenter.UserId else nil,
 		presenterPending = Match.presenterPending,
 	}
@@ -159,6 +163,7 @@ function Match.resetRound()
 	table.clear(Match.participants)
 	Match.startedWith = 0
 	Match.game = 0
+	Match.mode = nil
 	Match.presenter = nil
 	Match.presenterPending = false
 	Match.talk = nil

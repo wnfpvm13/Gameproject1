@@ -7,7 +7,9 @@
 -- is fighting, alive, not stunned by a hit (from Config.Knock.SwingGrace until the hit's stun ends: an attack arriving
 -- sooner was pressed before the player saw the hit) and the last attack's weapon is ready again (its cooldown: a
 -- hammer's stays even if the hammer ran out with it). The server takes an attack up to Config.Attack's slack early, but
--- the next one is still counted from when this one was due, so the slack never adds up to a faster rate.
+-- the next one is still counted from when this one was due, so the slack never adds up to a faster rate. A fighter the
+-- server runs itself (a practice bot: attack()) goes through the same judging with no network allowances: refused all
+-- through a stun and until its weapon is ready.
 -- Each punch or swing is a step of its attacker's 1-2-3 string (AttackString: it goes on only while attacks land; the
 -- client says which step it drew, the server takes that only as far as its own count allows; being hit breaks a
 -- fighter's string; the launching last step lands a moment later). It marks the character's
@@ -25,7 +27,6 @@
 -- the attack's number as its player's client counted them - none for a blast): the victim's own client moves its
 -- character, everyone shows it; a sandbag is moved here. A weapon goes back to bare fists when used up, when its time
 -- is over, when its holder is out, and whenever no fight is running.
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterPlayer = game:GetService("StarterPlayer")
 local Workspace = game:GetService("Workspace")
@@ -61,6 +62,8 @@ export type Hooks = {
 export type Service = {
 	give: (model: Model, weapon: string) -> (), -- the model holds this weapon now
 	holding: (model: Model) -> string, -- the weapon the model holds ("Fist" for bare fists)
+	-- A fighter the server runs (a practice bot) attacks along the flat `facing`; false when it may not now.
+	attack: (model: Model, facing: Vector3) -> boolean,
 	stop: () -> (),
 }
 
@@ -69,8 +72,10 @@ local FIST = WeaponRules.FIST
 function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, hooks: Hooks): Service
 	local attack = Config.Attack
 	local weapons = Config.Weapons
-	local readyAt: { [Player]: number } = {} -- server time each player's last attack's weapon is ready again
-	local strings: { [Player]: AttackString.State } = {} -- each player's 1-2-3 string
+	-- Per fighter (a player's character or a bot): the server time its last attack's weapon is ready again, and its
+	-- 1-2-3 string.
+	local readyAt: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
+	local strings: { [Model]: AttackString.State } = setmetatable({}, { __mode = "k" }) :: any
 	local stringRules = AttackString.rules(attack)
 	-- Per fighter: when the last hit landed and when its stun ends (server time).
 	local hitAt: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
@@ -91,8 +96,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 
 	local function set(model: Model, weapon: string)
 		local w = weapons[weapon]
-		local player = Players:GetPlayerFromCharacter(model)
-		local chain = if player and model:GetAttribute(Names.Weapon) ~= weapon then strings[player] else nil
+		local chain = if model:GetAttribute(Names.Weapon) ~= weapon then strings[model] else nil
 		if chain then
 			AttackString.reset(chain) -- a new weapon in hand starts the string over
 		end
@@ -118,13 +122,11 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		if kind == "none" then
 			return
 		end
-		local hitPlayer = Players:GetPlayerFromCharacter(victim.model)
-		local broken = if hitPlayer then strings[hitPlayer] else nil
+		local broken = strings[victim.model]
 		if broken then
 			AttackString.reset(broken) -- being hit breaks the victim's own string
 		end
-		local attackerPlayer = Players:GetPlayerFromCharacter(attacker)
-		local chain = if attackerPlayer then strings[attackerPlayer] else nil
+		local chain = strings[attacker]
 		if chain and AttackString.uses(w.style) then
 			AttackString.landed(chain) -- it landed: the attacker's string may go on
 		end
@@ -192,33 +194,32 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		end
 	end
 
-	local received = swingRemote.OnServerEvent:Connect(function(player: Player, aim: unknown, drawn: unknown, number: unknown)
-		local model = player.Character
+	-- An attack by `model` along `aim` (unchecked: the flat facing the server sees when unusable). `claim`: the step its
+	-- client drew; `tag`: the attack's number its client sent; `allowance`: whether to grant a player's network
+	-- allowances (taken a little early, and pressed before the hit that stuns it showed). Returns whether it was taken.
+	local function begin(model: Model, aim: unknown, claim: number?, tag: number?, allowance: boolean): boolean
 		local body = CharacterParts.body(model)
-		if not (model and body and body.humanoid.Health > 0 and hooks.canSwing(model)) then
-			return
+		if not (body and body.humanoid.Health > 0 and hooks.canSwing(model)) then
+			return false
 		end
 		local now = Workspace:GetServerTimeNow()
 		local since = hitAt[model]
 		local stunned = stunUntil[model]
-		if since and stunned and now - since >= Config.Knock.SwingGrace and now < stunned then
-			return -- still stunned by a hit (the client does not attack then either)
+		local grace = if allowance then Config.Knock.SwingGrace else 0
+		if since and stunned and now - since >= grace and now < stunned then
+			return false -- still stunned by a hit (the client does not attack then either)
 		end
 		local weapon = holding(model)
 		local w = weapons[weapon]
-		local ready = readyAt[player]
-		if ready and now < ready - attack.CooldownSlack then
-			return
+		local ready = readyAt[model]
+		if ready and now < ready - (if allowance then attack.CooldownSlack else 0) then
+			return false
 		end
-		readyAt[player] = math.max(now, ready or now) + w.cooldown
-		-- Its step in the player's string: the step the client drew, as far as this server's own count allows.
-		local claim = if typeof(drawn) == "number" and drawn % 1 == 0 then drawn else nil
-		-- The attack's number as the client counted them: only handed back (whole numbers only, also false for NaN).
-		local tag = if typeof(number) == "number" and number % 1 == 0 and math.abs(number) < 2 ^ 31 then number else nil
-		local chain = strings[player]
+		readyAt[model] = math.max(now, ready or now) + w.cooldown
+		local chain = strings[model]
 		if not chain then
 			chain = AttackString.new()
-			strings[player] = chain
+			strings[model] = chain
 		end
 		local step = AttackString.take(chain, stringRules, now, w.cooldown, w.style, claim)
 		-- Where the attacker aimed when pressed (along the ground); the facing this server sees if that is unusable.
@@ -248,6 +249,19 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 				set(model, FIST)
 			end
 		end)
+		return true
+	end
+
+	local received = swingRemote.OnServerEvent:Connect(function(player: Player, aim: unknown, drawn: unknown, number: unknown)
+		local model = player.Character
+		if not model then
+			return
+		end
+		-- Its step in the player's string: the step the client drew, as far as this server's own count allows.
+		local claim = if typeof(drawn) == "number" and drawn % 1 == 0 then drawn else nil
+		-- The attack's number as the client counted them: only handed back (whole numbers only, also false for NaN).
+		local tag = if typeof(number) == "number" and number % 1 == 0 and math.abs(number) < 2 ^ 31 then number else nil
+		begin(model, aim, claim, tag, true)
 	end)
 
 	-- Weapons run out of time, and go back to bare fists when their holder is out or no fight is running.
@@ -272,17 +286,15 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		end
 	end)
 
-	local leaving = Players.PlayerRemoving:Connect(function(player: Player)
-		readyAt[player] = nil
-		strings[player] = nil
-	end)
 	return {
 		give = set,
 		holding = holding,
+		attack = function(model: Model, facing: Vector3): boolean
+			return begin(model, facing, nil, nil, false)
+		end,
 		stop = function()
 			watching = false
 			received:Disconnect()
-			leaving:Disconnect()
 		end,
 	}
 end

@@ -3,8 +3,9 @@
 -- (RoundService); attacks with fists or a picked-up weapon are judged by WeaponService (a thrown stick burns and
 -- bursts in Dynamite); weapon crates drop onto the trains during a fight (WeaponDrops); falls are noticed by FallWatch
 -- and end that fighter's round, as does a home run (health emptied, kept by FighterHealth); knock-offs and dynamite
--- bursts go to every client; every character holds its weapon in its hand (WeaponGear). For testing alone in Studio,
--- the Workspace attribute Names.Solo makes sandbags (Sandbags) join every round as fighters.
+-- bursts go to every client; every character holds its weapon in its hand (WeaponGear), and every player's body is
+-- made the standard size with the standard animations (AvatarRules). For testing alone in Studio, the Workspace
+-- attribute Names.Solo makes practice bots (bodies: Sandbags, minds: BotBrain) join every round and fight.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -14,6 +15,8 @@ local Net = require(script.Parent:WaitForChild("Net"))
 local ArenaBuilder = require(script.Parent:WaitForChild("ArenaBuilder"))
 local WeaponGear = require(script.Parent:WaitForChild("WeaponGear"))
 local Sandbags = require(script.Parent:WaitForChild("Sandbags"))
+local BotBrain = require(script.Parent:WaitForChild("BotBrain"))
+local AvatarRules = require(script.Parent:WaitForChild("AvatarRules"))
 local FighterHealth = require(script.Parent:WaitForChild("FighterHealth"))
 local FallWatch = require(script.Parent:WaitForChild("FallWatch"))
 local WeaponService = require(script.Parent:WaitForChild("WeaponService"))
@@ -28,7 +31,13 @@ local WeaponRules = require(shared:WaitForChild("WeaponRules"))
 
 local remotes = Net.create()
 local arena = ArenaBuilder.build()
-local sandbags = Sandbags.start(arena.fallLine, arena.layout.surfaces)
+-- The bots' minds need the round and the attacks, made below.
+local brain: BotBrain.Brain? = nil
+local sandbags = Sandbags.start(arena.fallLine, function(model: Model, body, now: number)
+	if brain then
+		brain.think(model, body, now)
+	end
+end)
 local health = FighterHealth.start()
 
 local function equip(model: Model)
@@ -75,9 +84,13 @@ local weapons = WeaponService.start(remotes.Swing, remotes.Hit, {
 		remotes.Blast:FireAllClients(at, radius)
 	end,
 })
+brain = BotBrain.new(arena.layout.surfaces, {
+	fighters = round.fighters,
+	attack = weapons.attack,
+})
 WeaponDrops.start(arena.layout.surfaces, PartUtil.folder(Workspace, Names.CratesFolder), {
 	fighters = round.fighters,
-	-- Players only (the practice sandbags do not attack), with bare fists.
+	-- Players only (the practice bots do not pick crates up yet), with bare fists.
 	canTake = function(model: Model): boolean
 		return Players:GetPlayerFromCharacter(model) ~= nil and weapons.holding(model) == WeaponRules.FIST
 	end,
@@ -91,10 +104,18 @@ local function onCharacter(model: Model)
 end
 local function onPlayer(player: Player)
 	player.CharacterAdded:Connect(onCharacter)
-	-- The avatar's own body parts arrive after the character and replace the default hand: the weapon goes on again.
-	player.CharacterAppearanceLoaded:Connect(equip)
+	-- The avatar's own body parts arrive after the character and replace the default hand: the body is made standard,
+	-- then the weapon goes on again (also for a character that loaded before this ran, as in a Studio test).
+	local function onAppearance(model: Model)
+		AvatarRules.apply(model)
+		equip(model)
+	end
+	player.CharacterAppearanceLoaded:Connect(onAppearance)
 	if player.Character then
 		task.spawn(onCharacter, player.Character)
+		if player:HasAppearanceLoaded() then
+			task.spawn(onAppearance, player.Character)
+		end
 	end
 end
 Players.PlayerAdded:Connect(onPlayer)

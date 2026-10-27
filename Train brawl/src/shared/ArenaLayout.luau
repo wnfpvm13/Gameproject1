@@ -248,6 +248,19 @@ function ArenaLayout.preferMiddle(spots: { Spot }, trains: number, shuffle: <T>(
 	return list
 end
 
+-- The top someone with feet at height `feet` over (x, z) stands on: the highest of `surfaces` there that is not above
+-- the feet (a little slack for standing on it), nil over a gap, a plank or the sand.
+function ArenaLayout.topUnder(surfaces: { Surface }, x: number, z: number, feet: number): Surface?
+	local best: Surface? = nil
+	for _, surface in surfaces do
+		local inside = math.abs(x - surface.x) <= surface.width / 2 and math.abs(z - surface.z) <= surface.length / 2
+		if inside and surface.top <= feet + 0.5 and (not best or surface.top > best.top) then
+			best = surface
+		end
+	end
+	return best
+end
+
 -- How far a running jump carries along the ground when it lands `drop` lower than it started (Roblox's character
 -- jump: up to `jumpHeight` at `walkSpeed`, under `gravity`). The plain flight only: a real jump crosses about 4 more
 -- (it can start past the edge and catch the far edge; measured, tests' JUMP_EXTRA).

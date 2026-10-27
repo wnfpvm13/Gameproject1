@@ -347,6 +347,21 @@ Config.Drops = {
 -- ring-out). Falling off is out at any health. A body travels about 0.28 to 0.42 x the launch push (measured: push 18
 -- went 6.2, 24.4 went 10.3, 28 went 10.6, 15.4 went 4.3 to 5.4, 29.2 went 11.0, landing lying and sliding a little) and
 -- 1.2 to 2 studs from a light hit (the light pushes stayed as they were when the roofs grew: planks are still 4 wide).
+-- Every fighter's body: Roblox's standard R15 body parts at these scales (players: AvatarRules, practice bots:
+-- Sandbags; owner 2026-10-27: "since we hit each other, the bodies taking the hits should be the same"). These are
+-- the blocky standard body's own proportions (HipHeight 2; a new HumanoidDescription's 0.3 body type and 1 proportion
+-- stand about 0.2 taller).
+Config.Body = {
+	Scales = {
+		HeightScale = 1,
+		WidthScale = 1,
+		DepthScale = 1,
+		HeadScale = 1,
+		BodyTypeScale = 0,
+		ProportionScale = 0,
+	} :: { [string]: number },
+}
+
 Config.Health = {
 	Max = 100, -- each weapon's damage is its own (Config.Weapons)
 	LowFraction = 0.3, -- at or under this share the bar goes red and blinks
@@ -465,12 +480,28 @@ Config.Round = {
 	KillCreditSeconds = 6, -- a fall counts as a KO for whoever hit the player within this long before
 }
 
--- Studio-only practice (Workspace attribute Names.Solo): sandbags that wander the top they stand on and count as
--- players.
+-- Studio-only practice (Workspace attribute Names.Solo): bots that count as players and fight (BotBrain): each goes for
+-- the nearest other fighter on the top it stands on and punches its string, and wanders the top when nobody is there.
+-- (Owner 2026-10-27: "AI들이 공격하지 않아" - the practice sandbags only wandered.)
 Config.Sandbag = {
 	Count = 5,
 	WanderSeconds = 2.5, -- a new spot to walk to this often
-	WalkSpeed = 8,
+	WalkSpeed = 8, -- wandering
+	ChaseSpeed = 14, -- going for someone (a little slower than a player's 16, so one can get away)
+	ThinkSeconds = 0.1, -- how often a bot looks again
+	PerTarget = 2, -- at most this many bots go for one fighter
+	-- It runs to StandOff away and, within StepIn of PunchFrom, steps straight in at StepSpeed; it punches once at
+	-- StandOff (inside a fist's reach, 4) and goes after it again past PunchFrom. Two bots stepping at each other
+	-- close 2 x StepSpeed x ThinkSeconds (1.2) between looks, so they stop no nearer than about 2 (bodies touch at 1.5).
+	StandOff = 3.2,
+	PunchFrom = 3.9,
+	StepIn = 3,
+	StepSpeed = 6,
+	Margin = 1.5, -- spots stay this far inside a top's edges
+	React = { 0.3, 0.5 }, -- seconds before the first punch at someone newly in reach (a random share between)
+	Rest = { 0.6, 0.9 }, -- the breather after a string
+	Jitter = 0.08, -- up to this much later than its fist is ready, between punches of a string
+	FullString = 0.75, -- the chance a string is meant to go all three; otherwise it stops after one or two
 }
 
 return Config

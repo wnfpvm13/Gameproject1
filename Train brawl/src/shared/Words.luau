@@ -60,9 +60,9 @@ function Words.secondsLeft(weapon: string, seconds: number): string
 	return string.format("%s %d초", Words.Weapons[weapon] or weapon, seconds)
 end
 
--- A Studio practice sandbag's name (number `n`).
-function Words.sandbag(n: number): string
-	return string.format("샌드백 %d", n)
+-- A Studio practice bot's name (number `n`).
+function Words.bot(n: number): string
+	return string.format("봇 %d", n)
 end
 
 -- The music button, the touch attack button.

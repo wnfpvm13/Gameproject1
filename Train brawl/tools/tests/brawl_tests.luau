@@ -713,6 +713,52 @@ do
 	check("a thrown stick leaves the hand with the arm on its way forward", arm(early) > arm(release) and arm(release) > arm(after) and arm(release) < 170 and arm(release) > 40)
 end
 
+-- 12. Practice bots (stage 5e): whom a bot goes for and where it walks, kept on its own top.
+do
+	local S = Config.Sandbag
+	-- The top under a spot: the boxcar roof, not the sand under it; nothing over a gap between trains.
+	local boxcar
+	for _, surface in L.surfaces do
+		if surface.kind == "Boxcar" then
+			boxcar = surface
+			break
+		end
+	end
+	check("a spot on a boxcar roof is on that roof", ArenaLayout.topUnder(L.surfaces, boxcar.x, boxcar.z, boxcar.top) == boxcar)
+	check("feet below a roof are not on it", ArenaLayout.topUnder(L.surfaces, boxcar.x, boxcar.z, boxcar.top - 3) ~= boxcar)
+	check("the gap between trains has no top", ArenaLayout.topUnder(L.surfaces, boxcar.x + A.RoofWidth / 2 + A.Gap / 2, boxcar.z, 100) == nil)
+
+	local top = { x = 0, z = 0, width = 15, length = 30 }
+	local other = { x = 50, z = 0, width = 15, length = 30 }
+	local close = { key = "close", x = 3, z = 0, top = top }
+	local far = { key = "far", x = 0, z = 12, top = top }
+	local elsewhere = { key = "elsewhere", x = 50, z = 1, top = other }
+	local list = { far, close, elsewhere }
+	check("a bot goes for the nearest fighter on its own top", BotPlan.nearest(0, 0, top, list, {}, S.PerTarget) == close)
+	check("not for one that enough bots already go for", BotPlan.nearest(0, 0, top, list, { close = S.PerTarget }, S.PerTarget) == far)
+	check("never for a fighter on another top", BotPlan.nearest(0, 0, top, { elsewhere }, {}, S.PerTarget) == nil)
+
+	local x, z = BotPlan.standSpot(top, 0, -10, 0, 0, S.StandOff, S.Margin)
+	check("it stops StandOff short of its target, on its own side", near(x, 0) and near(z, -S.StandOff))
+	local ex, ez = BotPlan.standSpot(top, 7, 0, 7, 0, S.StandOff, S.Margin)
+	check("a target at the edge is punched from a spot still inside the top", math.abs(ex) <= 7.5 - S.Margin + 1e-9 and math.abs(ez) <= 15)
+	local inside = true
+	for _ = 1, 200 do
+		local wx, wz = BotPlan.wanderSpot(top, 14, 8, S.Margin, math.random)
+		inside = inside and math.abs(wx) <= 7.5 - S.Margin + 1e-9 and math.abs(wz) <= 15 - S.Margin + 1e-9
+	end
+	check("a wandering spot is always a margin inside the top", inside)
+	check("a bot punches from inside a fist's reach and walks up only once out of it", S.StandOff < S.PunchFrom and S.PunchFrom < Config.Weapons.Fist.reach)
+	check("a bot's punches of a string come soon enough to keep it going", Config.Sandbag.Jitter + Config.Sandbag.ThinkSeconds < Config.Attack.StringGap)
+	check("two bots stepping in at each other stop before their bodies run together", S.StandOff - 2 * S.StepSpeed * S.ThinkSeconds >= 1.5)
+	local scales = Config.Body.Scales
+	local all = true
+	for _, name in { "HeightScale", "WidthScale", "DepthScale", "HeadScale", "BodyTypeScale", "ProportionScale" } do
+		all = all and type(scales[name]) == "number"
+	end
+	check("every fighter's body has every scale set (players and bots alike)", all)
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed == 0 then
 	print("ALL PASS")

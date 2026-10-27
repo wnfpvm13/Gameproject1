@@ -1,8 +1,9 @@
 --!strict
--- Studio practice partners: sandbag characters (default avatars named Words.sandbag(N)) that wander the top they stand on
--- during a fight and take hits like players. The server owns their physics (SetNetworkOwner(nil)), so it moves them itself with the same rules a
+-- Studio practice bots' bodies: default-avatar characters (named Words.bot(N)) that fight in a round and take hits
+-- like players. The server owns their physics (SetNetworkOwner(nil)), so it moves them itself with the same rules a
 -- player's own client follows (BodyMotion): a short hold, stiff while flying, back on their feet after landing
--- (Config.Knock), and lying down and left behind once below the fall line.
+-- (Config.Knock), and lying down and left behind once below the fall line. Whenever one is free to act in a fight
+-- (not flinching from a hit, flying or fallen) its mind decides what it does (think: BotBrain, wired by Main).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -13,7 +14,6 @@ local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
 local CharacterParts = require(shared:WaitForChild("CharacterParts"))
-local ArenaLayout = require(shared:WaitForChild("ArenaLayout"))
 local BodyMotion = require(shared:WaitForChild("BodyMotion"))
 local Words = require(shared:WaitForChild("Words"))
 
@@ -30,45 +30,20 @@ export type Service = {
 	stop: () -> (),
 }
 
--- stiffSince: launched by a hit at this os.clock(); drifting: below the fall line last frame.
-type Bag = { body: CharacterParts.Body, stiffSince: number?, drifting: boolean, nextWander: number }
+-- stiffSince: launched by a hit at this os.clock(); drifting: below the fall line last frame; flinchUntil: a light hit's
+-- stun lasts until this os.clock() (it does nothing meanwhile).
+type Bag = { body: CharacterParts.Body, stiffSince: number?, drifting: boolean, flinchUntil: number }
 
--- The top the bag stands on: the highest walkable top of the arena (ArenaLayout) under its feet, if any.
-local function surfaceUnder(surfaces: { ArenaLayout.Surface }, body: CharacterParts.Body): ArenaLayout.Surface?
-	local here = body.root.Position
-	local feet = CharacterParts.feetY(body)
-	local best: ArenaLayout.Surface? = nil
-	for _, surface in surfaces do
-		local inside = math.abs(here.X - surface.x) <= surface.width / 2 and math.abs(here.Z - surface.z) <= surface.length / 2
-		if inside and surface.top <= feet + 0.5 and (not best or surface.top > best.top) then
-			best = surface
-		end
-	end
-	return best
-end
-
--- A spot to walk to near where the bag stands, on the same top (so it never walks off an edge by itself).
-local function wanderSpot(surfaces: { ArenaLayout.Surface }, body: CharacterParts.Body): Vector3?
-	local surface = surfaceUnder(surfaces, body)
-	if not surface then
-		return nil
-	end
-	local here = body.root.Position
-	local halfWidth = math.max(surface.width / 2 - 1.5, 0)
-	local halfLength = math.max(surface.length / 2 - 1.5, 0)
-	local x = surface.x + (math.random() * 2 - 1) * halfWidth
-	local z = math.clamp(here.Z + (math.random() * 2 - 1) * 8, surface.z - halfLength, surface.z + halfLength)
-	return Vector3.new(x, here.Y, z)
-end
-
--- Stops a walk already under way (a MoveTo target lasts until reached or for 8 s, even after the bag was knocked onto
--- another top, where walking on to the old target could take it over an edge).
+-- Stops a walk already under way (a MoveTo target lasts until reached or for 8 s, and a step straight in until its
+-- mind says otherwise, even after the bag was knocked onto another top, where walking on could take it over an edge).
 local function stopWalking(body: CharacterParts.Body)
+	body.humanoid:Move(Vector3.zero)
 	body.humanoid:MoveTo(body.root.Position)
 end
 
--- fallLine: feet below it have fallen off; surfaces: the arena's walkable tops (both from ArenaBuilder's layout).
-function Sandbags.start(fallLine: number, surfaces: { ArenaLayout.Surface }): Service
+-- fallLine: feet below it have fallen off (ArenaBuilder's layout); think: the bot `model` (its `body`) is free to act at
+-- `now` (os.clock()) in a fight.
+function Sandbags.start(fallLine: number, think: (model: Model, body: CharacterParts.Body, now: number) -> ()): Service
 	local bags: { [Model]: Bag } = {}
 	local ticking = RunService.Heartbeat:Connect(function()
 		local now = os.clock()
@@ -95,16 +70,9 @@ function Sandbags.start(fallLine: number, surfaces: { ArenaLayout.Surface }): Se
 				if BodyMotion.landed(body, now - since) then
 					bag.stiffSince = nil
 					BodyMotion.getUp(body)
-					bag.nextWander = now -- a new spot on the top it landed on
 				end
-			elseif Workspace:GetAttribute(Names.Phase) == "Fight" and now >= bag.nextWander then
-				bag.nextWander = now + Config.Sandbag.WanderSeconds * (0.6 + math.random() * 0.8)
-				local spot = wanderSpot(surfaces, body)
-				if spot then
-					body.humanoid:MoveTo(spot)
-				else
-					stopWalking(body) -- on a plank, a round boiler's side or the sand: stand still
-				end
+			elseif Workspace:GetAttribute(Names.Phase) == "Fight" and now >= bag.flinchUntil then
+				think(model, body, now)
 			end
 		end
 	end)
@@ -113,13 +81,18 @@ function Sandbags.start(fallLine: number, surfaces: { ArenaLayout.Surface }): Se
 		local made = {}
 		for i = 1, count do
 			local ok, model = pcall(function()
-				return Players:CreateHumanoidModelFromDescription(Instance.new("HumanoidDescription"), Enum.HumanoidRigType.R15)
+				-- The standard body at every fighter's scales (players' are made the same: AvatarRules).
+				local description = Instance.new("HumanoidDescription")
+				for name, value in Config.Body.Scales do
+					(description :: any)[name] = value
+				end
+				return Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R15)
 			end)
 			if ok and model then
 				model.Name = "Sandbag" .. i
 				local humanoid = model:FindFirstChildOfClass("Humanoid")
 				if humanoid then
-					humanoid.DisplayName = Words.sandbag(i)
+					humanoid.DisplayName = Words.bot(i)
 					humanoid.WalkSpeed = Config.Sandbag.WalkSpeed
 				end
 				CollectionService:AddTag(model, Names.SandbagTag)
@@ -129,7 +102,7 @@ function Sandbags.start(fallLine: number, surfaces: { ArenaLayout.Surface }): Se
 					-- The weapon first: welding it on changes the assembly, which puts ownership back on automatic.
 					equip(model)
 					body.root:SetNetworkOwner(nil) -- the server moves and knocks it
-					bags[model] = { body = body, stiffSince = nil, drifting = false, nextWander = 0 }
+					bags[model] = { body = body, stiffSince = nil, drifting = false, flinchUntil = 0 }
 					table.insert(made, model)
 				else
 					model:Destroy()
@@ -152,10 +125,10 @@ function Sandbags.start(fallLine: number, surfaces: { ArenaLayout.Surface }): Se
 				root:SetNetworkOwner(nil) -- the server keeps moving it
 			end
 			stopWalking(bag.body)
-			bag.nextWander = os.clock() + 0.5 -- after a flinch; a launch picks again once it has landed
 			if kind == "light" then
 				-- As a player's client does: the server sends a light hit only after a launch's unhittable moment.
 				bag.stiffSince = nil
+				bag.flinchUntil = os.clock() + Config.Hit.LightStun
 				BodyMotion.stagger(bag.body, velocity, reclaim)
 			else
 				bag.stiffSince = os.clock()

@@ -10,9 +10,9 @@
 -- the next one is still counted from when this one was due, so the slack never adds up to a faster rate. A fighter the
 -- server runs itself (a practice bot: attack()) goes through the same judging with no network allowances: refused all
 -- through a stun and until its weapon is ready.
--- Each punch or swing is a step of its attacker's 1-2-3 string (AttackString: it goes on only while attacks land; the
--- client says which step it drew, the server takes that only as far as its own count allows; being hit breaks a
--- fighter's string; the launching last step lands a moment later). It marks the character's
+-- Each punch or swing is a step of its attacker's 1-2-3 string (AttackString: it goes on hit or miss while the attacks
+-- come in time; the client says which step it drew, the server takes that only as far as its own count allows; being
+-- hit breaks a fighter's string; the launching last step lands a moment later). It marks the character's
 -- Names.SwingStep, Names.SwingTag (the attack's number its client sent) and Names.SwingAt (every client draws the
 -- weapon's attack and step from them) and, the weapon's hitAt
 -- later, lands it by its style: a punch or a swing hits every other fighter in a cone in front (SwingTargets, reach
@@ -125,10 +125,6 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		local broken = strings[victim.model]
 		if broken then
 			AttackString.reset(broken) -- being hit breaks the victim's own string
-		end
-		local chain = strings[attacker]
-		if chain and AttackString.uses(w.style) then
-			AttackString.landed(chain) -- it landed: the attacker's string may go on
 		end
 		local push, lift = HitRules.force(kind, health, Config.Health.Max, Config.Hit)
 		if kind ~= "smash" then

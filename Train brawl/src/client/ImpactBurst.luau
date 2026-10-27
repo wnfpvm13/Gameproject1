@@ -6,7 +6,9 @@
 -- longer, so the blow's direction shows. Every burst is turned a little differently and its rays vary in length, so a
 -- flurry of hits does not stamp the same picture again and again. It sits on the victim toward whoever struck it, at
 -- chest height (on the victim for a blast), faces the camera and is drawn over the bodies (it lives a fifth of a
--- second; past MAX_DISTANCE it is not drawn). Built once as a template and cloned, with one fade for the whole burst.
+-- second; past MAX_DISTANCE it is not drawn). A launch's burst (and a crowd's) also sends out a ring in its rays'
+-- colour that grows to about twice its width and fades (Config.Feedback.RingSeconds). Built once as a template and
+-- cloned, with one fade for the whole burst and one for the ring.
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -20,6 +22,8 @@ local ImpactBurst = {}
 
 local RAYS = 9 -- long rays (as many short ones between them)
 local MAX_DISTANCE = 120
+local RING_WIDTH = 2.4 -- the ring grows to this many times the burst's width
+local RING_THICK = 0.22 -- its line, in studs (turned into pixels for the distance it is seen from)
 local PUSH_STRETCH = 0.6 -- rays toward the push grow up to this much longer
 -- Each kind of burst: its width (studs), centre and ray colours.
 local STYLES: { [string]: { size: number, centre: Color3, ray: Color3 } } = {
@@ -79,6 +83,32 @@ do
 	local round = Instance.new("UICorner")
 	round.CornerRadius = UDim.new(0.5, 0)
 	round.Parent = centre
+	-- The ring: its own billboard (it grows past the burst's), a see-through circle with an outline.
+	local ringGui = Instance.new("BillboardGui")
+	ringGui.Name = "RingGui"
+	ringGui.AlwaysOnTop = true
+	ringGui.LightInfluence = 0
+	ringGui.MaxDistance = MAX_DISTANCE
+	ringGui.Enabled = false
+	ringGui.Parent = template
+	local ringGroup = Instance.new("CanvasGroup")
+	ringGroup.Name = "Group"
+	ringGroup.BackgroundTransparency = 1
+	ringGroup.Size = UDim2.fromScale(1, 1)
+	ringGroup.Parent = ringGui
+	local ring = Instance.new("Frame")
+	ring.Name = "Ring"
+	ring.AnchorPoint = Vector2.new(0.5, 0.5)
+	ring.Position = UDim2.fromScale(0.5, 0.5)
+	ring.Size = UDim2.fromScale(0.2, 0.2)
+	ring.BackgroundTransparency = 1
+	ring.Parent = ringGroup
+	local ringRound = Instance.new("UICorner")
+	ringRound.CornerRadius = UDim.new(0.5, 0)
+	ringRound.Parent = ring
+	local line = Instance.new("UIStroke")
+	line.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	line.Parent = ring
 end
 
 -- Where a hit's burst shows on `victim`: toward whoever struck it (`from`; straight on the victim when nil), at chest
@@ -134,7 +164,27 @@ function ImpactBurst.play(at: Vector3, kind: string, weapon: string, push: Vecto
 	local seconds = Config.Feedback.BurstSeconds
 	TweenService:Create(scale, TweenInfo.new(seconds, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1.15 }):Play()
 	TweenService:Create(group, TweenInfo.new(seconds * 0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, seconds * 0.4), { GroupTransparency = 1 }):Play()
-	Debris:AddItem(burst, seconds + 0.05)
+	local lasts = seconds
+	if kind ~= "light" then
+		local ringSeconds = Config.Feedback.RingSeconds
+		local ringGui = burst:FindFirstChild("RingGui") :: BillboardGui
+		local ringGroup = ringGui:FindFirstChild("Group") :: CanvasGroup
+		local ring = ringGroup:FindFirstChild("Ring") :: Frame
+		local line = ring:FindFirstChildOfClass("UIStroke") :: UIStroke
+		local wide = size * RING_WIDTH
+		ringGui.Size = UDim2.fromScale(wide, wide)
+		line.Color = style.ray
+		-- The line's studs as pixels at this distance (it stays about as thick as it is seen growing).
+		local camera = Workspace.CurrentCamera
+		local away = math.max((camera.CFrame.Position - at).Magnitude, 1)
+		local perStud = camera.ViewportSize.Y / (2 * away * math.tan(math.rad(camera.FieldOfView) / 2))
+		line.Thickness = math.clamp(RING_THICK * perStud, 1.5, 10)
+		ringGui.Enabled = true
+		TweenService:Create(ring, TweenInfo.new(ringSeconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromScale(1, 1) }):Play()
+		TweenService:Create(ringGroup, TweenInfo.new(ringSeconds * 0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, ringSeconds * 0.3), { GroupTransparency = 1 }):Play()
+		lasts = math.max(lasts, ringSeconds)
+	end
+	Debris:AddItem(burst, lasts + 0.05)
 end
 
 return ImpactBurst

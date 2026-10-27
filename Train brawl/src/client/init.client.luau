@@ -3,8 +3,9 @@
 -- locomotives (their rods turning, chimneys smoking) and the stands are dressed (CarDecor, LocomotiveDecor, Stands:
 -- drawn only, on top of what the server built); the mouse is locked with a shoulder
 -- camera unless the player shows the cursor (AimLock); the attack control (SwingInput) starts the player's own attack
--- with fists or the weapon held (OwnSwing: drawn at once by SwingPose and HitFeedback, judged by the server; a mouse
--- click attacks only while the mouse is locked); every character's attacks are drawn from their Names.SwingAt; what
+-- with fists or the weapon held (OwnSwing: drawn at once by SwingPose, SwingTrail and HitFeedback, the character
+-- stepping in (BodyMotion.lunge), judged by the server; a mouse click attacks only while the mouse is locked); every
+-- character's attacks are drawn from their Names.SwingAt (with a streak behind each blow: SwingTrail); what
 -- everyone holds shows (WeaponHud), crates and lit sticks are heard (DropShow), where a stick will burst and a crate
 -- will land is drawn on the roofs (GroundMarks), dynamite bursts show (ExplosionShow) (the roof wind, WindDust, is not
 -- built for now: nearly invisible in Studio, to be redone - docs/FEEL_REVIEW_2026-10-26.md);
@@ -29,6 +30,8 @@ local ArenaLayout = require(shared:WaitForChild("ArenaLayout"))
 local SoundBank = require(shared:WaitForChild("SoundBank"))
 local WeaponRules = require(shared:WaitForChild("WeaponRules"))
 local AttackString = require(shared:WaitForChild("AttackString"))
+local CharacterParts = require(shared:WaitForChild("CharacterParts"))
+local BodyMotion = require(shared:WaitForChild("BodyMotion"))
 local Scenery = require(script:WaitForChild("Scenery"))
 local Canyon = require(script:WaitForChild("Canyon"))
 local CarDecor = require(script:WaitForChild("CarDecor"))
@@ -36,6 +39,7 @@ local LocomotiveDecor = require(script:WaitForChild("LocomotiveDecor"))
 local Stands = require(script:WaitForChild("Stands"))
 local SwingInput = require(script:WaitForChild("SwingInput"))
 local SwingPose = require(script:WaitForChild("SwingPose"))
+local SwingTrail = require(script:WaitForChild("SwingTrail"))
 local OwnSwing = require(script:WaitForChild("OwnSwing"))
 local KnockFlight = require(script:WaitForChild("KnockFlight"))
 local HitFeedback = require(script:WaitForChild("HitFeedback"))
@@ -115,19 +119,27 @@ local own = OwnSwing.new(swingRemote, {
 	end,
 	draw = function(model: Model, at: number, weapon: string, step: number)
 		SwingPose.play(model, at, weapon, step)
+		SwingTrail.play(model, weapon, step, at)
 		HitFeedback.swing(model, weapon, AttackString.launches(STRING, step, Config.Weapons[weapon].style))
+	end,
+	lunge = function(model: Model, facing: Vector3, weapon: string, step: number)
+		local body = CharacterParts.body(model)
+		local style = Config.Weapons[weapon].style
+		if body then
+			BodyMotion.lunge(body, facing, WeaponRules.lunge(style, AttackString.launches(STRING, step, style), Config.Attack))
+		end
 	end,
 	restep = SwingPose.restep,
 	predict = function(victim: Model, weapon: string, finisher: boolean): string?
 		local character = player.Character
 		local from = if character then character:GetPivot().Position else victim:GetPivot().Position
-		if not HitFeedback.predict(victim, weapon, from) then
+		local kind = if finisher then "launch" else "light"
+		if not HitFeedback.predict(victim, weapon, from, kind) then
 			return nil
 		end
-		local kind = if finisher then "launch" else "light"
 		ImpactBurst.play(ImpactBurst.at(victim, from), kind, weapon, victim:GetPivot().Position - from)
 		if character then
-			SwingPose.hold(character, Config.Feedback.HitStop[kind])
+			SwingPose.hold(character, Config.Feedback.AttackerHold[kind])
 		end
 		return kind
 	end,
@@ -147,7 +159,8 @@ local function follow(model: Model)
 			return true
 		end
 		return false
-	end, function(weapon: string, step: number)
+	end, function(weapon: string, step: number, at: number)
+		SwingTrail.play(model, weapon, step, at)
 		HitFeedback.swing(model, weapon, AttackString.launches(STRING, step, Config.Weapons[weapon].style))
 	end)
 end
@@ -187,12 +200,11 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 	SwingPose.react(victim, hitKind, push)
 	local hitWeapon = if typeof(weapon) == "string" then weapon else WeaponRules.FIST
 	local mine = swinger == player.Character
-	local used = Config.Weapons[hitWeapon]
 	-- What this screen showed at once for that attack of the player's on this victim (nil: nothing), and whether it is
 	-- the attack drawn now.
 	local guess, latest = nil, false
 	if mine then
-		guess, latest = own:serverHit(if typeof(tag) == "number" then tag else nil, victim, used ~= nil and AttackString.uses(used.style))
+		guess, latest = own:serverHit(if typeof(tag) == "number" then tag else nil, victim)
 	end
 	local shown = HitFeedback.hit(victim, guess ~= nil, mine, me, hitKind, hitWeapon, push)
 	local attacker = if typeof(swinger) == "Instance" and swinger:IsA("Model") then swinger else nil
@@ -210,7 +222,7 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 		-- One hold per attack, as long as the longest: the player's own hit held at once is held longer when the server
 		-- made it bigger (a home run off the third). A thrower is long done, and a word on an older attack of the
 		-- player's comes while the next one is drawn (it is not held for this).
-		SwingPose.hold(attacker, Config.Feedback.HitStop[hitKind] or 0)
+		SwingPose.hold(attacker, Config.Feedback.AttackerHold[hitKind] or 0)
 	end
 	if hitKind == "launch" then
 		LaunchShow.play(victim)

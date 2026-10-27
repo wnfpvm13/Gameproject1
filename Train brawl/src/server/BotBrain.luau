@@ -19,7 +19,8 @@ local BotBrain = {}
 
 export type Hooks = {
 	fighters: () -> { Model }, -- the models still in the round
-	attack: (model: Model, facing: Vector3) -> boolean, -- the bot attacks along the flat facing (false: not now)
+	-- The bot attacks along the flat facing: how far the attack stepped it in (nil: not now).
+	attack: (model: Model, facing: Vector3) -> number?,
 }
 export type Brain = {
 	-- `model` (its `body`) is free to act at `now` (os.clock()) in a fight.
@@ -173,9 +174,13 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 		if now < mind.readyAt or now < mind.nextPunch then
 			return
 		end
-		if not hooks.attack(model, facing) then
+		local stepped = hooks.attack(model, facing)
+		if not stepped then
 			mind.nextPunch = now + c.ThinkSeconds -- stunned or not ready yet: try again soon
 			return
+		end
+		if stepped > 0 then
+			walkTo(humanoid, here + facing * stepped) -- stand where the attack's step took it (not walk back)
 		end
 		mind.left -= 1
 		if mind.left <= 0 then

@@ -1,7 +1,8 @@
 --!strict
--- How a fighter's body moves when hit, landed or fallen off, the same wherever its physics runs: on the player's own
--- client for a player (KnockFlight, FallDrift) and on the server for a sandbag (Sandbags). A light hit flinches
--- (stagger: held still, then pushed along the ground on its feet); a launch or smash sends the body flying (launch).
+-- How a fighter's body moves when it attacks, is hit, has landed or fell off, the same wherever its physics runs: on
+-- the player's own client for a player (KnockFlight, FallDrift, the player's own attack) and on the server for a
+-- sandbag (Sandbags, a bot's attack). An attack steps the body in (lunge); a light hit flinches (stagger: held still,
+-- then pushed along the ground on its feet); a launch or smash sends the body flying (launch).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -15,17 +16,49 @@ local BodyMotion = {}
 local launches: { [BasePart]: number } = setmetatable({}, { __mode = "k" }) :: any
 -- The push of a stagger still running on each root (a newer hit removes it).
 local slides: { [BasePart]: LinearVelocity } = setmetatable({}, { __mode = "k" }) :: any
+-- The step of an attack still running on each root (a hit, or the next attack's step, removes it).
+local lunges: { [BasePart]: LinearVelocity } = setmetatable({}, { __mode = "k" }) :: any
 
--- A new hit on `root`: ends any push still running and returns this hit's number.
-local function newHit(root: BasePart): number
-	local slide = slides[root]
-	if slide then
-		slide:Destroy()
-		slides[root] = nil
+local function stop(pushes: { [BasePart]: LinearVelocity }, root: BasePart)
+	local push = pushes[root]
+	if push then
+		push:Destroy()
+		pushes[root] = nil
 	end
+end
+
+-- A new hit on `root`: ends any push or step still running and returns this hit's number.
+local function newHit(root: BasePart): number
+	stop(slides, root)
+	stop(lunges, root)
 	local mine = (launches[root] or 0) + 1
 	launches[root] = mine
 	return mine
+end
+
+-- A push along the ground on `root` (a constraint: the Humanoid would stop a plain velocity at once), kept in `pushes`
+-- and removed after `seconds` (or sooner by stop()).
+local function push(pushes: { [BasePart]: LinearVelocity }, root: BasePart, name: string, seconds: number): LinearVelocity
+	local attachment = root:FindFirstChild("StaggerAttachment") :: Attachment?
+	if not attachment then
+		local made = Instance.new("Attachment")
+		made.Name = "StaggerAttachment"
+		made.Parent = root
+		attachment = made
+	end
+	local force = Instance.new("LinearVelocity")
+	force.Name = name
+	force.Attachment0 = attachment
+	force.RelativeTo = Enum.ActuatorRelativeTo.World
+	force.MaxForce = 1e6
+	pushes[root] = force
+	task.delay(seconds, function()
+		if pushes[root] == force then
+			pushes[root] = nil
+		end
+		force:Destroy()
+	end)
+	return force
 end
 
 -- Whether something solid is right under the feet (the body's own parts left out).
@@ -87,31 +120,61 @@ function BodyMotion.stagger(body: CharacterParts.Body, velocity: Vector3, reclai
 		if reclaim then
 			reclaim(root)
 		end
-		local attachment = root:FindFirstChild("StaggerAttachment") :: Attachment?
-		if not attachment then
-			local made = Instance.new("Attachment")
-			made.Name = "StaggerAttachment"
-			made.Parent = root
-			attachment = made
-		end
-		local push = Instance.new("LinearVelocity")
-		push.Name = "Stagger"
-		push.Attachment0 = attachment
-		push.RelativeTo = Enum.ActuatorRelativeTo.World
-		push.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane -- along the ground; falling stays free
-		push.PrimaryTangentAxis = Vector3.xAxis
-		push.SecondaryTangentAxis = Vector3.zAxis
-		push.PlaneVelocity = Vector2.new(velocity.X, velocity.Z)
-		push.MaxForce = 1e6
-		push.Parent = root
-		slides[root] = push
-		task.delay(Config.Hit.SlideSeconds, function()
-			if slides[root] == push then
-				slides[root] = nil
-			end
-			push:Destroy()
-		end)
+		local slide = push(slides, root, "Stagger", Config.Hit.SlideSeconds)
+		slide.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane -- along the ground; falling stays free
+		slide.PrimaryTangentAxis = Vector3.xAxis
+		slide.SecondaryTangentAxis = Vector3.zAxis
+		slide.PlaneVelocity = Vector2.new(velocity.X, velocity.Z)
+		slide.Parent = root
 	end)
+end
+
+-- How far `body` may step along the flat unit `flat`, up to `studs`: Config.Attack.LungeGap short of whatever is in
+-- the way ahead (a fighter, a chimney), and only as far as there is still something solid to stand on (half a stud at
+-- a time back from the whole step: never off the edge of a roof).
+local function room(body: CharacterParts.Body, flat: Vector3, studs: number): number
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { body.model }
+	local from = body.root.Position
+	local gap = Config.Attack.LungeGap
+	local blocked = Workspace:Spherecast(from, 1, flat * (studs + gap), params)
+	if blocked then
+		studs = math.min(studs, blocked.Distance - gap)
+	end
+	params.RespectCanCollide = true -- only what can be stood on
+	local down = Vector3.new(0, -(from.Y - CharacterParts.feetY(body) + 1.5), 0)
+	local d = studs
+	while d > 0.05 do
+		if Workspace:Raycast(from + flat * (d + 0.5), down, params) then
+			return d
+		end
+		d -= 0.5
+	end
+	return 0
+end
+
+-- An attack steps the fighter in: up to `studs` along the flat `facing` over Config.Attack.LungeSeconds, as far as
+-- room() allows, on its feet only (not flying, held or in the air). A hit ends it. Returns how far it steps.
+function BodyMotion.lunge(body: CharacterParts.Body, facing: Vector3, studs: number): number
+	local root, humanoid = body.root, body.humanoid
+	local flat = Vector3.new(facing.X, 0, facing.Z)
+	if studs <= 0 or flat.Magnitude < 1e-3 or root.Anchored or humanoid.PlatformStand or humanoid.FloorMaterial == Enum.Material.Air then
+		return 0
+	end
+	flat = flat.Unit
+	local go = room(body, flat, studs)
+	if go <= 0.05 then
+		return 0
+	end
+	stop(lunges, root)
+	local seconds = Config.Attack.LungeSeconds
+	local step = push(lunges, root, "Lunge", seconds)
+	step.VelocityConstraintMode = Enum.VelocityConstraintMode.Line -- along the aim; sideways and falling stay free
+	step.LineDirection = flat
+	step.LineVelocity = go / seconds
+	step.Parent = root
+	return go
 end
 
 -- Whether a body launched `elapsed` seconds ago is done flying: landed (after Config.Knock.MinSeconds), or flying

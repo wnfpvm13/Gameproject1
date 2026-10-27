@@ -591,18 +591,13 @@ end
 -- 9. The attacker's 1-2-3 string (stage 5b).
 do
 	local r = { count = 3, gap = 0.35, slack = 0.15, windup = 0.08 }
-	-- An attack that lands, then takes the next (each at `at`).
+	-- An attack (hit or miss: the string does not ask), each at `at`.
 	local function hits(s: any, at: number, claim: number?): number
-		local step = AttackString.take(s, r, at, 0.45, "punch", claim)
-		AttackString.landed(s)
-		return step
+		return AttackString.take(s, r, at, 0.45, "punch", claim)
 	end
 	local s = AttackString.new()
 	local steps = { hits(s, 0), hits(s, 0.5), hits(s, 1.0), hits(s, 1.5) }
-	check("landed attacks in a row go 1, 2, 3 and start again after the third", steps[1] == 1 and steps[2] == 2 and steps[3] == 3 and steps[4] == 1, table.concat(steps, ","))
-	local m = AttackString.new()
-	AttackString.take(m, r, 0, 0.45, "punch") -- a miss
-	check("a miss starts the string again (swinging at the air on the way in banks nothing)", AttackString.take(m, r, 0.5, 0.45, "punch") == 1)
+	check("attacks in a row go 1, 2, 3 and start again after the third, hit or miss (owner 2026-10-28)", steps[1] == 1 and steps[2] == 2 and steps[3] == 3 and steps[4] == 1, table.concat(steps, ","))
 	local p = AttackString.new()
 	hits(p, 0)
 	check("a pause longer than the gap starts the string again", AttackString.take(p, r, 0.45 + 0.36, 0.45, "punch") == 1)
@@ -620,9 +615,6 @@ do
 	hits(four, 0.5)
 	hits(four, 1.0)
 	check("nor claim a step past the last", AttackString.take(four, r, 1.5, 0.45, "punch", 4) == 1)
-	local miss = AttackString.new()
-	AttackString.take(miss, r, 0, 0.45, "punch")
-	check("nor keep a string going on a miss", AttackString.take(miss, r, 0.5, 0.45, "punch", 2) == 1)
 	local o = AttackString.new()
 	hits(o, 0)
 	check("a client may always start a new string", AttackString.take(o, r, 0.5, 0.45, "punch", 1) == 1)
@@ -876,6 +868,43 @@ do
 		all = all and type(scales[name]) == "number"
 	end
 	check("every fighter's body has every scale set (players and bots alike)", all)
+end
+
+-- 13. Hit feel (stage 5f, owner 2026-10-28: "what matters is a crisp, satisfying hit feel"): every blow steps in, the
+-- one hit shakes while held, the attacker is let go first, a hard short flash, a streak from the hand that strikes.
+do
+	local A = Config.Attack
+	check("a punch or a swing steps in, the string's last step further, a slam a little, a throw not at all",
+		WeaponRules.lunge("punch", false, A) == A.LungeStuds and WeaponRules.lunge("swing", true, A) == A.FinisherLunge
+			and A.FinisherLunge > A.LungeStuds and WeaponRules.lunge("slam", false, A) == A.SlamLunge and WeaponRules.lunge("throw", true, A) == 0)
+	check("the step is over by the time a fist's blow lands (the blow comes with the body)", A.LungeSeconds <= Config.Weapons.Fist.hitAt)
+	check("the step stops short of what is ahead but still closes in on a fighter at a fist's reach",
+		A.LungeGap > 0 and A.LungeGap < A.LungeStuds and Config.Weapons.Fist.reach - A.LungeStuds > 1.5)
+	check("bare fists jab with the left, then the right, the last with the right; weapons strike with the right",
+		AttackPoses.hand("punch", 1, false) == "LeftHand" and AttackPoses.hand("punch", 2, false) == "RightHand"
+			and AttackPoses.hand("punch", 3, true) == "RightHand" and AttackPoses.hand("swing", 1, false) == "RightHand")
+	local F = Config.Feedback
+	local holds = true
+	for kind, seconds in F.HitStop do
+		holds = holds and F.AttackerHold[kind] ~= nil and F.AttackerHold[kind] < seconds and F.AttackerHold[kind] > 0
+			and (F.Shake[kind] or 0) > 0
+	end
+	check("for every kind of hit the attacker is let go before the one hit, who shakes", holds)
+	check("the flash is hard and short (gone in under the old 0.15 s)", F.FlashHold > 0 and F.FlashHold + F.FlashFade < 0.15)
+	check("the attacker's kick is bigger when it launches, still under the one hit's", F.KickStuds.dealtLaunch > F.KickStuds.dealt
+		and F.KickStuds.dealtLaunch < F.KickStuds.launch and F.DealtFov < F.FovPunch)
+	local pose = { Root = { y = 10, shift = Vector3.new(0, 0.1, 0) }, Waist = { x = 5 } }
+	local first = AttackPoses.shaken(pose, 0, 0.06, 0.2, 1, 0)
+	local second = AttackPoses.shaken(pose, 1 / 60 + 1e-4, 0.06, 0.2, 1, 0)
+	local firstShift = (first.Root.shift :: Vector3) - Vector3.new(0, 0.1, 0)
+	local secondShift = (second.Root.shift :: Vector3) - Vector3.new(0, 0.1, 0)
+	check("a held hit shakes the body along the push, keeping the root's own turn and shift",
+		near(firstShift.Z, 0.2) and near(firstShift.X, 0) and first.Root.y == 10 and first.Waist == pose.Waist)
+	check("the shake flips each frame and dies out", secondShift.Z < 0 and math.abs(secondShift.Z) < math.abs(firstShift.Z))
+	check("no shake once the hold is over, and the pose given is left alone",
+		AttackPoses.shaken(pose, 0.06, 0.06, 0.2, 1, 0) == pose and (pose.Root.shift :: Vector3) == Vector3.new(0, 0.1, 0))
+	local side = AttackPoses.shaken({}, 0, 0.1, 0.3, 0, 1)
+	check("a hit from the side shakes it sideways (a pose without a root gets one)", side.Root ~= nil and near((side.Root.shift :: Vector3).X, 0.3))
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

@@ -15,6 +15,9 @@ return {
 	StandsFolder = "TrainBrawlStands",
 	WaitingRoom = "WaitingRoom",
 	WeaponPart = "HeldWeapon", -- the weapon in a character's hand (WeaponGear)
+	-- On a held weapon: the two points a blow's streak runs between (WeaponGear makes them, SwingTrail draws it)
+	TrailTip = "TrailTip",
+	TrailBase = "TrailBase",
 	CratesFolder = "TrainBrawlCrates",
 	SandbagTag = "TrainBrawlSandbag",
 	-- Workspace attributes (the round, written by the server)

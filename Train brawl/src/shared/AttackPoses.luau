@@ -417,6 +417,27 @@ function AttackPoses.keys(weapon: string, style: string, step: number, finisher:
 	return setOf(weapon, style).keys(step, finisher, k)
 end
 
+-- The hand a blow of `style` at `step` strikes with (`finisher`: the string's launching last step): bare fists jab with
+-- the left and throw the rest with the right (punch above); every weapon is in the right hand.
+function AttackPoses.hand(style: string, step: number, finisher: boolean): string
+	return if style == "punch" and not finisher and step % 2 == 1 then "LeftHand" else "RightHand"
+end
+
+-- `pose` with the whole body shaken along a hit's push (`back`, `side` as for react) `t` seconds into a hit that holds
+-- the body still `hold` seconds: `studs` each way at first, flipping every frame (1/60 s) and dying out by the end of
+-- the hold, so the blow reads as landing (Sakurai's hitstop shake). Unchanged outside the hold.
+function AttackPoses.shaken(pose: Pose, t: number, hold: number, studs: number, back: number, side: number): Pose
+	if t < 0 or t >= hold or studs <= 0 then
+		return pose
+	end
+	local flip = if math.floor(t * 60) % 2 == 0 then 1 else -1
+	local amount = studs * (1 - t / hold) * flip
+	local root: Joint = pose.Root or {}
+	local out = table.clone(pose)
+	out.Root = { x = root.x, y = root.y, z = root.z, shift = (root.shift or Vector3.zero) + Vector3.new(side, 0, back) * amount }
+	return out
+end
+
 -- A hit reaction ("light" or a launch), `u` (0..1) through it. `back` and `side` say which way the hit pushed, in the
 -- body's own frame (back: +1 straight backward, -1 forward; side: +1 to its right): a light hit snaps the torso and
 -- head that way at once, knocks the arms open and eases back into `stance` (the fighter's stance; nil: none); a launch

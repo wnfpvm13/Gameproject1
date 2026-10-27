@@ -64,6 +64,17 @@ function WeaponRules.pick(weapons: { [string]: Weapon }, roll: number): string?
 	return names[#names]
 end
 
+-- How far an attack of `style` steps its attacker in (Config.Attack: LungeStuds for a punch or a swing, FinisherLunge
+-- for a string's launching last step, SlamLunge for a slam; a throw stands still).
+function WeaponRules.lunge(style: string, finisher: boolean, attack: { LungeStuds: number, FinisherLunge: number, SlamLunge: number }): number
+	if style == "punch" or style == "swing" then
+		return if finisher then attack.FinisherLunge else attack.LungeStuds
+	elseif style == "slam" then
+		return attack.SlamLunge
+	end
+	return 0
+end
+
 -- Whether a fighter at (tx, ty, tz) is in an area hit centred on (cx, cy, cz): within `radius` along the ground and
 -- `heightReach` up or down.
 function WeaponRules.inArea(cx: number, cy: number, cz: number, tx: number, ty: number, tz: number, radius: number, heightReach: number): boolean

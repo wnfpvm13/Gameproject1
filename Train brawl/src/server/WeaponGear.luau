@@ -3,7 +3,8 @@
 -- (a handle and an iron head), a dynamite stick (red, a fuse with sparks) or a gold bar; bare fists hold nothing.
 -- Welded to the hand, pointing ahead and a little down, massless and not colliding (hits are judged by the
 -- WeaponService, not by touching). Made on the server so every client sees it; the attacks themselves are drawn on
--- each client by turning the body's joints (SwingPose).
+-- each client by turning the body's joints (SwingPose), with a streak along the part that strikes (between the
+-- weapon's Names.TrailTip and Names.TrailBase attachments: SwingTrail).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
@@ -36,21 +37,28 @@ end
 
 -- The weapon's parts, in the hand's space: a list of (part, where) with the grip at the origin and the weapon's length
 -- along -Z (ahead of the fist). The first part is the one the others weld to. A two-handed weapon's handle reaches back
--- past the fist for the other hand (Config.Weapons offHand: SwingPose puts that hand there).
-local function shapeOf(weapon: string): { { part: Part, at: CFrame } }
+-- past the fist for the other hand (Config.Weapons offHand: SwingPose puts that hand there). Also where the part that
+-- strikes ends and starts, in the first part's own space (a blow's streak runs between them; none for a thrown stick).
+local function shapeOf(weapon: string): ({ { part: Part, at: CFrame } }, Vector3?, Vector3?)
 	if weapon == "Bat" then
+		-- (The cylinder's +X end is ahead: the barrel, its last 2 studs.)
 		local b = Config.Bat
 		local length = b.Length
 		local stick = part("Bat", Vector3.new(length, b.Thickness, b.Thickness), b.Color, Enum.Material.Wood, Enum.PartType.Cylinder)
-		return { { part = stick, at = CFrame.new(0, 0, -(length / 2 - b.Knob)) * CFrame.Angles(0, math.rad(90), 0) } }
+		return { { part = stick, at = CFrame.new(0, 0, -(length / 2 - b.Knob)) * CFrame.Angles(0, math.rad(90), 0) } },
+			Vector3.new(length / 2 - 0.15, 0, 0),
+			Vector3.new(length / 2 - 2.2, 0, 0)
 	elseif weapon == "Hammer" then
-		-- The fist 1.2 up the handle from its end (the other hand below it), the head 3 ahead of the fist.
+		-- The fist 1.2 up the handle from its end (the other hand below it), the head 3 ahead of the fist (2.1 up the
+		-- handle from its middle).
 		local handle = part("Handle", Vector3.new(4.2, 0.32, 0.32), WOOD, Enum.Material.Wood, Enum.PartType.Cylinder)
 		local head = part("Head", Vector3.new(1.0, 1.0, 1.7), IRON, Enum.Material.Metal)
 		return {
 			{ part = handle, at = CFrame.new(0, 0, -0.9) * CFrame.Angles(0, math.rad(90), 0) },
 			{ part = head, at = CFrame.new(0, 0, -3.0) * CFrame.Angles(0, math.rad(90), 0) },
-		}
+		},
+			Vector3.new(2.6, 0, 0),
+			Vector3.new(1.2, 0, 0)
 	elseif weapon == "Dynamite" then
 		local stick = part("Stick", Vector3.new(1.3, 0.5, 0.5), RED, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 		local fuse = part("Fuse", Vector3.new(0.5, 0.1, 0.1), Color3.new(0.1, 0.1, 0.1), Enum.Material.Fabric, Enum.PartType.Cylinder)
@@ -61,7 +69,7 @@ local function shapeOf(weapon: string): { { part: Part, at: CFrame } }
 		}
 	elseif weapon == "GoldBar" then
 		local bar = part("Bar", Vector3.new(0.8, 0.7, 1.6), GOLD, Enum.Material.Foil)
-		return { { part = bar, at = CFrame.new(0, 0, -0.7) } }
+		return { { part = bar, at = CFrame.new(0, 0, -0.7) } }, Vector3.new(0, 0, -0.8), Vector3.new(0, 0, 0.8)
 	end
 	return {}
 end
@@ -83,7 +91,7 @@ function WeaponGear.equip(model: Model): boolean
 		end
 		old:Destroy()
 	end
-	local pieces = shapeOf(weapon)
+	local pieces, tip, base = shapeOf(weapon)
 	if #pieces == 0 then
 		return true -- bare fists
 	end
@@ -93,6 +101,14 @@ function WeaponGear.equip(model: Model): boolean
 	local root = pieces[1].part
 	root.Name = Names.WeaponPart
 	root:SetAttribute(Names.Weapon, weapon)
+	if tip and base then
+		for name, at in { [Names.TrailTip] = tip, [Names.TrailBase] = base } do
+			local point = Instance.new("Attachment")
+			point.Name = name
+			point.Position = at
+			point.Parent = root
+		end
+	end
 	for k, piece in pieces do
 		piece.part.CFrame = grip * piece.at
 		if k > 1 then

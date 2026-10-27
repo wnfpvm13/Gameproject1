@@ -2,9 +2,10 @@
 -- How hits feel on this client: a whoosh when someone attacks (each weapon's own: a punch, a bat's swing, a hammer's
 -- heavy swing, a gold bar's, a throw; a string's launching last step deeper and longer), and for a hit a thump at the
 -- victim (each weapon's own: a punch, a bat, a hammer's slam, a gold bar's clang; a dynamite blast is heard from
--- ExplosionShow), a short white flash on them, and a camera kick: the player hit is knocked the way the hit pushed
--- (harder and with the view narrowing for a moment on a launch or smash), the player who hit gets a small push
--- toward the blow. A launch adds a heavier layer (the bat's whack, a heavy body
+-- ExplosionShow), a hard white flash on them (all white for a frame or two, then gone), and a camera kick: the player
+-- hit is knocked the way the hit pushed (harder and with the view narrowing for a moment on a launch or smash), the
+-- player who hit gets a small push toward the blow (bigger, with the view narrowing a little, when it launches). A
+-- launch adds a heavier layer (the bat's whack, a heavy body
 -- blow for the rest), a home run (the smash that empties health) a finishing sound for the whole screen over the
 -- weapon's own thump (the bat's crack, a heavy blow for the rest: never the thump's own recording twice) and a cartoon
 -- slide whistle as the body flies off (its flight is HomeRunShow's). The player's own swing shows
@@ -12,6 +13,7 @@
 -- launched cannot be hit for a moment (Config.Hit.LaunchImmune), so no hit is predicted on it then. Sounds:
 -- Config.Sounds through SoundBank.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local Debris = game:GetService("Debris")
 
@@ -30,13 +32,16 @@ local kick = { dir = Vector3.zero, studs = 0, start = -math.huge, fov = 0, baseF
 local PEAK = 0.2 -- the kick is out at its farthest this share of the way through
 
 local function flash(model: Model)
+	local f = Config.Feedback
 	local highlight = Instance.new("Highlight")
 	highlight.FillColor = Color3.new(1, 1, 1)
-	highlight.FillTransparency = 0.25
+	highlight.FillTransparency = 0
 	highlight.OutlineTransparency = 1
 	highlight.DepthMode = Enum.HighlightDepthMode.Occluded
 	highlight.Parent = model
-	Debris:AddItem(highlight, Config.Feedback.FlashSeconds)
+	local fade = TweenInfo.new(f.FlashFade, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, f.FlashHold)
+	TweenService:Create(highlight, fade, { FillTransparency = 1 }):Play()
+	Debris:AddItem(highlight, f.FlashHold + f.FlashFade + 0.02)
 end
 
 -- Each weapon's thump when it lands (none for a blast: its boom is the sound).
@@ -97,6 +102,17 @@ local function startKick(dir: Vector3, studs: number, fov: number)
 	kick.narrowed = kick.narrowed or kick.fov > 0
 end
 
+-- The attacker's own kick toward a blow of `kind` it landed along `dir`: small, bigger with the view narrowing a
+-- little when it launches.
+local function dealt(dir: Vector3, kind: string)
+	local f = Config.Feedback
+	if kind == "light" then
+		startKick(dir, f.KickStuds.dealt, 0)
+	else
+		startKick(dir, f.KickStuds.dealtLaunch, f.DealtFov)
+	end
+end
+
 -- Someone attacks with `weapon` (any character); `finisher`: the launching last step of a string.
 function HitFeedback.swing(model: Model, weapon: string, finisher: boolean)
 	local body = CharacterParts.body(model)
@@ -107,9 +123,9 @@ function HitFeedback.swing(model: Model, weapon: string, finisher: boolean)
 	end
 end
 
--- The player's own attack with `weapon` hit this victim, as this client saw it, from `from` (the player's position).
--- Returns whether it was shown (not while the victim cannot be hit).
-function HitFeedback.predict(victim: Model, weapon: string, from: Vector3): boolean
+-- The player's own attack with `weapon` hit this victim, as this client saw it, from `from` (the player's position),
+-- as a hit of `kind` ("light" or "launch"). Returns whether it was shown (not while the victim cannot be hit).
+function HitFeedback.predict(victim: Model, weapon: string, from: Vector3, kind: string): boolean
 	local endsAt = unhittable[victim]
 	if endsAt and os.clock() < endsAt then
 		return false -- just launched: the server will not take this hit
@@ -117,7 +133,7 @@ function HitFeedback.predict(victim: Model, weapon: string, from: Vector3): bool
 	show(victim, weapon)
 	local body = CharacterParts.body(victim)
 	if body then
-		startKick(body.root.Position - from, Config.Feedback.KickStuds.dealt, 0)
+		dealt(body.root.Position - from, kind)
 	end
 	return true
 end
@@ -149,7 +165,7 @@ function HitFeedback.hit(victim: Model, seen: boolean, mine: boolean, me: boolea
 	if me and push then
 		startKick(push, Config.Feedback.KickStuds[kind] or 0, if kind == "light" then 0 else Config.Feedback.FovPunch)
 	elseif mine and shownNow and push then
-		startKick(push, Config.Feedback.KickStuds.dealt, 0) -- a hit this client did not show at once (a slam, a blast)
+		dealt(push, kind) -- a hit this client did not show at once (a slam, a blast)
 	end
 	return shownNow
 end

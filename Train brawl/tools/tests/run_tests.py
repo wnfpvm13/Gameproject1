@@ -9,8 +9,8 @@
           (the gap is wider than a jump, a light hit's stun ends before the next swing, a low-health launch goes off)
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
 
-The modules run unchanged; the only fakes are Color3.fromRGB and Vector3 (new, zero and Lerp: Config's colours and
-sizes, AttackPoses' shifts), which plain Luau lacks. (Taken over from Western train's runner, with this game's modules.)
+The modules run unchanged; the only fakes are Color3.fromRGB and Vector3 (new, zero, Lerp, +, - and * by a number:
+Config's colours and sizes, AttackPoses' shifts), which plain Luau lacks. (Taken over from Western train's runner, with this game's modules.)
 """
 import io, os, subprocess, sys, tempfile
 
@@ -36,6 +36,10 @@ PRELUDE = (
     "Vector3 = { new = function(x, y, z) return setmetatable({ X = x, Y = y, Z = z }, V3) end }\n"
     "function V3.Lerp(a, b, s) return Vector3.new(a.X + (b.X - a.X) * s, a.Y + (b.Y - a.Y) * s, a.Z + (b.Z - a.Z) * s) end\n"
     "Vector3.zero = Vector3.new(0, 0, 0)\n"
+    "function V3.__add(a, b) return Vector3.new(a.X + b.X, a.Y + b.Y, a.Z + b.Z) end\n"
+    "function V3.__sub(a, b) return Vector3.new(a.X - b.X, a.Y - b.Y, a.Z - b.Z) end\n"
+    "function V3.__mul(a, b) if type(a) == 'number' then a, b = b, a end return Vector3.new(a.X * b, a.Y * b, a.Z * b) end\n"
+    "function V3.__eq(a, b) return a.X == b.X and a.Y == b.Y and a.Z == b.Z end\n"
 )
 
 

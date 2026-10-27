@@ -28,6 +28,9 @@ local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
 local WeaponRules = require(shared:WaitForChild("WeaponRules"))
+local CharacterParts = require(shared:WaitForChild("CharacterParts"))
+local BodyMotion = require(shared:WaitForChild("BodyMotion"))
+local AttackString = require(shared:WaitForChild("AttackString"))
 
 local remotes = Net.create()
 local arena = ArenaBuilder.build()
@@ -84,9 +87,23 @@ local weapons = WeaponService.start(remotes.Swing, remotes.Hit, {
 		remotes.Blast:FireAllClients(at, radius)
 	end,
 })
+local stringRules = AttackString.rules(Config.Attack)
 brain = BotBrain.new(arena.layout.surfaces, {
 	fighters = round.fighters,
-	attack = weapons.attack,
+	-- A bot's attack steps it in as a player's own client steps the player in (BodyMotion.lunge, by the weapon and step
+	-- the attack was taken with).
+	attack = function(model: Model, facing: Vector3): number?
+		if not weapons.attack(model, facing) then
+			return nil
+		end
+		local body = CharacterParts.body(model)
+		if not body then
+			return 0
+		end
+		local style = Config.Weapons[WeaponRules.named(Config.Weapons, model:GetAttribute(Names.SwingWeapon))].style
+		local step = PartUtil.number(model, Names.SwingStep) or 1
+		return BodyMotion.lunge(body, facing, WeaponRules.lunge(style, AttackString.launches(stringRules, step, style), Config.Attack))
+	end,
 })
 WeaponDrops.start(arena.layout.surfaces, PartUtil.folder(Workspace, Names.CratesFolder), {
 	fighters = round.fighters,

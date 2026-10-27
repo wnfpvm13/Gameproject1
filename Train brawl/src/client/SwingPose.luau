@@ -5,7 +5,8 @@
 -- over the weapon's `seconds` with the blow when AttackString says it lands. An attack starts at the character's
 -- Names.SwingAt (server time, set by WeaponService with Names.SwingWeapon and Names.SwingStep), or at once for the
 -- player's own (play(); redrawn as another step when the server counted it differently, restep()). A hit reaction
--- (react(): a light hit's flinch the way the hit pushed, a launch's flail) takes over from an attack at once, and no
+-- (react(): a light hit's flinch the way the hit pushed, a launch's flail, the body shaking along the push while the
+-- hit holds it: AttackPoses.shaken) takes over from an attack at once, and no
 -- attack is drawn over a flail; an attack taking over from another pose fades from where that one left each joint
 -- (FADE), the joints it does not turn back to the animation. The pose is blended in from what the walking or idle
 -- animation shows and back out to it (no snap through standing straight). The joints are written in
@@ -509,18 +510,21 @@ function SwingPose.react(model: Model, kind: string, push: Vector3?)
 	end
 	local light = kind == "light"
 	local length = if light then AttackPoses.FlinchSeconds else AttackPoses.FlailSeconds
+	-- Shaking along the push while the hit holds the body still (the body itself stays put).
+	local hold = Config.Feedback.HitStop[kind] or 0
+	local shake = Config.Feedback.Shake[kind] or 0
 	-- A flinch settles back into the stance the fighter keeps (the one it keeps then: a weapon used up meanwhile).
 	local stance = stances[model]
 	begin(model, if light then "light" else "flail", os.clock(), length, os.clock, function(u: number): AttackPoses.Pose
 		local settle = if stance and stance.weight > 0 then shownStance(stance) else nil
-		return AttackPoses.react(kind, u, back, side, settle)
+		return AttackPoses.shaken(AttackPoses.react(kind, u, back, side, settle), u * length, hold, shake, back, side)
 	end, 0, false)
 end
 
 -- Follows a character's Names.SwingAt (every attack the server takes) and keeps its stance. `skip(at, step)` returns
--- true for an attack this client already drew (the player's own, started at once); `heard(weapon, step)` sounds the
+-- true for an attack this client already drew (the player's own, started at once); `heard(weapon, step, at)` sounds the
 -- others. Returns the connection.
-function SwingPose.follow(model: Model, skip: (number, number) -> boolean, heard: (string, number) -> ()): RBXScriptConnection
+function SwingPose.follow(model: Model, skip: (number, number) -> boolean, heard: (string, number, number) -> ()): RBXScriptConnection
 	if not stances[model] then
 		stances[model] = { pose = nil, offHand = nil, weight = 0, joints = {}, written = {}, prev = nil, prevOffHand = nil, switchAt = 0 }
 	end
@@ -531,7 +535,7 @@ function SwingPose.follow(model: Model, skip: (number, number) -> boolean, heard
 		if typeof(at) == "number" and not skip(at, step) then
 			local weapon = WeaponRules.named(Config.Weapons, model:GetAttribute(Names.SwingWeapon))
 			SwingPose.play(model, at, weapon, step)
-			heard(weapon, step)
+			heard(weapon, step, at)
 		end
 	end)
 end

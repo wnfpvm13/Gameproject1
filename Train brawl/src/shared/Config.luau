@@ -240,7 +240,7 @@ Config.Attack = {
 	-- moment it may (OwnSwing): pressed in time with a 0.4 s cooldown, about one press in five came a moment early and
 	-- did nothing (Studio 2026-10-27; owner: "my player can't seem to attack").
 	PressBuffer = 0.2,
-	-- The attacker's 1-2-3 string (AttackString, punches and swings): when the last attack landed, an attack starting
+	-- The attacker's 1-2-3 string (AttackString, punches and swings): hit or miss (owner 2026-10-28), an attack starting
 	-- within StringGap after its weapon was ready again is the next step; the StringCount-th (the 3rd) launches what it
 	-- hits, landing FinisherWindup later than the weapon's hitAt (a wind-up everyone sees) and drawn FinisherStretch
 	-- times the weapon's seconds. The server takes the client's step up to StringSlack later than its own clock would
@@ -250,6 +250,17 @@ Config.Attack = {
 	StringSlack = 0.15,
 	FinisherWindup = 0.08,
 	FinisherStretch = 1.5,
+	-- Every attack steps its attacker in along the aim, hit or miss (BodyMotion.lunge; owner 2026-10-28: "what matters is
+	-- a crisp, satisfying hit feel"): the body carries the blow, and a string swung at the air closes in. LungeStuds for
+	-- a punch or a swing, FinisherLunge for a string's launching last step, SlamLunge for a hammer's slam (a throw stands
+	-- still), over LungeSeconds. It stops LungeGap short of whatever is ahead (a fighter, a chimney) and never steps past
+	-- the edge of what the attacker stands on; none in the air. (Brawlers commonly step 1.5 to 2.5 per blow and 3 to 4
+	-- for the last; these roofs are 15 wide, so the low end.)
+	LungeStuds = 1.5,
+	FinisherLunge = 3,
+	SlamLunge = 1,
+	LungeSeconds = 0.1,
+	LungeGap = 0.4,
 }
 
 -- The bat's look (WeaponGear): a big cartoon bat, so its reach shows, held in both hands: the right fist Knob up from
@@ -431,15 +442,31 @@ Config.Knock = {
 }
 
 -- How a hit feels: its sound (Config.Sounds), a white flash and a comic burst where it lands, a hold (whoever is hit
--- holds still, and the attacker's pose pauses with it), and a camera kick the way the hit went.
+-- holds still, shaking, and the attacker's pose pauses a little shorter), a camera kick the way the hit went, and a
+-- streak behind every blow (hit or miss).
 Config.Feedback = {
-	-- The hold: a heavier hit holds longer (the beat that makes a hit land). A launch's flight starts after it.
+	-- The hold: a heavier hit holds longer (the beat that makes a hit land). A launch's flight starts after it. About 4,
+	-- 6 and 10 frames at 60 fps: inside the usual 2-4 light, 6-10 heavy, 12-18 special (research 2026-10-28).
 	HitStop = { light = 0.06, launch = 0.1, smash = 0.16 } :: { [string]: number },
-	FlashSeconds = 0.15,
+	-- The attacker's pose pauses about 2 frames shorter than the victim holds (Capcom's The Punisher, measured: jab 6/8,
+	-- cross 8/10, finisher 9/11 frames): the attacker is let go first, so the blow feels light in the hand.
+	AttackerHold = { light = 0.04, launch = 0.07, smash = 0.13 } :: { [string]: number },
+	-- While held, the one hit shakes along the push, this many studs each way at first, flipping every frame and dying
+	-- out by the end of the hold (Sakurai's hitstop shake; drawn by the joints, the body itself stays put).
+	Shake = { light = 0.2, launch = 0.3, smash = 0.35 } :: { [string]: number },
+	-- The flash: all white for FlashHold, then gone over FlashFade (a hard 1-2 frame flash reads sharper than a soft
+	-- one left on; it was 0.25 see-through for 0.15 s).
+	FlashHold = 0.03,
+	FlashFade = 0.08,
 	BurstSeconds = 0.18, -- the comic burst where a hit lands
+	RingSeconds = 0.3, -- the ring a launch's burst sends out
 	KickSeconds = 0.2, -- the camera kick
-	KickStuds = { light = 0.35, launch = 0.8, smash = 1.1, dealt = 0.15 } :: { [string]: number }, -- dealt: the attacker's own
+	-- dealt: the attacker's own kick toward the blow (dealtLaunch when it launches, with the view narrowing DealtFov)
+	KickStuds = { light = 0.35, launch = 0.8, smash = 1.1, dealt = 0.15, dealtLaunch = 0.45 } :: { [string]: number },
 	FovPunch = 7, -- a launch or smash taken narrows the view this many degrees for a moment
+	DealtFov = 3,
+	-- The streak behind a blow lasts this long behind a fist, behind a weapon (SwingTrail).
+	StreakSeconds = { punch = 0.12, weapon = 0.2 } :: { [string]: number },
 	DustSeconds = 0.6, -- the puff where a launched body lands
 	HomeRunTextSeconds = 1.6, -- the big "홈런!" over where the home run was hit
 	Gold = Color3.fromRGB(255, 214, 90), -- the home run's colour (text, trail, feed line)

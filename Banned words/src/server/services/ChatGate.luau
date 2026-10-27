@@ -30,6 +30,7 @@ local answerLine: (Player, string) -> boolean = function(_sender, _text)
 	return false
 end
 local answerOf: { [string]: boolean } = {} -- MessageId -> was it an answer (decided once)
+local answerOfBefore: { [string]: boolean } = {} -- the ones decided before (kept one more turn: never forgotten mid-delivery)
 local answersKept = 0
 
 local function playerOf(source: Instance?): Player?
@@ -114,13 +115,17 @@ end
 -- Whether the message is a quiz answer (asked once per MessageId: the first call counts it; never yields).
 function ChatGate.isAnswer(messageId: string, sender: Player, text: string): boolean
 	local known = answerOf[messageId]
+	if known == nil then
+		known = answerOfBefore[messageId]
+	end
 	if known ~= nil then
 		return known
 	end
 	local ok, result = pcall(answerLine, sender, text)
 	local answer = ok and result == true
-	if answersKept > 500 then -- (only the last moments matter: a message is decided within one delivery)
-		table.clear(answerOf)
+	if answersKept >= 500 then -- (only the last moments matter: a message is decided within one delivery)
+		answerOfBefore = answerOf
+		answerOf = {}
 		answersKept = 0
 	end
 	answerOf[messageId] = answer

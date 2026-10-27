@@ -7819,6 +7819,7 @@ local answerLine: (Player, string) -> boolean = function(_sender, _text)
 	return false
 end
 local answerOf: { [string]: boolean } = {} -- MessageId -> was it an answer (decided once)
+local answerOfBefore: { [string]: boolean } = {} -- the ones decided before (kept one more turn: never forgotten mid-delivery)
 local answersKept = 0
 
 local function playerOf(source: Instance?): Player?
@@ -7903,13 +7904,17 @@ end
 -- Whether the message is a quiz answer (asked once per MessageId: the first call counts it; never yields).
 function ChatGate.isAnswer(messageId: string, sender: Player, text: string): boolean
 	local known = answerOf[messageId]
+	if known == nil then
+		known = answerOfBefore[messageId]
+	end
 	if known ~= nil then
 		return known
 	end
 	local ok, result = pcall(answerLine, sender, text)
 	local answer = ok and result == true
-	if answersKept > 500 then -- (only the last moments matter: a message is decided within one delivery)
-		table.clear(answerOf)
+	if answersKept >= 500 then -- (only the last moments matter: a message is decided within one delivery)
+		answerOfBefore = answerOf
+		answerOf = {}
 		answersKept = 0
 	end
 	answerOf[messageId] = answer
@@ -9141,7 +9146,9 @@ function MissionRunner.chatAnswer(player: Player, text: string): boolean
 		local label = if shown.kind ~= "estimate" and open.choices == 2
 			then (if choice == 1 then Config.TEXT.OX_O else Config.TEXT.OX_X)
 			else tostring(choice)
-		Net.to(player, "Notice", { text = string.format(Config.TEXT.CHAT_ANSWERED, label) })
+		-- (`answered`: their card shows this pick, not a button pressed meanwhile — Codex review 2026-10-27)
+		Net.to(player, "Notice", { text = string.format(Config.TEXT.CHAT_ANSWERED, label),
+			answered = { id = open.id, choice = choice } })
 	end
 	return true
 end
@@ -11878,6 +11885,11 @@ end)
 remotes.Notice.OnClientEvent:Connect(function(info)
 	lastNotice, lastNoticeAt = info.text, os.clock()
 	Toast.show(info.text, "near")
+	local answered = info.answered -- (my answer typed in chat, counted: the card shows it, bundle 12)
+	if typeof(answered) == "table" and typeof(answered.id) == "number" and typeof(answered.choice) == "number"
+		and MissionPanel.answered(answered.id, answered.choice) then
+		showMission()
+	end
 end)
 
 -- The banned-word talk ended: once my speech that may still count has been sent, say so (the settle stage waits).
@@ -15497,6 +15509,16 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		elseif shownButtons == 3 then UDim2.new(1 / 3, -6, 0, 44)
 		else UDim2.new(0.5, -4, 0, 44)
 	MissionPanel.tick(workspace:GetServerTimeNow())
+end
+
+-- The server counted my answer typed in chat (bundle 12): question `id` shows `choice` as mine, also over a button I
+-- pressed meanwhile (the server keeps the first answer). Returns whether the card should be drawn again.
+function MissionPanel.answered(id: number, choice: number): boolean
+	if state.id ~= id or (state.kind ~= "quiz" and state.kind ~= "estimate") or state.myPick == choice then
+		return false
+	end
+	state.myPick = choice
+	return true
 end
 
 -- I rang my bell at `now` (server time): 물병 세우기's marker stops there on my screen.

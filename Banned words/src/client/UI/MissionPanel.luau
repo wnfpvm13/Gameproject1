@@ -1062,6 +1062,16 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end
 
+-- The server counted my answer typed in chat (bundle 12): question `id` shows `choice` as mine, also over a button I
+-- pressed meanwhile (the server keeps the first answer). Returns whether the card should be drawn again.
+function MissionPanel.answered(id: number, choice: number): boolean
+	if state.id ~= id or (state.kind ~= "quiz" and state.kind ~= "estimate") or state.myPick == choice then
+		return false
+	end
+	state.myPick = choice
+	return true
+end
+
 -- I rang my bell at `now` (server time): 물병 세우기's marker stops there on my screen.
 function MissionPanel.rang(now: number)
 	if state.kind == "bottle" and state.timing.stoppedAt == 0 and now >= state.timing.barStartAt then

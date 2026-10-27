@@ -680,7 +680,9 @@ function MissionRunner.chatAnswer(player: Player, text: string): boolean
 		local label = if shown.kind ~= "estimate" and open.choices == 2
 			then (if choice == 1 then Config.TEXT.OX_O else Config.TEXT.OX_X)
 			else tostring(choice)
-		Net.to(player, "Notice", { text = string.format(Config.TEXT.CHAT_ANSWERED, label) })
+		-- (`answered`: their card shows this pick, not a button pressed meanwhile — Codex review 2026-10-27)
+		Net.to(player, "Notice", { text = string.format(Config.TEXT.CHAT_ANSWERED, label),
+			answered = { id = open.id, choice = choice } })
 	end
 	return true
 end

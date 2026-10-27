@@ -595,6 +595,11 @@ end)
 remotes.Notice.OnClientEvent:Connect(function(info)
 	lastNotice, lastNoticeAt = info.text, os.clock()
 	Toast.show(info.text, "near")
+	local answered = info.answered -- (my answer typed in chat, counted: the card shows it, bundle 12)
+	if typeof(answered) == "table" and typeof(answered.id) == "number" and typeof(answered.choice) == "number"
+		and MissionPanel.answered(answered.id, answered.choice) then
+		showMission()
+	end
 end)
 
 -- The banned-word talk ended: once my speech that may still count has been sent, say so (the settle stage waits).

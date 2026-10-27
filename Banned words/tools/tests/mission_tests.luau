@@ -2014,12 +2014,14 @@ do
 		and #record2.fails == 0 and lastScreenOf(since2, "estimateResult") == nil
 		and table.find(record2.shows, Config.TEXT.MINIGAME_TOO_FEW) ~= nil)
 
-	-- O/X: someone not asked (flying when the statement opened) who is back while the answers show gets no tag.
+	-- O/X: someone in the game but not asked (launched when the statement opened) who is back while the answers show
+	-- gets no tag.
 	local oa, ob, oc = table.unpack(newPlayers(3))
-	local flying = { [oc] = true }
+	local flying = {}
 	local record3 = fakeCtx({ oa, ob, oc }, false, flying)
 	local since3 = now
-	start(OXQuiz, record3)
+	start(OXQuiz, record3) -- (oc on the ground: one of the game's players)
+	flying[oc] = true -- (launched before the first statement opens)
 	at(now + Config.OX_INTRO_SECONDS + 0.2)
 	answer(oa, 1)
 	answer(ob, 2)

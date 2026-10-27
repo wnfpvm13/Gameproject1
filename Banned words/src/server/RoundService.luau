@@ -6,7 +6,7 @@
 --   Result -> Countdown (quick rematch) ...
 -- Rules live in the services: lives in LifeService, the game count, time cap and final trigger in Timeline, missions in
 -- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
--- join by chat in ChatService, the presenter in PresenterService, banned words in WordService, score in Scores, the round awards in Awards, the beta's measurements in Telemetry.
+-- join by chat in ChatService, the presenter in PresenterService, banned words in WordService, score in Scores, the round awards in Awards, the beta's measurements in Telemetry, each player's sound settings in SettingsService.
 -- Bundle 6a: banned words exist only during the banned-word talk (a minigame, played while speech judging is on): its
 -- prep stage draws them (the presenter may re-draw), the talk is judged in chat at once and in speech (JudgeService,
 -- bundle 6e) — the presenter rescues, or without a presenter the hit flies at once — and by the presenter's ear, and
@@ -38,6 +38,7 @@ local PresenterService = require(services:WaitForChild("PresenterService"))
 local Scores = require(services:WaitForChild("Scores"))
 local Awards = require(services:WaitForChild("Awards"))
 local Telemetry = require(services:WaitForChild("Telemetry"))
+local SettingsService = require(services:WaitForChild("SettingsService"))
 
 local RoundService = {}
 
@@ -852,6 +853,10 @@ local function onSync(player: Player)
 	if player == Match.presenter then
 		RescueService.send()
 	end
+	local settings = SettingsService.get(player) -- (none yet while their load is out: it goes when the load is over)
+	if settings then
+		Net.to(player, "Settings", settings)
+	end
 end
 
 -- Whether a banned word may count against `target` now (docs/DESIGN_V3.md §4, §6): the main game not yet decided, the
@@ -1062,6 +1067,12 @@ function RoundService.start()
 	SeatService.init(onFlightOver, function(player, distance, _airTime)
 		Awards.flight(player, distance)
 	end)
+	SettingsService.init(function(player, settings)
+		Net.to(player, "Settings", settings)
+	end)
+	Net.listen("Settings", function(player, payload)
+		SettingsService.change(player, payload)
+	end)
 	-- "Ready" changes take effect at once; the state broadcast they cause is gathered (at most one per
 	-- READY_BROADCAST_DELAY), so a client flipping it fast cannot make the server message everyone each time.
 	local readyBroadcastQueued = false
@@ -1126,9 +1137,14 @@ function RoundService.start()
 	end
 	for _, player in Players:GetPlayers() do
 		watch(player)
+		SettingsService.join(player)
 	end
-	Players.PlayerAdded:Connect(watch)
+	Players.PlayerAdded:Connect(function(player)
+		watch(player)
+		SettingsService.join(player)
+	end)
 	Players.PlayerRemoving:Connect(function(player)
+		SettingsService.leave(player)
 		lastSync[player] = nil
 		lastChatJoin[player] = nil
 		-- Leaving is out (docs/DESIGN_V3.md §4).

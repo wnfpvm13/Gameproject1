@@ -380,6 +380,13 @@ return {
 		READY_COUNT = "준비 완료! (준비 %d명)",
 		READY_NEXT_ROUND = "준비 완료! 다음 판부터 같이 해요",
 		INVITE = "친구 초대",
+		-- The sound settings (bundle 11a).
+		SETTINGS = "설정",
+		SETTINGS_TITLE = "소리 설정",
+		SETTINGS_MUSIC = "배경 음악",
+		SETTINGS_EFFECTS = "효과음",
+		SETTINGS_VOICE_NOTE = "음성 채팅 소리는 Roblox 메뉴(ESC)에서 바꿔요",
+		SETTINGS_CLOSE = "닫기",
 		INVITE_UNAVAILABLE = "이 계정은 여기서 초대를 보낼 수 없어요",
 		HEADSET_TIP = "헤드셋을 쓰면 더 잘 들려요", -- speakers feed others' voices back into the mic
 		NO_VOICE_WATCH = "관람석에서 구경할 수 있어요",
@@ -644,4 +651,26 @@ return {
 	-- the loudest hit after the roll); it starts so the crash meets the pick
 	SOUND_WHISTLE = "rbxassetid://9118114334", -- Referee Whistle Interior Gymnasium 1 (SFX): 무궁화's red light
 	SOUND_VOLUME = 0.5, -- these game sounds, under the voices
+
+	-- Background music (bundle 11a, owner 2026-10-27: "너무 슴슴하네"; docs/BUNDLE11_2026-10-27.md). Roblox-licensed APM
+	-- Music without vocals (the lobby mic test passes on any speech it hears, sung words from a speaker included); the
+	-- owner listens and may swap any of them. The client plays the one for the phase (lobby: also the countdown, the
+	-- assignment and the result).
+	MUSIC_TRACKS = {
+		lobby = "rbxassetid://1842174239", -- Game Show (KPM, "upbeat entertainment bed", 146 s)
+		play = "rbxassetid://1842373862", -- A Little Mischief (KPM, "bouncy, playful theme", 194 s)
+		final = "rbxassetid://1839997507", -- Four Heads Tension Bed (APM game show toolkit, 137 s)
+	},
+	MUSIC_VOLUME = 0.25, -- the music at a player's 100% (their setting scales it), under the voices
+	MUSIC_FADE_SECONDS = 1, -- one track to the next
+	MUSIC_DUCK = 0.3, -- while someone speaks for the game (a word to everyone, a clue, a bell answer ...)
+	MUSIC_RESULT_DELAY = 3, -- the result's fanfare plays first
+	-- A player's sound settings (bundle 11a): 0..1 in steps of SETTINGS_STEP, kept in a DataStore across visits.
+	SETTINGS_DEFAULT = { music = 0.5, effects = 1 },
+	SETTINGS_STEP = 0.1,
+	SETTINGS_STORE = "BW_PlayerSettings_v1",
+	SETTINGS_LOAD_RETRY = 2, -- seconds before the one retry of a failed load
+	SETTINGS_SAVE_DELAY = 6, -- a change is saved this long after the last one (a drag is many changes)
+	SETTINGS_SAVE_RETRIES = { 5, 15 }, -- seconds before retrying a failed save
+	SETTINGS_RATE = 4, -- changes a second taken from one player
 }

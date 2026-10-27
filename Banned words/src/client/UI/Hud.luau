@@ -24,20 +24,22 @@ local timerL: TextLabel
 local aliveL: TextLabel
 local livesL: TextLabel
 
-function Hud.build()
+-- Returns the board (the sound settings key sits on its right edge, bundle 11a).
+function Hud.build(): Frame
 	local top = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 14)
 	top.AnchorPoint = Vector2.new(0.5, 0)
 	top.Position = UDim2.new(0.5, 0, 0, 8)
 	top.Size = UDim2.new(0.5, 0, 0, 64)
 	-- (at most the screen less 250 px each side where Roblox's player list sits open at the top right — a small PC window,
-	-- review 2026-10-25; a phone keeps it folded, so the board keeps its width there)
+	-- review 2026-10-25; a phone keeps it folded, so the board keeps its width there — and 30 px more for the settings
+	-- key that sticks out of its right edge, bundle 11a)
 	local limit = Instance.new("UISizeConstraint")
 	limit.MinSize = Vector2.new(320, 0)
 	limit.Parent = top
 	local function fit()
 		local camera = workspace.CurrentCamera
 		local phone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-		local width = if not camera then 580 elseif phone then camera.ViewportSize.X * 0.6 else camera.ViewportSize.X - 500
+		local width = if not camera then 580 elseif phone then camera.ViewportSize.X * 0.6 else camera.ViewportSize.X - 560
 		limit.MaxSize = Vector2.new(math.clamp(width, 320, 580), 200)
 	end
 	fit()
@@ -54,8 +56,9 @@ function Hud.build()
 	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watch)
 
 	statusL = Style.label(top, Style.BOLD, 22, Style.INK)
-	statusL.Position = UDim2.fromScale(0.04, 0.06)
-	statusL.Size = UDim2.fromScale(0.92, 0.46)
+	-- (30 px kept free at each end of the top line and at the right of the second: the settings key sits there)
+	statusL.Position = UDim2.new(0.04, 30, 0.06, 0)
+	statusL.Size = UDim2.new(0.92, -60, 0.46, 0)
 	timerL = Style.label(top, Style.BOLD, 22, Style.INK)
 	timerL.Position = UDim2.fromScale(0.04, 0.55)
 	timerL.Size = UDim2.fromScale(0.28, 0.38)
@@ -66,8 +69,9 @@ function Hud.build()
 	livesL.RichText = true
 	aliveL = Style.label(top, Style.REGULAR, 20, Style.FAINT)
 	aliveL.Position = UDim2.fromScale(0.68, 0.55)
-	aliveL.Size = UDim2.fromScale(0.28, 0.38)
+	aliveL.Size = UDim2.new(0.28, -30, 0.38, 0)
 	aliveL.TextXAlignment = Enum.TextXAlignment.Right
+	return top
 end
 
 -- The message alone, or the phase's name when there is none (review 2026-10-25: "본 경기 · 본 경기 시작!", "결승 ·

@@ -66,6 +66,7 @@ ROUND_MODULES = [
     ("PresenterService", "src/server/services/PresenterService.luau"),
     ("BellService", "src/server/services/BellService.luau"),
     ("VoiceServiceReal", "src/server/services/VoiceService.luau"),  # section 9 (RoundService gets a stub)
+    ("SettingsService", "src/server/services/SettingsService.luau"),  # (no DataStore here: settings for the visit)
     ("RoundService", "src/server/RoundService.luau"),
 ]
 

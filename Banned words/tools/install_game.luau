@@ -393,6 +393,13 @@ return {
 		READY_COUNT = "준비 완료! (준비 %d명)",
 		READY_NEXT_ROUND = "준비 완료! 다음 판부터 같이 해요",
 		INVITE = "친구 초대",
+		-- The sound settings (bundle 11a).
+		SETTINGS = "설정",
+		SETTINGS_TITLE = "소리 설정",
+		SETTINGS_MUSIC = "배경 음악",
+		SETTINGS_EFFECTS = "효과음",
+		SETTINGS_VOICE_NOTE = "음성 채팅 소리는 Roblox 메뉴(ESC)에서 바꿔요",
+		SETTINGS_CLOSE = "닫기",
 		INVITE_UNAVAILABLE = "이 계정은 여기서 초대를 보낼 수 없어요",
 		HEADSET_TIP = "헤드셋을 쓰면 더 잘 들려요", -- speakers feed others' voices back into the mic
 		NO_VOICE_WATCH = "관람석에서 구경할 수 있어요",
@@ -657,6 +664,28 @@ return {
 	-- the loudest hit after the roll); it starts so the crash meets the pick
 	SOUND_WHISTLE = "rbxassetid://9118114334", -- Referee Whistle Interior Gymnasium 1 (SFX): 무궁화's red light
 	SOUND_VOLUME = 0.5, -- these game sounds, under the voices
+
+	-- Background music (bundle 11a, owner 2026-10-27: "너무 슴슴하네"; docs/BUNDLE11_2026-10-27.md). Roblox-licensed APM
+	-- Music without vocals (the lobby mic test passes on any speech it hears, sung words from a speaker included); the
+	-- owner listens and may swap any of them. The client plays the one for the phase (lobby: also the countdown, the
+	-- assignment and the result).
+	MUSIC_TRACKS = {
+		lobby = "rbxassetid://1842174239", -- Game Show (KPM, "upbeat entertainment bed", 146 s)
+		play = "rbxassetid://1842373862", -- A Little Mischief (KPM, "bouncy, playful theme", 194 s)
+		final = "rbxassetid://1839997507", -- Four Heads Tension Bed (APM game show toolkit, 137 s)
+	},
+	MUSIC_VOLUME = 0.25, -- the music at a player's 100% (their setting scales it), under the voices
+	MUSIC_FADE_SECONDS = 1, -- one track to the next
+	MUSIC_DUCK = 0.3, -- while someone speaks for the game (a word to everyone, a clue, a bell answer ...)
+	MUSIC_RESULT_DELAY = 3, -- the result's fanfare plays first
+	-- A player's sound settings (bundle 11a): 0..1 in steps of SETTINGS_STEP, kept in a DataStore across visits.
+	SETTINGS_DEFAULT = { music = 0.5, effects = 1 },
+	SETTINGS_STEP = 0.1,
+	SETTINGS_STORE = "BW_PlayerSettings_v1",
+	SETTINGS_LOAD_RETRY = 2, -- seconds before the one retry of a failed load
+	SETTINGS_SAVE_DELAY = 6, -- a change is saved this long after the last one (a drag is many changes)
+	SETTINGS_SAVE_RETRIES = { 5, 15 }, -- seconds before retrying a failed save
+	SETTINGS_RATE = 4, -- changes a second taken from one player
 }
 ]====]; s.Parent = n1 end
 do local s = Instance.new("ModuleScript"); s.Name = "Hangul"; s.Source = [====[--!strict
@@ -1250,6 +1279,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "Net"; s.Source = [====[--!s
 --   Settle      the banned-word talk ended at `cutoff`: { key, cutoff } (client -> server: Settled (key), my speech
 --               from before it has been sent; Transcript (text, earliest, latest, ended, textId), my own speech
 --               transcribed during the talk — speech judging, bundle 6e, JudgeService)
+--   Settings    to one player: their sound settings { music, effects } (0..1), once loaded and on every Sync
+--               (client -> server: Settings { music?, effects? }, a change; bundle 11a, SettingsService)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = {}
@@ -1258,7 +1289,7 @@ local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
 	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer", "Lever",
 	"EarJudge", "Reroll", "TalkStart", "Rescue", "Bell", "BellOpen", "BellRang",
-	"Words", "Settle", "Transcript", "Settled",
+	"Words", "Settle", "Transcript", "Settled", "Settings",
 }
 
 local folder: Folder
@@ -1315,7 +1346,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "RoundService"; s.Source = [
 --   Result -> Countdown (quick rematch) ...
 -- Rules live in the services: lives in LifeService, the game count, time cap and final trigger in Timeline, missions in
 -- MissionRunner, flying chairs in SeatService, spectators in SpectatorService, voice routing in VoiceService, who may
--- join by chat in ChatService, the presenter in PresenterService, banned words in WordService, score in Scores, the round awards in Awards, the beta's measurements in Telemetry.
+-- join by chat in ChatService, the presenter in PresenterService, banned words in WordService, score in Scores, the round awards in Awards, the beta's measurements in Telemetry, each player's sound settings in SettingsService.
 -- Bundle 6a: banned words exist only during the banned-word talk (a minigame, played while speech judging is on): its
 -- prep stage draws them (the presenter may re-draw), the talk is judged in chat at once and in speech (JudgeService,
 -- bundle 6e) — the presenter rescues, or without a presenter the hit flies at once — and by the presenter's ear, and
@@ -1347,6 +1378,7 @@ local PresenterService = require(services:WaitForChild("PresenterService"))
 local Scores = require(services:WaitForChild("Scores"))
 local Awards = require(services:WaitForChild("Awards"))
 local Telemetry = require(services:WaitForChild("Telemetry"))
+local SettingsService = require(services:WaitForChild("SettingsService"))
 
 local RoundService = {}
 
@@ -2161,6 +2193,10 @@ local function onSync(player: Player)
 	if player == Match.presenter then
 		RescueService.send()
 	end
+	local settings = SettingsService.get(player) -- (none yet while their load is out: it goes when the load is over)
+	if settings then
+		Net.to(player, "Settings", settings)
+	end
 end
 
 -- Whether a banned word may count against `target` now (docs/DESIGN_V3.md §4, §6): the main game not yet decided, the
@@ -2371,6 +2407,12 @@ function RoundService.start()
 	SeatService.init(onFlightOver, function(player, distance, _airTime)
 		Awards.flight(player, distance)
 	end)
+	SettingsService.init(function(player, settings)
+		Net.to(player, "Settings", settings)
+	end)
+	Net.listen("Settings", function(player, payload)
+		SettingsService.change(player, payload)
+	end)
 	-- "Ready" changes take effect at once; the state broadcast they cause is gathered (at most one per
 	-- READY_BROADCAST_DELAY), so a client flipping it fast cannot make the server message everyone each time.
 	local readyBroadcastQueued = false
@@ -2435,9 +2477,14 @@ function RoundService.start()
 	end
 	for _, player in Players:GetPlayers() do
 		watch(player)
+		SettingsService.join(player)
 	end
-	Players.PlayerAdded:Connect(watch)
+	Players.PlayerAdded:Connect(function(player)
+		watch(player)
+		SettingsService.join(player)
+	end)
 	Players.PlayerRemoving:Connect(function(player)
+		SettingsService.leave(player)
 		lastSync[player] = nil
 		lastChatJoin[player] = nil
 		-- Leaving is out (docs/DESIGN_V3.md §4).
@@ -9556,6 +9603,277 @@ end)
 
 return SeatService
 ]====]; s.Parent = n5 end
+do local s = Instance.new("ModuleScript"); s.Name = "SettingsService"; s.Source = [====[--!strict
+-- A player's sound settings (bundle 11a, docs/BUNDLE11_2026-10-27.md): background music and game sounds, 0..1 each.
+-- Loaded from a DataStore when they join (one retry), kept here and sent to them when the load is over (whatever its
+-- result) and again on every Sync; changed by the player (checked, at most Config.SETTINGS_RATE a second) and saved
+-- Config.SETTINGS_SAVE_DELAY after the last change, when they leave and when the server closes.
+-- Saves of one player run one at a time and carry a change number: only a save that worked marks its number saved,
+-- a failed one is retried (Config.SETTINGS_SAVE_RETRIES). A player whose load failed is never saved this visit (a
+-- default must not overwrite what they had), and neither is anyone while the store cannot be reached (Studio without
+-- API access): their settings last for this visit only.
+local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+
+local SettingsService = {}
+
+export type Settings = { music: number, effects: number }
+-- What a DataStore needs to give here (the real one, or a fake in the tests).
+export type Store = {
+	GetAsync: (self: any, key: string) -> any,
+	SetAsync: (self: any, key: string, value: any) -> any,
+}
+
+type Entry = {
+	settings: Settings,
+	loaded: boolean, -- the load is over (worked or not)
+	canSave: boolean, -- the load worked (a missing key counts: a new player)
+	touched: boolean, -- the player changed something: a load ending later keeps their values
+	version: number, -- one more for each change
+	savedVersion: number, -- the change number the last save that worked carried
+	saving: boolean,
+	timer: thread?, -- the delayed save waiting
+	rateWindow: number,
+	rateCount: number,
+}
+
+local CLOSE_WAIT = 25 -- seconds the server's closing waits for the last saves (Roblox gives 30)
+
+local entries: { [Player]: Entry } = {}
+local store: Store? = nil
+local send: (Player, Settings) -> () = function(_player: Player, _settings: Settings) end
+
+local steps = math.round(1 / Config.SETTINGS_STEP)
+
+-- A volume as it is kept: a number from 0 to 1 on the steps, or nil (not a number, NaN, out of range).
+local function volume(value: any): number?
+	if typeof(value) ~= "number" or value ~= value or value < 0 or value > 1 then
+		return nil
+	end
+	return math.round(value * steps) / steps
+end
+
+local function defaults(): Settings
+	return { music = Config.SETTINGS_DEFAULT.music, effects = Config.SETTINGS_DEFAULT.effects }
+end
+
+-- What a stored value holds, on top of the defaults (anything else in it is ignored).
+local function parse(data: any): Settings
+	local out = defaults()
+	if typeof(data) == "table" then
+		out.music = volume(data.music) or out.music
+		out.effects = volume(data.effects) or out.effects
+	end
+	return out
+end
+
+local function keyOf(player: Player): string
+	return tostring(player.UserId)
+end
+
+-- Sets the store up (`fake`: the tests' own) and the way settings go to a player. Without a reachable store the
+-- settings only last for the visit.
+function SettingsService.init(sendTo: (Player, Settings) -> (), fake: Store?)
+	send = sendTo
+	if fake then
+		store = fake
+	else
+		local ok, result = pcall(function()
+			return DataStoreService:GetDataStore(Config.SETTINGS_STORE)
+		end)
+		if ok and result then
+			store = result :: any
+		else
+			store = nil
+			warn("[BannedWords] settings store unavailable, settings last for the visit only:", result)
+		end
+	end
+	pcall(function() -- (the tests' fake game has no BindToClose)
+		game:BindToClose(SettingsService.closeAll)
+	end)
+end
+
+-- One save of `player`'s settings as they are now. Returns whether it worked. Saves of one player wait for each other.
+local function saveNow(player: Player, entry: Entry): boolean
+	local target = store
+	if not target or not entry.canSave then
+		return false
+	end
+	while entry.saving do
+		task.wait(0.1)
+	end
+	if entry.savedVersion >= entry.version then
+		return true -- (saved meanwhile)
+	end
+	entry.saving = true
+	local version = entry.version
+	local copy = { music = entry.settings.music, effects = entry.settings.effects }
+	local ok, err = pcall(function()
+		target:SetAsync(keyOf(player), copy)
+	end)
+	entry.saving = false
+	if ok then
+		entry.savedVersion = math.max(entry.savedVersion, version)
+	else
+		warn("[BannedWords] settings save failed:", err)
+	end
+	return ok
+end
+
+-- Saves after `delay` seconds, retrying a failed save after each of Config.SETTINGS_SAVE_RETRIES; a later change
+-- starts over (the waiting save is replaced).
+local function scheduleSave(player: Player, entry: Entry, delay: number)
+	if entry.timer then
+		task.cancel(entry.timer)
+	end
+	entry.timer = task.delay(delay, function()
+		entry.timer = nil
+		if entries[player] ~= entry then
+			return -- (left: the leave saved)
+		end
+		if not entry.loaded then
+			scheduleSave(player, entry, Config.SETTINGS_SAVE_DELAY) -- (the load is still out: after it)
+			return
+		end
+		if saveNow(player, entry) then
+			if entry.version > entry.savedVersion then
+				scheduleSave(player, entry, Config.SETTINGS_SAVE_DELAY) -- (changed while it saved)
+			end
+			return
+		end
+		for _, wait in Config.SETTINGS_SAVE_RETRIES do
+			task.wait(wait)
+			if entries[player] ~= entry or entry.timer then
+				return -- (left, or a newer change took over)
+			end
+			if saveNow(player, entry) then
+				return
+			end
+		end
+	end)
+end
+
+-- A player came: their settings load (defaults until then) and go to them once the load is over.
+function SettingsService.join(player: Player)
+	if entries[player] then
+		return
+	end
+	local entry: Entry = { settings = defaults(), loaded = false, canSave = false, touched = false, version = 0,
+		savedVersion = 0, saving = false, timer = nil, rateWindow = -math.huge, rateCount = 0 }
+	entries[player] = entry
+	task.spawn(function()
+		local target = store
+		local found, worked = nil, false
+		if target then
+			for attempt = 1, 2 do
+				local ok, result = pcall(function()
+					return target:GetAsync(keyOf(player))
+				end)
+				if ok then
+					found, worked = result, true
+					break
+				end
+				warn("[BannedWords] settings load failed:", result)
+				if attempt == 1 then
+					task.wait(Config.SETTINGS_LOAD_RETRY)
+				end
+				if entries[player] ~= entry then
+					return -- (left meanwhile)
+				end
+			end
+		end
+		if entries[player] ~= entry then
+			return
+		end
+		entry.canSave = worked
+		if worked and not entry.touched then
+			entry.settings = parse(found)
+		end
+		entry.loaded = true
+		send(player, entry.settings)
+	end)
+end
+
+-- The settings to send again (Sync), or nil while the load is still out (they go when it is over).
+function SettingsService.get(player: Player): Settings?
+	local entry = entries[player]
+	if entry and entry.loaded then
+		return { music = entry.settings.music, effects = entry.settings.effects }
+	end
+	return nil
+end
+
+-- The player changed their settings: `payload` = { music?, effects? }. Anything not a volume is ignored.
+function SettingsService.change(player: Player, payload: any)
+	local entry = entries[player]
+	if not entry or typeof(payload) ~= "table" then
+		return
+	end
+	local now = os.clock()
+	if now - entry.rateWindow >= 1 then
+		entry.rateWindow, entry.rateCount = now, 0
+	end
+	entry.rateCount += 1
+	if entry.rateCount > Config.SETTINGS_RATE then
+		return
+	end
+	local music, effects = volume(payload.music), volume(payload.effects)
+	if (music == nil or music == entry.settings.music) and (effects == nil or effects == entry.settings.effects) then
+		return
+	end
+	entry.settings = { music = music or entry.settings.music, effects = effects or entry.settings.effects }
+	entry.touched = true
+	entry.version += 1
+	scheduleSave(player, entry, Config.SETTINGS_SAVE_DELAY)
+end
+
+-- A player left: what they changed and was not saved yet is saved now (once, no retries: they are gone).
+function SettingsService.leave(player: Player)
+	local entry = entries[player]
+	if not entry then
+		return
+	end
+	entries[player] = nil
+	if entry.timer then
+		task.cancel(entry.timer)
+		entry.timer = nil
+	end
+	if entry.loaded and entry.version > entry.savedVersion then
+		task.spawn(saveNow, player, entry)
+	end
+end
+
+-- The server closes: everyone with unsaved changes is saved at once, and the closing waits for those saves (at most
+-- CLOSE_WAIT seconds). Not in Studio (stopping a test would wait each time).
+function SettingsService.closeAll()
+	if RunService:IsStudio() then
+		return
+	end
+	local pending = 0
+	for player, entry in entries do
+		if entry.timer then
+			task.cancel(entry.timer)
+			entry.timer = nil
+		end
+		if entry.loaded and entry.version > entry.savedVersion then
+			pending += 1
+			task.spawn(function()
+				saveNow(player, entry)
+				pending -= 1
+			end)
+		end
+	end
+	local deadline = os.clock() + CLOSE_WAIT
+	while pending > 0 and os.clock() < deadline do
+		task.wait(0.2)
+	end
+end
+
+return SettingsService
+]====]; s.Parent = n5 end
 do local s = Instance.new("ModuleScript"); s.Name = "SpectatorService"; s.Source = [====[--!strict
 -- Spectators (docs/DESIGN_V3.md §8-10, was GhostService in V2): during a round everyone who is not an alive
 -- participant (players who are out, late joiners, anyone who respawns) watches from the stands. Anyone found on the
@@ -10202,6 +10520,8 @@ local Billboards = require(script:WaitForChild("Billboards"))
 local ChatLook = require(script:WaitForChild("ChatLook"))
 local Fx = require(script:WaitForChild("Fx"))
 local Bell = require(script:WaitForChild("Bell"))
+local Sound = require(script:WaitForChild("Sound"))
+local Music = require(script:WaitForChild("Music"))
 local UI = script:WaitForChild("UI")
 local Hud = require(UI:WaitForChild("Hud"))
 local Toast = require(UI:WaitForChild("Toast"))
@@ -10211,6 +10531,7 @@ local PresenterPanel = require(UI:WaitForChild("PresenterPanel"))
 local MissionPanel = require(UI:WaitForChild("MissionPanel"))
 local BellButton = require(UI:WaitForChild("BellButton"))
 local InviteButton = require(UI:WaitForChild("InviteButton"))
+local SettingsPanel = require(UI:WaitForChild("SettingsPanel"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
@@ -10257,6 +10578,9 @@ local function refreshVoice()
 		remotes.Ready:FireServer(isReady, linked)
 	end
 	Speech.setEnabled(not State.micTested or talkingByVoice())
+	-- (the music stays silent while my mic test listens: from a speaker the recognizer would hear it, bundle 11a)
+	Music.setMicTest(not State.micTested and (status == "Listening" or status == "Speaking")
+		and player:GetAttribute("BW_ChatMode") ~= true)
 	MicPanel.set({
 		status = status,
 		micTested = State.micTested,
@@ -10266,6 +10590,14 @@ local function refreshVoice()
 		chatAccess = State.chatAccess,
 		chatMode = player:GetAttribute("BW_ChatMode") == true,
 	})
+end
+
+-- The music ducks while someone speaks for the game (bundle 11a): a mission screen with a speaker on it, or the
+-- banned-word talk. (`lastMission` is the mission card's last screen, set further down.)
+local lastMission: { [string]: any } = { kind = "none" }
+local function refreshDucking()
+	local talk = State.round.talk
+	Music.setDucked(State.inRound() and (Music.speaking(lastMission) or talk == "talk" or talk == "settle"))
 end
 
 -- Everyone on the chairs (and the presenter) gets a head bubble during a round, every participant in the result.
@@ -10341,10 +10673,39 @@ local function refresh()
 	refreshBell()
 	refreshVoice()
 	applySeatLock()
+	Music.setPhase(round.phase)
+	refreshDucking()
 end
 
 -- Build UI and systems.
-Hud.build()
+local soundGroups = Sound.init()
+Music.init(soundGroups.music)
+local board = Hud.build()
+-- My sound settings (bundle 11a): applied here at once, sent to the server (it keeps and saves them) at most every
+-- SETTINGS_SEND_GAP, the last change always. Once I changed them, a load arriving late does not undo my change.
+local SETTINGS_SEND_GAP = 0.3
+local settingsTouched = false
+local settingsToSend: Sound.Settings? = nil
+local settingsSending = false
+local settingsSentAt = -math.huge
+SettingsPanel.build(board, function(settings)
+	settingsTouched = true
+	Sound.apply(settings)
+	settingsToSend = settings
+	if settingsSending then
+		return
+	end
+	settingsSending = true
+	task.delay(math.max(0, settingsSentAt + SETTINGS_SEND_GAP - os.clock()), function()
+		settingsSending = false
+		settingsSentAt = os.clock()
+		local pending = settingsToSend
+		settingsToSend = nil
+		if pending then
+			remotes.Settings:FireServer(pending)
+		end
+	end)
+end)
 Toast.build()
 MicPanel.build(function(on)
 	remotes.ChatJoin:FireServer(on)
@@ -10408,7 +10769,7 @@ InviteButton.build(function()
 		inviting = false
 	end)
 end)
-Fx.init()
+Fx.init(soundGroups.effects)
 FlatVoice.start()
 GetUp.start()
 ChatLook.start()
@@ -10500,7 +10861,6 @@ end)
 -- is shown again when my flight starts and ends). It steps aside so the blast is seen (owner 2026-10-24): while I am
 -- the one flying (until I am back), and while someone else's launch flies over a screen with nothing to do on it (a
 -- result, the roulette, a vote) until the next screen comes.
-local lastMission: { [string]: any } = { kind = "none" }
 local othersLaunchHideUntil = 0
 local function passiveScreen(payload: { [string]: any }): boolean
 	local kind = payload.kind
@@ -10602,12 +10962,24 @@ end
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	cueSounds(lastMission, payload)
 	lastMission = payload
+	refreshDucking()
 	BellButton.setIcon(if payload.kind == "duel" then "gun" else "bell")
 	bellTrap = (payload.kind == "duel" and payload.stage ~= "fire") or (payload.kind == "redLight" and payload.light == "red")
 	refreshBell()
 	othersLaunchHideUntil = 0
 	bottlesFor(payload)
 	showMission()
+end)
+
+-- My saved sound settings (once loaded, and on every Sync; bundle 11a). The music waits for them.
+remotes.Settings.OnClientEvent:Connect(function(settings)
+	if typeof(settings) == "table" and typeof(settings.music) == "number" and typeof(settings.effects) == "number"
+		and not settingsTouched then
+		local values = { music = settings.music, effects = settings.effects }
+		Sound.apply(values)
+		SettingsPanel.set(values)
+	end
+	Music.release()
 end)
 
 -- To the presenter: banned words caught in chat waiting for a rescue (bundle 5b).
@@ -11441,11 +11813,14 @@ local rolling: Sound? = nil
 local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
 local playing: { [BasePart]: number } = {} -- hinge -> current animation number
 
+local effects: SoundGroup? = nil -- every game sound plays in the player's "효과음" group (bundle 11a; copies keep it)
+
 local function sound(name: string, id: string, volume: number): Sound
 	local s = Instance.new("Sound")
 	s.Name = name
 	s.SoundId = id
 	s.Volume = volume
+	s.SoundGroup = effects
 	s.Parent = SoundService
 	return s
 end
@@ -11473,7 +11848,9 @@ local function playCopy(template: Sound)
 	end
 end
 
-function Fx.init()
+-- `group`: the sound group every game sound plays in (client Sound, the player's "효과음" volume).
+function Fx.init(group: SoundGroup)
+	effects = group
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "BannedWordsFx"
 	gui.IgnoreGuiInset = true
@@ -11945,6 +12322,148 @@ end
 
 return GetUp
 ]====]; s.Parent = n6 end
+do local s = Instance.new("ModuleScript"); s.Name = "Music"; s.Source = [====[--!strict
+-- Background music (bundle 11a, owner 2026-10-27: "너무 슴슴하네"; docs/BUNDLE11_2026-10-27.md). One looping track for
+-- each part of the round (Config.MUSIC_TRACKS: lobby — also the countdown, the assignment and the result —, play,
+-- final), crossfaded over MUSIC_FADE_SECONDS. In the result the track waits MUSIC_RESULT_DELAY for the fanfare.
+-- Quieter (MUSIC_DUCK) while someone speaks for the game; silent while my mic test listens (the recognizer would hear
+-- it from a speaker) and until my saved settings came (muted ones must not blare first). The player's volume is the
+-- group's (client Sound); fades and ducking move each track's own volume, so neither overwrites the other.
+local TweenService = game:GetService("TweenService")
+
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("BannedWords"):WaitForChild("Config"))
+
+local Music = {}
+
+local DUCK_SECONDS = 0.4 -- ducking and the mic test move this fast (a track change fades slower)
+
+local tracks: { [string]: Sound } = {}
+local tweens: { [string]: Tween } = {}
+local wanted: string? = nil -- the track for the phase now (nil: none)
+local released = false -- my settings came
+local ducked = false
+local micTest = false
+local resultFrom = 0 -- os.clock() from which the result's track may play
+local phaseNow = ""
+
+-- Which track goes with a phase.
+local function trackFor(phase: string): string?
+	if phase == "Play" then
+		return "play"
+	elseif phase == "Final" then
+		return "final"
+	elseif phase == "Lobby" or phase == "Countdown" or phase == "Assign" or phase == "Result" then
+		return "lobby"
+	end
+	return nil
+end
+
+-- Every track to its volume now: the wanted one at full (ducked, held or silenced as needed), the others at 0 and
+-- stopped once faded out.
+local function update(seconds: number)
+	local level = if not released or micTest then 0 elseif ducked then Config.MUSIC_DUCK else 1
+	if phaseNow == "Result" and os.clock() < resultFrom then
+		level = 0
+	end
+	for name, sound in tracks do
+		local target = if name == wanted then Config.MUSIC_VOLUME * level else 0
+		if math.abs(sound.Volume - target) < 1e-3 and (target > 0) == sound.IsPlaying then
+			continue
+		end
+		local running = tweens[name]
+		if running then
+			running:Cancel()
+		end
+		if target > 0 and not sound.IsPlaying then
+			sound:Play()
+		end
+		local tween = TweenService:Create(sound, TweenInfo.new(seconds, Enum.EasingStyle.Sine), { Volume = target })
+		tweens[name] = tween
+		tween.Completed:Once(function(state)
+			if state == Enum.PlaybackState.Completed and target == 0 and tweens[name] == tween then
+				sound:Stop() -- (a track that comes back starts from its beginning)
+			end
+		end)
+		tween:Play()
+	end
+end
+
+-- Makes the tracks in `group` (the Music sound group).
+function Music.init(group: SoundGroup)
+	for name, id in Config.MUSIC_TRACKS :: { [string]: string } do
+		local sound = Instance.new("Sound")
+		sound.Name = "Music_" .. name
+		sound.SoundId = id
+		sound.Looped = true
+		sound.Volume = 0
+		sound.SoundGroup = group
+		sound.Parent = group
+		tracks[name] = sound
+	end
+end
+
+-- The round's phase (RoundState).
+function Music.setPhase(phase: string)
+	if phase == phaseNow then
+		return
+	end
+	if phase == "Result" then
+		resultFrom = os.clock() + Config.MUSIC_RESULT_DELAY
+		task.delay(Config.MUSIC_RESULT_DELAY + 0.05, function()
+			if phaseNow == "Result" then
+				update(Config.MUSIC_FADE_SECONDS)
+			end
+		end)
+	end
+	phaseNow = phase
+	wanted = trackFor(phase)
+	update(Config.MUSIC_FADE_SECONDS)
+end
+
+-- Someone speaks for the game now (a word to everyone, a clue, a bell answer, 스무고개's turns, the banned-word talk).
+function Music.setDucked(on: boolean)
+	if on ~= ducked then
+		ducked = on
+		update(DUCK_SECONDS)
+	end
+end
+
+-- My mic test is listening (voice players who have not passed it yet).
+function Music.setMicTest(on: boolean)
+	if on ~= micTest then
+		micTest = on
+		update(DUCK_SECONDS)
+	end
+end
+
+-- My settings came (the group volume is set): the music may play.
+function Music.release()
+	if not released then
+		released = true
+		update(Config.MUSIC_FADE_SECONDS)
+	end
+end
+
+-- Whether a mission screen is one where someone speaks for the game (MUSIC_DUCK). One-word turns call their stage
+-- `phase`; the others `stage`.
+function Music.speaking(payload: { [string]: any }): boolean
+	local kind = payload.kind
+	if kind == "oneWord" then
+		return payload.phase == "talk"
+	elseif kind == "balance" then
+		return payload.stage == "talk"
+	elseif kind == "liar" then
+		return payload.stage == "clue"
+	elseif kind == "bellQuiz" then
+		return payload.stage == "answer"
+	elseif kind == "twenty" then
+		return payload.stage == "ask" or payload.stage == "verdict"
+	end
+	return false
+end
+
+return Music
+]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "ShowCamera"; s.Source = [====[--!strict
 -- The fixed round cameras (docs/DESIGN_V3.md §10, owner 2026-10-22):
 --   "show"      seated participants watch the chair row from the front, so every other participant (faces and word
@@ -12282,6 +12801,48 @@ function ShowCamera.reapply()
 end
 
 return ShowCamera
+]====]; s.Parent = n6 end
+do local s = Instance.new("ModuleScript"); s.Name = "Sound"; s.Source = [====[--!strict
+-- The two sound groups (bundle 11a, docs/BUNDLE11_2026-10-27.md): "Effects" holds every game sound (client Fx),
+-- "Music" the background music (client Music). A player's settings set the groups' volumes, on this screen only.
+-- (init.client hands the groups to Fx and Music: client parts do not require each other.)
+local SoundService = game:GetService("SoundService")
+
+local Sound = {}
+
+export type Groups = { music: SoundGroup, effects: SoundGroup }
+export type Settings = { music: number, effects: number }
+
+local groups: Groups? = nil
+
+local function group(name: string): SoundGroup
+	local existing = SoundService:FindFirstChild(name)
+	if existing and existing:IsA("SoundGroup") then
+		return existing
+	end
+	local made = Instance.new("SoundGroup")
+	made.Name = name
+	made.Parent = SoundService
+	return made
+end
+
+function Sound.init(): Groups
+	local made = { music = group("BW_Music"), effects = group("BW_Effects") }
+	groups = made
+	return made
+end
+
+-- A player's volumes (0..1 each).
+function Sound.apply(settings: Settings)
+	local g = groups
+	if not g then
+		return
+	end
+	g.music.Volume = math.clamp(settings.music, 0, 1)
+	g.effects.Volume = math.clamp(settings.effects, 0, 1)
+end
+
+return Sound
 ]====]; s.Parent = n6 end
 do local s = Instance.new("ModuleScript"); s.Name = "Speech"; s.Source = [====[--!strict
 -- Transcribes the local player's own mic. Roblox only runs AudioSpeechToText on clients, so every client
@@ -12795,20 +13356,22 @@ local timerL: TextLabel
 local aliveL: TextLabel
 local livesL: TextLabel
 
-function Hud.build()
+-- Returns the board (the sound settings key sits on its right edge, bundle 11a).
+function Hud.build(): Frame
 	local top = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 14)
 	top.AnchorPoint = Vector2.new(0.5, 0)
 	top.Position = UDim2.new(0.5, 0, 0, 8)
 	top.Size = UDim2.new(0.5, 0, 0, 64)
 	-- (at most the screen less 250 px each side where Roblox's player list sits open at the top right — a small PC window,
-	-- review 2026-10-25; a phone keeps it folded, so the board keeps its width there)
+	-- review 2026-10-25; a phone keeps it folded, so the board keeps its width there — and 30 px more for the settings
+	-- key that sticks out of its right edge, bundle 11a)
 	local limit = Instance.new("UISizeConstraint")
 	limit.MinSize = Vector2.new(320, 0)
 	limit.Parent = top
 	local function fit()
 		local camera = workspace.CurrentCamera
 		local phone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-		local width = if not camera then 580 elseif phone then camera.ViewportSize.X * 0.6 else camera.ViewportSize.X - 500
+		local width = if not camera then 580 elseif phone then camera.ViewportSize.X * 0.6 else camera.ViewportSize.X - 560
 		limit.MaxSize = Vector2.new(math.clamp(width, 320, 580), 200)
 	end
 	fit()
@@ -12825,8 +13388,9 @@ function Hud.build()
 	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watch)
 
 	statusL = Style.label(top, Style.BOLD, 22, Style.INK)
-	statusL.Position = UDim2.fromScale(0.04, 0.06)
-	statusL.Size = UDim2.fromScale(0.92, 0.46)
+	-- (30 px kept free at each end of the top line and at the right of the second: the settings key sits there)
+	statusL.Position = UDim2.new(0.04, 30, 0.06, 0)
+	statusL.Size = UDim2.new(0.92, -60, 0.46, 0)
 	timerL = Style.label(top, Style.BOLD, 22, Style.INK)
 	timerL.Position = UDim2.fromScale(0.04, 0.55)
 	timerL.Size = UDim2.fromScale(0.28, 0.38)
@@ -12837,8 +13401,9 @@ function Hud.build()
 	livesL.RichText = true
 	aliveL = Style.label(top, Style.REGULAR, 20, Style.FAINT)
 	aliveL.Position = UDim2.fromScale(0.68, 0.55)
-	aliveL.Size = UDim2.fromScale(0.28, 0.38)
+	aliveL.Size = UDim2.new(0.28, -30, 0.38, 0)
 	aliveL.TextXAlignment = Enum.TextXAlignment.Right
+	return top
 end
 
 -- The message alone, or the phase's name when there is none (review 2026-10-25: "본 경기 · 본 경기 시작!", "결승 ·
@@ -14577,6 +15142,191 @@ function ReactionBar.setVisible(visible: boolean)
 end
 
 return ReactionBar
+]====]; s.Parent = n7 end
+do local s = Instance.new("ModuleScript"); s.Name = "SettingsPanel"; s.Source = [====[--!strict
+-- Sound settings (bundle 11a, owner 2026-10-27: "소리조절을 설정칸을 만들어서 조절가능하게"; docs/BUNDLE11_2026-10-27.md):
+-- a "설정" key on the status board's right edge opens a panel with two volumes, background music and game sounds,
+-- 0-100 % in steps of Config.SETTINGS_STEP: [-] bar [+] and the percent; the bar takes a press or a drag. Voice chat
+-- volume is Roblox's own (its menu), said in a line. Only draws: init.client applies and sends what changes.
+local UserInputService = game:GetService("UserInputService")
+
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("BannedWords"):WaitForChild("Config"))
+local Style = require(script.Parent:WaitForChild("Style"))
+
+local SettingsPanel = {}
+
+export type Settings = { music: number, effects: number }
+
+local KEYS = { "music", "effects" }
+local TITLES = { music = Config.TEXT.SETTINGS_MUSIC, effects = Config.TEXT.SETTINGS_EFFECTS }
+
+local panel: Frame
+local values: Settings = { music = Config.SETTINGS_DEFAULT.music, effects = Config.SETTINGS_DEFAULT.effects }
+local fills: { [string]: Frame } = {}
+local percents: { [string]: TextLabel } = {}
+local changed: (Settings) -> () = function(_settings: Settings) end
+
+local steps = math.round(1 / Config.SETTINGS_STEP)
+
+local function draw()
+	for _, key in KEYS do
+		local value = values[key]
+		fills[key].Size = UDim2.fromScale(value, 1)
+		percents[key].Text = string.format("%d%%", math.round(value * 100))
+	end
+end
+
+local function set(key: string, value: number)
+	local stepped = math.clamp(math.round(value * steps) / steps, 0, 1)
+	if stepped == values[key] then
+		return
+	end
+	values = { music = values.music, effects = values.effects }
+	values[key] = stepped
+	draw()
+	changed(values)
+end
+
+-- One volume row: its name, [-], the bar, [+], the percent.
+local function row(parent: Frame, key: string, order: number)
+	local line = Instance.new("Frame")
+	line.Name = key
+	line.BackgroundTransparency = 1
+	line.Size = UDim2.new(1, 0, 0, 72)
+	line.LayoutOrder = order
+	line.Parent = parent
+	local name = Style.label(line, Style.BOLD, 20, Style.INK)
+	name.Size = UDim2.new(1, 0, 0, 24)
+	name.TextXAlignment = Enum.TextXAlignment.Left
+	name.Text = TITLES[key]
+	local function key_(text: string, x: number, delta: number)
+		local b = Style.button(Style.BOLD, 26)
+		b.Text = text
+		b.Size = UDim2.fromOffset(44, 44)
+		b.AnchorPoint = Vector2.new(0, 0)
+		b.Position = UDim2.new(x, if x > 0 then -44 - 56 else 0, 0, 28)
+		b.Parent = line
+		b.Activated:Connect(function()
+			set(key, values[key] + delta)
+		end)
+	end
+	key_("-", 0, -Config.SETTINGS_STEP)
+	key_("+", 1, Config.SETTINGS_STEP)
+	local bar = Style.panel(line, Style.KEY_OFF, 0, 8)
+	bar.Name = "Bar"
+	bar.Position = UDim2.fromOffset(54, 38)
+	bar.Size = UDim2.new(1, -54 - 54 - 56, 0, 24)
+	bar.ClipsDescendants = true
+	local fill = Instance.new("Frame")
+	fill.BackgroundColor3 = Style.KEY
+	fill.BorderSizePixel = 0
+	fill.Size = UDim2.fromScale(values[key], 1)
+	fill.Parent = bar
+	fills[key] = fill
+	local percent = Style.label(line, Style.BOLD, 20, Style.INK)
+	percent.AnchorPoint = Vector2.new(1, 0)
+	percent.Position = UDim2.new(1, 0, 0, 36)
+	percent.Size = UDim2.fromOffset(52, 28)
+	percent.TextXAlignment = Enum.TextXAlignment.Right
+	percents[key] = percent
+	-- A press on the bar sets the volume there; holding and moving keeps setting it.
+	local dragging: InputObject? = nil
+	local function at(x: number)
+		local width = bar.AbsoluteSize.X
+		if width > 0 then
+			set(key, (x - bar.AbsolutePosition.X) / width)
+		end
+	end
+	bar.InputBegan:Connect(function(input: InputObject)
+		local kind = input.UserInputType
+		if kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch then
+			dragging = input
+			at(input.Position.X)
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input: InputObject)
+		if not dragging then
+			return
+		end
+		local kind = input.UserInputType
+		if kind == Enum.UserInputType.MouseMovement or (kind == Enum.UserInputType.Touch and input == dragging) then
+			at(input.Position.X)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input: InputObject)
+		if dragging and (input == dragging or input.UserInputType == Enum.UserInputType.MouseButton1) then
+			dragging = nil
+		end
+	end)
+end
+
+-- Builds the "설정" key on `board`'s right edge (the status board) and the panel; `onChange` gets every new pair of
+-- volumes.
+function SettingsPanel.build(board: GuiObject, onChange: (Settings) -> ())
+	changed = onChange
+	local open = Style.button(Style.BOLD, 18)
+	open.Name = "SettingsKey"
+	open.Text = Config.TEXT.SETTINGS
+	open.AnchorPoint = Vector2.new(0.5, 0.5)
+	open.Position = UDim2.fromScale(1, 0.5) -- (straddling the board's right edge)
+	open.Size = UDim2.fromOffset(56, 44)
+	open.ZIndex = 2
+	open.Parent = board
+
+	panel = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 16)
+	panel.Name = "SettingsPanel"
+	panel.AnchorPoint = Vector2.new(0.5, 0.5)
+	panel.Position = UDim2.fromScale(0.5, 0.5)
+	panel.Size = UDim2.fromOffset(380, 0)
+	panel.AutomaticSize = Enum.AutomaticSize.Y
+	panel.ZIndex = 20
+	panel.Visible = false
+	Style.fitWidth(panel, 0.92, 380, 600)
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0, 14)
+	pad.PaddingBottom = UDim.new(0, 14)
+	pad.PaddingLeft = UDim.new(0, 18)
+	pad.PaddingRight = UDim.new(0, 18)
+	pad.Parent = panel
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 8)
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Parent = panel
+
+	local title = Style.label(panel, Style.BOLD, 24, Style.ACCENT_TEXT)
+	title.Size = UDim2.new(1, 0, 0, 30)
+	title.Text = Config.TEXT.SETTINGS_TITLE
+	title.LayoutOrder = 1
+	for i, key in KEYS do
+		row(panel, key, 1 + i)
+	end
+	local note = Style.label(panel, Style.REGULAR, 16, Style.FAINT)
+	note.Size = UDim2.new(1, 0, 0, 22)
+	note.Text = Config.TEXT.SETTINGS_VOICE_NOTE
+	note.LayoutOrder = 10
+	local close = Style.button(Style.BOLD, 20)
+	close.Text = Config.TEXT.SETTINGS_CLOSE
+	close.Size = UDim2.fromOffset(140, 44)
+	close.LayoutOrder = 11
+	close.Parent = panel
+	draw()
+
+	open.Activated:Connect(function()
+		panel.Visible = not panel.Visible
+	end)
+	close.Activated:Connect(function()
+		panel.Visible = false
+	end)
+end
+
+-- The volumes now (the saved ones came, or a change elsewhere).
+function SettingsPanel.set(settings: Settings)
+	values = { music = settings.music, effects = settings.effects }
+	draw()
+end
+
+return SettingsPanel
 ]====]; s.Parent = n7 end
 do local s = Instance.new("ModuleScript"); s.Name = "Style"; s.Source = [====[--!strict
 -- Shared look for every HUD panel: fonts, colours, the one ScreenGui, and small constructors. Owner 2026-10-25: the

@@ -2348,4 +2348,135 @@ do
 	finish(since)
 end
 
+---------------------------------------------------------------- 18. Sound settings (SettingsService, bundle 11a)
+-- The real SettingsService (RoundService started it) on the prelude's in-memory DataStore: loads, checks, the delayed
+-- save, its retries, a failed load (never saved), a change made before the load ended, leaving, and Sync.
+do
+	local Settings = require(node("SettingsService"))
+	local function sentTo(p, since)
+		local found = nil
+		for _, item in NetStub.sent do
+			if item.name == "Settings" and item.to == p and item.at >= since then
+				found = item.payload
+			end
+		end
+		return found
+	end
+	local function settingsPlayer(id)
+		local p = fakePlayer(id)
+		return p
+	end
+	-- 18a: a saved player gets their settings once the load is over.
+	local p1 = settingsPlayer(901)
+	settingsData["901"] = { music = 0.3, effects = 0.8 }
+	local since = now
+	Settings.join(p1)
+	at(now + 0.1)
+	local got = sentTo(p1, since)
+	check("18a a saved player's settings are loaded and sent", got ~= nil and got.music == 0.3 and got.effects == 0.8)
+	-- 18b: a new player gets the defaults; a change is kept on the steps and saved SETTINGS_SAVE_DELAY after it.
+	local p2 = settingsPlayer(902)
+	since = now
+	Settings.join(p2)
+	at(now + 0.1)
+	got = sentTo(p2, since)
+	local writes = settingsWrites
+	Settings.change(p2, { music = 0.73, effects = 1 })
+	at(now + Config.SETTINGS_SAVE_DELAY - 0.5)
+	local early = settingsWrites
+	at(now + 1)
+	check("18b a new player gets the defaults; a change is kept on the steps (0.73 -> 0.7) and saved once,"
+		.. " SETTINGS_SAVE_DELAY later", got ~= nil and got.music == Config.SETTINGS_DEFAULT.music
+		and got.effects == Config.SETTINGS_DEFAULT.effects and early == writes and settingsWrites == writes + 1
+		and settingsData["902"].music == 0.7 and settingsData["902"].effects == 1)
+	-- 18c: anything not a volume is ignored (NaN, out of range, not a number, not a table).
+	at(now + 1.1)
+	Settings.change(p2, { music = 0 / 0 })
+	Settings.change(p2, { music = 2 })
+	Settings.change(p2, { effects = "x" })
+	Settings.change(p2, "loud")
+	local kept = Settings.get(p2)
+	check("18c NaN, out of range, not a number or not a table changes nothing", kept ~= nil and kept.music == 0.7
+		and kept.effects == 1)
+	-- 18d: at most SETTINGS_RATE changes a second are taken.
+	at(now + 1.1)
+	for i = 1, 10 do
+		Settings.change(p2, { music = i / 10 })
+	end
+	local limited = Settings.get(p2)
+	at(now + 1.1)
+	Settings.change(p2, { music = 0.2 })
+	local after = Settings.get(p2)
+	check("18d at most SETTINGS_RATE changes a second; the next second takes changes again", limited ~= nil
+		and limited.music == Config.SETTINGS_RATE / 10 and after ~= nil and after.music == 0.2)
+	at(now + Config.SETTINGS_SAVE_DELAY + 1)
+	-- 18e: a load that fails twice: the defaults go after the retry, and nothing of this visit is ever saved.
+	settingsGetBroken = true
+	local p3 = settingsPlayer(903)
+	settingsData["903"] = { music = 0.1, effects = 0.1 }
+	since = now
+	local warned = #warnings
+	Settings.join(p3)
+	at(now + Config.SETTINGS_LOAD_RETRY - 0.5)
+	local beforeRetry = sentTo(p3, since)
+	at(now + 1)
+	got = sentTo(p3, since)
+	settingsGetBroken = false
+	writes = settingsWrites
+	Settings.change(p3, { music = 0.9, effects = 0.9 })
+	at(now + Config.SETTINGS_SAVE_DELAY + 1)
+	Settings.leave(p3)
+	at(now + 1)
+	check("18e a failed load: the defaults go after one retry, and the visit's changes are never saved", beforeRetry == nil
+		and got ~= nil and got.music == Config.SETTINGS_DEFAULT.music and settingsWrites == writes
+		and settingsData["903"].music == 0.1)
+	-- (the two failed loads warned; nothing else did)
+	for i = #warnings, warned + 1, -1 do
+		table.remove(warnings, i)
+	end
+	-- 18f: a change made while the load is still out wins over the loaded values (and is saved).
+	settingsGetDelay = 1
+	local p4 = settingsPlayer(904)
+	settingsData["904"] = { music = 0.2, effects = 0.2 }
+	since = now
+	Settings.join(p4)
+	at(now + 0.2)
+	Settings.change(p4, { music = 0.9, effects = 1 })
+	at(now + 1.5)
+	got = sentTo(p4, since)
+	settingsGetDelay = 0
+	at(now + Config.SETTINGS_SAVE_DELAY + 1)
+	check("18f a change made before the load ended is kept (the load's values are dropped) and saved", got ~= nil
+		and got.music == 0.9 and got.effects == 1 and settingsData["904"].music == 0.9)
+	-- 18g: a failed save is retried after SETTINGS_SAVE_RETRIES[1].
+	settingsSetBroken = true
+	writes = settingsWrites
+	warned = #warnings
+	Settings.change(p4, { music = 0.4, effects = 1 })
+	at(now + Config.SETTINGS_SAVE_DELAY + 0.5)
+	local failedOnce = settingsWrites == writes and settingsData["904"].music == 0.9
+	settingsSetBroken = false
+	at(now + Config.SETTINGS_SAVE_RETRIES[1] + 0.5)
+	check("18g a failed save is retried SETTINGS_SAVE_RETRIES[1] later", failedOnce and settingsWrites == writes + 1
+		and settingsData["904"].music == 0.4)
+	for i = #warnings, warned + 1, -1 do
+		table.remove(warnings, i)
+	end
+	-- 18h: leaving saves what was not saved yet, once; the waiting save does not run after.
+	writes = settingsWrites
+	Settings.change(p4, { music = 0.6, effects = 1 })
+	Settings.leave(p4)
+	at(now + Config.SETTINGS_SAVE_DELAY + 1)
+	check("18h leaving saves the unsaved change at once, once", settingsWrites == writes + 1
+		and settingsData["904"].music == 0.6 and Settings.get(p4) == nil)
+	-- 18i: Sync sends the settings again.
+	at(now + Config.SYNC_COOLDOWN + 0.1)
+	since = now
+	NetStub.listeners.Sync(p1)
+	got = sentTo(p1, since)
+	check("18i Sync sends the settings again", got ~= nil and got.music == 0.3 and got.effects == 0.8)
+	Settings.leave(p1)
+	Settings.leave(p2)
+end
+
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

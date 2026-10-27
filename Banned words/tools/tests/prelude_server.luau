@@ -37,7 +37,17 @@ local task = {
 		return coroutine.yield()
 	end,
 	delay = function(s, fn, ...)
-		schedule(now + s, coroutine.create(fn), ...)
+		local co = coroutine.create(fn)
+		schedule(now + s, co, ...)
+		return co
+	end,
+	-- (a cancelled thread is taken off the queue: it never runs or resumes again)
+	cancel = function(co)
+		for i = #queue, 1, -1 do
+			if queue[i].co == co then
+				table.remove(queue, i)
+			end
+		end
 	end,
 	defer = function(fn, ...)
 		schedule(now, coroutine.create(fn), ...)
@@ -48,6 +58,7 @@ local task = {
 		if not ok then
 			error(err)
 		end
+		return co
 	end,
 }
 local os = { clock = function() return now end }
@@ -213,9 +224,39 @@ local AnalyticsService = {
 		error("analytics from a Studio round")
 	end,
 }
+-- Sound settings (SettingsService, bundle 11a): a DataStore kept in memory. Tests read and seed `settingsData` (key =
+-- UserId string), count `settingsWrites`, and make calls fail with settingsGetBroken / settingsSetBroken.
+local settingsData: { [string]: any } = {}
+local settingsWrites = 0
+local settingsGetBroken, settingsSetBroken = false, false
+local settingsGetDelay = 0 -- each load yields this long
+local DataStoreService = {
+	GetDataStore = function(_, _name)
+		return {
+			GetAsync = function(_, key)
+				if settingsGetDelay > 0 then
+					task.wait(settingsGetDelay)
+				end
+				if settingsGetBroken then
+					error("settings load unavailable")
+				end
+				return settingsData[key]
+			end,
+			SetAsync = function(_, key, value)
+				if settingsSetBroken then
+					error("settings save unavailable")
+				end
+				settingsWrites += 1
+				settingsData[key] = value
+			end,
+		}
+	end,
+}
 local game = {
 	GetService = function(_, n)
-		if n == "Players" then
+		if n == "DataStoreService" then
+			return DataStoreService
+		elseif n == "Players" then
 			return Players
 		elseif n == "RunService" then
 			return RunService

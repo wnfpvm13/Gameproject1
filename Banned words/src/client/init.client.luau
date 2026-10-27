@@ -22,6 +22,8 @@ local Billboards = require(script:WaitForChild("Billboards"))
 local ChatLook = require(script:WaitForChild("ChatLook"))
 local Fx = require(script:WaitForChild("Fx"))
 local Bell = require(script:WaitForChild("Bell"))
+local Sound = require(script:WaitForChild("Sound"))
+local Music = require(script:WaitForChild("Music"))
 local UI = script:WaitForChild("UI")
 local Hud = require(UI:WaitForChild("Hud"))
 local Toast = require(UI:WaitForChild("Toast"))
@@ -31,6 +33,7 @@ local PresenterPanel = require(UI:WaitForChild("PresenterPanel"))
 local MissionPanel = require(UI:WaitForChild("MissionPanel"))
 local BellButton = require(UI:WaitForChild("BellButton"))
 local InviteButton = require(UI:WaitForChild("InviteButton"))
+local SettingsPanel = require(UI:WaitForChild("SettingsPanel"))
 
 local player = Players.LocalPlayer
 local readySent: boolean? = nil
@@ -77,6 +80,9 @@ local function refreshVoice()
 		remotes.Ready:FireServer(isReady, linked)
 	end
 	Speech.setEnabled(not State.micTested or talkingByVoice())
+	-- (the music stays silent while my mic test listens: from a speaker the recognizer would hear it, bundle 11a)
+	Music.setMicTest(not State.micTested and (status == "Listening" or status == "Speaking")
+		and player:GetAttribute("BW_ChatMode") ~= true)
 	MicPanel.set({
 		status = status,
 		micTested = State.micTested,
@@ -86,6 +92,14 @@ local function refreshVoice()
 		chatAccess = State.chatAccess,
 		chatMode = player:GetAttribute("BW_ChatMode") == true,
 	})
+end
+
+-- The music ducks while someone speaks for the game (bundle 11a): a mission screen with a speaker on it, or the
+-- banned-word talk. (`lastMission` is the mission card's last screen, set further down.)
+local lastMission: { [string]: any } = { kind = "none" }
+local function refreshDucking()
+	local talk = State.round.talk
+	Music.setDucked(State.inRound() and (Music.speaking(lastMission) or talk == "talk" or talk == "settle"))
 end
 
 -- Everyone on the chairs (and the presenter) gets a head bubble during a round, every participant in the result.
@@ -161,10 +175,39 @@ local function refresh()
 	refreshBell()
 	refreshVoice()
 	applySeatLock()
+	Music.setPhase(round.phase)
+	refreshDucking()
 end
 
 -- Build UI and systems.
-Hud.build()
+local soundGroups = Sound.init()
+Music.init(soundGroups.music)
+local board = Hud.build()
+-- My sound settings (bundle 11a): applied here at once, sent to the server (it keeps and saves them) at most every
+-- SETTINGS_SEND_GAP, the last change always. Once I changed them, a load arriving late does not undo my change.
+local SETTINGS_SEND_GAP = 0.3
+local settingsTouched = false
+local settingsToSend: Sound.Settings? = nil
+local settingsSending = false
+local settingsSentAt = -math.huge
+SettingsPanel.build(board, function(settings)
+	settingsTouched = true
+	Sound.apply(settings)
+	settingsToSend = settings
+	if settingsSending then
+		return
+	end
+	settingsSending = true
+	task.delay(math.max(0, settingsSentAt + SETTINGS_SEND_GAP - os.clock()), function()
+		settingsSending = false
+		settingsSentAt = os.clock()
+		local pending = settingsToSend
+		settingsToSend = nil
+		if pending then
+			remotes.Settings:FireServer(pending)
+		end
+	end)
+end)
 Toast.build()
 MicPanel.build(function(on)
 	remotes.ChatJoin:FireServer(on)
@@ -228,7 +271,7 @@ InviteButton.build(function()
 		inviting = false
 	end)
 end)
-Fx.init()
+Fx.init(soundGroups.effects)
 FlatVoice.start()
 GetUp.start()
 ChatLook.start()
@@ -320,7 +363,6 @@ end)
 -- is shown again when my flight starts and ends). It steps aside so the blast is seen (owner 2026-10-24): while I am
 -- the one flying (until I am back), and while someone else's launch flies over a screen with nothing to do on it (a
 -- result, the roulette, a vote) until the next screen comes.
-local lastMission: { [string]: any } = { kind = "none" }
 local othersLaunchHideUntil = 0
 local function passiveScreen(payload: { [string]: any }): boolean
 	local kind = payload.kind
@@ -422,12 +464,24 @@ end
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	cueSounds(lastMission, payload)
 	lastMission = payload
+	refreshDucking()
 	BellButton.setIcon(if payload.kind == "duel" then "gun" else "bell")
 	bellTrap = (payload.kind == "duel" and payload.stage ~= "fire") or (payload.kind == "redLight" and payload.light == "red")
 	refreshBell()
 	othersLaunchHideUntil = 0
 	bottlesFor(payload)
 	showMission()
+end)
+
+-- My saved sound settings (once loaded, and on every Sync; bundle 11a). The music waits for them.
+remotes.Settings.OnClientEvent:Connect(function(settings)
+	if typeof(settings) == "table" and typeof(settings.music) == "number" and typeof(settings.effects) == "number"
+		and not settingsTouched then
+		local values = { music = settings.music, effects = settings.effects }
+		Sound.apply(values)
+		SettingsPanel.set(values)
+	end
+	Music.release()
 end)
 
 -- To the presenter: banned words caught in chat waiting for a rescue (bundle 5b).

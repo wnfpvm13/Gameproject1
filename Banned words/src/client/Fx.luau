@@ -34,11 +34,14 @@ local rolling: Sound? = nil
 local restOf: { [BasePart]: CFrame } = {} -- each hinge's resting CFrame (taken the first time it fires)
 local playing: { [BasePart]: number } = {} -- hinge -> current animation number
 
+local effects: SoundGroup? = nil -- every game sound plays in the player's "효과음" group (bundle 11a; copies keep it)
+
 local function sound(name: string, id: string, volume: number): Sound
 	local s = Instance.new("Sound")
 	s.Name = name
 	s.SoundId = id
 	s.Volume = volume
+	s.SoundGroup = effects
 	s.Parent = SoundService
 	return s
 end
@@ -66,7 +69,9 @@ local function playCopy(template: Sound)
 	end
 end
 
-function Fx.init()
+-- `group`: the sound group every game sound plays in (client Sound, the player's "효과음" volume).
+function Fx.init(group: SoundGroup)
+	effects = group
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "BannedWordsFx"
 	gui.IgnoreGuiInset = true

@@ -34,6 +34,8 @@
 --   Settle      the banned-word talk ended at `cutoff`: { key, cutoff } (client -> server: Settled (key), my speech
 --               from before it has been sent; Transcript (text, earliest, latest, ended, textId), my own speech
 --               transcribed during the talk — speech judging, bundle 6e, JudgeService)
+--   Settings    to one player: their sound settings { music, effects } (0..1), once loaded and on every Sync
+--               (client -> server: Settings { music?, effects? }, a change; bundle 11a, SettingsService)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = {}
@@ -42,7 +44,7 @@ local NAMES = {
 	"RoundState", "LifeLost", "ChatAccess", "Notice", "Reaction", "Fling", "Splash", "Ready", "Sync", "DevFling", "ChatJoin",
 	"Volunteer", "PresenterMenu", "PresenterPick", "PresenterSound", "Sound", "Mission", "MissionAnswer", "Lever",
 	"EarJudge", "Reroll", "TalkStart", "Rescue", "Bell", "BellOpen", "BellRang",
-	"Words", "Settle", "Transcript", "Settled",
+	"Words", "Settle", "Transcript", "Settled", "Settings",
 }
 
 local folder: Folder

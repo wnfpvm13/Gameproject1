@@ -9,8 +9,9 @@
 -- under the mouse lock), which step was drawn and the attack's number (counted here: the server hands it back with
 -- the attack, Names.SwingTag, and with its hits, so each word is matched to the attack it is about, however late it
 -- comes). The server judges it for real (WeaponService). A press a moment too early (Config.Attack.PressBuffer before
--- the weapon is ready again or the flinch ends) is kept and made as soon as it may (update(), every frame), so a press
--- in time with the attacks is never lost. The drawing and the hit effects come in as hooks (SwingPose, HitFeedback via
+-- the weapon is ready again or a light hit's flinch ends) is kept and made as soon as it may (update(), every frame), so
+-- a press in time with the attacks is never lost; it is dropped if the character takes up another weapon meanwhile or
+-- is hit, and a press while flying from a launch is not kept. The drawing and the hit effects come in as hooks (SwingPose, HitFeedback via
 -- init).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -35,6 +36,7 @@ local KEEP = 4
 export type Hooks = {
 	fighters: () -> { Model }, -- the characters still in the round
 	stunned: () -> boolean, -- the player's character is flinching or flying from a hit
+	launched: () -> boolean, -- flying from a launch (lying down until it lands)
 	-- Draw and sound an attack that started at server time `at`, at `step` of the string.
 	draw: (model: Model, at: number, weapon: string, step: number) -> (),
 	-- Draw the attack drawn at `at` as `step` instead (the server counted it differently; not sounded again).
@@ -54,7 +56,7 @@ type Showing = { shown: { [Model]: string }, confirmed: { [Model]: boolean } }
 -- model: the character it was made by. count: the attacks pressed so far (the last one's number); cut: the count when
 -- the string was last broken (a word on an attack pressed before that does not touch the string). showings: the last
 -- KEEP attacks' showings, by number. queued: when (server time) a press that came a moment too early was made, still
--- waiting to start.
+-- waiting to start, and queuedWith: the weapon held then.
 type Fields = {
 	remote: RemoteEvent,
 	hooks: Hooks,
@@ -67,6 +69,7 @@ type Fields = {
 	cut: number,
 	showings: { [number]: Showing },
 	queued: number?,
+	queuedWith: string?,
 }
 export type Swing = typeof(setmetatable({} :: Fields, OwnSwing))
 
@@ -83,6 +86,7 @@ function OwnSwing.new(remote: RemoteEvent, hooks: Hooks): Swing
 		cut = 0,
 		showings = {},
 		queued = nil,
+		queuedWith = nil,
 	}
 	return setmetatable(fields, OwnSwing)
 end
@@ -155,21 +159,31 @@ local function try(self: Swing, model: Model?): string
 	return "started"
 end
 
--- The control was pressed; `model` is the player's character (nil = none). Too early, it is kept for a moment.
+-- The weapon `model` holds now.
+local function held(model: Model?): string
+	return WeaponRules.named(Config.Weapons, if model then model:GetAttribute(Names.Weapon) else nil)
+end
+
+-- The control was pressed; `model` is the player's character (nil = none). Too early, it is kept for a moment (not
+-- while flying from a launch).
 function OwnSwing.press(self: Swing, model: Model?)
 	local result = try(self, model)
-	self.queued = if result == "soon" then Workspace:GetServerTimeNow() else nil
+	if result == "soon" and not self.hooks.launched() then
+		self.queued, self.queuedWith = Workspace:GetServerTimeNow(), held(model)
+	else
+		self.queued, self.queuedWith = nil, nil
+	end
 end
 
 -- Every frame (after a flinch may have ended): a press kept from a moment ago starts now if it may, or is dropped once
--- older than Config.Attack.PressBuffer.
+-- older than Config.Attack.PressBuffer or when another weapon is held now (it was meant for the one before).
 function OwnSwing.update(self: Swing, model: Model?)
 	local queued = self.queued
 	if not queued then
 		return
 	end
-	if Workspace:GetServerTimeNow() - queued > Config.Attack.PressBuffer or try(self, model) ~= "soon" then
-		self.queued = nil
+	if Workspace:GetServerTimeNow() - queued > Config.Attack.PressBuffer or held(model) ~= self.queuedWith or try(self, model) ~= "soon" then
+		self.queued, self.queuedWith = nil, nil
 	end
 end
 
@@ -201,6 +215,7 @@ end
 function OwnSwing.broken(self: Swing)
 	AttackString.reset(self.chain)
 	self.cut = self.count
+	self.queued, self.queuedWith = nil, nil -- a press kept from before the hit is not made after it
 end
 
 -- The server's step for the player's attack number `tag` (Names.SwingStep): when that is the latest attack and the

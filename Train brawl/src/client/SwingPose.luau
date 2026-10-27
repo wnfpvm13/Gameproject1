@@ -18,9 +18,11 @@
 -- followed (follow()) keeps the stance of what it holds (AttackPoses.stance: bare fists' guard, a weapon held ready)
 -- while it is in a round that is counting down or fighting and on its feet, coming up and going down over
 -- STANCE_BLEND (at once when it is knocked flying; a new weapon's comes up anew) and showing less while running fast
--- (the arms swing a little): what an attack or a hit reaction blends from and back to. With a two-handed weapon
--- (Config.Weapons offHand) the poses turn only the weapon arm, and last each frame the free hand is put on the handle
--- (ArmReach), letting go of it at a light hit's flinch and taking it again as the flinch settles.
+-- (the arms swing a little; taking up another weapon fades from the one stance to the other): what an attack or a hit
+-- reaction blends from and back to. With a two-handed weapon (Config.Weapons offHand) the poses turn only the weapon
+-- arm, and last each frame the free hand is put on the handle (ArmReach) - fully while the stance is up at all or an
+-- attack with it is drawn (even when the weapon is used up as the blow lands), letting go of it at a light hit's flinch
+-- and taking it again as the flinch settles.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -65,13 +67,24 @@ type Drawing = {
 	fadeFrom: { [string]: CFrame }?,
 	fadeAt: number,
 	progress: number?, -- how far through it was drawn this frame
+	offHand: Vector3?, -- an attack with a two-handed weapon: its second grip
 }
 local drawing: { [Model]: Drawing } = {}
 -- Joints a pose wrote that is over or replaced: put straight once before the next animation step.
 local loose: { CharacterParts.Joint } = {}
--- A fighter's stance: the pose (the last one it had, while going down), how much of it shows (0..1), the joints found
--- for it and the ones it wrote this frame.
-type Stance = { pose: AttackPoses.Pose?, weight: number, joints: { [string]: CharacterParts.Joint }, written: { [string]: boolean } }
+-- A fighter's stance: the pose (the last one it had, while going down) and its weapon's second grip (offHand), how much
+-- of it shows (0..1), the joints found for it and the ones it wrote this frame. prev/prevOffHand: the stance of the
+-- weapon held before, faded from since switchAt (os.clock).
+type Stance = {
+	pose: AttackPoses.Pose?,
+	offHand: Vector3?,
+	weight: number,
+	joints: { [string]: CharacterParts.Joint },
+	written: { [string]: boolean },
+	prev: AttackPoses.Pose?,
+	prevOffHand: Vector3?,
+	switchAt: number,
+}
 local stances: { [Model]: Stance } = {}
 
 local function serverNow(): number
@@ -106,8 +119,9 @@ local function straighten(joint: CharacterParts.Joint)
 	end
 end
 
--- Starts drawing on `model` (replacing what was drawn on it; `fade`: from where that left each joint).
-local function begin(model: Model, kind: string, start: number, length: number, clock: () -> number, pose: (number) -> AttackPoses.Pose, blendIn: number, fade: boolean)
+-- Starts drawing on `model` (replacing what was drawn on it; `fade`: from where that left each joint). Returns the
+-- drawing (nil when the model has no joints).
+local function begin(model: Model, kind: string, start: number, length: number, clock: () -> number, pose: (number) -> AttackPoses.Pose, blendIn: number, fade: boolean): Drawing?
 	local before = drawing[model]
 	local from = if fade and before and next(before.written) then table.clone(before.written) else nil
 	if before then
@@ -116,9 +130,9 @@ local function begin(model: Model, kind: string, start: number, length: number, 
 	local joints = CharacterParts.joints(model)
 	if next(joints) == nil then
 		drawing[model] = nil
-		return
+		return nil
 	end
-	drawing[model] = {
+	local d: Drawing = {
 		joints = joints,
 		kind = kind,
 		start = start,
@@ -130,6 +144,8 @@ local function begin(model: Model, kind: string, start: number, length: number, 
 		fadeFrom = from,
 		fadeAt = os.clock(),
 	}
+	drawing[model] = d
+	return d
 end
 
 -- The joint turn of a pose's joint.
@@ -138,10 +154,10 @@ local function frameOf(turn: AttackPoses.Joint): CFrame
 	return if turn.shift then CFrame.new(turn.shift) * frame else frame
 end
 
--- The stance `model` keeps now (nil: none), and whether one it had goes down gently: when the round is not counting
--- down or fighting, or the fighter is out of it. Flying or lying fallen it goes at once (another pose takes over, and
--- would show a stance's bent elbow it does not turn).
-local function stanceOf(model: Model): (AttackPoses.Pose?, boolean)
+-- The stance `model` keeps now (nil: none) and its weapon's second grip, and whether one it had goes down gently: when
+-- the round is not counting down or fighting, or the fighter is out of it. Flying or lying fallen it goes at once
+-- (another pose takes over, and would show a stance's bent elbow it does not turn).
+local function stanceOf(model: Model): (AttackPoses.Pose?, boolean, Vector3?)
 	local body = CharacterParts.body(model)
 	local now = drawing[model]
 	if body and (body.humanoid.PlatformStand or (now and now.kind == "flail")) then
@@ -155,7 +171,17 @@ local function stanceOf(model: Model): (AttackPoses.Pose?, boolean)
 		return nil, true
 	end
 	local weapon = WeaponRules.named(Config.Weapons, model:GetAttribute(Names.Weapon))
-	return AttackPoses.stance(weapon, Config.Weapons[weapon].style), true
+	local w = Config.Weapons[weapon]
+	return AttackPoses.stance(weapon, w.style), true, w.offHand
+end
+
+local function smooth(x: number): number
+	return x * x * (3 - 2 * x)
+end
+
+-- How far a stance has faded over from the one before it (1: done, or none to fade from).
+local function switched(stance: Stance): number
+	return if stance.prev then math.min((os.clock() - stance.switchAt) / STANCE_BLEND, 1) else 1
 end
 
 -- How much of a stance shows at `model`'s speed along the ground.
@@ -169,10 +195,11 @@ local function runShare(model: Model): number
 	return 1 - (1 - RUN_LEAST) * math.clamp((speed - RUN_FROM) / (RUN_TO - RUN_FROM), 0, 1)
 end
 
--- The joints of `model` for `pose`, found again when one it turns is missing or gone (any of its body parts replaced,
--- or one arriving late).
-local function stanceJoints(model: Model, stance: Stance, pose: AttackPoses.Pose): { [string]: CharacterParts.Joint }
-	for name in pose do
+-- The joints of `model` for `names` (a pose, or any table keyed by joint name), found again when one is missing or gone
+-- (any of its body parts replaced, or one arriving late).
+local ARM_JOINTS = { RightShoulder = true, RightElbow = true, RightWrist = true, LeftShoulder = true, LeftElbow = true, LeftWrist = true }
+local function stanceJoints(model: Model, stance: Stance, names: { [string]: any }): { [string]: CharacterParts.Joint }
+	for name in names do
 		local joint = stance.joints[name]
 		if not (joint and joint:IsDescendantOf(model)) then
 			stance.joints = CharacterParts.joints(model)
@@ -195,19 +222,12 @@ local function link(joint: CharacterParts.Joint): CFrame?
 end
 
 -- Puts `model`'s free (left) hand on the handle of the two-handed weapon it holds (`offHand`: where, in the grip), `w`
--- of the way from where the joints are now, from where the weapon arm is turned this frame. The joints come from the
--- stance (found again when gone). Returns false when it could not (a joint or the hand missing).
-local function holdHandle(model: Model, stance: Stance, offHand: Vector3, w: number): boolean
-	local joints = stance.joints
-	local names = { "RightShoulder", "RightElbow", "RightWrist", "LeftShoulder", "LeftElbow", "LeftWrist" }
-	for _, name in names do
-		local joint = joints[name]
-		if not (joint and joint:IsDescendantOf(model)) then
-			stance.joints = CharacterParts.joints(model)
-			joints = stance.joints
-			break
-		end
-	end
+-- of the way from where the joints are now, from where the weapon arm is turned this frame; the free wrist is put
+-- straight with it (the reach is worked out for a straight wrist). The joints come from the stance (found again when
+-- gone); what is written is also what drawing `d` (if any) left (the next attack fades from it). Returns false when it
+-- could not (a joint or the hand missing).
+local function holdHandle(model: Model, stance: Stance, offHand: Vector3, w: number, d: Drawing?): boolean
+	local joints = stanceJoints(model, stance, ARM_JOINTS)
 	local hand = CharacterParts.weaponHand(model)
 	local shoulder, elbow, wrist = joints.RightShoulder, joints.RightElbow, joints.RightWrist
 	local freeShoulder, freeElbow, freeWrist = joints.LeftShoulder, joints.LeftElbow, joints.LeftWrist
@@ -224,11 +244,16 @@ local function holdHandle(model: Model, stance: Stance, offHand: Vector3, w: num
 	-- Where the free hand goes, in the upper torso's space (where both shoulders hang).
 	local target = (a * b * c * CharacterParts.grip(hand) * CFrame.new(offHand)).Position
 	local turnShoulder, turnElbow = ArmReach.solve({ shoulder0 = s0, shoulder1 = s1, elbow0 = e0, elbow1 = e1, wrist0 = w0, wrist1 = w1 }, target, FREE_ELBOW)
-	local s, e = freeShoulder :: any, freeElbow :: any
-	s.Transform = (s.Transform :: CFrame):Lerp(turnShoulder, w)
-	e.Transform = (e.Transform :: CFrame):Lerp(turnElbow, w)
-	stance.written.LeftShoulder = true
-	stance.written.LeftElbow = true
+	local turns: { [string]: CFrame } = { LeftShoulder = turnShoulder, LeftElbow = turnElbow, LeftWrist = CFrame.identity }
+	for name, turn in turns do
+		local motor = joints[name] :: any
+		local value = (motor.Transform :: CFrame):Lerp(turn, w)
+		motor.Transform = value
+		stance.written[name] = true
+		if d then
+			d.written[name] = value
+		end
+	end
 	return true
 end
 
@@ -278,12 +303,13 @@ RunService.Stepped:Connect(function(_time: number, dt: number)
 			dropStance(stance)
 			continue
 		end
-		local pose, gentle = stanceOf(model)
+		local pose, gentle, offHand = stanceOf(model)
 		if pose and pose ~= stance.pose then
-			if stance.pose then
-				stance.weight = 0 -- another weapon taken up: its stance comes up anew
+			if stance.pose and stance.weight > 0 then
+				-- Another weapon taken up: faded over from the stance it had.
+				stance.prev, stance.prevOffHand, stance.switchAt = stance.pose, stance.offHand, os.clock()
 			end
-			stance.pose = pose
+			stance.pose, stance.offHand = pose, offHand
 		end
 		if pose or gentle then
 			local target = if pose then runShare(model) else 0
@@ -294,16 +320,30 @@ RunService.Stepped:Connect(function(_time: number, dt: number)
 		end
 		local shown = stance.pose
 		if stance.weight <= 0 or not shown then
+			stance.prev, stance.prevOffHand = nil, nil
 			dropStance(stance)
 			continue
 		end
 		local joints = stanceJoints(model, stance, shown)
-		local w = stance.weight * stance.weight * (3 - 2 * stance.weight)
-		for name, turn in shown do
-			local joint = joints[name]
-			if joint and joint:IsDescendantOf(Workspace) then
+		local w = smooth(stance.weight)
+		local share = switched(stance)
+		local prev = if share < 1 then stance.prev else nil
+		if not prev then
+			stance.prev, stance.prevOffHand = nil, nil
+		end
+		-- Each joint either stance turns: from the animation's pose, the stance over it (while switching, the one before
+		-- fading into the new one; a joint only one of them turns is the animation's in the other).
+		local s = smooth(share)
+		for name, joint in joints do
+			local turn, before = shown[name], if prev then prev[name] else nil
+			if (turn or before) and joint:IsDescendantOf(Workspace) then
 				local motor = joint :: any
-				motor.Transform = (motor.Transform :: CFrame):Lerp(frameOf(turn), w)
+				local base = motor.Transform :: CFrame
+				local value = if turn then base:Lerp(frameOf(turn), w) else base
+				if prev then
+					value = (if before then base:Lerp(frameOf(before), w) else base):Lerp(value, s)
+				end
+				motor.Transform = value
 				stance.written[name] = true
 			end
 		end
@@ -348,25 +388,39 @@ RunService.Stepped:Connect(function(_time: number, dt: number)
 			end
 		end
 	end
-	-- Last, the free hand onto a two-handed weapon's handle, as much as the stance shows (let go at a flinch's peak and
-	-- taken again as it settles; none while flying).
+	-- Last, the free hand onto a two-handed weapon's handle: fully while the stance is up at all (running lowers the
+	-- stance, not the grip; between two weapons the grip fades with the switch) or an attack with such a weapon is drawn
+	-- (it keeps its grip to the end even if the weapon was used up as the blow landed); let go at a flinch's peak and
+	-- taken again as it settles; none while flying.
 	for model, stance in stances do
-		if stance.weight <= 0 or not model.Parent then
-			continue
-		end
-		local weapon = Config.Weapons[WeaponRules.named(Config.Weapons, model:GetAttribute(Names.Weapon))]
-		local offHand = weapon.offHand
 		local now = drawing[model]
-		if not offHand or (now and now.kind == "flail") then
+		if not model.Parent or (now and now.kind == "flail") then
 			continue
 		end
-		local w = stance.weight * stance.weight * (3 - 2 * stance.weight)
-		if now and now.kind == "light" then
-			local back = math.clamp(((now.progress or 0) - 0.25) / 0.75, 0, 1)
-			w *= back * back * (3 - 2 * back)
+		local offHand: Vector3? = nil
+		local w = 0
+		if stance.weight > 0 then
+			local up = smooth(math.clamp(stance.weight / RUN_LEAST, 0, 1))
+			local share = smooth(switched(stance))
+			if stance.offHand then
+				offHand = stance.offHand
+				w = if stance.prev and not stance.prevOffHand then up * share else up
+			elseif stance.prevOffHand then
+				offHand = stance.prevOffHand
+				w = up * (1 - share)
+			end
 		end
-		if w > 0 then
-			holdHandle(model, stance, offHand, w)
+		if now and now.kind == "attack" and now.offHand then
+			local drawn = weight(now, now.progress or 0)
+			if drawn > w then
+				offHand, w = now.offHand, drawn
+			end
+		end
+		if now and now.kind == "light" then
+			w *= smooth(math.clamp(((now.progress or 0) - 0.25) / 0.75, 0, 1))
+		end
+		if offHand and w > 0 then
+			holdHandle(model, stance, offHand, w, now)
 		end
 	end
 end)
@@ -384,9 +438,12 @@ function SwingPose.play(model: Model, at: number, weapon: string, step: number)
 	local length = w.seconds * (if finisher then Config.Attack.FinisherStretch else 1)
 	local k = math.clamp(AttackString.hitAt(STRING, w.hitAt, step, w.style) / length, 0.1, 0.9) -- the blow, as a share of the move
 	local keys = AttackPoses.keys(name, w.style, step, finisher, k)
-	begin(model, "attack", at, length, serverNow, function(u: number): AttackPoses.Pose
+	local d = begin(model, "attack", at, length, serverNow, function(u: number): AttackPoses.Pose
 		return AttackPoses.sample(keys, u)
 	end, BLEND_IN, true)
+	if d then
+		d.offHand = w.offHand
+	end
 end
 
 -- The player's own attack begun at `at` and still being drawn is drawn as `step` from now on (the server counted it
@@ -434,10 +491,10 @@ function SwingPose.react(model: Model, kind: string, push: Vector3?)
 	end
 	local light = kind == "light"
 	local length = if light then AttackPoses.FlinchSeconds else AttackPoses.FlailSeconds
-	-- A flinch settles back into the stance the fighter keeps.
+	-- A flinch settles back into the stance the fighter keeps (the one it keeps then: a weapon used up meanwhile).
 	local stance = stances[model]
-	local settle = if stance and stance.weight > 0 then stance.pose else nil
 	begin(model, if light then "light" else "flail", os.clock(), length, os.clock, function(u: number): AttackPoses.Pose
+		local settle = if stance and stance.weight > 0 then stance.pose else nil
 		return AttackPoses.react(kind, u, back, side, settle)
 	end, 0, false)
 end
@@ -447,7 +504,7 @@ end
 -- others. Returns the connection.
 function SwingPose.follow(model: Model, skip: (number, number) -> boolean, heard: (string, number) -> ()): RBXScriptConnection
 	if not stances[model] then
-		stances[model] = { pose = nil, weight = 0, joints = {}, written = {} }
+		stances[model] = { pose = nil, offHand = nil, weight = 0, joints = {}, written = {}, prev = nil, prevOffHand = nil, switchAt = 0 }
 	end
 	return model:GetAttributeChangedSignal(Names.SwingAt):Connect(function()
 		local at = model:GetAttribute(Names.SwingAt)

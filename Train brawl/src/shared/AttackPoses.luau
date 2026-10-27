@@ -425,10 +425,12 @@ function AttackPoses.react(kind: string, u: number, back: number, side: number, 
 			RightElbow = { x = 55 },
 			LeftElbow = { x = 55 },
 		}
+		-- The stance's joints the flinch does not move (a weapon's hips, its wrist) stay as the stance has them.
+		local held = if stance then with(stance, peak) else peak
 		if u <= 0.25 then
-			return peak
+			return held
 		end
-		return blend(peak, stance or REST, ease(nil, (u - 0.25) / 0.75))
+		return blend(held, stance or REST, ease(nil, (u - 0.25) / 0.75))
 	end
 	local wave = math.sin(u * math.pi * 6) * 30 * (1 - u) -- the arms flail, less as the flight ends
 	local flail: Pose = {

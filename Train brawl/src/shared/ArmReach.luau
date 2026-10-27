@@ -16,6 +16,7 @@ export type Arm = {
 }
 
 local MOST_BEND = math.rad(150)
+local SIDE_BEND = math.rad(90) -- the bend the elbow's side is read at (a straight arm has its elbow on the line)
 
 -- The hand's middle in the upper arm's space with the elbow bent `bend` radians (about its own X, as R15 elbows bend).
 local function handAt(arm: Arm, bend: number): Vector3
@@ -25,6 +26,17 @@ end
 -- The part of `v` square to the unit vector `along`.
 local function across(v: Vector3, along: Vector3): Vector3
 	return v - along * v:Dot(along)
+end
+
+-- A unit vector square to the unit vector `along`, as near `want` as can be (any one when `want` lies along it).
+local function squareTo(along: Vector3, want: Vector3): Vector3
+	for _, try in { want, Vector3.xAxis, Vector3.zAxis } do
+		local v = across(try, along)
+		if v.Magnitude > 1e-4 then
+			return v.Unit
+		end
+	end
+	return Vector3.yAxis -- not reached: x and z cannot both lie along one line
 end
 
 -- The shoulder and elbow Transforms that put the hand's middle at `target` (in the upper torso's space), the elbow
@@ -60,28 +72,22 @@ function ArmReach.solve(arm: Arm, target: Vector3, pole: Vector3): (CFrame, CFra
 	if distance < 1e-3 then
 		return CFrame.identity, elbow
 	end
-	-- The arm as it is with that bend: the line to the hand, the elbow's hinge (its X) and which side of the line the
-	-- elbow sits on.
-	local hand = arm.shoulder1:PointToObjectSpace(handAt(arm, bend))
+	-- The arm as it is with that bend: the line to the hand and the elbow's hinge (its X) square to it.
 	local hinge = arm.shoulder1:VectorToObjectSpace(arm.elbow0.RightVector)
 	local elbowAt = arm.shoulder1:PointToObjectSpace(arm.elbow0.Position)
-	local a1 = hand.Unit
-	local c1 = across(hinge, a1)
-	if c1.Magnitude < 1e-4 then
-		return CFrame.identity, elbow -- a hinge along the arm's line (no R15 arm has one)
-	end
-	c1 = c1.Unit
-	local side = c1:Cross(a1):Dot(elbowAt) -- the elbow's side, across both the line and the hinge
-	-- Turned onto the target, the hinge square to the plane of the line and the pole, the elbow on the pole's side.
+	local a1 = arm.shoulder1:PointToObjectSpace(handAt(arm, bend)).Unit
+	local c1 = squareTo(a1, hinge)
+	-- Which side of the line the elbow sits on, across both the line and the hinge: read with the elbow well bent (the
+	-- side an elbow bends to is the arm's own; read straight, the elbow is on the line and the sign would flip).
+	local bentLine = arm.shoulder1:PointToObjectSpace(handAt(arm, SIDE_BEND)).Unit
+	local side = squareTo(bentLine, hinge):Cross(bentLine):Dot(elbowAt)
+	-- Turned onto the target, the hinge square to the plane of the line and the pole, the elbow on the pole's side (a
+	-- pole along the line: the hinge kept as near as it lies).
 	local a2 = want.Unit
-	local c2 = a2:Cross(wantPole)
-	if c2.Magnitude < 1e-4 then
-		c2 = across(c1, a2) -- the pole along the line: keep the hinge as it lies
-		if c2.Magnitude < 1e-4 then
-			return CFrame.identity, elbow
-		end
+	local c2 = squareTo(a2, a2:Cross(wantPole))
+	if a2:Cross(wantPole).Magnitude < 1e-4 then
+		c2 = squareTo(a2, c1)
 	end
-	c2 = c2.Unit
 	if (c2:Cross(a2):Dot(wantPole) > 0) ~= (side > 0) then
 		c2 = -c2
 	end

@@ -110,6 +110,9 @@ local own = OwnSwing.new(swingRemote, {
 	stunned = function(): boolean
 		return knock:stunned()
 	end,
+	launched = function(): boolean
+		return knock:launched()
+	end,
 	draw = function(model: Model, at: number, weapon: string, step: number)
 		SwingPose.play(model, at, weapon, step)
 		HitFeedback.swing(model, weapon, AttackString.launches(STRING, step, Config.Weapons[weapon].style))

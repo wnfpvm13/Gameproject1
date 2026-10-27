@@ -332,11 +332,12 @@ end
 do
 	-- Knock reach (the plain flight formula; a lying landing and a short slide add about a fifth, measured in Studio).
 	local h = Config.Hit
-	-- (Bare fists are what everyone fights with: their damage makes the strings' health.)
-	local max, damage = Config.Health.Max, Config.Weapons.Fist.damage
+	-- (Bare fists are what everyone fights with: their damage makes the strings' health, and the server multiplies the
+	-- push by theirs, WeaponService.)
+	local max, damage, fistPush = Config.Health.Max, Config.Weapons.Fist.damage, Config.Weapons.Fist.push
 	local function launchAt(health: number): number
 		local push, lift = HitRules.force("launch", health, max, h)
-		return BatMath.flightDistance(push, lift, GRAVITY)
+		return BatMath.flightDistance(push * fistPush, lift, GRAVITY)
 	end
 	local strikes = Config.Attack.StringCount -- a string's last hit launches: the first launch comes after its hits
 	local first, second = launchAt(max - strikes * damage), launchAt(max - 2 * strikes * damage)
@@ -354,14 +355,14 @@ do
 		farther = farther and BatMath.flightDistance(push, lift, GRAVITY) > BatMath.flightDistance(oldPush, 28, GRAVITY)
 	end
 	check("every launch flies farther than it did", farther)
-	-- The launches as measured in Studio (2026-10-27, a server-physics standard body along a boxcar roof; the bat's first
-	-- at 64 went 8.74): the travel includes landing and sliding, so it is longer than the formula's. A tuning change to
-	-- these pushes must be measured again.
-	local MEASURED = { { health = 76, push = 17.96, lift = 26.88, travel = 5.99 }, { health = 52, push = 30.92, lift = 29.76, travel = 11.91 } }
+	-- Bare fists' launches as measured in Studio (2026-10-27, a server-physics standard body along a boxcar roof, the
+	-- fists' push multiplier applied; the third at 28 went 14.01, a bat's first at 64 8.83): the travel includes landing
+	-- and sliding, so it is longer than the formula's. A tuning change to these pushes must be measured again.
+	local MEASURED = { { health = 76, push = 14.37, lift = 26.88, travel = 4.79 }, { health = 52, push = 24.74, lift = 29.76, travel = 9.16 } }
 	local same = true
 	for _, m in MEASURED do
 		local push, lift = HitRules.force("launch", m.health, max, h)
-		same = same and near(push, m.push, 0.05) and near(lift, m.lift)
+		same = same and near(push * fistPush, m.push, 0.05) and near(lift, m.lift)
 	end
 	check("the launch pushes are the ones measured in Studio (measure again after a change)", same)
 	check("measured: the first string's launch stays on the roof from its middle", MEASURED[1].travel < A.RoofWidth / 2)
@@ -731,6 +732,22 @@ do
 		end
 	end
 	check("every weapon's attacks start in its stance and come back to it", stanced, stanceDetail)
+	-- And every joint the attack turns that the stance does not (the legs, the hips' step) is at rest then.
+	local rested, restDetail = true, ""
+	for _, case in CASES do
+		local stance = AttackPoses.stance(case[1], case[2])
+		local keys = AttackPoses.keys(case[1], case[2], case[3], case[4], 0.4)
+		for _, u in { 0, 1 } do
+			for name, joint in AttackPoses.sample(keys, u) do
+				local own = stance[name]
+				local shift = joint.shift
+				if (not own and (math.abs(joint.x or 0) + math.abs(joint.y or 0) + math.abs(joint.z or 0)) > 1e-6) or (shift and shift.X * shift.X + shift.Y * shift.Y + shift.Z * shift.Z > 1e-9) then
+					rested, restDetail = false, label(case) .. " " .. name .. " at " .. u
+				end
+			end
+		end
+	end
+	check("an attack's other joints are at rest as it starts and ends", rested, restDetail)
 	local guard = AttackPoses.stance("Fist", "punch")
 	check("bare fists' stance is the guard (both fists up)", guard.LeftElbow ~= nil and guard.RightElbow ~= nil and (guard.LeftElbow.x :: number) > 90)
 	check("a weapon without a set of its own is drawn with its style's", AttackPoses.stance("NewWeapon", "swing") == AttackPoses.stance("Bat", "swing") and AttackPoses.stance("NewWeapon", "slam") == AttackPoses.stance("Hammer", "slam"))
@@ -738,6 +755,26 @@ do
 	check("a jab's arm is straight as it lands and already on its way back a tenth later", (AttackPoses.sample(jab, 0.4).LeftElbow.x :: number) < 10 and (AttackPoses.sample(jab, 0.5).LeftElbow.x :: number) > 15)
 	local settled = AttackPoses.react("light", 1, 1, 0, guard)
 	check("a light hit's flinch settles back into the guard", near(settled.LeftElbow.x :: number, guard.LeftElbow.x :: number) and near(settled.RightShoulder.x :: number, guard.RightShoulder.x :: number))
+	-- A stance's joints the flinch does not move (a weapon's hips and wrist) stay as the stance has them all through it.
+	local kept, keptDetail = true, ""
+	for name, w in Config.Weapons do
+		local stance = AttackPoses.stance(name, w.style)
+		for i = 0, 20 do
+			local pose = AttackPoses.react("light", i / 20, 1, 0.3, stance)
+			for joint in stance do
+				if not pose[joint] then
+					kept, keptDetail = false, name .. " drops " .. joint .. " at " .. i / 20
+				end
+			end
+			for _, joint in { "Root", "RightWrist" } do
+				local turn = stance[joint]
+				if turn and not near(pose[joint].y :: number, turn.y or 0) then
+					kept, keptDetail = false, name .. " moves " .. joint .. " at " .. i / 20
+				end
+			end
+		end
+	end
+	check("a light hit's flinch keeps the stance's joints it does not move", kept, keptDetail)
 	-- A two-handed weapon's poses leave the free arm to SwingPose (it puts that hand on the handle).
 	local free, freeDetail = true, ""
 	for _, case in CASES do

@@ -87,6 +87,18 @@ local function nextStep(r: Ready): (string, boolean)
 	return ready .. " · " .. TEXT.HEADSET_TIP, true
 end
 
+-- The lower edge (pixels from the top) of the getting-ready line and the chat button under the board, or nil while
+-- neither shows (the mission card goes under them, bundle 12).
+function MicPanel.bottom(): number?
+	local bottom: number? = nil
+	for _, item in { testL, chatButton } :: { GuiObject } do
+		if item.Visible then
+			bottom = math.max(bottom or 0, item.AbsolutePosition.Y + item.AbsoluteSize.Y)
+		end
+	end
+	return bottom
+end
+
 function MicPanel.set(r: Ready)
 	chatMode = r.chatMode
 	voiceL.Text = voiceLine(r)

@@ -130,8 +130,9 @@ local state = {
 -- top centre under the status board, see-through a little, so the chairs and the players below stay in view; it may
 -- reach CARD_ROOM of the screen's height (it shrinks to fit). The talk's slim line goes a little lower (rows 1-3 are
 -- the getting-ready lines).
-local CARD_TOP = UDim2.new(0.5, 0, 0, Style.row(1))
-local TALK_POSITION = UDim2.new(0.5, 0, 0, Style.row(4))
+local CARD_TOP = Style.row(1)
+local TALK_TOP = Style.row(4)
+local aboveBottom: number? = nil -- the lowest line or button shown above the card (setAbove), or nil
 local CARD_ALPHA = 0.3 -- the card's background
 local BUTTON_ALPHA = 0.12 -- its buttons'
 local CARD_ROOM = 0.6
@@ -145,7 +146,11 @@ local SCREEN_ROOM = 0.9
 local SLIM_ROOM = 0.8
 
 local function place()
-	card.Position = if state.slim then TALK_POSITION else CARD_TOP
+	local top = if state.slim then TALK_TOP else CARD_TOP
+	if aboveBottom then
+		top = math.max(top, aboveBottom + 8) -- (under a spectator's ready line, the chat or step-down button)
+	end
+	card.Position = UDim2.new(0.5, 0, 0, top)
 end
 
 local function answerButton(index: number): TextButton
@@ -1060,6 +1065,12 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		elseif shownButtons == 3 then UDim2.new(1 / 3, -6, 0, 44)
 		else UDim2.new(0.5, -4, 0, 44)
 	MissionPanel.tick(workspace:GetServerTimeNow())
+end
+
+-- The lowest edge (pixels from the top) of the lines and buttons shown in the rows above the card, or nil: the card
+-- starts under them (Codex review 2026-10-27: a spectator's ready line and chat button were under the card at row 1).
+function MissionPanel.setAbove(bottom: number?)
+	aboveBottom = bottom
 end
 
 -- The server counted my answer typed in chat (bundle 12): question `id` shows `choice` as mine, also over a button I

@@ -11983,6 +11983,9 @@ RunService.Heartbeat:Connect(function()
 		Hud.setTimer(if State.round.phase ~= "Lobby" and remaining > 0 then remaining else nil)
 	end
 	PresenterPanel.tick(workspace:GetServerTimeNow())
+	-- (the card starts under the ready line and the buttons shown above it, then the toasts go under the card)
+	local mic, volunteer = MicPanel.bottom(), PresenterPanel.bottom()
+	MissionPanel.setAbove(if mic and volunteer then math.max(mic, volunteer) else mic or volunteer)
 	MissionPanel.tick(workspace:GetServerTimeNow())
 	Toast.place(MissionPanel.bottom()) -- (under the card at the top, bundle 12)
 end)
@@ -14434,6 +14437,18 @@ local function nextStep(r: Ready): (string, boolean)
 	return ready .. " · " .. TEXT.HEADSET_TIP, true
 end
 
+-- The lower edge (pixels from the top) of the getting-ready line and the chat button under the board, or nil while
+-- neither shows (the mission card goes under them, bundle 12).
+function MicPanel.bottom(): number?
+	local bottom: number? = nil
+	for _, item in { testL, chatButton } :: { GuiObject } do
+		if item.Visible then
+			bottom = math.max(bottom or 0, item.AbsolutePosition.Y + item.AbsoluteSize.Y)
+		end
+	end
+	return bottom
+end
+
 function MicPanel.set(r: Ready)
 	chatMode = r.chatMode
 	voiceL.Text = voiceLine(r)
@@ -14582,8 +14597,9 @@ local state = {
 -- top centre under the status board, see-through a little, so the chairs and the players below stay in view; it may
 -- reach CARD_ROOM of the screen's height (it shrinks to fit). The talk's slim line goes a little lower (rows 1-3 are
 -- the getting-ready lines).
-local CARD_TOP = UDim2.new(0.5, 0, 0, Style.row(1))
-local TALK_POSITION = UDim2.new(0.5, 0, 0, Style.row(4))
+local CARD_TOP = Style.row(1)
+local TALK_TOP = Style.row(4)
+local aboveBottom: number? = nil -- the lowest line or button shown above the card (setAbove), or nil
 local CARD_ALPHA = 0.3 -- the card's background
 local BUTTON_ALPHA = 0.12 -- its buttons'
 local CARD_ROOM = 0.6
@@ -14597,7 +14613,11 @@ local SCREEN_ROOM = 0.9
 local SLIM_ROOM = 0.8
 
 local function place()
-	card.Position = if state.slim then TALK_POSITION else CARD_TOP
+	local top = if state.slim then TALK_TOP else CARD_TOP
+	if aboveBottom then
+		top = math.max(top, aboveBottom + 8) -- (under a spectator's ready line, the chat or step-down button)
+	end
+	card.Position = UDim2.new(0.5, 0, 0, top)
 end
 
 local function answerButton(index: number): TextButton
@@ -15514,6 +15534,12 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	MissionPanel.tick(workspace:GetServerTimeNow())
 end
 
+-- The lowest edge (pixels from the top) of the lines and buttons shown in the rows above the card, or nil: the card
+-- starts under them (Codex review 2026-10-27: a spectator's ready line and chat button were under the card at row 1).
+function MissionPanel.setAbove(bottom: number?)
+	aboveBottom = bottom
+end
+
 -- The server counted my answer typed in chat (bundle 12): question `id` shows `choice` as mine, also over a button I
 -- pressed meanwhile (the server keeps the first answer). Returns whether the card should be drawn again.
 function MissionPanel.answered(id: number, choice: number): boolean
@@ -15925,6 +15951,15 @@ function PresenterPanel.setVolunteer(visible: boolean, on: boolean, presenting: 
 	volunteered = on
 	volunteerButton.Visible = visible
 	volunteerButton.Text = if presenting then TEXT.STEP_DOWN elseif on then TEXT.VOLUNTEER_CANCEL else TEXT.VOLUNTEER
+end
+
+-- The lower edge (pixels from the top) of the volunteer / step-down button, or nil while it is hidden (the mission
+-- card goes under it, bundle 12; the rescue rows stay over the card instead: they come and go).
+function PresenterPanel.bottom(): number?
+	if not volunteerButton.Visible then
+		return nil
+	end
+	return volunteerButton.AbsolutePosition.Y + volunteerButton.AbsoluteSize.Y
 end
 
 -- While I present: the sound buttons.

@@ -299,6 +299,15 @@ function PresenterPanel.setVolunteer(visible: boolean, on: boolean, presenting: 
 	volunteerButton.Text = if presenting then TEXT.STEP_DOWN elseif on then TEXT.VOLUNTEER_CANCEL else TEXT.VOLUNTEER
 end
 
+-- The lower edge (pixels from the top) of the volunteer / step-down button, or nil while it is hidden (the mission
+-- card goes under it, bundle 12; the rescue rows stay over the card instead: they come and go).
+function PresenterPanel.bottom(): number?
+	if not volunteerButton.Visible then
+		return nil
+	end
+	return volunteerButton.AbsolutePosition.Y + volunteerButton.AbsoluteSize.Y
+end
+
 -- While I present: the sound buttons.
 function PresenterPanel.setPresenting(on: boolean)
 	soundBar.Visible = on

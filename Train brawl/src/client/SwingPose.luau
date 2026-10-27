@@ -184,6 +184,15 @@ local function switched(stance: Stance): number
 	return if stance.prev then math.min((os.clock() - stance.switchAt) / STANCE_BLEND, 1) else 1
 end
 
+-- The stance as it shows now: while switching, the one before mixed part way into the new one.
+local function shownStance(stance: Stance): AttackPoses.Pose?
+	local prev, pose, share = stance.prev, stance.pose, switched(stance)
+	if prev and pose and share < 1 then
+		return AttackPoses.mix(prev, pose, smooth(share))
+	end
+	return pose
+end
+
 -- How much of a stance shows at `model`'s speed along the ground.
 local function runShare(model: Model): number
 	local body = CharacterParts.body(model)
@@ -307,7 +316,11 @@ RunService.Stepped:Connect(function(_time: number, dt: number)
 		if pose and pose ~= stance.pose then
 			if stance.pose and stance.weight > 0 then
 				-- Another weapon taken up: faded over from the stance it had.
-				stance.prev, stance.prevOffHand, stance.switchAt = stance.pose, stance.offHand, os.clock()
+				-- (Switching again part way: from what shows now, and the grip of whichever stance showed more.)
+				local mostlyNew = switched(stance) >= 0.5
+				stance.prev = shownStance(stance)
+				stance.prevOffHand = if mostlyNew then stance.offHand else stance.prevOffHand
+				stance.switchAt = os.clock()
 			end
 			stance.pose, stance.offHand = pose, offHand
 		end
@@ -411,13 +424,18 @@ RunService.Stepped:Connect(function(_time: number, dt: number)
 			end
 		end
 		if now and now.kind == "attack" and now.offHand then
+			-- An attack drawn with a two-handed weapon keeps that weapon's grip (whatever the stance holds by now).
 			local drawn = weight(now, now.progress or 0)
-			if drawn > w then
-				offHand, w = now.offHand, drawn
+			if drawn > 0 then
+				offHand, w = now.offHand, math.max(w, drawn)
 			end
 		end
 		if now and now.kind == "light" then
 			w *= smooth(math.clamp(((now.progress or 0) - 0.25) / 0.75, 0, 1))
+		end
+		if now and now.fadeFrom and (now.fadeFrom.LeftShoulder or now.fadeFrom.LeftElbow) then
+			-- A pose taken over that had the free arm elsewhere (a flinch): the hand comes onto the handle with its fade.
+			w *= smooth(math.min((os.clock() - now.fadeAt) / FADE, 1))
 		end
 		if offHand and w > 0 then
 			holdHandle(model, stance, offHand, w, now)
@@ -494,7 +512,7 @@ function SwingPose.react(model: Model, kind: string, push: Vector3?)
 	-- A flinch settles back into the stance the fighter keeps (the one it keeps then: a weapon used up meanwhile).
 	local stance = stances[model]
 	begin(model, if light then "light" else "flail", os.clock(), length, os.clock, function(u: number): AttackPoses.Pose
-		local settle = if stance and stance.weight > 0 then stance.pose else nil
+		local settle = if stance and stance.weight > 0 then shownStance(stance) else nil
 		return AttackPoses.react(kind, u, back, side, settle)
 	end, 0, false)
 end

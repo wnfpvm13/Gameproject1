@@ -775,6 +775,15 @@ do
 		end
 	end
 	check("a light hit's flinch keeps the stance's joints it does not move", kept, keptDetail)
+	-- Switching stance part way: the mix starts at the one before and ends at the new one.
+	local bat, fists = AttackPoses.stance("Bat", "swing"), AttackPoses.stance("Fist", "punch")
+	local half = AttackPoses.mix(fists, bat, 0.5)
+	check(
+		"a stance switch shows the old stance mixing into the new",
+		near(AttackPoses.mix(fists, bat, 0).LeftElbow.x :: number, fists.LeftElbow.x :: number)
+			and near(AttackPoses.mix(fists, bat, 1).RightWrist.x :: number, bat.RightWrist.x :: number)
+			and near(half.RightShoulder.x :: number, ((fists.RightShoulder.x :: number) + (bat.RightShoulder.x :: number)) / 2)
+	)
 	-- A two-handed weapon's poses leave the free arm to SwingPose (it puts that hand on the handle).
 	local free, freeDetail = true, ""
 	for _, case in CASES do

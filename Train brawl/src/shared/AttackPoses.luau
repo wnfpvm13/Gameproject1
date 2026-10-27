@@ -400,6 +400,12 @@ local function setOf(weapon: string, style: string): Set
 	return SETS[weapon] or SETS[BY_STYLE[style] or "Bat"]
 end
 
+-- `a` mixed `s` of the way into `b` (a joint one of them leaves out at rest there): what a fighter switching from one
+-- stance to another shows part way.
+function AttackPoses.mix(a: Pose, b: Pose, s: number): Pose
+	return blend(a, b, math.clamp(s, 0, 1))
+end
+
 -- The stance a fighter holding `weapon` (of `style`) keeps while fighting: bare fists' guard, or the weapon held ready.
 function AttackPoses.stance(weapon: string, style: string): Pose
 	return setOf(weapon, style).stance

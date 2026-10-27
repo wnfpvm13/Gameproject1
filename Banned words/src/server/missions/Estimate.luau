@@ -8,6 +8,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Picks = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Picks"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local EstimateBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("EstimateBank"))
 
@@ -48,7 +49,8 @@ local Estimate = {
 	id = "estimate",
 	title = Config.TEXT.ESTIMATE_TITLE,
 	brief = Config.TEXT.ESTIMATE_BRIEF, -- (the briefing before it)
-	expectedSeconds = Config.ESTIMATE_INTRO_SECONDS + Config.ESTIMATE_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedSeconds = Config.ESTIMATE_INTRO_SECONDS + Config.ESTIMATE_SECONDS + Config.PICKS_SECONDS
+		+ Config.MINIGAME_RESULT_SECONDS,
 	briefFor = nil :: ((mode: string) -> string)?,
 	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
@@ -58,6 +60,19 @@ local Estimate = {
 }
 
 local used: { [EstimateBank.Question]: boolean } = {}
+
+-- A whole number with thousands separators (384,400), as shown over a head.
+local function grouped(value: number): string
+	local text = tostring(math.floor(value))
+	local out = text
+	while true do
+		local next, count = string.gsub(out, "^(%d+)(%d%d%d)", "%1,%2")
+		out = next
+		if count == 0 then
+			return out
+		end
+	end
+end
 
 local function pick(rng: Random): EstimateBank.Question?
 	local words = Match.wordsInPlay()
@@ -159,6 +174,16 @@ function Estimate.run(ctx: Ctx): boolean?
 		ctx.show(Config.TEXT.MINIGAME_TOO_FEW)
 		return nil
 	end
+	-- (everyone's number over their head first, bundle 12; then the answer, the farthest turned wrong, and they fly)
+	local function label(player: Player): string?
+		local guess = guesses[player]
+		return if guess then grouped(guess) else nil
+	end
+	ctx.screen({ kind = "estimate", question = question.q, picks = Picks.build(present, label) })
+	ctx.show(Config.TEXT.PICKS_REVEAL)
+	if not ctx.wait(Config.PICKS_SECONDS) then
+		return nil
+	end
 	local losers = Estimate.losers(present, guesses, question.answer)
 	local ids, shownGuesses, loserIds, names = {}, {}, {}, {}
 	for _, player in present do
@@ -170,7 +195,9 @@ function Estimate.run(ctx: Ctx): boolean?
 		table.insert(names, player.DisplayName)
 	end
 	ctx.screen({ kind = "estimateResult", question = question.q, answer = question.answer, ids = ids,
-		guesses = shownGuesses, losers = loserIds })
+		guesses = shownGuesses, losers = loserIds, picks = Picks.build(present, label, function(player)
+			return if table.find(losers, player) then "wrong" else "right"
+		end) })
 	ctx.show(if #losers > 0 then string.format(Config.TEXT.ESTIMATE_RESULT, question.answer, table.concat(names, ", "))
 		else string.format(Config.TEXT.ESTIMATE_NOBODY, question.answer))
 	ctx.answers(typed, none) -- (before the fail: a launched player's miss would not count)

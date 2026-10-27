@@ -146,6 +146,8 @@ local function refresh()
 		lives = round.lives,
 		maxLives = round.maxLives,
 		presenter = if State.inRound() then round.presenter else nil,
+		-- (a quiz question's answers once its time is up, bundle 12)
+		picks = if State.inRound() and typeof(lastMission.picks) == "table" then lastMission.picks else nil,
 	}))
 	-- (no round is being played and too few are ready: invite friends)
 	InviteButton.set(not State.inRound() and not presenting and (round.readyCount or 0) < Config.INVITE_BELOW)
@@ -435,7 +437,9 @@ local function cueSounds(before: { [string]: any }, now: { [string]: any })
 		Fx.stopRoll() -- (a roulette that ended or stopped takes its drum roll with it)
 	end
 	local serverNow = workspace:GetServerTimeNow()
-	if now.kind == "quizResult" and before.kind == "quiz" and now.question == before.question then
+	-- (the right answer comes after everyone's answers were shown, bundle 12: the second result of the same question)
+	if now.kind == "quizResult" and now.answer ~= nil and now.question == before.question
+		and (before.kind == "quiz" or (before.kind == "quizResult" and before.answer == nil)) then
 		if typeof(now.right) == "table" and table.find(now.right, State.myId()) then
 			Fx.cue("right") -- (the server counted my answer right: not one that arrived after the end)
 		end
@@ -466,8 +470,12 @@ end
 
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	cueSounds(lastMission, payload)
+	local picksChanged = payload.picks ~= nil or lastMission.picks ~= nil
 	lastMission = payload
 	refreshDucking()
+	if picksChanged then
+		refresh() -- (the answers over the heads come and go with the screens, bundle 12)
+	end
 	BellButton.setIcon(if payload.kind == "duel" then "gun" else "bell")
 	bellTrap = (payload.kind == "duel" and payload.stage ~= "fire") or (payload.kind == "redLight" and payload.light == "red")
 	refreshBell()
@@ -681,6 +689,7 @@ RunService.Heartbeat:Connect(function()
 	end
 	PresenterPanel.tick(workspace:GetServerTimeNow())
 	MissionPanel.tick(workspace:GetServerTimeNow())
+	Toast.place(MissionPanel.bottom()) -- (under the card at the top, bundle 12)
 end)
 
 -- Ask for the current state now that every handler is connected (late joiners miss earlier broadcasts).

@@ -75,6 +75,7 @@ ROUND_MODULES = [
 MISSION_MODULES = [
     ("Config", "src/shared/Config.luau"),
     ("Modes", "src/shared/Modes.luau"),
+    ("Picks", "src/shared/Picks.luau"),
     ("Match", "src/server/Match.luau"),
     ("QuizBank", "src/server/content/QuizBank.luau"),
     ("Quiz", "src/server/missions/Quiz.luau"),

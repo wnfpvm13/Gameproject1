@@ -95,6 +95,10 @@ return {
 	QUIZ_INTRO_SECONDS = 2, -- the question shows before the buttons work
 	QUIZ_SECONDS = 10, -- answer time
 	QUIZ_REVEAL_SECONDS = 3, -- the right answer stays on screen
+	-- Bundle 12 (owner 2026-10-27): when a quiz question's time is up (the 4-choice quiz, 초성, the final, each O/X
+	-- statement, 숫자 근사), everyone's answer shows over their head this long before the right answer; then the tags
+	-- turn right / wrong and the wrong ones fly (shared/Picks).
+	PICKS_SECONDS = 2,
 	ROULETTE_SPIN_SECONDS = 6,
 	ROULETTE_REVEAL_SECONDS = 2,
 	ROULETTE_MIN_PLAYERS = 2,
@@ -468,6 +472,7 @@ return {
 		FINAL_QUIZ = "결승 문제 나갑니다!",
 		QUIZ_ANSWER = "정답: %s",
 		QUIZ_ALL_RIGHT = "모두 정답!",
+		PICKS_REVEAL = "모두의 답 공개!",
 		ROULETTE_TITLE = "룰렛",
 		ROULETTE_BRIEF = "룰렛에 걸린 한 명이 날아가요", -- (the briefing before it, owner 2026-10-24)
 		ROULETTE_START = "룰렛 돌아갑니다!",
@@ -1041,6 +1046,41 @@ function Modes.decide(counts: { [string]: number }, rng: Random): string
 end
 
 return Modes
+]====]; s.Parent = n1 end
+do local s = Instance.new("ModuleScript"); s.Name = "Picks"; s.Source = [====[--!strict
+-- Everyone's answers over their heads (bundle 12, owner 2026-10-27: "시간이 끝나고 각자의 머리 위에 어떤 선택했는지
+-- 나오고 날리면 되겠다"). When a quiz question's time is up, its screen carries `picks` (userId string -> what that
+-- player answered, and once the right answer shows, whether it was right); the client draws them on the head tags. Data
+-- only: the missions build it, the client reads it.
+local Picks = {}
+
+export type Pick = { text: string, verdict: string? } -- verdict: nil (not shown yet) | "right" | "wrong"
+export type Map = { [string]: Pick }
+
+Picks.NONE = "?" -- no answer
+
+-- The picks of `players`: `labelOf(player)` is the shown answer (nil: none), `verdictOf(player)` (optional) "right" or
+-- "wrong" once the answer is out.
+function Picks.build(players: { Player }, labelOf: (Player) -> string?, verdictOf: ((Player) -> string?)?): Map
+	local out: Map = {}
+	for _, player in players do
+		out[tostring(player.UserId)] = { text = labelOf(player) or Picks.NONE, verdict = if verdictOf then verdictOf(player) else nil }
+	end
+	return out
+end
+
+-- A choice's label as numbered on the answer buttons ("1" .. "4"); O / X keep their own.
+function Picks.choiceLabel(index: number?, choices: { string }): string?
+	if index == nil then
+		return nil
+	end
+	if #choices == 2 then
+		return choices[index]
+	end
+	return tostring(index)
+end
+
+return Picks
 ]====]; s.Parent = n1 end
 do local s = Instance.new("ModuleScript"); s.Name = "PowerBar"; s.Source = [====[--!strict
 -- 물병 세우기's power bar (bundle 8b): where the marker is, 0 = left end, 1 = right end, `t` seconds after the bar
@@ -4625,6 +4665,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "Estimate"; s.Source = [====
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
+local Picks = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Picks"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local EstimateBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("EstimateBank"))
 
@@ -4665,7 +4706,8 @@ local Estimate = {
 	id = "estimate",
 	title = Config.TEXT.ESTIMATE_TITLE,
 	brief = Config.TEXT.ESTIMATE_BRIEF, -- (the briefing before it)
-	expectedSeconds = Config.ESTIMATE_INTRO_SECONDS + Config.ESTIMATE_SECONDS + Config.MINIGAME_RESULT_SECONDS,
+	expectedSeconds = Config.ESTIMATE_INTRO_SECONDS + Config.ESTIMATE_SECONDS + Config.PICKS_SECONDS
+		+ Config.MINIGAME_RESULT_SECONDS,
 	briefFor = nil :: ((mode: string) -> string)?,
 	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
@@ -4675,6 +4717,19 @@ local Estimate = {
 }
 
 local used: { [EstimateBank.Question]: boolean } = {}
+
+-- A whole number with thousands separators (384,400), as shown over a head.
+local function grouped(value: number): string
+	local text = tostring(math.floor(value))
+	local out = text
+	while true do
+		local next, count = string.gsub(out, "^(%d+)(%d%d%d)", "%1,%2")
+		out = next
+		if count == 0 then
+			return out
+		end
+	end
+end
 
 local function pick(rng: Random): EstimateBank.Question?
 	local words = Match.wordsInPlay()
@@ -4776,6 +4831,16 @@ function Estimate.run(ctx: Ctx): boolean?
 		ctx.show(Config.TEXT.MINIGAME_TOO_FEW)
 		return nil
 	end
+	-- (everyone's number over their head first, bundle 12; then the answer, the farthest turned wrong, and they fly)
+	local function label(player: Player): string?
+		local guess = guesses[player]
+		return if guess then grouped(guess) else nil
+	end
+	ctx.screen({ kind = "estimate", question = question.q, picks = Picks.build(present, label) })
+	ctx.show(Config.TEXT.PICKS_REVEAL)
+	if not ctx.wait(Config.PICKS_SECONDS) then
+		return nil
+	end
 	local losers = Estimate.losers(present, guesses, question.answer)
 	local ids, shownGuesses, loserIds, names = {}, {}, {}, {}
 	for _, player in present do
@@ -4787,7 +4852,9 @@ function Estimate.run(ctx: Ctx): boolean?
 		table.insert(names, player.DisplayName)
 	end
 	ctx.screen({ kind = "estimateResult", question = question.q, answer = question.answer, ids = ids,
-		guesses = shownGuesses, losers = loserIds })
+		guesses = shownGuesses, losers = loserIds, picks = Picks.build(present, label, function(player)
+			return if table.find(losers, player) then "wrong" else "right"
+		end) })
 	ctx.show(if #losers > 0 then string.format(Config.TEXT.ESTIMATE_RESULT, question.answer, table.concat(names, ", "))
 		else string.format(Config.TEXT.ESTIMATE_NOBODY, question.answer))
 	ctx.answers(typed, none) -- (before the fail: a launched player's miss would not count)
@@ -5342,6 +5409,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
+local Picks = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Picks"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local content = script.Parent.Parent:WaitForChild("content")
 local OXBank = require(content:WaitForChild("OXBank"))
@@ -5385,8 +5453,8 @@ local OXQuiz = {
 	id = "oxQuiz",
 	title = Config.TEXT.OX_TITLE,
 	brief = string.format(Config.TEXT.OX_BRIEF, Config.OX_QUESTIONS), -- (the briefing before it)
-	expectedSeconds = Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
-		+ Config.MINIGAME_RESULT_SECONDS,
+	expectedSeconds = Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + Config.OX_SECONDS + Config.PICKS_SECONDS
+		+ Config.OX_REVEAL_SECONDS) + Config.MINIGAME_RESULT_SECONDS,
 	briefFor = nil :: ((mode: string) -> string)?,
 	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
@@ -5401,7 +5469,7 @@ local function oxSeconds(mode: string?): number
 	return Modes.value(mode, "OX_SECONDS") :: number
 end
 OXQuiz.expectedFor = function(_players: number, mode: string): number
-	return Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + oxSeconds(mode) + Config.OX_REVEAL_SECONDS)
+	return Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + oxSeconds(mode) + Config.PICKS_SECONDS + Config.OX_REVEAL_SECONDS)
 		+ Config.MINIGAME_RESULT_SECONDS
 end
 
@@ -5521,6 +5589,15 @@ function OXQuiz.run(ctx: Ctx): boolean?
 			return nil
 		end
 		local right = if statement.o then 1 else 2
+		-- (everyone's O / X over their head first, bundle 12; then the right one with the tags turned right / wrong)
+		local function label(player: Player): string?
+			return Picks.choiceLabel(answers[player], choices)
+		end
+		ctx.screen({ kind = "quizResult", final = false, question = question, choices = choices,
+			picks = Picks.build(from, label) })
+		if not ctx.wait(Config.PICKS_SECONDS) then
+			return nil
+		end
 		local rightIds = {} -- (who the server counted right: their "correct" sound)
 		local still = present()
 		for _, player in from do
@@ -5539,7 +5616,9 @@ function OXQuiz.run(ctx: Ctx): boolean?
 			end
 		end
 		ctx.screen({ kind = "quizResult", final = false, question = question, choices = choices, answer = right,
-			right = rightIds })
+			right = rightIds, picks = Picks.build(still, label, function(player)
+				return if answers[player] == right then "right" else "wrong"
+			end) })
 		if not ctx.wait(Config.OX_REVEAL_SECONDS) then
 			return nil
 		end
@@ -5955,6 +6034,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
+local Picks = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Picks"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local QuizBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("QuizBank"))
 local ChosungBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("ChosungBank"))
@@ -5999,7 +6079,7 @@ local Quiz = {
 	id = "quiz",
 	title = Config.TEXT.QUIZ_TITLE,
 	brief = Config.TEXT.QUIZ_BRIEF, -- (the briefing before it)
-	expectedSeconds = Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.QUIZ_REVEAL_SECONDS,
+	expectedSeconds = Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.PICKS_SECONDS + Config.QUIZ_REVEAL_SECONDS,
 	briefFor = nil :: ((mode: string) -> string)?,
 	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = nil :: number?, -- the basic mission: no limit (§5)
@@ -6017,7 +6097,7 @@ local function quizSeconds(mode: string?): number
 	return Modes.value(mode, "QUIZ_SECONDS") :: number
 end
 local function quizExpected(_players: number, mode: string): number
-	return Config.QUIZ_INTRO_SECONDS + quizSeconds(mode) + Config.QUIZ_REVEAL_SECONDS
+	return Config.QUIZ_INTRO_SECONDS + quizSeconds(mode) + Config.PICKS_SECONDS + Config.QUIZ_REVEAL_SECONDS
 end
 Quiz.expectedFor = quizExpected
 
@@ -6136,8 +6216,9 @@ local function shuffledChoices(question: QuizBank.Question, rng: Random): ({ str
 	return choices, answer
 end
 
--- Everyone on the ground answers `question` with four choices; wrong or none is a fail (event `key`). Returns false if
--- cancelled.
+-- Everyone on the ground answers `question` with four choices; wrong or none is a fail (event `key`). When the time is
+-- up, everyone's answer shows over their head for PICKS_SECONDS (bundle 12), then the right one with the tags turned
+-- right / wrong, and the wrong ones fly. Returns false if cancelled.
 local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): boolean
 	ctx.show(if ctx.final then Config.TEXT.FINAL_QUIZ else Config.TEXT.QUIZ_START)
 	local choices, rightAt = shuffledChoices(question, ctx.rng)
@@ -6156,6 +6237,15 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 	if ctx.cancelled() then
 		return false
 	end
+	local function label(player: Player): string?
+		return Picks.choiceLabel(answers[player], choices)
+	end
+	ctx.screen({ kind = "quizResult", final = ctx.final, question = question.q, choices = choices,
+		picks = Picks.build(asked, label) })
+	ctx.show(Config.TEXT.PICKS_REVEAL)
+	if not ctx.wait(Config.PICKS_SECONDS) then
+		return false
+	end
 	local answered, missed, wrong, rightIds = {}, {}, {}, {}
 	for _, player in asked do
 		local choice = answers[player]
@@ -6172,7 +6262,9 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 	end
 	-- (`right`: who the server counted right — their "correct" sound, review 2026-10-26)
 	ctx.screen({ kind = "quizResult", final = ctx.final, question = question.q, choices = choices, answer = rightAt,
-		right = rightIds })
+		right = rightIds, picks = Picks.build(asked, label, function(player)
+			return if answers[player] == rightAt then "right" else "wrong"
+		end) })
 	ctx.show(if #wrong == 0 then Config.TEXT.QUIZ_ALL_RIGHT
 		else string.format(Config.TEXT.QUIZ_ANSWER, choices[rightAt]))
 	if not ctx.final then
@@ -11223,6 +11315,8 @@ local function refresh()
 		lives = round.lives,
 		maxLives = round.maxLives,
 		presenter = if State.inRound() then round.presenter else nil,
+		-- (a quiz question's answers once its time is up, bundle 12)
+		picks = if State.inRound() and typeof(lastMission.picks) == "table" then lastMission.picks else nil,
 	}))
 	-- (no round is being played and too few are ready: invite friends)
 	InviteButton.set(not State.inRound() and not presenting and (round.readyCount or 0) < Config.INVITE_BELOW)
@@ -11512,7 +11606,9 @@ local function cueSounds(before: { [string]: any }, now: { [string]: any })
 		Fx.stopRoll() -- (a roulette that ended or stopped takes its drum roll with it)
 	end
 	local serverNow = workspace:GetServerTimeNow()
-	if now.kind == "quizResult" and before.kind == "quiz" and now.question == before.question then
+	-- (the right answer comes after everyone's answers were shown, bundle 12: the second result of the same question)
+	if now.kind == "quizResult" and now.answer ~= nil and now.question == before.question
+		and (before.kind == "quiz" or (before.kind == "quizResult" and before.answer == nil)) then
 		if typeof(now.right) == "table" and table.find(now.right, State.myId()) then
 			Fx.cue("right") -- (the server counted my answer right: not one that arrived after the end)
 		end
@@ -11543,8 +11639,12 @@ end
 
 remotes.Mission.OnClientEvent:Connect(function(payload)
 	cueSounds(lastMission, payload)
+	local picksChanged = payload.picks ~= nil or lastMission.picks ~= nil
 	lastMission = payload
 	refreshDucking()
+	if picksChanged then
+		refresh() -- (the answers over the heads come and go with the screens, bundle 12)
+	end
 	BellButton.setIcon(if payload.kind == "duel" then "gun" else "bell")
 	bellTrap = (payload.kind == "duel" and payload.stage ~= "fire") or (payload.kind == "redLight" and payload.light == "red")
 	refreshBell()
@@ -11758,6 +11858,7 @@ RunService.Heartbeat:Connect(function()
 	end
 	PresenterPanel.tick(workspace:GetServerTimeNow())
 	MissionPanel.tick(workspace:GetServerTimeNow())
+	Toast.place(MissionPanel.bottom()) -- (under the card at the top, bundle 12)
 end)
 
 -- Ask for the current state now that every handler is connected (late joiners miss earlier broadcasts).
@@ -11844,6 +11945,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "Billboards"; s.Source = [==
 -- "진행자" instead of hearts), and from bundle 5 the banned words above them: each other participant's visible words
 -- (a new one flashes) and "???" for my own.
 -- The V3 pool hall is white, so word cards carry a thick navy outline and the name sits on a navy pill.
+-- Bundle 12 (owner 2026-10-27): when a quiz question's time is up, each player's answer shows on a card over the name
+-- (`picks`, shared/Picks), yellow first, then green or red once the right answer is out.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -11864,6 +11967,11 @@ local HEART_ROW = 0.8
 -- (the same values as UI/Style's KEY, INK and PAPER: a world tag may not require the HUD's Style, deps rule)
 local CARD_COLOR = Color3.fromRGB(255, 255, 255)
 local NEW_COLOR = Color3.fromRGB(255, 212, 59)
+local PICK_COLORS = { -- a pick's card by its verdict (none yet: yellow)
+	right = Color3.fromRGB(94, 209, 122),
+	wrong = Color3.fromRGB(255, 107, 107),
+}
+local PICK_ROW = 1.6 -- studs: an answer reads from the show camera
 local OUTLINE = Color3.fromRGB(34, 35, 38)
 local NAME_PILL = Color3.fromRGB(255, 251, 240)
 local NAME_INK = Color3.fromRGB(34, 35, 38)
@@ -11878,6 +11986,7 @@ export type View = {
 	lives: { [string]: number },
 	maxLives: number,
 	presenter: number?, -- the presenter's userId (their bubble shows the presenter tag)
+	picks: { [string]: { text: string, verdict: string? } }?, -- quiz answers over the heads (bundle 12)
 }
 
 type Bubble = { gui: BillboardGui, size: UDim2, hearts: TextLabel, words: { string }, layout: string }
@@ -11900,12 +12009,12 @@ local function removeBubble(userId: number)
 	bubbles[userId] = nil
 end
 
-local function wordRow(parent: Instance, text: string, order: number, fresh: boolean): Frame
+local function wordRow(parent: Instance, text: string, order: number, fresh: boolean, color: Color3?): Frame
 	local row = Instance.new("Frame")
 	row.Name = "Word" .. order
 	row.LayoutOrder = order
 	row.Size = UDim2.new(1, 0, 1, 0) -- resized by the caller
-	row.BackgroundColor3 = if fresh then NEW_COLOR else CARD_COLOR
+	row.BackgroundColor3 = color or if fresh then NEW_COLOR else CARD_COLOR
 	row.Parent = parent
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0.25, 0)
@@ -11929,7 +12038,7 @@ local function wordRow(parent: Instance, text: string, order: number, fresh: boo
 	pad.PaddingLeft = UDim.new(0.05, 0)
 	pad.PaddingRight = UDim.new(0.05, 0)
 	pad.Parent = label
-	if fresh then
+	if fresh and not color then
 		task.delay(3, function()
 			if row.Parent then
 				TweenService:Create(row, TweenInfo.new(0.6), { BackgroundColor3 = CARD_COLOR }):Play()
@@ -11940,13 +12049,14 @@ local function wordRow(parent: Instance, text: string, order: number, fresh: boo
 end
 
 -- (Re)builds one bubble: word rows (none, or "???" for hidden words), the name pill, the hearts. `previous` = the
--- words shown before, so a newly added word flashes.
-local function build(player: Player, words: { string }, caption: string, previous: { string }?): Bubble?
+-- words shown before, so a newly added word flashes. `pick`: a quiz answer on top (bundle 12).
+local function build(player: Player, words: { string }, caption: string, previous: { string }?,
+	pick: { text: string, verdict: string? }?): Bubble?
 	local head = player.Character and player.Character:FindFirstChild("Head") :: BasePart?
 	if not head then
 		return nil
 	end
-	local wordsHeight = #words * ROW
+	local wordsHeight = #words * ROW + (if pick then PICK_ROW else 0)
 	local total = wordsHeight + NAME_ROW + HEART_ROW
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "WordBubble"
@@ -11956,7 +12066,7 @@ local function build(player: Player, words: { string }, caption: string, previou
 	gui.MaxDistance = 150
 	gui.LightInfluence = 0
 
-	if #words > 0 then
+	if #words > 0 or pick then
 		local list = Instance.new("Frame")
 		list.Name = "Words"
 		list.BackgroundTransparency = 1
@@ -11966,10 +12076,16 @@ local function build(player: Player, words: { string }, caption: string, previou
 		layout.SortOrder = Enum.SortOrder.LayoutOrder
 		layout.Padding = UDim.new(0.04, 0)
 		layout.Parent = list
+		local share = 1 / (#words + (if pick then PICK_ROW / ROW else 0))
+		if pick then
+			local row = wordRow(list, pick.text, 0, false, PICK_COLORS[pick.verdict or ""] or NEW_COLOR)
+			row.Name = "Pick"
+			row.Size = UDim2.new(1, 0, share * PICK_ROW / ROW, -2)
+		end
 		for i, text in words do
 			local fresh = previous ~= nil and text ~= HIDDEN and not table.find(previous, text)
 			local row = wordRow(list, text, i, fresh)
-			row.Size = UDim2.new(1, 0, 1 / #words, -2)
+			row.Size = UDim2.new(1, 0, share, -2)
 		end
 	end
 
@@ -12038,14 +12154,16 @@ function Billboards.render(view: View): number
 			local key = tostring(userId)
 			local entry = view.words[key]
 			local words = if not entry then {} elseif entry.words then entry.words else { HIDDEN }
-			tallest = math.max(tallest, #words * ROW)
+			local pick = if view.picks then view.picks[key] else nil
+			tallest = math.max(tallest, #words * ROW + (if pick then PICK_ROW else 0))
 			local caption = player.DisplayName
 			local layout = table.concat(words, "|") .. "#" .. caption
+				.. (if pick then "#pick:" .. pick.text .. ":" .. (pick.verdict or "") else "")
 			local bubble: Bubble? = bubbles[userId]
 			if not bubble or bubble.layout ~= layout or bubble.gui.Parent ~= head then
 				local previous = if bubble then bubble.words else nil
 				removeBubble(userId)
-				bubble = build(player, words, caption, previous)
+				bubble = build(player, words, caption, previous, pick)
 				if bubble then
 					bubble.layout = layout
 					bubbles[userId] = bubble
@@ -14330,22 +14448,23 @@ local state = {
 	hidden = false, -- stepped aside for a launch (setHidden)
 	shown = false, -- what the screen asks for, before `hidden`
 }
-local CARD_GAP = 8 -- pixels between the card and the bottom row (the reactions, the presenter's sounds)
-local TALK_POSITION = UDim2.new(0.5, 0, 0, Style.row(4)) -- the talk's slim line: under the status board and the
--- getting-ready lines (rows 1-3), above the chair row
+-- Bundle 12 (owner 2026-10-27: "미션 때문에 캐릭터가 보이지 않아 ... 살짝 반투명하게 중앙 위쪽으로"): the card sits at the
+-- top centre under the status board, see-through a little, so the chairs and the players below stay in view; it may
+-- reach CARD_ROOM of the screen's height (it shrinks to fit). The talk's slim line goes a little lower (rows 1-3 are
+-- the getting-ready lines).
+local CARD_TOP = UDim2.new(0.5, 0, 0, Style.row(1))
+local TALK_POSITION = UDim2.new(0.5, 0, 0, Style.row(4))
+local CARD_ALPHA = 0.3 -- the card's background
+local BUTTON_ALPHA = 0.12 -- its buttons'
+local CARD_ROOM = 0.6
 
--- Where the card goes: the talk's slim line under the status board, else on top of the bottom row (its height changes
--- with the reactions; the bell button sits on the right side since 2026-10-25).
 local function place()
-	if state.slim then
-		card.Position = TALK_POSITION
-	else
-		card.Position = UDim2.new(0.5, 0, 1, -(Style.bottomStack().AbsoluteSize.Y + 12 + CARD_GAP))
-	end
+	card.Position = if state.slim then TALK_POSITION else CARD_TOP
 end
 
 local function answerButton(index: number): TextButton
 	local b = Style.button(Style.BOLD, 22)
+	b.BackgroundTransparency = BUTTON_ALPHA
 	b.TextScaled = true
 	local pad = Instance.new("UIPadding")
 	pad.PaddingLeft = UDim.new(0, 8)
@@ -14817,7 +14936,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local twenty = kind == "twenty" or kind == "twentyResult"
 	-- (스무고개: the box only on my own turn)
 	local myTurn = kind == "twenty" and payload.stage == "ask" and (payload.ids or {})[payload.asker or 0] == myId
-	answerRow.Visible = kind == "estimate" or myTurn
+	answerRow.Visible = (kind == "estimate" and payload.id ~= nil) or myTurn -- (not once the time is up, bundle 12)
 	if not answerRow.Visible then
 		dropFocus() -- (the box is gone: no phone keyboard left over)
 	end
@@ -14875,8 +14994,8 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	timer.TextColor3 = if kind == "redLight" then Style.INK else Style.ACCENT_TEXT
 	note.TextColor3 = if kind == "redLight" then Style.INK else Style.FAINT
 	local slim = kind == "talk"
-	card.BackgroundTransparency = Style.PAPER_ALPHA
-	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 1)
+	card.BackgroundTransparency = CARD_ALPHA
+	card.AnchorPoint = Vector2.new(0.5, 0)
 	state.slim = slim
 	place()
 	title.TextSize = if slim then 20 else 24
@@ -14894,9 +15013,15 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		local choices = payload.choices :: { string }
 		for i, b in buttons do
 			b.Visible = choices[i] ~= nil
-			b.Text = choices[i] or ""
+			-- (numbered as over the heads when the time is up, bundle 12; O / X stay as they are)
+			b.Text = if choices[i] == nil then "" elseif #choices == 2 then choices[i] else string.format("%d. %s", i, choices[i])
 			local open = kind == "quiz" and canAnswer and payload.endsAt ~= nil and not state.myPick
-			if kind == "quizResult" then
+			if kind == "quizResult" and payload.answer == nil then
+				-- (the time is up and everyone's answers are over their heads; the right one comes next)
+				b.AutoButtonColor = false
+				b.BackgroundColor3 = if i == state.myPick then Style.PICK else Style.KEY_OFF
+				b.TextColor3 = if i == state.myPick or not state.myPick then Style.INK else Style.FAINT
+			elseif kind == "quizResult" then
 				local right = i == payload.answer
 				b.AutoButtonColor = false
 				b.BackgroundColor3 = if right then Style.RIGHT elseif i == state.myPick then Style.WRONG else Style.KEY_OFF
@@ -15268,6 +15393,14 @@ end
 
 -- Every frame (server time): the quiz countdown, the spinning pointer or the flipping coin, and the card's size.
 -- Steps the card aside (a launch flying, owner 2026-10-24) without forgetting what it shows or what I picked.
+-- The card's lower edge on screen (pixels from the top), or nil while it is not shown: the toasts go under it.
+function MissionPanel.bottom(): number?
+	if not card.Visible then
+		return nil
+	end
+	return card.AbsolutePosition.Y + card.AbsoluteSize.Y
+end
+
 function MissionPanel.setHidden(hidden: boolean)
 	state.hidden = hidden
 	card.Visible = state.shown and not hidden
@@ -15287,10 +15420,7 @@ function MissionPanel.tick(now: number)
 		local width = math.max(card.AbsoluteSize.X, if wheel.Visible then wheel.AbsoluteSize.X + 28 else 0) / scale
 		if camera and height > 0 and width > 0 then
 			local view = camera.ViewportSize
-			local room = view.Y * 0.8
-			if not state.slim then
-				room = math.min(room, card.AbsolutePosition.Y + card.AbsoluteSize.Y - Style.row(0))
-			end
+			local room = view.Y * CARD_ROOM - card.AbsolutePosition.Y -- (the lower part of the screen stays for the chairs)
 			cardScale.Scale = math.clamp(math.min(1, room / height, view.X * 0.9 / width), 0.3, 1)
 		end
 	end
@@ -16199,6 +16329,18 @@ function Toast.build()
 	toastL.TextTransparency = 1
 	edge.Transparency = 1
 	toastL.Parent = Style.gui()
+end
+
+-- Under the mission card when one shows (`top`: its lower edge, bundle 12: the card sits at the top now), else at
+-- its own place a little above the middle.
+function Toast.place(top: number?)
+	if top then
+		toastL.AnchorPoint = Vector2.new(0.5, 0)
+		toastL.Position = UDim2.new(0.5, 0, 0, top + 10)
+	else
+		toastL.AnchorPoint = Vector2.new(0.5, 0.5)
+		toastL.Position = UDim2.fromScale(0.5, 0.36)
+	end
 end
 
 function Toast.show(text: string, kind: "elim" | "near" | "info")

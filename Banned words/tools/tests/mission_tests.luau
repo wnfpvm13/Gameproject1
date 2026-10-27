@@ -188,6 +188,16 @@ do
 	answer(ps[3], 5)
 	answer(ps[3], "1")
 	at(now + Config.QUIZ_SECONDS + 0.2)
+	-- Bundle 12: first everyone's answers over their heads (no right answer yet, nobody failed), then the result.
+	local picking = screens(since)
+	local picksShown = picking[#picking].payload
+	local p = picksShown.picks or {}
+	check("1l when the time is up everyone's answer shows first (numbered; none = ?), without the right one and before"
+		.. " any fail", picksShown.kind == "quizResult" and picksShown.answer == nil and #record.fails == 0
+		and p[tostring(ps[1].UserId)].text == "1" and p[tostring(ps[2].UserId)].text == "3"
+		and p[tostring(ps[3].UserId)].text == "?" and p[tostring(ps[4].UserId)] == nil
+		and p[tostring(ps[1].UserId)].verdict == nil)
+	at(now + Config.PICKS_SECONDS)
 	local f = record.fails[1]
 	check("1c a wrong answer or none fails; the right one, a flying player, early, repeated, malformed or old-question answers do not",
 		#record.fails == 1 and f.key == "answer" and #f.players == 2 and has(f.players, ps[2]) and has(f.players, ps[3])
@@ -197,7 +207,10 @@ do
 		and not has(record.answered, ps[4]))
 	local shown = screens(since)
 	local result = shown[#shown].payload
-	check("1e then everyone sees the right answer", result.kind == "quizResult" and result.answer == 1)
+	local rp = result.picks or {}
+	check("1e then everyone sees the right answer, the answers over the heads turned right / wrong", result.kind == "quizResult"
+		and result.answer == 1 and rp[tostring(ps[1].UserId)].verdict == "right"
+		and rp[tostring(ps[2].UserId)].verdict == "wrong" and rp[tostring(ps[3].UserId)].verdict == "wrong")
 	at(now + Config.QUIZ_REVEAL_SECONDS + 0.5)
 	local last = screens(since)
 	check("1f the screen clears when the mission ends", run.done and run.ok and last[#last].payload.kind == "none")
@@ -210,8 +223,8 @@ do
 	at(now + Config.QUIZ_INTRO_SECONDS + 0.1)
 	answer(ps[1], 1)
 	answer(ps[2], 1)
-	at(now + 0.5)
-	check("1g when everyone asked has answered, the answer shows at once", #record2.fails == 1 and #record2.fails[1].players == 0
+	at(now + Config.PICKS_SECONDS + 0.5)
+	check("1g when everyone asked has answered, the answer shows at once (after the answers over the heads)", #record2.fails == 1 and #record2.fails[1].players == 0
 		and now < begun + Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS)
 	at(now + Config.QUIZ_REVEAL_SECONDS + 0.5)
 	check("1h (and the mission ends after the reveal)", run2.done)
@@ -239,7 +252,7 @@ do
 	at(now + Config.QUIZ_INTRO_SECONDS + 0.1)
 	answer(ps[1], 1)
 	answer(ps[2], 2)
-	at(now + 1)
+	at(now + Config.PICKS_SECONDS + 1)
 	local s4 = screens(since4)
 	local stillShown = not run4.done and s4[#s4].payload.kind == "quizResult"
 	at(now + Config.QUIZ_REVEAL_SECONDS)
@@ -249,7 +262,7 @@ do
 		record5.stop = true -- a new round began
 	end
 	local run5 = start(Quiz, record5)
-	at(now + Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + 0.5)
+	at(now + Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.PICKS_SECONDS + 0.5)
 	check("1k ...but a new round ends it at once", run5.done)
 end
 
@@ -1840,7 +1853,7 @@ do
 		local right = if statement and statement.o then 1 else 2
 		answer(a, right)
 		answer(b, 3 - right)
-		at(now + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
+		at(now + Config.OX_SECONDS + Config.PICKS_SECONDS + Config.OX_REVEAL_SECONDS)
 	end
 	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
 	local result = lastScreenOf(since, "oxResult")
@@ -1849,6 +1862,23 @@ do
 		.. " answered missed", run.done and result ~= nil and result.wrong[1] == 0 and result.wrong[2] == Config.OX_QUESTIONS
 		and result.wrong[3] == Config.OX_QUESTIONS and f ~= nil and #f.players == 2 and has(record.missed, c)
 		and not has(record.missed, b))
+	-- Bundle 12: each statement's answers over the heads first (O / X, none = ?), then turned right / wrong.
+	local before, after = nil, nil
+	for _, m in screens(since) do
+		if m.payload.kind == "quizResult" and m.payload.picks then
+			if m.payload.answer == nil then
+				before = before or m.payload
+			else
+				after = after or m.payload
+			end
+		end
+	end
+	local bp, ap = before and before.picks or {}, after and after.picks or {}
+	local aKey, bKey, cKey = tostring(a.UserId), tostring(b.UserId), tostring(c.UserId)
+	check("17o O/X: each statement's O / X over the heads before its answer (none = ?), then right / wrong",
+		before ~= nil and after ~= nil and (bp[aKey].text == "O" or bp[aKey].text == "X") and bp[aKey].text ~= bp[bKey].text
+		and bp[cKey].text == "?" and bp[aKey].verdict == nil and ap[aKey].verdict == "right" and ap[bKey].verdict == "wrong"
+		and ap[cKey].verdict == "wrong")
 end
 do
 	local a, b, c = table.unpack(newPlayers(3))
@@ -1881,12 +1911,22 @@ do
 	answer(a, target)
 	answer(b, target + 1000)
 	answer(c, 0) -- (out of range: ignored, counts as none)
-	at(now + Config.ESTIMATE_SECONDS + Config.MINIGAME_RESULT_SECONDS + 1)
+	at(now + Config.ESTIMATE_SECONDS + Config.PICKS_SECONDS + Config.MINIGAME_RESULT_SECONDS + 1)
 	local result = lastScreenOf(since, "estimateResult")
 	local f = record.fails[1]
 	check("17i the number quiz runs: whole numbers only (0 is not taken); who typed nothing flies and missed an answer",
 		run.done and q ~= nil and result ~= nil and result.answer == target and result.guesses[1] == target
 		and result.guesses[3] == -1 and f ~= nil and #f.players == 1 and f.players[1] == c and has(record.missed, c))
+	local picksFirst = nil
+	for _, m in screens(since) do
+		if m.payload.kind == "estimate" and m.payload.picks and not picksFirst then
+			picksFirst = m.payload
+		end
+	end
+	local fp, rp = picksFirst and picksFirst.picks or {}, result and result.picks or {}
+	check("17p 숫자 근사: everyone's number over the heads first (no box, none = ?), then the one who flies turned wrong",
+		picksFirst ~= nil and picksFirst.id == nil and fp[tostring(b.UserId)] ~= nil and fp[tostring(c.UserId)].text == "?"
+		and rp[tostring(c.UserId)].verdict == "wrong" and rp[tostring(a.UserId)].verdict == "right")
 end
 do
 	-- The right O/X answer of the statement on screen now.
@@ -1918,21 +1958,21 @@ do
 	answer(a, right)
 	answer(b, 3 - right)
 	answer(c, right)
-	at(now + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
+	at(now + Config.OX_SECONDS + Config.PICKS_SECONDS + Config.OX_REVEAL_SECONDS)
 	table.remove(alive, table.find(alive, d))
 	fly[c] = true
 	at(now + Config.OX_INTRO_SECONDS + 0.2)
 	right = oxRight()
 	answer(a, right)
 	answer(c, 3 - right)
-	at(now + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
+	at(now + Config.OX_SECONDS + Config.PICKS_SECONDS + Config.OX_REVEAL_SECONDS)
 	fly[c] = nil
 	at(now + Config.OX_INTRO_SECONDS + 0.2)
 	right = oxRight()
 	answer(a, 3 - right)
 	answer(b, 3 - right)
 	answer(c, right)
-	at(now + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
+	at(now + Config.OX_SECONDS + Config.PICKS_SECONDS + Config.OX_REVEAL_SECONDS)
 	at(now + Config.MINIGAME_RESULT_SECONDS + 1)
 	local result = lastScreenOf(since, "oxResult")
 	local f = record.fails[1]
@@ -2417,7 +2457,7 @@ do
 			record.ctx.rng = Random.new(k * 31)
 			local since = now
 			start(Quiz, record)
-			at(now + Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + 0.5)
+			at(now + Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.PICKS_SECONDS + 0.5)
 			local result = lastScreenOf(since, "quizResult")
 			if result then
 				local right = result.choices[result.answer]
@@ -2470,6 +2510,7 @@ do
 	answer(ps[2], 2)
 	at(now + Config.QUIZ_SECONDS + 0.2)
 	answer(ps[3], 1) -- (after the end: not counted)
+	at(now + Config.PICKS_SECONDS + 0.2)
 	local result = lastScreenOf(since, "quizResult")
 	local right = result and result.right or {}
 	check("19g the quiz result lists who was counted right (the late answer is not)", #right == 1 and right[1] == ps[1].UserId)
@@ -2495,10 +2536,15 @@ do
 		Modes.value("easy", "QUIZ_SECONDS") == 15 and Modes.value("hard", "QUIZ_SECONDS") == 7
 		and Modes.value("normal", "QUIZ_SECONDS") == Config.QUIZ_SECONDS and Modes.value(nil, "QUIZ_SECONDS") == Config.QUIZ_SECONDS
 		and Modes.value("easy", "LIVES") == Config.LIVES and Modes.title("hard") == Config.TEXT.MODE_HARD)
-	check("20c the time budget counts the mode: a quiz 20/15/12 s, the O/X quiz 33/27/24 s, 초성 like the quiz",
-		Quiz.expectedFor(5, "easy") == 20 and Quiz.expectedFor(5, "normal") == 15 and Quiz.expectedFor(5, "hard") == 12
-		and OXQuiz.expectedFor(5, "easy") == 33 and OXQuiz.expectedFor(5, "normal") == 27
-		and OXQuiz.expectedFor(5, "hard") == 24 and Quiz.chosung.expectedFor(5, "hard") == 12)
+	-- (with the answers over the heads, bundle 12: PICKS_SECONDS a question)
+	local quizBase = Config.QUIZ_INTRO_SECONDS + Config.PICKS_SECONDS + Config.QUIZ_REVEAL_SECONDS
+	local oxBase = Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + Config.PICKS_SECONDS + Config.OX_REVEAL_SECONDS)
+		+ Config.MINIGAME_RESULT_SECONDS
+	check("20c the time budget counts the mode: a quiz's answer time 15/10/7 s, the O/X quiz's 7/5/4 s a statement, 초성"
+		.. " like the quiz", Quiz.expectedFor(5, "easy") == quizBase + 15 and Quiz.expectedFor(5, "normal") == quizBase + 10
+		and Quiz.expectedFor(5, "hard") == quizBase + 7 and OXQuiz.expectedFor(5, "easy") == oxBase + 3 * 7
+		and OXQuiz.expectedFor(5, "normal") == oxBase + 3 * 5 and OXQuiz.expectedFor(5, "hard") == oxBase + 3 * 4
+		and Quiz.chosung.expectedFor(5, "hard") == quizBase + 7)
 end
 -- One question of `mission` in `mode`: its text and how long its buttons were open.
 local function askedIn(mode, final, mission)
@@ -2565,8 +2611,10 @@ do
 	check("20f a round never asks a question twice: the bank's last fresh one, then (history over) the other two, each"
 		.. " once", third ~= nil and not table.find(first, third) and fourth ~= nil and fifth ~= nil and fourth ~= third
 		and fifth ~= third and fifth ~= fourth)
-	-- 20l: the time budget sees the mode: a quiz fits 15 s + the flight back in the normal mode, not in the easy one.
-	local budget = 15 + Config.FLING_RETURN_SECONDS
+	-- 20l: the time budget sees the mode: a quiz fits a normal round's last seconds, not an easy one's; a little less
+	-- only a hard one's.
+	local quizCore = Config.QUIZ_INTRO_SECONDS + Config.PICKS_SECONDS + Config.QUIZ_REVEAL_SECONDS
+	local budget = quizCore + Config.QUIZ_SECONDS + Config.FLING_RETURN_SECONDS
 	local function offered(mode)
 		Match.mode = mode
 		local found = false
@@ -2577,9 +2625,9 @@ do
 		return found
 	end
 	local normalFits, easyFits = offered(nil), offered("easy")
-	budget = 12 + Config.FLING_RETURN_SECONDS
-	check("20l the time budget counts the mode: the quiz fits a normal round's last 20 s, not an easy one's; 17 s only"
-		.. " a hard one's", normalFits and not easyFits and offered("hard") and not offered(nil))
+	budget = quizCore + 7 + Config.FLING_RETURN_SECONDS
+	check("20l the time budget counts the mode: the quiz fits a normal round's last seconds, not an easy one's; a little"
+		.. " less only a hard one's", normalFits and not easyFits and offered("hard") and not offered(nil))
 end
 do
 	-- 20g: the O/X banks by mode.

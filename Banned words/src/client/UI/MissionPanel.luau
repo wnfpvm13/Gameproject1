@@ -125,22 +125,23 @@ local state = {
 	hidden = false, -- stepped aside for a launch (setHidden)
 	shown = false, -- what the screen asks for, before `hidden`
 }
-local CARD_GAP = 8 -- pixels between the card and the bottom row (the reactions, the presenter's sounds)
-local TALK_POSITION = UDim2.new(0.5, 0, 0, Style.row(4)) -- the talk's slim line: under the status board and the
--- getting-ready lines (rows 1-3), above the chair row
+-- Bundle 12 (owner 2026-10-27: "미션 때문에 캐릭터가 보이지 않아 ... 살짝 반투명하게 중앙 위쪽으로"): the card sits at the
+-- top centre under the status board, see-through a little, so the chairs and the players below stay in view; it may
+-- reach CARD_ROOM of the screen's height (it shrinks to fit). The talk's slim line goes a little lower (rows 1-3 are
+-- the getting-ready lines).
+local CARD_TOP = UDim2.new(0.5, 0, 0, Style.row(1))
+local TALK_POSITION = UDim2.new(0.5, 0, 0, Style.row(4))
+local CARD_ALPHA = 0.3 -- the card's background
+local BUTTON_ALPHA = 0.12 -- its buttons'
+local CARD_ROOM = 0.6
 
--- Where the card goes: the talk's slim line under the status board, else on top of the bottom row (its height changes
--- with the reactions; the bell button sits on the right side since 2026-10-25).
 local function place()
-	if state.slim then
-		card.Position = TALK_POSITION
-	else
-		card.Position = UDim2.new(0.5, 0, 1, -(Style.bottomStack().AbsoluteSize.Y + 12 + CARD_GAP))
-	end
+	card.Position = if state.slim then TALK_POSITION else CARD_TOP
 end
 
 local function answerButton(index: number): TextButton
 	local b = Style.button(Style.BOLD, 22)
+	b.BackgroundTransparency = BUTTON_ALPHA
 	b.TextScaled = true
 	local pad = Instance.new("UIPadding")
 	pad.PaddingLeft = UDim.new(0, 8)
@@ -612,7 +613,7 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	local twenty = kind == "twenty" or kind == "twentyResult"
 	-- (스무고개: the box only on my own turn)
 	local myTurn = kind == "twenty" and payload.stage == "ask" and (payload.ids or {})[payload.asker or 0] == myId
-	answerRow.Visible = kind == "estimate" or myTurn
+	answerRow.Visible = (kind == "estimate" and payload.id ~= nil) or myTurn -- (not once the time is up, bundle 12)
 	if not answerRow.Visible then
 		dropFocus() -- (the box is gone: no phone keyboard left over)
 	end
@@ -670,8 +671,8 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 	timer.TextColor3 = if kind == "redLight" then Style.INK else Style.ACCENT_TEXT
 	note.TextColor3 = if kind == "redLight" then Style.INK else Style.FAINT
 	local slim = kind == "talk"
-	card.BackgroundTransparency = Style.PAPER_ALPHA
-	card.AnchorPoint = if slim then Vector2.new(0.5, 0) else Vector2.new(0.5, 1)
+	card.BackgroundTransparency = CARD_ALPHA
+	card.AnchorPoint = Vector2.new(0.5, 0)
 	state.slim = slim
 	place()
 	title.TextSize = if slim then 20 else 24
@@ -689,9 +690,15 @@ function MissionPanel.show(payload: { [string]: any }, canAnswer: boolean, names
 		local choices = payload.choices :: { string }
 		for i, b in buttons do
 			b.Visible = choices[i] ~= nil
-			b.Text = choices[i] or ""
+			-- (numbered as over the heads when the time is up, bundle 12; O / X stay as they are)
+			b.Text = if choices[i] == nil then "" elseif #choices == 2 then choices[i] else string.format("%d. %s", i, choices[i])
 			local open = kind == "quiz" and canAnswer and payload.endsAt ~= nil and not state.myPick
-			if kind == "quizResult" then
+			if kind == "quizResult" and payload.answer == nil then
+				-- (the time is up and everyone's answers are over their heads; the right one comes next)
+				b.AutoButtonColor = false
+				b.BackgroundColor3 = if i == state.myPick then Style.PICK else Style.KEY_OFF
+				b.TextColor3 = if i == state.myPick or not state.myPick then Style.INK else Style.FAINT
+			elseif kind == "quizResult" then
 				local right = i == payload.answer
 				b.AutoButtonColor = false
 				b.BackgroundColor3 = if right then Style.RIGHT elseif i == state.myPick then Style.WRONG else Style.KEY_OFF
@@ -1063,6 +1070,14 @@ end
 
 -- Every frame (server time): the quiz countdown, the spinning pointer or the flipping coin, and the card's size.
 -- Steps the card aside (a launch flying, owner 2026-10-24) without forgetting what it shows or what I picked.
+-- The card's lower edge on screen (pixels from the top), or nil while it is not shown: the toasts go under it.
+function MissionPanel.bottom(): number?
+	if not card.Visible then
+		return nil
+	end
+	return card.AbsolutePosition.Y + card.AbsoluteSize.Y
+end
+
 function MissionPanel.setHidden(hidden: boolean)
 	state.hidden = hidden
 	card.Visible = state.shown and not hidden
@@ -1082,10 +1097,7 @@ function MissionPanel.tick(now: number)
 		local width = math.max(card.AbsoluteSize.X, if wheel.Visible then wheel.AbsoluteSize.X + 28 else 0) / scale
 		if camera and height > 0 and width > 0 then
 			local view = camera.ViewportSize
-			local room = view.Y * 0.8
-			if not state.slim then
-				room = math.min(room, card.AbsolutePosition.Y + card.AbsoluteSize.Y - Style.row(0))
-			end
+			local room = view.Y * CARD_ROOM - card.AbsolutePosition.Y -- (the lower part of the screen stays for the chairs)
 			cardScale.Scale = math.clamp(math.min(1, room / height, view.X * 0.9 / width), 0.3, 1)
 		end
 	end

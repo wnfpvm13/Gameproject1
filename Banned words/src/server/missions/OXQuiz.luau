@@ -11,6 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
+local Picks = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Picks"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local content = script.Parent.Parent:WaitForChild("content")
 local OXBank = require(content:WaitForChild("OXBank"))
@@ -54,8 +55,8 @@ local OXQuiz = {
 	id = "oxQuiz",
 	title = Config.TEXT.OX_TITLE,
 	brief = string.format(Config.TEXT.OX_BRIEF, Config.OX_QUESTIONS), -- (the briefing before it)
-	expectedSeconds = Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + Config.OX_SECONDS + Config.OX_REVEAL_SECONDS)
-		+ Config.MINIGAME_RESULT_SECONDS,
+	expectedSeconds = Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + Config.OX_SECONDS + Config.PICKS_SECONDS
+		+ Config.OX_REVEAL_SECONDS) + Config.MINIGAME_RESULT_SECONDS,
 	briefFor = nil :: ((mode: string) -> string)?,
 	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
@@ -70,7 +71,7 @@ local function oxSeconds(mode: string?): number
 	return Modes.value(mode, "OX_SECONDS") :: number
 end
 OXQuiz.expectedFor = function(_players: number, mode: string): number
-	return Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + oxSeconds(mode) + Config.OX_REVEAL_SECONDS)
+	return Config.OX_QUESTIONS * (Config.OX_INTRO_SECONDS + oxSeconds(mode) + Config.PICKS_SECONDS + Config.OX_REVEAL_SECONDS)
 		+ Config.MINIGAME_RESULT_SECONDS
 end
 
@@ -190,6 +191,15 @@ function OXQuiz.run(ctx: Ctx): boolean?
 			return nil
 		end
 		local right = if statement.o then 1 else 2
+		-- (everyone's O / X over their head first, bundle 12; then the right one with the tags turned right / wrong)
+		local function label(player: Player): string?
+			return Picks.choiceLabel(answers[player], choices)
+		end
+		ctx.screen({ kind = "quizResult", final = false, question = question, choices = choices,
+			picks = Picks.build(from, label) })
+		if not ctx.wait(Config.PICKS_SECONDS) then
+			return nil
+		end
 		local rightIds = {} -- (who the server counted right: their "correct" sound)
 		local still = present()
 		for _, player in from do
@@ -208,7 +218,9 @@ function OXQuiz.run(ctx: Ctx): boolean?
 			end
 		end
 		ctx.screen({ kind = "quizResult", final = false, question = question, choices = choices, answer = right,
-			right = rightIds })
+			right = rightIds, picks = Picks.build(still, label, function(player)
+				return if answers[player] == right then "right" else "wrong"
+			end) })
 		if not ctx.wait(Config.OX_REVEAL_SECONDS) then
 			return nil
 		end

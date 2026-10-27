@@ -3,6 +3,8 @@
 -- "진행자" instead of hearts), and from bundle 5 the banned words above them: each other participant's visible words
 -- (a new one flashes) and "???" for my own.
 -- The V3 pool hall is white, so word cards carry a thick navy outline and the name sits on a navy pill.
+-- Bundle 12 (owner 2026-10-27): when a quiz question's time is up, each player's answer shows on a card over the name
+-- (`picks`, shared/Picks), yellow first, then green or red once the right answer is out.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -23,6 +25,11 @@ local HEART_ROW = 0.8
 -- (the same values as UI/Style's KEY, INK and PAPER: a world tag may not require the HUD's Style, deps rule)
 local CARD_COLOR = Color3.fromRGB(255, 255, 255)
 local NEW_COLOR = Color3.fromRGB(255, 212, 59)
+local PICK_COLORS = { -- a pick's card by its verdict (none yet: yellow)
+	right = Color3.fromRGB(94, 209, 122),
+	wrong = Color3.fromRGB(255, 107, 107),
+}
+local PICK_ROW = 1.6 -- studs: an answer reads from the show camera
 local OUTLINE = Color3.fromRGB(34, 35, 38)
 local NAME_PILL = Color3.fromRGB(255, 251, 240)
 local NAME_INK = Color3.fromRGB(34, 35, 38)
@@ -37,6 +44,7 @@ export type View = {
 	lives: { [string]: number },
 	maxLives: number,
 	presenter: number?, -- the presenter's userId (their bubble shows the presenter tag)
+	picks: { [string]: { text: string, verdict: string? } }?, -- quiz answers over the heads (bundle 12)
 }
 
 type Bubble = { gui: BillboardGui, size: UDim2, hearts: TextLabel, words: { string }, layout: string }
@@ -59,12 +67,12 @@ local function removeBubble(userId: number)
 	bubbles[userId] = nil
 end
 
-local function wordRow(parent: Instance, text: string, order: number, fresh: boolean): Frame
+local function wordRow(parent: Instance, text: string, order: number, fresh: boolean, color: Color3?): Frame
 	local row = Instance.new("Frame")
 	row.Name = "Word" .. order
 	row.LayoutOrder = order
 	row.Size = UDim2.new(1, 0, 1, 0) -- resized by the caller
-	row.BackgroundColor3 = if fresh then NEW_COLOR else CARD_COLOR
+	row.BackgroundColor3 = color or if fresh then NEW_COLOR else CARD_COLOR
 	row.Parent = parent
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0.25, 0)
@@ -88,7 +96,7 @@ local function wordRow(parent: Instance, text: string, order: number, fresh: boo
 	pad.PaddingLeft = UDim.new(0.05, 0)
 	pad.PaddingRight = UDim.new(0.05, 0)
 	pad.Parent = label
-	if fresh then
+	if fresh and not color then
 		task.delay(3, function()
 			if row.Parent then
 				TweenService:Create(row, TweenInfo.new(0.6), { BackgroundColor3 = CARD_COLOR }):Play()
@@ -99,13 +107,14 @@ local function wordRow(parent: Instance, text: string, order: number, fresh: boo
 end
 
 -- (Re)builds one bubble: word rows (none, or "???" for hidden words), the name pill, the hearts. `previous` = the
--- words shown before, so a newly added word flashes.
-local function build(player: Player, words: { string }, caption: string, previous: { string }?): Bubble?
+-- words shown before, so a newly added word flashes. `pick`: a quiz answer on top (bundle 12).
+local function build(player: Player, words: { string }, caption: string, previous: { string }?,
+	pick: { text: string, verdict: string? }?): Bubble?
 	local head = player.Character and player.Character:FindFirstChild("Head") :: BasePart?
 	if not head then
 		return nil
 	end
-	local wordsHeight = #words * ROW
+	local wordsHeight = #words * ROW + (if pick then PICK_ROW else 0)
 	local total = wordsHeight + NAME_ROW + HEART_ROW
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "WordBubble"
@@ -115,7 +124,7 @@ local function build(player: Player, words: { string }, caption: string, previou
 	gui.MaxDistance = 150
 	gui.LightInfluence = 0
 
-	if #words > 0 then
+	if #words > 0 or pick then
 		local list = Instance.new("Frame")
 		list.Name = "Words"
 		list.BackgroundTransparency = 1
@@ -125,10 +134,16 @@ local function build(player: Player, words: { string }, caption: string, previou
 		layout.SortOrder = Enum.SortOrder.LayoutOrder
 		layout.Padding = UDim.new(0.04, 0)
 		layout.Parent = list
+		local share = 1 / (#words + (if pick then PICK_ROW / ROW else 0))
+		if pick then
+			local row = wordRow(list, pick.text, 0, false, PICK_COLORS[pick.verdict or ""] or NEW_COLOR)
+			row.Name = "Pick"
+			row.Size = UDim2.new(1, 0, share * PICK_ROW / ROW, -2)
+		end
 		for i, text in words do
 			local fresh = previous ~= nil and text ~= HIDDEN and not table.find(previous, text)
 			local row = wordRow(list, text, i, fresh)
-			row.Size = UDim2.new(1, 0, 1 / #words, -2)
+			row.Size = UDim2.new(1, 0, share, -2)
 		end
 	end
 
@@ -197,14 +212,16 @@ function Billboards.render(view: View): number
 			local key = tostring(userId)
 			local entry = view.words[key]
 			local words = if not entry then {} elseif entry.words then entry.words else { HIDDEN }
-			tallest = math.max(tallest, #words * ROW)
+			local pick = if view.picks then view.picks[key] else nil
+			tallest = math.max(tallest, #words * ROW + (if pick then PICK_ROW else 0))
 			local caption = player.DisplayName
 			local layout = table.concat(words, "|") .. "#" .. caption
+				.. (if pick then "#pick:" .. pick.text .. ":" .. (pick.verdict or "") else "")
 			local bubble: Bubble? = bubbles[userId]
 			if not bubble or bubble.layout ~= layout or bubble.gui.Parent ~= head then
 				local previous = if bubble then bubble.words else nil
 				removeBubble(userId)
-				bubble = build(player, words, caption, previous)
+				bubble = build(player, words, caption, previous, pick)
 				if bubble then
 					bubble.layout = layout
 					bubbles[userId] = bubble

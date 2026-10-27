@@ -16,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Modes = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Modes"))
+local Picks = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Picks"))
 local Match = require(script.Parent.Parent:WaitForChild("Match"))
 local QuizBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("QuizBank"))
 local ChosungBank = require(script.Parent.Parent:WaitForChild("content"):WaitForChild("ChosungBank"))
@@ -60,7 +61,7 @@ local Quiz = {
 	id = "quiz",
 	title = Config.TEXT.QUIZ_TITLE,
 	brief = Config.TEXT.QUIZ_BRIEF, -- (the briefing before it)
-	expectedSeconds = Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.QUIZ_REVEAL_SECONDS,
+	expectedSeconds = Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.PICKS_SECONDS + Config.QUIZ_REVEAL_SECONDS,
 	briefFor = nil :: ((mode: string) -> string)?,
 	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = nil :: number?, -- the basic mission: no limit (§5)
@@ -78,7 +79,7 @@ local function quizSeconds(mode: string?): number
 	return Modes.value(mode, "QUIZ_SECONDS") :: number
 end
 local function quizExpected(_players: number, mode: string): number
-	return Config.QUIZ_INTRO_SECONDS + quizSeconds(mode) + Config.QUIZ_REVEAL_SECONDS
+	return Config.QUIZ_INTRO_SECONDS + quizSeconds(mode) + Config.PICKS_SECONDS + Config.QUIZ_REVEAL_SECONDS
 end
 Quiz.expectedFor = quizExpected
 
@@ -197,8 +198,9 @@ local function shuffledChoices(question: QuizBank.Question, rng: Random): ({ str
 	return choices, answer
 end
 
--- Everyone on the ground answers `question` with four choices; wrong or none is a fail (event `key`). Returns false if
--- cancelled.
+-- Everyone on the ground answers `question` with four choices; wrong or none is a fail (event `key`). When the time is
+-- up, everyone's answer shows over their head for PICKS_SECONDS (bundle 12), then the right one with the tags turned
+-- right / wrong, and the wrong ones fly. Returns false if cancelled.
 local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): boolean
 	ctx.show(if ctx.final then Config.TEXT.FINAL_QUIZ else Config.TEXT.QUIZ_START)
 	local choices, rightAt = shuffledChoices(question, ctx.rng)
@@ -217,6 +219,15 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 	if ctx.cancelled() then
 		return false
 	end
+	local function label(player: Player): string?
+		return Picks.choiceLabel(answers[player], choices)
+	end
+	ctx.screen({ kind = "quizResult", final = ctx.final, question = question.q, choices = choices,
+		picks = Picks.build(asked, label) })
+	ctx.show(Config.TEXT.PICKS_REVEAL)
+	if not ctx.wait(Config.PICKS_SECONDS) then
+		return false
+	end
 	local answered, missed, wrong, rightIds = {}, {}, {}, {}
 	for _, player in asked do
 		local choice = answers[player]
@@ -233,7 +244,9 @@ local function askEveryone(ctx: Ctx, question: QuizBank.Question, key: string): 
 	end
 	-- (`right`: who the server counted right — their "correct" sound, review 2026-10-26)
 	ctx.screen({ kind = "quizResult", final = ctx.final, question = question.q, choices = choices, answer = rightAt,
-		right = rightIds })
+		right = rightIds, picks = Picks.build(asked, label, function(player)
+			return if answers[player] == rightAt then "right" else "wrong"
+		end) })
 	ctx.show(if #wrong == 0 then Config.TEXT.QUIZ_ALL_RIGHT
 		else string.format(Config.TEXT.QUIZ_ANSWER, choices[rightAt]))
 	if not ctx.final then

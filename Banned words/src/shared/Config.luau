@@ -82,6 +82,10 @@ return {
 	QUIZ_INTRO_SECONDS = 2, -- the question shows before the buttons work
 	QUIZ_SECONDS = 10, -- answer time
 	QUIZ_REVEAL_SECONDS = 3, -- the right answer stays on screen
+	-- Bundle 12 (owner 2026-10-27): when a quiz question's time is up (the 4-choice quiz, 초성, the final, each O/X
+	-- statement, 숫자 근사), everyone's answer shows over their head this long before the right answer; then the tags
+	-- turn right / wrong and the wrong ones fly (shared/Picks).
+	PICKS_SECONDS = 2,
 	ROULETTE_SPIN_SECONDS = 6,
 	ROULETTE_REVEAL_SECONDS = 2,
 	ROULETTE_MIN_PLAYERS = 2,
@@ -455,6 +459,7 @@ return {
 		FINAL_QUIZ = "결승 문제 나갑니다!",
 		QUIZ_ANSWER = "정답: %s",
 		QUIZ_ALL_RIGHT = "모두 정답!",
+		PICKS_REVEAL = "모두의 답 공개!",
 		ROULETTE_TITLE = "룰렛",
 		ROULETTE_BRIEF = "룰렛에 걸린 한 명이 날아가요", -- (the briefing before it, owner 2026-10-24)
 		ROULETTE_START = "룰렛 돌아갑니다!",

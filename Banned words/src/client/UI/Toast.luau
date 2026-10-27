@@ -37,6 +37,18 @@ function Toast.build()
 	toastL.Parent = Style.gui()
 end
 
+-- Under the mission card when one shows (`top`: its lower edge, bundle 12: the card sits at the top now), else at
+-- its own place a little above the middle.
+function Toast.place(top: number?)
+	if top then
+		toastL.AnchorPoint = Vector2.new(0.5, 0)
+		toastL.Position = UDim2.new(0.5, 0, 0, top + 10)
+	else
+		toastL.AnchorPoint = Vector2.new(0.5, 0.5)
+		toastL.Position = UDim2.fromScale(0.5, 0.36)
+	end
+end
+
 function Toast.show(text: string, kind: "elim" | "near" | "info")
 	for _, tween in fading do
 		tween:Cancel()

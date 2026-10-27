@@ -8,8 +8,10 @@
 -- stick's hits wait for the server's word); and the server is told where the character aims (it turns with the camera
 -- under the mouse lock), which step was drawn and the attack's number (counted here: the server hands it back with
 -- the attack, Names.SwingTag, and with its hits, so each word is matched to the attack it is about, however late it
--- comes). The server judges it for real (WeaponService). The drawing and the hit effects come in as hooks (SwingPose,
--- HitFeedback via init).
+-- comes). The server judges it for real (WeaponService). A press a moment too early (Config.Attack.PressBuffer before
+-- the weapon is ready again or the flinch ends) is kept and made as soon as it may (update(), every frame), so a press
+-- in time with the attacks is never lost. The drawing and the hit effects come in as hooks (SwingPose, HitFeedback via
+-- init).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -51,7 +53,8 @@ type Showing = { shown: { [Model]: string }, confirmed: { [Model]: boolean } }
 -- chain: the player's 1-2-3 string; weapon: what the last attack was made with (a new weapon starts the string over);
 -- model: the character it was made by. count: the attacks pressed so far (the last one's number); cut: the count when
 -- the string was last broken (a word on an attack pressed before that does not touch the string). showings: the last
--- KEEP attacks' showings, by number.
+-- KEEP attacks' showings, by number. queued: when (server time) a press that came a moment too early was made, still
+-- waiting to start.
 type Fields = {
 	remote: RemoteEvent,
 	hooks: Hooks,
@@ -63,6 +66,7 @@ type Fields = {
 	count: number,
 	cut: number,
 	showings: { [number]: Showing },
+	queued: number?,
 }
 export type Swing = typeof(setmetatable({} :: Fields, OwnSwing))
 
@@ -78,6 +82,7 @@ function OwnSwing.new(remote: RemoteEvent, hooks: Hooks): Swing
 		count = 0,
 		cut = 0,
 		showings = {},
+		queued = nil,
 	}
 	return setmetatable(fields, OwnSwing)
 end
@@ -88,17 +93,18 @@ local function current(self: Swing, tag: number): boolean
 	return tag == self.count and tag > self.cut
 end
 
--- The control was pressed; `model` is the player's character (nil = none).
-function OwnSwing.press(self: Swing, model: Model?)
+-- Starts an attack by `model` (the player's character) if one may start now. Returns "started", "soon" (not yet: the
+-- weapon is getting ready or the character is flinching or flying) or "no" (not fighting).
+local function try(self: Swing, model: Model?): string
 	local body = CharacterParts.body(model)
 	local now = Workspace:GetServerTimeNow()
 	if not body or body.model:GetAttribute(Names.Alive) ~= true or Workspace:GetAttribute(Names.Phase) ~= "Fight" then
-		return
+		return "no"
 	end
 	local weapon = WeaponRules.named(Config.Weapons, body.model:GetAttribute(Names.Weapon))
 	local w = Config.Weapons[weapon]
 	if self.hooks.stunned() or now < self.ready then
-		return
+		return "soon"
 	end
 	self.last = now
 	self.ready = now + w.cooldown
@@ -119,7 +125,7 @@ function OwnSwing.press(self: Swing, model: Model?)
 	self.remote:FireServer(aim, step, tag)
 	local reach = w.reach
 	if not reach then
-		return -- a slam or a throw: its hits are shown when the server says
+		return "started" -- a slam or a throw: its hits are shown when the server says
 	end
 	task.delay(AttackString.hitAt(STRING, w.hitAt, step, w.style), function()
 		local me = CharacterParts.body(body.model)
@@ -146,6 +152,25 @@ function OwnSwing.press(self: Swing, model: Model?)
 			end
 		end
 	end)
+	return "started"
+end
+
+-- The control was pressed; `model` is the player's character (nil = none). Too early, it is kept for a moment.
+function OwnSwing.press(self: Swing, model: Model?)
+	local result = try(self, model)
+	self.queued = if result == "soon" then Workspace:GetServerTimeNow() else nil
+end
+
+-- Every frame (after a flinch may have ended): a press kept from a moment ago starts now if it may, or is dropped once
+-- older than Config.Attack.PressBuffer.
+function OwnSwing.update(self: Swing, model: Model?)
+	local queued = self.queued
+	if not queued then
+		return
+	end
+	if Workspace:GetServerTimeNow() - queued > Config.Attack.PressBuffer or try(self, model) ~= "soon" then
+		self.queued = nil
+	end
 end
 
 -- The server's word that the player's attack number `tag` (nil: not an attack, a blast) hit `victim`. Returns the

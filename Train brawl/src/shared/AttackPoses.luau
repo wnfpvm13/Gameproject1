@@ -1,21 +1,18 @@
 --!strict
 -- The whole-body poses of every attack and hit reaction, as keyframes over the joints of an R15 body (no uploaded
--- animation): the hips and torso turn into a blow, the free arm guards, the head keeps facing ahead. Each attack style
--- has its own (Config.Weapons style), and a punch or swing has its own pose for each step of the attacker's string
--- (AttackString); the launching last step is plainly bigger and starts with a wind-up (it lands a moment later than
--- the others: Config.Attack.FinisherWindup). A style can have a stance (stance()): the pose a fighter holding it keeps
--- while fighting, standing or walking (bare fists: a boxing guard); its attacks start from it and come back to it, and
--- a light hit's flinch settles back into it.
--- - punch: from the guard, 1 a left jab, 2 a right straight (then 1, 2 again), the last a dip into a rising uppercut
---   with a short step in. The hips turn first, the torso and shoulder follow and the elbow straightens last, as the
---   blow lands; the arm stays out only a moment and snaps back to the guard;
--- - swing: 1 a forehand, 2 a backhand, the last a big forehand with a step in that carries on into a full spin;
--- - slam: both arms overhead, leaning back, then bent over the slam with the knees giving;
--- - throw: wound back over the shoulder, then the torso turns through the throw;
+-- animation): the hips and torso turn into a blow, the head keeps facing ahead. Each weapon (Config.Weapons) has its
+-- own set: a stance (stance()), the pose a fighter holding it keeps while fighting, standing or walking, that its
+-- attacks start from and come back to and a light hit's flinch settles back into; and a punch or swing has its own
+-- pose for each step of the attacker's string (AttackString), the launching last step plainly bigger and starting with
+-- a wind-up (it lands a moment later than the others: Config.Attack.FinisherWindup).
+-- - bare fists: a boxing guard; 1 a left jab, 2 a right straight (then 1, 2 again), the last a dip into a rising
+--   uppercut with a short step in. The hips turn first, the torso and shoulder follow and the elbow straightens last,
+--   as the blow lands; the arm stays out only a moment and snaps back to the guard;
+-- - the bat, the gold bar, the hammer and the dynamite stick: see their sets below (the first three in both hands);
 -- - hit reactions: a light hit snaps the torso and head the way the hit pushed (back when hit from the front, forward
 --   from behind, sideways from the side); a launch flails the arms while flying.
 -- Each segment between keys has its own easing: a blow speeds into the hit and carries on through it (no stop at the
--- hit), a spin turns evenly. A pose is each joint's turn (degrees, about the joint's own axes: x raises an arm forward
+-- hit). A pose is each joint's turn (degrees, about the joint's own axes: x raises an arm forward
 -- or leans the torso back, y turns left, z lifts an arm out to the right) and, for the root, a shift (studs, -z ahead).
 -- SwingPose writes them on every client, blended in from the walking animation and back out (shared because client
 -- parts do not require each other). Requires nothing.
@@ -33,7 +30,7 @@ export type Key = { t: number, pose: Pose, ease: string? }
 AttackPoses.FlinchSeconds = 0.28
 AttackPoses.FlailSeconds = 0.7
 
-local JOINTS = { "Root", "Waist", "Neck", "RightShoulder", "LeftShoulder", "RightElbow", "LeftElbow", "RightHip", "LeftHip", "RightKnee", "LeftKnee" }
+local JOINTS = { "Root", "Waist", "Neck", "RightShoulder", "LeftShoulder", "RightElbow", "LeftElbow", "RightWrist", "LeftWrist", "RightHip", "LeftHip", "RightKnee", "LeftKnee" }
 
 local function ease(kind: string?, s: number): number
 	if kind == "in" then
@@ -120,7 +117,6 @@ local function ordered(keys: { Key }): { Key }
 end
 
 local REST: Pose = {}
-local GUARD_LEFT: Pose = { LeftShoulder = { x = 45 }, LeftElbow = { x = 100 } }
 
 -- Bare fists' boxing guard: the torso turned a little so the left side leads (the head still facing ahead), the left
 -- fist a little forward, the right one by the chin, elbows in.
@@ -144,21 +140,6 @@ local function with(...: Pose): Pose
 		end
 	end
 	return out
-end
-
--- How far toward rest the last key of a blow has come back: SwingPose blends the rest of the way out to the walking
--- animation (a last key at rest would pull the body through standing straight on its way back to walking).
-local SETTLE = 0.5
-
--- The usual shape of a blow: rest, wound up by `windUp`, speeding into the hit at `k`, held a moment, settling back.
-local function blow(cocked: Pose, out: Pose, follow: Pose, k: number, windUp: number, hold: number): { Key }
-	return ordered({
-		{ t = 0, pose = REST },
-		{ t = k * windUp, pose = cocked },
-		{ t = k, pose = out, ease = "in" },
-		{ t = k + hold, pose = follow, ease = "out" },
-		{ t = 1, pose = blend(follow, REST, SETTLE) },
-	})
 end
 
 -- A punch from the guard landing at `k` (a share of the drawn attack): `load` a moment before, `drive` (the hips and
@@ -266,88 +247,168 @@ local function punch(step: number, finisher: boolean, k: number): { Key }
 	})
 end
 
--- The weapon arm lifted out to the right side (`lift` 0..1) and swung round the torso by `turn` degrees (negative =
--- toward the back, positive = across the front).
-local function arm(lift: number, turn: number): Joint
-	return { y = turn, z = 90 * lift }
+-- The weapons' own sets. Each pose was found in Studio (2026-10-27) from where the fist and the weapon should be at
+-- that moment - the arm's turns that put them there - so the numbers are not meant to be read as angles. A two-handed
+-- weapon's poses turn only the weapon arm and the body: SwingPose puts the free hand on the handle (Config.Weapons
+-- offHand, ArmReach), and none of them names the left arm.
+
+-- A strike from `stance` landing at `k`: wound up into `load`, speeding through `drive` (if any) into `hit` as it lands,
+-- carried on into `follow` (`hold` later), then back through `back` to the stance.
+local function strike(stance: Pose, load: Pose, drive: Pose?, hit: Pose, follow: Pose, back: Pose, k: number, hold: number): { Key }
+	local keys: { Key } = { { t = 0, pose = stance }, { t = k * (if drive then 0.45 else 0.6), pose = load, ease = "out" } }
+	if drive then
+		table.insert(keys, { t = k * 0.8, pose = drive, ease = "in" })
+	end
+	table.insert(keys, { t = k, pose = hit, ease = if drive then "linear" else "in" })
+	table.insert(keys, { t = k + hold, pose = follow, ease = "out" })
+	table.insert(keys, { t = k + hold + (1 - k - hold) * 0.5, pose = back, ease = "out" })
+	table.insert(keys, { t = 1, pose = stance })
+	return ordered(keys)
 end
 
-local function swing(step: number, finisher: boolean, k: number): { Key }
-	local cocked = with(GUARD_LEFT, { Waist = { y = -28 }, RightShoulder = arm(1, -40), Neck = { y = 14 } })
-	local through = with(GUARD_LEFT, { Waist = { y = 18 }, RightShoulder = arm(1, 90), Neck = { y = -8 } })
+-- The bat, in both hands, up by the right shoulder: 1 a level swing from the right that lands with the bat straight
+-- ahead and carries on round to the left, 2 the swing back from the left, the last a big one from low with a step in,
+-- ending wrapped round the left shoulder (held a moment, like a home run's).
+local BAT_STANCE: Pose = { Root = { y = -10 }, Waist = { y = -15 }, Neck = { y = 25 }, RightShoulder = { x = 65, y = 42, z = -60 }, RightElbow = { x = 87 }, RightWrist = { x = 25, y = 3, z = -3 } }
+local function bat(step: number, finisher: boolean, k: number): { Key }
 	if not finisher then
-		if step % 2 == 0 then -- a backhand: from across the body on the left out to the right, pointing ahead as it lands
-			local back = with(GUARD_LEFT, { Waist = { y = 30 }, RightShoulder = arm(1, 120), Neck = { y = -14 } })
-			local hit = with(GUARD_LEFT, { RightShoulder = arm(1, 85) })
-			local follow = with(GUARD_LEFT, { Waist = { y = -32 }, RightShoulder = arm(0.9, -50), Neck = { y = 14 } })
-			return blow(back, hit, follow, k, 0.6, 0.3)
+		if step % 2 == 1 then
+			return strike(
+				BAT_STANCE,
+				{ Root = { y = -25 }, Waist = { y = -30 }, Neck = { y = 45 }, RightShoulder = { x = 68, y = 41, z = -60 }, RightElbow = { x = 90 }, RightWrist = { x = 20, y = -14 } },
+				{ Root = { y = 10 }, Waist = { y = -10 }, Neck = { y = 20 }, RightShoulder = { x = 33, y = 25, z = -59 }, RightElbow = { x = 106 }, RightWrist = { x = 36, y = -1, z = 1 } },
+				{ Root = { y = 25 }, Waist = { y = 20 }, Neck = { y = -25 }, RightShoulder = { x = 16, y = 30, z = -43 }, RightElbow = { x = 123 }, RightWrist = { x = -17, y = -52, z = 10 } },
+				{ Root = { y = 35 }, Waist = { y = 45 }, Neck = { y = -50 }, RightShoulder = { x = 21, y = 67, z = -19 }, RightElbow = { x = 135 }, RightWrist = { x = -80, y = -35, z = 3 } },
+				{ Root = { y = 10 }, Waist = { y = 10 }, Neck = { y = -5 }, RightShoulder = { x = 39, y = 68, z = -5 }, RightElbow = { x = 131 }, RightWrist = { x = -42, y = -10 } },
+				k,
+				0.15
+			)
 		end
-		local follow = with(GUARD_LEFT, { Waist = { y = 36 }, RightShoulder = arm(0.9, 130), Neck = { y = -16 } })
-		return blow(cocked, through, follow, k, 0.6, 0.3)
+		return strike(
+			BAT_STANCE,
+			{ Root = { y = 10 }, Waist = { y = 30 }, Neck = { y = -30 }, RightShoulder = { x = 84, y = 60, z = -42 }, RightElbow = { x = 89 }, RightWrist = { x = -39, y = -7, z = -5 } },
+			{ Root = { y = -5 }, Waist = { y = 10 }, Neck = { y = -10 }, RightShoulder = { x = 101, y = 70, z = -55 }, RightElbow = { x = 70 }, RightWrist = { x = -41, y = 15, z = -7 } },
+			{ Root = { y = -20 }, Waist = { y = -20 }, Neck = { y = 25 }, RightShoulder = { x = 75, y = 26, z = -60 }, RightElbow = { x = 39 }, RightWrist = { x = -65, y = -33, z = -11 } },
+			{ Root = { y = -30 }, Waist = { y = -40 }, Neck = { y = 45 }, RightShoulder = { x = 59, y = 17, z = -60 }, RightElbow = { x = 60 }, RightWrist = { x = -4, y = -47, z = -11 } },
+			{ Root = { y = -10 }, Waist = { y = -15 }, Neck = { y = 15 }, RightShoulder = { x = 75, y = 33, z = -53 }, RightElbow = { x = 76 }, RightWrist = { x = 4, y = -15, z = -17 } },
+			k,
+			0.15
+		)
 	end
-	-- The finisher: a bigger forehand with a step in that carries on round into a full spin, arm out.
-	local wound = with(cocked, { Root = { shift = Vector3.new(0, -0.2, 0.2) }, Waist = { y = -40 }, RightKnee = { x = -20 }, LeftKnee = { x = -20 } })
-	local hit = with(through, { Root = { y = 0, shift = Vector3.new(0, 0, -0.5) }, LeftHip = { x = 25 }, RightHip = { x = -15 } })
-	local spinning = with(GUARD_LEFT, { Root = { y = 200, shift = Vector3.new(0, 0, -0.5) }, RightShoulder = arm(1, 70) })
-	local round = with(GUARD_LEFT, { Root = { y = 360, shift = Vector3.new(0, 0, -0.3) }, RightShoulder = arm(0.6, 40) })
+	local through: Pose = { Root = { y = 50, shift = Vector3.new(0, 0, -0.3) }, Waist = { x = 10, y = 70 }, Neck = { y = -70 }, RightShoulder = { x = 50, y = 87, z = -34 }, RightElbow = { x = 150 }, RightWrist = { x = -6, y = -90, z = 5 }, RightHip = { x = -14 }, LeftHip = { x = 20 } }
 	return ordered({
-		{ t = 0, pose = REST },
-		{ t = k * 0.65, pose = wound },
-		{ t = k, pose = hit, ease = "in" },
-		{ t = k + (1 - k) * 0.45, pose = spinning, ease = "linear" },
-		{ t = k + (1 - k) * 0.8, pose = round, ease = "linear" },
-		-- Half way back like any blow; the root keeps its whole turn (the same as none) instead of unwinding half of it.
-		{ t = 1, pose = with(blend(round, REST, SETTLE), { Root = { y = 360, shift = Vector3.new(0, 0, -0.15) } }), ease = "out" },
+		{ t = 0, pose = BAT_STANCE },
+		{ t = k * 0.55, pose = { Root = { y = -30, shift = Vector3.new(0, -0.25, 0.15) }, Waist = { x = -8, y = -40 }, Neck = { y = 50 }, RightShoulder = { x = 90, y = 32, z = -60 }, RightElbow = { x = 87 }, RightWrist = { x = 20, y = -34, z = 4 }, RightHip = { x = 12 }, LeftHip = { x = 12 }, RightKnee = { x = -22 }, LeftKnee = { x = -22 } }, ease = "out" },
+		{ t = k * 0.85, pose = { Root = { y = 15, shift = Vector3.new(0, -0.2, -0.25) }, Waist = { y = -10 }, Neck = { y = 15 }, RightShoulder = { x = 42, y = 34, z = -59 }, RightElbow = { x = 118 }, RightWrist = { x = 31, y = -3, z = -7 }, LeftHip = { x = 22 }, RightKnee = { x = -15 }, LeftKnee = { x = -10 } }, ease = "in" },
+		{ t = k, pose = { Root = { y = 35, shift = Vector3.new(0, -0.1, -0.35) }, Waist = { y = 25 }, Neck = { y = -30 }, RightShoulder = { x = 20, y = 53, z = -60 }, RightElbow = { x = 150 }, RightWrist = { x = -2, y = -38, z = 1 }, RightHip = { x = -12 }, LeftHip = { x = 26 }, LeftKnee = { x = -6 } }, ease = "linear" },
+		{ t = k + 0.18, pose = through, ease = "out" },
+		{ t = k + 0.34, pose = through, ease = "linear" },
+		{ t = 1, pose = BAT_STANCE, ease = "out" },
 	})
 end
 
-local function slam(k: number): { Key }
-	-- Both hands on the handle: the left arm follows the right.
-	local up: Pose = { Waist = { x = 16 }, Neck = { x = -8 }, RightShoulder = { x = 185 }, LeftShoulder = { x = 185 }, RightElbow = { x = 20 }, LeftElbow = { x = 20 } }
-	local down: Pose = {
-		Root = { shift = Vector3.new(0, -0.45, -0.2) },
-		Waist = { x = -28 },
-		Neck = { x = 14 },
-		RightShoulder = { x = 75 },
-		LeftShoulder = { x = 75 },
-		RightKnee = { x = -35 },
-		LeftKnee = { x = -35 },
-		RightHip = { x = 20 },
-		LeftHip = { x = 20 },
-	}
-	return blow(up, down, down, k, 0.85, 0.2)
-end
-
--- The stick leaves the hand at `k`, with the arm on its way forward over the shoulder (wound back before it, followed
--- through low after).
-local function throw(k: number): { Key }
-	local back: Pose = { Waist = { x = 8, y = -30 }, Neck = { y = 18 }, RightShoulder = { x = 170 }, RightElbow = { x = 60 }, LeftShoulder = { x = 70 } }
-	local out: Pose = { Waist = { x = -8, y = 26 }, Neck = { y = -10 }, RightShoulder = { x = 40 }, RightElbow = { x = 10 }, LeftShoulder = { x = 20 } }
+-- The gold bar, carried by both ends in front: 1 heaved from the right side across the front to the left, 2 back from
+-- the left, the last lifted overhead and brought down in front with the knees giving (it stays down a moment).
+local GOLD_STANCE: Pose = { RightShoulder = { x = 27, y = 48, z = -7 }, RightElbow = { x = 59 }, RightWrist = { x = -37, y = 28, z = -15 } }
+local function goldBar(step: number, finisher: boolean, k: number): { Key }
+	if not finisher then
+		if step % 2 == 1 then
+			return strike(
+				GOLD_STANCE,
+				{ Root = { y = -20 }, Waist = { y = -35 }, Neck = { y = 40 }, RightShoulder = { x = 36, y = 66, z = -3 }, RightElbow = { x = 76 }, RightWrist = { x = -44, y = 18, z = -14 } },
+				nil,
+				{ Root = { y = 20 }, Waist = { y = 25 }, Neck = { y = -25 }, RightShoulder = { x = -13, y = -8, z = 27 }, RightElbow = { x = 124 }, RightWrist = { x = -67, y = 26, z = -27 } },
+				{ Root = { y = 30 }, Waist = { y = 45 }, Neck = { y = -45 }, RightShoulder = { x = -22, y = -16, z = 26 }, RightElbow = { x = 149 }, RightWrist = { x = -53, y = 41, z = -45 } },
+				{ Root = { y = 10 }, Waist = { y = 15 }, Neck = { y = -15 }, RightShoulder = { x = 5, y = 16, z = 10 }, RightElbow = { x = 104 }, RightWrist = { x = -45, y = 34, z = -30 } },
+				k,
+				0.15
+			)
+		end
+		return strike(
+			GOLD_STANCE,
+			{ Root = { y = 20 }, Waist = { y = 35 }, Neck = { y = -40 }, RightShoulder = { x = 3, y = 38, z = 21 }, RightElbow = { x = 104 }, RightWrist = { x = -49, y = 29, z = -27 } },
+			nil,
+			{ Root = { y = -20 }, Waist = { y = -25 }, Neck = { y = 25 }, RightShoulder = { x = 19, y = 90, z = 37 }, RightElbow = { x = 74 }, RightWrist = { x = -14, y = 24, z = -8 } },
+			{ Root = { y = -30 }, Waist = { y = -45 }, Neck = { y = 45 }, RightShoulder = { x = 19, y = 90, z = 37 }, RightElbow = { x = 70 }, RightWrist = { x = -30, y = 13, z = -2 } },
+			{ Root = { y = -10 }, Waist = { y = -15 }, Neck = { y = 15 }, RightShoulder = { x = 23, y = 69, z = 15 }, RightElbow = { x = 65 }, RightWrist = { x = -34, y = 20, z = -9 } },
+			k,
+			0.15
+		)
+	end
+	local down: Pose = { Root = { shift = Vector3.new(0, -0.45, -0.25) }, Waist = { x = -30 }, Neck = { x = 15 }, RightShoulder = { x = 25, y = 58, z = 33 }, RightElbow = { x = 107 }, RightWrist = { x = -65, y = 20, z = -27 }, RightHip = { x = 20 }, LeftHip = { x = 20 }, RightKnee = { x = -35 }, LeftKnee = { x = -35 } }
 	return ordered({
-		{ t = 0, pose = REST },
-		{ t = k * 0.6, pose = back },
-		{ t = k, pose = blend(back, out, 0.5), ease = "in" },
-		{ t = math.min(k + 0.25, 0.9), pose = out, ease = "out" },
-		{ t = 1, pose = blend(out, REST, SETTLE) },
+		{ t = 0, pose = GOLD_STANCE },
+		{ t = k * 0.6, pose = { Root = { shift = Vector3.new(0, -0.1, 0.1) }, Waist = { x = 15 }, Neck = { x = -8 }, RightShoulder = { x = 67, y = 63, z = 41 }, RightElbow = { x = 69 }, RightWrist = { x = -33, y = 19, z = -7 } }, ease = "out" },
+		{ t = k, pose = down, ease = "in" },
+		{ t = k + 0.15, pose = down, ease = "linear" },
+		{ t = 1, pose = GOLD_STANCE },
 	})
 end
 
--- The stance a fighter holding a weapon of `style` keeps while fighting (nil: none, the walking animation as it is).
-function AttackPoses.stance(style: string): Pose?
-	return if style == "punch" then GUARD else nil
+-- The hammer, in both hands with its head up in front: raised high overhead, leaning back (a long wind-up everyone
+-- sees), slammed down into the roof ahead with the knees giving, kept down a moment, lifted back.
+local HAMMER_STANCE: Pose = { Root = { y = -5 }, Waist = { y = -10 }, Neck = { y = 15 }, RightShoulder = { x = 42, y = 49, z = -42 }, RightElbow = { x = 88 }, RightWrist = { x = 29, y = 11, z = -5 } }
+local function hammer(k: number): { Key }
+	local down: Pose = { Root = { shift = Vector3.new(0, -0.45, -0.2) }, Waist = { x = -30 }, Neck = { x = 14 }, RightShoulder = { x = 67, y = 48, z = -60 }, RightElbow = { x = 98 }, RightWrist = { x = -11, y = -79, z = 11 }, RightHip = { x = 20 }, LeftHip = { x = 20 }, RightKnee = { x = -35 }, LeftKnee = { x = -35 } }
+	return ordered({
+		{ t = 0, pose = HAMMER_STANCE },
+		{ t = k * 0.7, pose = { Waist = { x = 18 }, Neck = { x = -10 }, RightShoulder = { x = 106, y = 30, z = -32 }, RightElbow = { x = 59 }, RightWrist = { x = 3, z = 4 } }, ease = "out" },
+		{ t = k, pose = down, ease = "in" },
+		{ t = k + 0.15, pose = down, ease = "linear" },
+		{ t = 1, pose = HAMMER_STANCE },
+	})
 end
 
--- The keys of an attack of `style` at `step` of the string (`finisher`: its launching last step), the blow landing
--- at `k` (a share of the drawn length). Made once per attack; sample() reads them each frame.
-function AttackPoses.keys(style: string, step: number, finisher: boolean, k: number): { Key }
-	if style == "punch" then
-		return punch(step, finisher, k)
-	elseif style == "slam" then
-		return slam(k)
-	elseif style == "throw" then
-		return throw(k)
-	end
-	return swing(step, finisher, k)
+-- The dynamite stick, held up by the right shoulder with the left hand out ahead to aim: wound back with the torso
+-- turned away and the left arm pointing, whipped forward (it leaves the hand at `k`, high and on its way forward),
+-- followed through low across the body.
+local DYNAMITE_STANCE: Pose = { Root = { y = -5 }, Waist = { y = -10 }, Neck = { y = 15 }, RightShoulder = { x = 26, y = 42, z = 21 }, RightElbow = { x = 129 }, RightWrist = { x = -29, y = -32, z = -2 }, LeftShoulder = { x = 60, z = -10 }, LeftElbow = { x = 40 } }
+local DYNAMITE_RELEASE: Pose = { Root = { y = 15 }, Waist = { x = -8, y = 20 }, Neck = { y = -20 }, RightShoulder = { x = 107, y = 13, z = -56 }, RightElbow = { x = 122 }, RightWrist = { x = -10, y = -79, z = 14 }, LeftShoulder = { x = 30, z = -20 }, LeftElbow = { x = 70 } }
+local function dynamite(k: number): { Key }
+	return ordered({
+		{ t = 0, pose = DYNAMITE_STANCE },
+		{ t = k * 0.6, pose = { Root = { y = -25 }, Waist = { x = 8, y = -35 }, Neck = { y = 40 }, RightShoulder = { x = 60, y = 38 }, RightElbow = { x = 121 }, RightWrist = { x = -10, y = -44, z = 9 }, LeftShoulder = { x = 85, z = -5 }, LeftElbow = { x = 10 } }, ease = "out" },
+		{ t = k, pose = DYNAMITE_RELEASE, ease = "in" },
+		{ t = math.min(k + 0.25, 0.9), pose = { Root = { y = 25 }, Waist = { x = -15, y = 35 }, Neck = { y = -30 }, RightShoulder = { x = 26, y = 43, z = -60 }, RightElbow = { x = 136 }, RightWrist = { x = -13, y = -74, z = 18 }, LeftShoulder = { x = 10, z = -25 }, LeftElbow = { x = 60 } }, ease = "out" },
+		{ t = 1, pose = DYNAMITE_STANCE },
+	})
+end
+
+-- Each weapon's stance and attack keys, by its name (Config.Weapons); a weapon without a set of its own is drawn with
+-- its style's (the first weapon of that style).
+type Set = { stance: Pose, keys: (step: number, finisher: boolean, k: number) -> { Key } }
+local SETS: { [string]: Set } = {
+	Fist = { stance = GUARD, keys = punch },
+	Bat = { stance = BAT_STANCE, keys = bat },
+	GoldBar = { stance = GOLD_STANCE, keys = goldBar },
+	Hammer = {
+		stance = HAMMER_STANCE,
+		keys = function(_step: number, _finisher: boolean, k: number): { Key }
+			return hammer(k)
+		end,
+	},
+	Dynamite = {
+		stance = DYNAMITE_STANCE,
+		keys = function(_step: number, _finisher: boolean, k: number): { Key }
+			return dynamite(k)
+		end,
+	},
+}
+local BY_STYLE: { [string]: string } = { punch = "Fist", swing = "Bat", slam = "Hammer", throw = "Dynamite" }
+
+local function setOf(weapon: string, style: string): Set
+	return SETS[weapon] or SETS[BY_STYLE[style] or "Bat"]
+end
+
+-- The stance a fighter holding `weapon` (of `style`) keeps while fighting: bare fists' guard, or the weapon held ready.
+function AttackPoses.stance(weapon: string, style: string): Pose
+	return setOf(weapon, style).stance
+end
+
+-- The keys of an attack with `weapon` (of `style`) at `step` of the string (`finisher`: its launching last step), the
+-- blow landing at `k` (a share of the drawn length). Made once per attack; sample() reads them each frame.
+function AttackPoses.keys(weapon: string, style: string, step: number, finisher: boolean, k: number): { Key }
+	return setOf(weapon, style).keys(step, finisher, k)
 end
 
 -- A hit reaction ("light" or a launch), `u` (0..1) through it. `back` and `side` say which way the hit pushed, in the

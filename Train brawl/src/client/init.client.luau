@@ -240,6 +240,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 	locomotives:update(dt, list)
 	knock:update()
 	local character = player.Character
+	own:update(character) -- a press kept from a moment ago, once the weapon is ready or a flinch is over
 	drift:update(character, knock:launched())
 	local state = if character then character:GetAttribute(Names.Alive) else nil
 	local alive = state == true

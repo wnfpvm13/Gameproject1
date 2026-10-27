@@ -98,6 +98,16 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 		return n
 	end
 
+	-- Whether a player (not a practice bot) is still in.
+	local function playerIn(): boolean
+		for _, fighter in alive do
+			if fighter.player then
+				return true
+			end
+		end
+		return false
+	end
+
 	local function publishAlive()
 		Workspace:SetAttribute(Names.AliveCount, count())
 	end
@@ -233,7 +243,9 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 			fighting = true
 			local fightEnds = now() + r.MaxSeconds
 			setPhase("Fight", fightEnds)
-			while running and count() > 1 and now() < fightEnds do
+			-- With practice bots, it also ends once no player is left in it (the bots would fight on for minutes while
+			-- the player could only watch from the stands; with players only, two or more in means a player is in).
+			while running and count() > 1 and now() < fightEnds and playerIn() do
 				task.wait(0.1)
 			end
 			fighting = false

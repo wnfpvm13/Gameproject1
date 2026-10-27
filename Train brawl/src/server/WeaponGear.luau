@@ -35,19 +35,21 @@ local function part(name: string, size: Vector3, color: Color3, material: Enum.M
 end
 
 -- The weapon's parts, in the hand's space: a list of (part, where) with the grip at the origin and the weapon's length
--- along -Z (ahead of the fist). The first part is the one the others weld to.
+-- along -Z (ahead of the fist). The first part is the one the others weld to. A two-handed weapon's handle reaches back
+-- past the fist for the other hand (Config.Weapons offHand: SwingPose puts that hand there).
 local function shapeOf(weapon: string): { { part: Part, at: CFrame } }
 	if weapon == "Bat" then
 		local b = Config.Bat
 		local length = b.Length
 		local stick = part("Bat", Vector3.new(length, b.Thickness, b.Thickness), b.Color, Enum.Material.Wood, Enum.PartType.Cylinder)
-		return { { part = stick, at = CFrame.new(0, 0, -(length / 2 - 0.3)) * CFrame.Angles(0, math.rad(90), 0) } }
+		return { { part = stick, at = CFrame.new(0, 0, -(length / 2 - b.Knob)) * CFrame.Angles(0, math.rad(90), 0) } }
 	elseif weapon == "Hammer" then
-		local handle = part("Handle", Vector3.new(3.6, 0.32, 0.32), WOOD, Enum.Material.Wood, Enum.PartType.Cylinder)
+		-- The fist 1.2 up the handle from its end (the other hand below it), the head 3 ahead of the fist.
+		local handle = part("Handle", Vector3.new(4.2, 0.32, 0.32), WOOD, Enum.Material.Wood, Enum.PartType.Cylinder)
 		local head = part("Head", Vector3.new(1.0, 1.0, 1.7), IRON, Enum.Material.Metal)
 		return {
-			{ part = handle, at = CFrame.new(0, 0, -1.5) * CFrame.Angles(0, math.rad(90), 0) },
-			{ part = head, at = CFrame.new(0, 0, -3.3) * CFrame.Angles(0, math.rad(90), 0) },
+			{ part = handle, at = CFrame.new(0, 0, -0.9) * CFrame.Angles(0, math.rad(90), 0) },
+			{ part = head, at = CFrame.new(0, 0, -3.0) * CFrame.Angles(0, math.rad(90), 0) },
 		}
 	elseif weapon == "Dynamite" then
 		local stick = part("Stick", Vector3.new(1.3, 0.5, 0.5), RED, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
@@ -87,7 +89,7 @@ function WeaponGear.equip(model: Model): boolean
 	end
 	-- Gripped in the fist, tipped 15 degrees down: with the arm lifted out for a swing (SwingPose) the weapon sweeps
 	-- level and far in front instead of across the chest.
-	local grip = hand.CFrame * CFrame.new(0, -hand.Size.Y * 0.3, 0) * CFrame.Angles(math.rad(-15), 0, 0)
+	local grip = hand.CFrame * CharacterParts.grip(hand)
 	local root = pieces[1].part
 	root.Name = Names.WeaponPart
 	root:SetAttribute(Names.Weapon, weapon)

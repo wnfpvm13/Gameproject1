@@ -1,6 +1,7 @@
 --!strict
 -- Finding the parts of a character (players' and sandbags', R15 or R6) that the brawl needs: its root and Humanoid,
--- the hand that holds a weapon, the joints the drawn poses turn (R15), and how high its feet are. Requires nothing.
+-- the hand that holds a weapon and where in it the weapon is gripped, the joints the drawn poses turn (R15) and their
+-- frames, and how high its feet are. Requires nothing.
 
 local CharacterParts = {}
 
@@ -26,6 +27,12 @@ function CharacterParts.weaponHand(model: Model): BasePart?
 	return if hand and hand:IsA("BasePart") then hand else nil
 end
 
+-- Where a weapon is gripped, in the hand's own space: in the fist, tipped 15 degrees down, its length along -Z (ahead
+-- of the fist). WeaponGear puts weapons there; SwingPose finds a two-handed weapon's second grip from it.
+function CharacterParts.grip(hand: BasePart): CFrame
+	return CFrame.new(0, -hand.Size.Y * 0.3, 0) * CFrame.Angles(math.rad(-15), 0, 0)
+end
+
 -- Each R15 joint the drawn poses turn, by name, and the part that holds it.
 local JOINT_PARTS: { [string]: string } = {
 	Root = "LowerTorso",
@@ -39,6 +46,8 @@ local JOINT_PARTS: { [string]: string } = {
 	LeftHip = "LeftUpperLeg",
 	RightKnee = "RightLowerLeg",
 	LeftKnee = "LeftLowerLeg",
+	RightWrist = "RightHand",
+	LeftWrist = "LeftHand",
 }
 
 -- The R15 joints of a character found by name (a Motor6D on older rigs, an AnimationConstraint on characters with
@@ -53,6 +62,21 @@ function CharacterParts.joints(model: Model): { [string]: Joint }
 		end
 	end
 	return found
+end
+
+-- A joint's two frames: where it sits in the part it hangs from and in the part it moves (a Motor6D's C0 and C1, an
+-- AnimationConstraint's attachments); the moved part is at from * C0 * Transform * C1:Inverse(). nil when an
+-- attachment is missing.
+function CharacterParts.frames(joint: Joint): (CFrame?, CFrame?)
+	if joint:IsA("Motor6D") then
+		return joint.C0, joint.C1
+	end
+	local constraint = joint :: AnimationConstraint
+	local a0, a1 = constraint.Attachment0, constraint.Attachment1
+	if a0 and a1 then
+		return a0.CFrame, a1.CFrame
+	end
+	return nil, nil
 end
 
 -- The feet's height (world Y). An R6 HipHeight leaves out its 2-stud legs; an R15 one includes them.

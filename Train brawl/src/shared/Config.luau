@@ -40,6 +40,7 @@ type Weapon = {
 	resist: number?,
 	slow: number?,
 	weight: number?,
+	offHand: Vector3?,
 }
 
 -- The arena: big trains side by side on parallel tracks. They stand still in the world; the scenery scrolls past
@@ -235,6 +236,10 @@ Config.Attack = {
 	ReachSlack = 1.5,
 	HeightReach = 5, -- the target's middle within this much higher or lower (cones and areas alike)
 	CooldownSlack = 0.1, -- the server takes an attack this much early (clock and network jitter)
+	-- A press this soon before an attack may start (the weapon getting ready again, a flinch ending) is kept and made the
+	-- moment it may (OwnSwing): pressed in time with a 0.4 s cooldown, about one press in five came a moment early and
+	-- did nothing (Studio 2026-10-27; owner: "my player can't seem to attack").
+	PressBuffer = 0.2,
 	-- The attacker's 1-2-3 string (AttackString, punches and swings): when the last attack landed, an attack starting
 	-- within StringGap after its weapon was ready again is the next step; the StringCount-th (the 3rd) launches what it
 	-- hits, landing FinisherWindup later than the weapon's hitAt (a wind-up everyone sees) and drawn FinisherStretch
@@ -247,9 +252,11 @@ Config.Attack = {
 	FinisherStretch = 1.5,
 }
 
--- The bat's look (WeaponGear): a big cartoon bat, so its reach shows.
+-- The bat's look (WeaponGear): a big cartoon bat, so its reach shows, held in both hands: the right fist Knob up from
+-- its end, the left hand below it (Config.Weapons.Bat offHand).
 Config.Bat = {
-	Length = 4.5,
+	Length = 5.2,
+	Knob = 1.2,
 	Thickness = 0.55,
 	Color = Color3.fromRGB(196, 150, 90),
 }
@@ -261,7 +268,8 @@ Config.Bat = {
 -- single hit carries one off a roof from its middle, tests), launch makes even a first hit a launch. style: how it
 -- attacks and is drawn (punch, swing: a cone of reach and halfAngle; slam: an area of radius just ahead; throw: a lit
 -- stick that bursts after its fuse). hitAt: seconds after pressing when it lands; seconds: the drawn attack. weight:
--- how often a crate holds it. (Its name on screen is in Words.Weapons.)
+-- how often a crate holds it. offHand: held in both hands, the free hand there along the grip (+Z: back toward the
+-- handle's end; WeaponGear makes the handle that long). (Its name on screen is in Words.Weapons.)
 Config.Weapons = {
 	-- A quick jab: short reach, light damage, a little push (13 punches empty health). Quicker since 2026-10-27 (owner:
 	-- punching looked slow; 0.45 / 0.26 before): the guard fills the time between punches.
@@ -279,6 +287,7 @@ Config.Weapons = {
 		seconds = 0.32,
 		uses = 15,
 		weight = 3,
+		offHand = Vector3.new(0, 0, 0.85), -- under the right fist, toward the knob
 	},
 	-- Raised high (a long wind-up everyone sees), slammed down: everyone around the spot just ahead flies, away from the
 	-- one who slammed.
@@ -294,12 +303,13 @@ Config.Weapons = {
 		seconds = 0.75,
 		uses = 3,
 		weight = 2,
+		offHand = Vector3.new(0, 0, 0.85), -- under the right fist, toward the handle's end
 	},
 	-- Thrown in an arc; a red ring shows where it comes down; it bursts after its fuse, throwing everyone around out.
 	Dynamite = {
 		style = "throw",
 		damage = 18,
-		push = 1.35,
+		push = 1.2,
 		launch = true,
 		radius = 8,
 		throwSpeed = 36,
@@ -325,6 +335,7 @@ Config.Weapons = {
 		resist = 0.5,
 		slow = 0.75,
 		weight = 1.5,
+		offHand = Vector3.new(0, 0, -1.5), -- carried by both ends
 	},
 } :: { [string]: Weapon }
 
@@ -383,13 +394,18 @@ Config.Hit = {
 	SlideSeconds = 0.18,
 	LightFull = 5.5,
 	LightEmpty = 14,
-	-- Launch: push from LaunchFull (at full health) to LaunchEmpty (at none), lift LaunchLift. A string's third hit
-	-- launches, so with a bat the first one comes at 64 health: measured 4.3 to 5.4 studs; the second at 28: 11.0 (2026-10-25, with the
-	-- 15-wide roofs: 7.5 from the middle to an edge; on 10-wide roofs two thirds of these pushes went 3.6 and 6.9). The two light
-	-- hits before it push too: taken all the same way from the middle of a roof, a first string can carry a fighter off.
-	LaunchFull = 1.5,
-	LaunchEmpty = 40,
-	LaunchLift = 28,
+	-- Launch: push from LaunchFull (at full health) to LaunchEmpty (at none), lift from LaunchLift to LaunchLiftEmpty.
+	-- Faster and farther since 2026-10-27 (owner: "when someone is launched it should fly speedier, faster and farther";
+	-- it was 1.5 to 40 with lift 28, a hop): low and quick while health is high, higher and much farther as it drops.
+	-- A string's third hit launches: with bare fists the first comes at 76 health (about 18 along the ground, 5 in the
+	-- air - it stays on a 15-wide roof from its middle, 7.5 to an edge), the second at 52 (off from the middle), the
+	-- third at 28 (about 15 in the air: on toward the next train); a bat's first comes at 64, already off from the middle
+	-- (a weapon's edge). The two light hits before it push too: taken all the same way from the middle of a roof, a first
+	-- string can carry a fighter off.
+	LaunchFull = 5,
+	LaunchEmpty = 59,
+	LaunchLift = 24,
+	LaunchLiftEmpty = 36,
 	LaunchImmune = 0.9, -- a launched fighter cannot be hit for this long (flight, getting up and a moment more)
 	-- Smash, the home run: high into the sky and away. With this lift a body is still in the air (higher than the
 	-- highest top) when Config.Fall.HomeRunSeconds ends and it twinkles out - hit on the lowest deck it would reach the

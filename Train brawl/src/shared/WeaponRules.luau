@@ -31,6 +31,7 @@ export type Weapon = {
 	resist: number?, -- while held, knocks taken are multiplied by this
 	slow: number?, -- while held, walking speed is multiplied by this
 	weight: number?,
+	offHand: Vector3?, -- held in both hands: where the free hand holds it (studs, in the grip's space: CharacterParts.grip)
 }
 
 -- The weapon named by `value` (a character's Names.Weapon attribute), or "Fist" when it names none.

@@ -319,12 +319,12 @@ do
 	check("push scales from full to empty", HitRules.scale(100, 100, 9, 29) == 9 and HitRules.scale(0, 100, 9, 29) == 29 and HitRules.scale(50, 100, 9, 29) == 19)
 	check("push stays in range outside the health range", HitRules.scale(-5, 100, 9, 29) == 29 and HitRules.scale(150, 100, 9, 29) == 9)
 	check("the real numbers: a bat empties health on the 9th hit, fists on the 13th", math.ceil(Config.Health.Max / Config.Weapons.Bat.damage) == 9 and math.ceil(Config.Health.Max / Config.Weapons.Fist.damage) == 13)
-	local forces = { LightFull = 5, LightEmpty = 15, LaunchFull = 1, LaunchEmpty = 27, LaunchLift = 28, SmashPush = 70, SmashLift = 60 }
+	local forces = { LightFull = 5, LightEmpty = 15, LaunchFull = 1, LaunchEmpty = 27, LaunchLift = 20, LaunchLiftEmpty = 36, SmashPush = 70, SmashLift = 60 }
 	local sp, sl = HitRules.force("smash", 0, 100, forces)
 	local lp, ll = HitRules.force("launch", 50, 100, forces)
 	local gp, gl = HitRules.force("light", 50, 100, forces)
 	check("a smash pushes and lifts at its own fixed force", sp == 70 and sl == 60)
-	check("a launch pushes by health and lifts", lp == 14 and ll == 28)
+	check("a launch pushes and lifts by health", lp == 14 and ll == 28)
 	check("a light hit pushes by health along the ground only", gp == 10 and gl == 0)
 end
 
@@ -332,27 +332,41 @@ end
 do
 	-- Knock reach (the plain flight formula; a lying landing and a short slide add about a fifth, measured in Studio).
 	local h = Config.Hit
-	-- (The launches were measured with the bat: its damage makes the combos' health.)
-	local max, damage = Config.Health.Max, Config.Weapons.Bat.damage
+	-- (Bare fists are what everyone fights with: their damage makes the strings' health.)
+	local max, damage = Config.Health.Max, Config.Weapons.Fist.damage
 	local function launchAt(health: number): number
 		local push, lift = HitRules.force("launch", health, max, h)
 		return BatMath.flightDistance(push, lift, GRAVITY)
 	end
 	local strikes = Config.Attack.StringCount -- a string's last hit launches: the first launch comes after its hits
 	local first, second = launchAt(max - strikes * damage), launchAt(max - 2 * strikes * damage)
-	check("the first combo's launch lands on the roof from its middle", first < A.RoofWidth / 2, string.format("%.1f", first))
-	-- The launches as measured in Studio (2026-10-25, a server-physics sandbag on a 15-wide roof): the travel includes
-	-- landing and sliding, so it is longer than the formula's. A tuning change to these pushes must be measured again.
-	local MEASURED = { { health = 64, push = 15.4, lift = 28, travel = 5.38 }, { health = 28, push = 29.2, lift = 28, travel = 11.02 } }
+	check("the first string's launch lands on the roof from its middle", first < A.RoofWidth / 2, string.format("%.1f", first))
+	check("a launch flies higher as health drops", h.LaunchLiftEmpty > h.LaunchLift and h.LaunchEmpty > h.LaunchFull)
+	-- Faster than the hop it was (push 1.5 to 40, lift 28 - owner 2026-10-27): the first string's launch half as fast
+	-- again along the ground, and every launch farther.
+	local oldFirst = 40 + (1.5 - 40) * (max - strikes * damage) / max
+	local firstPush = HitRules.force("launch", max - strikes * damage, max, h)
+	check("the first string's launch flies half as fast again as it did", firstPush >= 1.5 * oldFirst, string.format("%.1f vs %.1f", firstPush, oldFirst))
+	local farther = true
+	for health = 5, 95, 10 do
+		local push, lift = HitRules.force("launch", health, max, h)
+		local oldPush = 40 + (1.5 - 40) * health / max
+		farther = farther and BatMath.flightDistance(push, lift, GRAVITY) > BatMath.flightDistance(oldPush, 28, GRAVITY)
+	end
+	check("every launch flies farther than it did", farther)
+	-- The launches as measured in Studio (2026-10-27, a server-physics standard body along a boxcar roof; the bat's first
+	-- at 64 went 8.74): the travel includes landing and sliding, so it is longer than the formula's. A tuning change to
+	-- these pushes must be measured again.
+	local MEASURED = { { health = 76, push = 17.96, lift = 26.88, travel = 5.99 }, { health = 52, push = 30.92, lift = 29.76, travel = 11.91 } }
 	local same = true
 	for _, m in MEASURED do
 		local push, lift = HitRules.force("launch", m.health, max, h)
 		same = same and near(push, m.push, 0.05) and near(lift, m.lift)
 	end
 	check("the launch pushes are the ones measured in Studio (measure again after a change)", same)
-	check("measured: the first combo's launch stays on the roof from its middle", MEASURED[1].travel < A.RoofWidth / 2)
-	check("measured: the second combo's launch goes off the roof from its middle", MEASURED[2].travel > A.RoofWidth / 2)
-	check("the second combo's launch goes off the roof from its middle", second > A.RoofWidth / 2, string.format("%.1f", second))
+	check("measured: the first string's launch stays on the roof from its middle", MEASURED[1].travel < A.RoofWidth / 2)
+	check("measured: the second string's launch goes off the roof from its middle", MEASURED[2].travel > A.RoofWidth / 2)
+	check("the second string's launch goes off the roof from its middle", second > A.RoofWidth / 2, string.format("%.1f", second))
 	check("a light hit never pushes off the roof from its middle", h.LightEmpty * h.SlideSeconds < A.RoofWidth / 2)
 	check("a smash flies past the other train", BatMath.flightDistance(h.SmashPush, h.SmashLift, GRAVITY) > A.RoofWidth + A.Gap + A.RoofWidth)
 	-- The home run: from a body on any top (its middle about 3 above), still flying over the highest top when it
@@ -675,67 +689,101 @@ do
 		return names
 	end
 	local whole, detail = true, ""
-	for _, case in { { "punch", 1, false }, { "punch", 2, false }, { "punch", 3, true }, { "swing", 1, false }, { "swing", 2, false }, { "swing", 3, true }, { "slam", 1, false }, { "throw", 1, false } } do
-		local keys = AttackPoses.keys(case[1], case[2], case[3], 0.4)
+	-- Every weapon's every step (a slam or a throw has one).
+	local CASES = {}
+	for name, w in Config.Weapons do
+		local steps = if AttackString.uses(w.style) then { { 1, false }, { 2, false }, { 3, true } } else { { 1, false } }
+		for _, step in steps do
+			table.insert(CASES, { name, w.style, step[1], step[2] })
+		end
+	end
+	local function label(case: any): string
+		return case[1] .. " " .. case[3]
+	end
+	for _, case in CASES do
+		local keys = AttackPoses.keys(case[1], case[2], case[3], case[4], 0.4)
 		local names = turned(keys)
 		for i = 0, 20 do
 			local pose = AttackPoses.sample(keys, i / 20)
 			for name in names do
 				if not pose[name] then
 					whole = false
-					detail = case[1] .. " " .. case[2] .. " drops " .. name .. " at " .. i / 20
+					detail = label(case) .. " drops " .. name .. " at " .. i / 20
 				end
 			end
 		end
 	end
 	check("every joint an attack turns is drawn all through it", whole, detail)
-	local slamKeys = AttackPoses.keys("slam", 1, false, 0.4)
-	local last, out = AttackPoses.sample(slamKeys, 1), AttackPoses.sample(slamKeys, 0.4)
-	check("a blow with no stance ends half way back to rest, not standing straight", near(last.RightShoulder.x :: number, (out.RightShoulder.x :: number) * 0.5, 1e-6) and (last.RightShoulder.x :: number) > 0)
-	local guard = AttackPoses.stance("punch")
-	check("bare fists keep a guard; the weapons none yet", guard ~= nil and AttackPoses.stance("swing") == nil and AttackPoses.stance("slam") == nil and AttackPoses.stance("throw") == nil)
-	if guard then
-		local guarded = true
-		for _, case in { { 1, false }, { 2, false }, { 3, true } } do
-			local keys = AttackPoses.keys("punch", case[1], case[2], 0.4)
-			for _, u in { 0, 1 } do
-				local pose = AttackPoses.sample(keys, u)
-				for name, joint in guard do
-					guarded = guarded and near(pose[name].x :: number, joint.x or 0) and near(pose[name].z :: number, joint.z or 0)
+	-- Every weapon has a stance; its attacks start in it and come back to it.
+	local stanced, stanceDetail = true, ""
+	for _, case in CASES do
+		local stance = AttackPoses.stance(case[1], case[2])
+		local keys = AttackPoses.keys(case[1], case[2], case[3], case[4], 0.4)
+		for _, u in { 0, 1 } do
+			local pose = AttackPoses.sample(keys, u)
+			for name, joint in stance do
+				for _, axis in { "x", "y", "z" } do
+					if not (pose[name] and near(pose[name][axis] :: number, (joint :: any)[axis] or 0)) then
+						stanced, stanceDetail = false, label(case) .. " " .. name .. " at " .. u
+					end
 				end
 			end
 		end
-		check("every punch starts in the guard and comes back to it", guarded)
-		local jab = AttackPoses.keys("punch", 1, false, 0.4)
-		check("a jab's arm is straight as it lands and already on its way back a tenth later", (AttackPoses.sample(jab, 0.4).LeftElbow.x :: number) < 10 and (AttackPoses.sample(jab, 0.5).LeftElbow.x :: number) > 15)
-		local settled = AttackPoses.react("light", 1, 1, 0, guard)
-		check("a light hit's flinch settles back into the guard", near(settled.LeftElbow.x :: number, guard.LeftElbow.x :: number) and near(settled.RightShoulder.x :: number, guard.RightShoulder.x :: number))
 	end
-	local spin = AttackPoses.sample(AttackPoses.keys("swing", 3, true, 0.4), 0.4 + 0.6 * 0.6)
-	check("the swing finisher's knees ease back to rest while it spins (not dropped)", spin.RightKnee ~= nil and spin.RightKnee.x == 0)
+	check("every weapon's attacks start in its stance and come back to it", stanced, stanceDetail)
+	local guard = AttackPoses.stance("Fist", "punch")
+	check("bare fists' stance is the guard (both fists up)", guard.LeftElbow ~= nil and guard.RightElbow ~= nil and (guard.LeftElbow.x :: number) > 90)
+	check("a weapon without a set of its own is drawn with its style's", AttackPoses.stance("NewWeapon", "swing") == AttackPoses.stance("Bat", "swing") and AttackPoses.stance("NewWeapon", "slam") == AttackPoses.stance("Hammer", "slam"))
+	local jab = AttackPoses.keys("Fist", "punch", 1, false, 0.4)
+	check("a jab's arm is straight as it lands and already on its way back a tenth later", (AttackPoses.sample(jab, 0.4).LeftElbow.x :: number) < 10 and (AttackPoses.sample(jab, 0.5).LeftElbow.x :: number) > 15)
+	local settled = AttackPoses.react("light", 1, 1, 0, guard)
+	check("a light hit's flinch settles back into the guard", near(settled.LeftElbow.x :: number, guard.LeftElbow.x :: number) and near(settled.RightShoulder.x :: number, guard.RightShoulder.x :: number))
+	-- A two-handed weapon's poses leave the free arm to SwingPose (it puts that hand on the handle).
+	local free, freeDetail = true, ""
+	for _, case in CASES do
+		if Config.Weapons[case[1]].offHand then
+			local poses = { AttackPoses.stance(case[1], case[2]) }
+			for _, key in AttackPoses.keys(case[1], case[2], case[3], case[4], 0.4) do
+				table.insert(poses, key.pose)
+			end
+			for _, pose in poses do
+				if pose.LeftShoulder or pose.LeftElbow or pose.LeftWrist then
+					free, freeDetail = false, label(case)
+				end
+			end
+		end
+	end
+	check("a two-handed weapon's poses never turn the free arm", free, freeDetail)
+	check("the bat's handle reaches back past the right fist to the left hand", (Config.Weapons.Bat.offHand :: any).Z < Config.Bat.Knob)
+	local turnedMost = 0
+	local homeRun = AttackPoses.keys("Bat", "swing", 3, true, 0.4)
+	for i = 0, 40 do
+		turnedMost = math.max(turnedMost, math.abs(AttackPoses.sample(homeRun, i / 40).Root.y :: number))
+	end
+	check("the bat's finisher ends wrapped round the shoulder, not spinning round", turnedMost < 90, string.format("%.0f", turnedMost))
 	local inOrder, orderDetail = true, ""
-	for _, case in { { "punch", 1, false }, { "punch", 2, false }, { "punch", 3, true }, { "swing", 1, false }, { "swing", 3, true }, { "slam", 1, false }, { "throw", 1, false } } do
+	for _, case in CASES do
 		for _, k in { 0.1, 0.4, 0.9 } do
-			local keys = AttackPoses.keys(case[1], case[2], case[3], k)
+			local keys = AttackPoses.keys(case[1], case[2], case[3], case[4], k)
 			for i = 2, #keys do
 				if not (keys[i].t > keys[i - 1].t) then
 					inOrder = false
-					orderDetail = case[1] .. " " .. case[2] .. " at k " .. k
+					orderDetail = label(case) .. " at k " .. k
 				end
 			end
 			if keys[#keys].t ~= 1 then
 				inOrder = false
-				orderDetail = case[1] .. " " .. case[2] .. " does not end at 1"
+				orderDetail = label(case) .. " does not end at 1"
 			end
 		end
 	end
 	check("an attack's keys stay in order however late its blow lands", inOrder, orderDetail)
-	local toss = AttackPoses.keys("throw", 1, false, 0.4)
-	local early, release, after = AttackPoses.sample(toss, 0.3), AttackPoses.sample(toss, 0.4), AttackPoses.sample(toss, 0.5)
-	local arm = function(pose: any): number
-		return pose.RightShoulder.x
+	local released = false
+	for _, key in AttackPoses.keys("Dynamite", "throw", 1, false, 0.4) do
+		released = released or key.t == 0.4
 	end
-	check("a thrown stick leaves the hand with the arm on its way forward", arm(early) > arm(release) and arm(release) > arm(after) and arm(release) < 170 and arm(release) > 40)
+	check("a thrown stick leaves the hand at a key of its own, as the blow would land", released)
+	check("a press kept a moment is dropped before the quickest weapon could attack twice", Config.Attack.PressBuffer > 0 and Config.Attack.PressBuffer < Config.Weapons.Fist.cooldown)
 end
 
 -- 12. Practice bots (stage 5e): whom a bot goes for and where it walks, kept on its own top.

@@ -683,9 +683,28 @@ do
 		end
 	end
 	check("every joint an attack turns is drawn all through it", whole, detail)
-	local jab = AttackPoses.keys("punch", 1, false, 0.4)
-	local last, out = AttackPoses.sample(jab, 1), AttackPoses.sample(jab, 0.4)
-	check("a blow ends half way back to rest, not standing straight", near(last.LeftShoulder.x :: number, (out.LeftShoulder.x :: number) * 0.5, 1e-6) and (last.LeftShoulder.x :: number) > 0)
+	local slamKeys = AttackPoses.keys("slam", 1, false, 0.4)
+	local last, out = AttackPoses.sample(slamKeys, 1), AttackPoses.sample(slamKeys, 0.4)
+	check("a blow with no stance ends half way back to rest, not standing straight", near(last.RightShoulder.x :: number, (out.RightShoulder.x :: number) * 0.5, 1e-6) and (last.RightShoulder.x :: number) > 0)
+	local guard = AttackPoses.stance("punch")
+	check("bare fists keep a guard; the weapons none yet", guard ~= nil and AttackPoses.stance("swing") == nil and AttackPoses.stance("slam") == nil and AttackPoses.stance("throw") == nil)
+	if guard then
+		local guarded = true
+		for _, case in { { 1, false }, { 2, false }, { 3, true } } do
+			local keys = AttackPoses.keys("punch", case[1], case[2], 0.4)
+			for _, u in { 0, 1 } do
+				local pose = AttackPoses.sample(keys, u)
+				for name, joint in guard do
+					guarded = guarded and near(pose[name].x :: number, joint.x or 0) and near(pose[name].z :: number, joint.z or 0)
+				end
+			end
+		end
+		check("every punch starts in the guard and comes back to it", guarded)
+		local jab = AttackPoses.keys("punch", 1, false, 0.4)
+		check("a jab's arm is straight as it lands and already on its way back a tenth later", (AttackPoses.sample(jab, 0.4).LeftElbow.x :: number) < 10 and (AttackPoses.sample(jab, 0.5).LeftElbow.x :: number) > 15)
+		local settled = AttackPoses.react("light", 1, 1, 0, guard)
+		check("a light hit's flinch settles back into the guard", near(settled.LeftElbow.x :: number, guard.LeftElbow.x :: number) and near(settled.RightShoulder.x :: number, guard.RightShoulder.x :: number))
+	end
 	local spin = AttackPoses.sample(AttackPoses.keys("swing", 3, true, 0.4), 0.4 + 0.6 * 0.6)
 	check("the swing finisher's knees ease back to rest while it spins (not dropped)", spin.RightKnee ~= nil and spin.RightKnee.x == 0)
 	local inOrder, orderDetail = true, ""

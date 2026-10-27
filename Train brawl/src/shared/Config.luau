@@ -241,7 +241,7 @@ Config.Attack = {
 	-- times the weapon's seconds. The server takes the client's step up to StringSlack later than its own clock would
 	-- (network jitter).
 	StringCount = 3,
-	StringGap = 0.35, -- with bare fists: a new attack within 0.8 s of the last one keeps the string
+	StringGap = 0.4, -- with bare fists: a new attack within 0.8 s of the last one keeps the string
 	StringSlack = 0.15,
 	FinisherWindup = 0.08,
 	FinisherStretch = 1.5,
@@ -263,9 +263,10 @@ Config.Bat = {
 -- stick that bursts after its fuse). hitAt: seconds after pressing when it lands; seconds: the drawn attack. weight:
 -- how often a crate holds it. (Its name on screen is in Words.Weapons.)
 Config.Weapons = {
-	-- A quick jab: short reach, light damage, a little push (13 punches empty health).
+	-- A quick jab: short reach, light damage, a little push (13 punches empty health). Quicker since 2026-10-27 (owner:
+	-- punching looked slow; 0.45 / 0.26 before): the guard fills the time between punches.
 	-- (Its cooldown leaves a punched fighter, stunned Config.Hit.LightStun, a moment to answer before the next punch.)
-	Fist = { style = "punch", damage = 8, push = 0.8, reach = 4, halfAngle = 60, cooldown = 0.45, hitAt = 0.1, seconds = 0.26 },
+	Fist = { style = "punch", damage = 8, push = 0.8, reach = 4, halfAngle = 60, cooldown = 0.4, hitAt = 0.1, seconds = 0.24 },
 	-- The old bat: as the whole game used before the weapons (reach measured: the drawn tip passes 4.2 ahead as it hits).
 	Bat = {
 		style = "swing",
@@ -376,7 +377,7 @@ Config.Hit = {
 	-- Light: held still Config.Feedback.HitStop.light, then pushed along the ground for SlideSeconds at a speed from
 	-- LightFull (full health) to LightEmpty (none); no swinging for LightStun. Measured 2026-10-25: 1.2 studs at 88
 	-- health, 2 at 40 (the Humanoid carries on a little after the push).
-	LightStun = 0.3,
+	LightStun = 0.28, -- with the fist's 0.4 cooldown the one hit can still answer first (0.3 before)
 	SlideSeconds = 0.18,
 	LightFull = 5.5,
 	LightEmpty = 14,

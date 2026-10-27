@@ -3,8 +3,12 @@
 -- animation): the hips and torso turn into a blow, the free arm guards, the head keeps facing ahead. Each attack style
 -- has its own (Config.Weapons style), and a punch or swing has its own pose for each step of the attacker's string
 -- (AttackString); the launching last step is plainly bigger and starts with a wind-up (it lands a moment later than
--- the others: Config.Attack.FinisherWindup).
--- - punch: 1 a left jab, 2 a right straight (then 1, 2 again), the last a dip into a rising uppercut with a step in;
+-- the others: Config.Attack.FinisherWindup). A style can have a stance (stance()): the pose a fighter holding it keeps
+-- while fighting, standing or walking (bare fists: a boxing guard); its attacks start from it and come back to it, and
+-- a light hit's flinch settles back into it.
+-- - punch: from the guard, 1 a left jab, 2 a right straight (then 1, 2 again), the last a dip into a rising uppercut
+--   with a short step in. The hips turn first, the torso and shoulder follow and the elbow straightens last, as the
+--   blow lands; the arm stays out only a moment and snaps back to the guard;
 -- - swing: 1 a forehand, 2 a backhand, the last a big forehand with a step in that carries on into a full spin;
 -- - slam: both arms overhead, leaning back, then bent over the slam with the knees giving;
 -- - throw: wound back over the shoulder, then the torso turns through the throw;
@@ -117,7 +121,19 @@ end
 
 local REST: Pose = {}
 local GUARD_LEFT: Pose = { LeftShoulder = { x = 45 }, LeftElbow = { x = 100 } }
-local GUARD_RIGHT: Pose = { RightShoulder = { x = 45 }, RightElbow = { x = 100 } }
+
+-- Bare fists' boxing guard: the torso turned a little so the left side leads (the head still facing ahead), the left
+-- fist a little forward, the right one by the chin, elbows in.
+local LEAD: Pose = { LeftShoulder = { x = 55, z = 10 }, LeftElbow = { x = 105 } }
+local REAR: Pose = { RightShoulder = { x = 38, z = -12 }, RightElbow = { x = 128 } }
+local GUARD: Pose = {
+	Waist = { y = -10 },
+	Neck = { y = 10 },
+	LeftShoulder = LEAD.LeftShoulder,
+	LeftElbow = LEAD.LeftElbow,
+	RightShoulder = REAR.RightShoulder,
+	RightElbow = REAR.RightElbow,
+}
 
 -- Joins pose tables (later ones win for a joint both name).
 local function with(...: Pose): Pose
@@ -145,41 +161,109 @@ local function blow(cocked: Pose, out: Pose, follow: Pose, k: number, windUp: nu
 	})
 end
 
+-- A punch from the guard landing at `k` (a share of the drawn attack): `load` a moment before, `drive` (the hips and
+-- torso turning, the elbow still bent) speeding into `out` (the arm straight) as it lands, out only `hold` longer, then
+-- snapped back through `back` to the guard.
+local function fromGuard(load: Pose, drive: Pose, out: Pose, back: Pose, k: number, hold: number): { Key }
+	return ordered({
+		{ t = 0, pose = GUARD },
+		{ t = k * 0.4, pose = load, ease = "out" },
+		{ t = k * 0.75, pose = drive, ease = "in" },
+		{ t = k, pose = out, ease = "linear" },
+		{ t = k + hold, pose = out, ease = "linear" },
+		{ t = k + hold + (1 - k - hold) * 0.5, pose = back, ease = "out" },
+		{ t = 1, pose = GUARD },
+	})
+end
+
 -- k: when the blow lands, as a share of the drawn attack.
 local function punch(step: number, finisher: boolean, k: number): { Key }
 	if not finisher then
-		if step % 2 == 1 then -- a left jab
-			local cocked = with(GUARD_RIGHT, { Waist = { y = 8 }, LeftShoulder = { x = 40 }, LeftElbow = { x = 75 } })
-			local out = with(GUARD_RIGHT, { Waist = { y = -18 }, Neck = { y = 10 }, LeftShoulder = { x = 90, z = 8 }, LeftElbow = { x = 5 } })
-			return blow(cocked, out, out, k, 0.45, 0.22)
+		if step % 2 == 1 then -- a left jab: quick, the hips barely turning
+			local load = with(GUARD, { Root = { y = 4 }, Waist = { y = -6 }, Neck = { y = 4 }, LeftShoulder = { x = 50, z = 12 }, LeftElbow = { x = 115 } })
+			local drive = with(GUARD, { Root = { y = -6 }, Waist = { y = -18 }, Neck = { y = 20 }, LeftShoulder = { x = 80, z = 4 }, LeftElbow = { x = 60 } })
+			local out = with(REAR, {
+				Root = { y = -8, shift = Vector3.new(0, 0, -0.15) },
+				Waist = { y = -24 },
+				Neck = { y = 26 },
+				LeftShoulder = { x = 92 },
+				LeftElbow = { x = 2 },
+			})
+			local back = with(GUARD, { Waist = { y = -14 }, Neck = { y = 14 }, LeftShoulder = { x = 64, z = 8 }, LeftElbow = { x = 72 } })
+			return fromGuard(load, drive, out, back, k, 0.06)
 		end
-		-- a right straight
-		local cocked = with(GUARD_LEFT, { Waist = { y = -10 }, RightShoulder = { x = 40 }, RightElbow = { x = 75 } })
-		local out = with(GUARD_LEFT, { Waist = { y = 24 }, Neck = { y = -12 }, RightShoulder = { x = 90, z = -8 }, RightElbow = { x = 5 } })
-		return blow(cocked, out, out, k, 0.45, 0.22)
+		-- a right straight: coiled a little further, then the hips drive the rear hand through
+		local load = with(GUARD, { Root = { y = -6 }, Waist = { y = -18 }, Neck = { y = 22 }, RightShoulder = { x = 34, z = -14 }, RightElbow = { x = 135 } })
+		local drive = with(GUARD, { Root = { y = 10 }, Waist = { y = 6 }, Neck = { y = -14 }, RightShoulder = { x = 74, z = -6 }, RightElbow = { x = 70 } })
+		local out = with(LEAD, {
+			Root = { y = 18, shift = Vector3.new(0, -0.05, -0.25) },
+			Waist = { y = 22 },
+			Neck = { y = -34 },
+			RightShoulder = { x = 92, z = -4 },
+			RightElbow = { x = 2 },
+			RightKnee = { x = -12 },
+		})
+		local back = with(GUARD, { Root = { y = 6 }, Waist = { y = 4 }, Neck = { y = -8 }, RightShoulder = { x = 58, z = -8 }, RightElbow = { x = 80 } })
+		return fromGuard(load, drive, out, back, k, 0.06)
 	end
-	-- The finisher: down into a dip with the right fist low and back, then up through a rising uppercut and a step in.
-	local dip = with(GUARD_LEFT, {
-		Root = { shift = Vector3.new(0, -0.35, 0) },
-		Waist = { x = -12, y = -22 },
-		RightShoulder = { x = 5, z = 18 },
-		RightElbow = { x = 70 },
+	-- The finisher: down into a dip with the right fist low and back, then up through a rising uppercut with a short step
+	-- in (a long one slides the feet).
+	local dip = with(LEAD, {
+		Root = { y = -10, shift = Vector3.new(0, -0.35, 0) },
+		Waist = { x = -12, y = -20 },
+		Neck = { x = 10, y = 26 },
+		RightShoulder = { x = 8, z = 16 },
+		RightElbow = { x = 80 },
 		RightKnee = { x = -25 },
 		LeftKnee = { x = -25 },
 		RightHip = { x = 15 },
 		LeftHip = { x = 15 },
 	})
-	local rise = with(GUARD_LEFT, {
-		Root = { shift = Vector3.new(0, 0.05, -0.5) },
-		Waist = { x = 14, y = 32 },
-		Neck = { x = 10, y = -14 },
-		RightShoulder = { x = 140, z = -10 },
-		RightElbow = { x = 70 }, -- bent: a fist driven up past the chin, not a raised hand
-		LeftHip = { x = 28 },
-		RightHip = { x = -18 },
-		LeftKnee = { x = -10 },
+	local drive = with(LEAD, {
+		Root = { y = 4, shift = Vector3.new(0, -0.15, -0.1) },
+		Waist = { x = 2, y = 8 },
+		Neck = { x = 4, y = -10 },
+		RightShoulder = { x = 80, z = -4 },
+		RightElbow = { x = 85 },
+		RightKnee = { x = -12 },
+		LeftKnee = { x = -12 },
+		LeftHip = { x = 14 },
 	})
-	return blow(dip, rise, rise, k, 0.6, 0.25)
+	-- As it lands: the upper arm out ahead, the forearm up (a fist driven up under the chin, not a raised hand)...
+	local rise = with(LEAD, {
+		Root = { y = 14, shift = Vector3.new(0, 0.05, -0.2) },
+		Waist = { x = 0, y = 24 },
+		Neck = { x = 4, y = -36 },
+		RightShoulder = { x = 112, z = -8 },
+		RightElbow = { x = 72 },
+		LeftHip = { x = 24 },
+		RightHip = { x = -14 },
+		LeftKnee = { x = -8 },
+	})
+	-- ...and carrying on up through it, leaning back.
+	local through = with(rise, {
+		Root = { y = 16, shift = Vector3.new(0, 0.1, -0.2) },
+		Waist = { x = 12, y = 28 },
+		Neck = { x = 8, y = -38 },
+		RightShoulder = { x = 145, z = -10 },
+		RightElbow = { x = 60 },
+	})
+	local back = with(GUARD, {
+		Root = { y = 6, shift = Vector3.new(0, 0, -0.1) },
+		Waist = { x = 4, y = 6 },
+		Neck = { y = -8 },
+		RightShoulder = { x = 70, z = -8 },
+		RightElbow = { x = 95 },
+	})
+	return ordered({
+		{ t = 0, pose = GUARD },
+		{ t = k * 0.6, pose = dip, ease = "out" },
+		{ t = k * 0.85, pose = drive, ease = "in" },
+		{ t = k, pose = rise, ease = "linear" },
+		{ t = k + 0.12, pose = through, ease = "out" },
+		{ t = k + 0.12 + (1 - k - 0.12) * 0.55, pose = back, ease = "out" },
+		{ t = 1, pose = GUARD },
+	})
 end
 
 -- The weapon arm lifted out to the right side (`lift` 0..1) and swung round the torso by `turn` degrees (negative =
@@ -248,6 +332,11 @@ local function throw(k: number): { Key }
 	})
 end
 
+-- The stance a fighter holding a weapon of `style` keeps while fighting (nil: none, the walking animation as it is).
+function AttackPoses.stance(style: string): Pose?
+	return if style == "punch" then GUARD else nil
+end
+
 -- The keys of an attack of `style` at `step` of the string (`finisher`: its launching last step), the blow landing
 -- at `k` (a share of the drawn length). Made once per attack; sample() reads them each frame.
 function AttackPoses.keys(style: string, step: number, finisher: boolean, k: number): { Key }
@@ -263,19 +352,22 @@ end
 
 -- A hit reaction ("light" or a launch), `u` (0..1) through it. `back` and `side` say which way the hit pushed, in the
 -- body's own frame (back: +1 straight backward, -1 forward; side: +1 to its right): a light hit snaps the torso and
--- head that way at once and eases back; a launch throws the arms up and flails them while flying.
-function AttackPoses.react(kind: string, u: number, back: number, side: number): Pose
+-- head that way at once, knocks the arms open and eases back into `stance` (the fighter's stance; nil: none); a launch
+-- throws the arms up and flails them while flying.
+function AttackPoses.react(kind: string, u: number, back: number, side: number, stance: Pose?): Pose
 	if kind == "light" then
 		local peak: Pose = {
-			Waist = { x = 20 * back, z = -14 * side },
-			Neck = { x = 16 * back, z = -10 * side },
-			RightShoulder = { x = 25, z = 25 + 15 * math.max(side, 0) },
-			LeftShoulder = { x = 25, z = -25 - 15 * math.max(-side, 0) },
+			Waist = { x = 20 * back, y = -10 * side, z = -14 * side },
+			Neck = { x = 16 * back, y = -16 * side, z = -10 * side },
+			RightShoulder = { x = 30, z = 28 + 15 * math.max(side, 0) },
+			LeftShoulder = { x = 30, z = -28 - 15 * math.max(-side, 0) },
+			RightElbow = { x = 55 },
+			LeftElbow = { x = 55 },
 		}
 		if u <= 0.25 then
 			return peak
 		end
-		return blend(peak, REST, ease(nil, (u - 0.25) / 0.75))
+		return blend(peak, stance or REST, ease(nil, (u - 0.25) / 0.75))
 	end
 	local wave = math.sin(u * math.pi * 6) * 30 * (1 - u) -- the arms flail, less as the flight ends
 	local flail: Pose = {

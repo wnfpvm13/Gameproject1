@@ -14,7 +14,10 @@
 -- the Animator runs (RunService.PreAnimation): so what Stepped finds is the animation's pose - straight for a joint no
 -- animation moves - and a pose that ends simply stops (writing joints straight in Stepped would show a frame of
 -- standing straight; they are put straight once more before the next animation step). When a blow lands, its
--- attacker's pose pauses for the hit's hold (hold()), as the victim holds still.
+-- attacker's pose pauses for the hit's hold (hold()), as the victim holds still. Under all of it, every fighter
+-- followed (follow()) keeps the stance of what it holds (AttackPoses.stance: bare fists' guard) while it is in a round
+-- that is counting down or fighting and on its feet, coming up and going down over STANCE_BLEND and showing less
+-- while running fast (the arms swing a little): what an attack or a hit reaction blends from and back to.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -33,6 +36,9 @@ local STRING = AttackString.rules(Config.Attack)
 local BLEND_IN = 0.12 -- an attack blends in from the animation over this share of it
 local BLEND_OUT = 0.2 -- and back out over its last this share
 local FADE = 0.08 -- an attack taking over from another pose fades from it over this many seconds
+local STANCE_BLEND = 0.15 -- a stance comes up or goes down over this many seconds
+-- A stance shows fully up to RUN_FROM studs a second along the ground and RUN_LEAST of it from RUN_TO.
+local RUN_FROM, RUN_TO, RUN_LEAST = 10, 16, 0.6
 
 -- A pose being drawn on a character: its joints, what kind ("attack", "light" or "flail"), when it started (server
 -- time for attacks, os.clock for reactions) and how long it lasts, the pose at a share of it, how it blends in, and
@@ -56,6 +62,10 @@ type Drawing = {
 local drawing: { [Model]: Drawing } = {}
 -- Joints a pose wrote that is over or replaced: put straight once before the next animation step.
 local loose: { CharacterParts.Joint } = {}
+-- A fighter's stance: the pose (the last one it had, while going down), how much of it shows (0..1), the joints found
+-- for it and the ones it wrote this frame.
+type Stance = { pose: AttackPoses.Pose?, weight: number, joints: { [string]: CharacterParts.Joint }, written: { [string]: boolean } }
+local stances: { [Model]: Stance } = {}
 
 local function serverNow(): number
 	return Workspace:GetServerTimeNow()
@@ -105,6 +115,58 @@ local function begin(model: Model, kind: string, start: number, length: number, 
 	}
 end
 
+-- The joint turn of a pose's joint.
+local function frameOf(turn: AttackPoses.Joint): CFrame
+	local frame = CFrame.Angles(math.rad(turn.x or 0), math.rad(turn.y or 0), math.rad(turn.z or 0))
+	return if turn.shift then CFrame.new(turn.shift) * frame else frame
+end
+
+-- The stance `model` keeps now (nil: none - not in a round that is counting down or fighting, off its feet, or holding
+-- a weapon with none).
+local function stanceOf(model: Model): AttackPoses.Pose?
+	local phase = Workspace:GetAttribute(Names.Phase)
+	if model:GetAttribute(Names.Alive) ~= true or (phase ~= "Fight" and phase ~= "Countdown") then
+		return nil
+	end
+	local body = CharacterParts.body(model)
+	if not body or body.humanoid.PlatformStand or body.humanoid.Health <= 0 then
+		return nil -- flying, lying fallen or out
+	end
+	local weapon = WeaponRules.named(Config.Weapons, model:GetAttribute(Names.Weapon))
+	return AttackPoses.stance(Config.Weapons[weapon].style)
+end
+
+-- How much of a stance shows at `model`'s speed along the ground.
+local function runShare(model: Model): number
+	local body = CharacterParts.body(model)
+	if not body then
+		return 1
+	end
+	local v = body.root.AssemblyLinearVelocity
+	local speed = Vector3.new(v.X, 0, v.Z).Magnitude
+	return 1 - (1 - RUN_LEAST) * math.clamp((speed - RUN_FROM) / (RUN_TO - RUN_FROM), 0, 1)
+end
+
+-- The stance's joints of `model` (found again when its body parts were replaced).
+local function stanceJoints(model: Model, stance: Stance): { [string]: CharacterParts.Joint }
+	local root = stance.joints.Root or stance.joints.Waist
+	if not (root and root:IsDescendantOf(model)) then
+		stance.joints = CharacterParts.joints(model)
+	end
+	return stance.joints
+end
+
+-- Hands the joints a stance wrote back to the animation.
+local function dropStance(stance: Stance)
+	for name in stance.written do
+		local joint = stance.joints[name]
+		if joint then
+			table.insert(loose, joint)
+		end
+	end
+	table.clear(stance.written)
+end
+
 -- How far through its move a drawing is, 0..1 (time stands still during its hold).
 local function progress(d: Drawing): number
 	local now = d.clock()
@@ -129,6 +191,14 @@ RunService.PreAnimation:Connect(function()
 		straighten(joint)
 	end
 	table.clear(loose)
+	for _, stance in stances do
+		for name in stance.written do
+			local joint = stance.joints[name]
+			if joint then
+				straighten(joint)
+			end
+		end
+	end
 	for _, d in drawing do
 		for name in d.written do
 			local joint = d.joints[name]
@@ -145,7 +215,37 @@ local function write(d: Drawing, name: string, motor: any, value: CFrame)
 	d.written[name] = value
 end
 
-RunService.Stepped:Connect(function()
+RunService.Stepped:Connect(function(_time: number, dt: number)
+	-- The stances first: the animation's pose with the stance over it is what the drawings below blend from.
+	for model, stance in stances do
+		if not model.Parent then
+			stances[model] = nil
+			dropStance(stance)
+			continue
+		end
+		local pose = stanceOf(model)
+		if pose then
+			stance.pose = pose
+		end
+		local target = if pose then runShare(model) else 0
+		local step = dt / STANCE_BLEND
+		stance.weight = if stance.weight < target then math.min(stance.weight + step, target) else math.max(stance.weight - step, target)
+		local shown = stance.pose
+		if stance.weight <= 0 or not shown then
+			dropStance(stance)
+			continue
+		end
+		local joints = stanceJoints(model, stance)
+		local w = stance.weight * stance.weight * (3 - 2 * stance.weight)
+		for name, turn in shown do
+			local joint = joints[name]
+			if joint and joint:IsDescendantOf(Workspace) then
+				local motor = joint :: any
+				motor.Transform = (motor.Transform :: CFrame):Lerp(frameOf(turn), w)
+				stance.written[name] = true
+			end
+		end
+	end
 	for model, d in drawing do
 		local u = progress(d)
 		local root = d.joints.Root or d.joints.Waist
@@ -165,14 +265,10 @@ RunService.Stepped:Connect(function()
 			for name, turn in pose do
 				local joint = d.joints[name]
 				if joint then
-					local frame = CFrame.Angles(math.rad(turn.x or 0), math.rad(turn.y or 0), math.rad(turn.z or 0))
-					if turn.shift then
-						frame = CFrame.new(turn.shift) * frame
-					end
-					-- The animation's pose for this frame is in the joint already (the Animator's, or straight): blend
-					-- from it.
+					-- The animation's pose for this frame is in the joint already (the Animator's, or straight, with the
+					-- stance over it): blend from it.
 					local motor = joint :: any
-					local value = (motor.Transform :: CFrame):Lerp(frame, w)
+					local value = (motor.Transform :: CFrame):Lerp(frameOf(turn), w)
 					local left = if fade then fade[name] else nil
 					write(d, name, motor, if left then left:Lerp(value, s) else value)
 				end
@@ -254,15 +350,21 @@ function SwingPose.react(model: Model, kind: string, push: Vector3?)
 	end
 	local light = kind == "light"
 	local length = if light then AttackPoses.FlinchSeconds else AttackPoses.FlailSeconds
+	-- A flinch settles back into the stance the fighter keeps.
+	local stance = stances[model]
+	local settle = if stance and stance.weight > 0 then stance.pose else nil
 	begin(model, if light then "light" else "flail", os.clock(), length, os.clock, function(u: number): AttackPoses.Pose
-		return AttackPoses.react(kind, u, back, side)
+		return AttackPoses.react(kind, u, back, side, settle)
 	end, 0, false)
 end
 
--- Follows a character's Names.SwingAt (every attack the server takes). `skip(at, step)` returns true for an attack
--- this client already drew (the player's own, started at once); `heard(weapon, step)` sounds the others. Returns the
--- connection.
+-- Follows a character's Names.SwingAt (every attack the server takes) and keeps its stance. `skip(at, step)` returns
+-- true for an attack this client already drew (the player's own, started at once); `heard(weapon, step)` sounds the
+-- others. Returns the connection.
 function SwingPose.follow(model: Model, skip: (number, number) -> boolean, heard: (string, number) -> ()): RBXScriptConnection
+	if not stances[model] then
+		stances[model] = { pose = nil, weight = 0, joints = {}, written = {} }
+	end
 	return model:GetAttributeChangedSignal(Names.SwingAt):Connect(function()
 		local at = model:GetAttribute(Names.SwingAt)
 		local raw = model:GetAttribute(Names.SwingStep)

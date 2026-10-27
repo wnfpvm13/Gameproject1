@@ -16,8 +16,9 @@
 -- standing straight; they are put straight once more before the next animation step). When a blow lands, its
 -- attacker's pose pauses for the hit's hold (hold()), as the victim holds still. Under all of it, every fighter
 -- followed (follow()) keeps the stance of what it holds (AttackPoses.stance: bare fists' guard) while it is in a round
--- that is counting down or fighting and on its feet, coming up and going down over STANCE_BLEND and showing less
--- while running fast (the arms swing a little): what an attack or a hit reaction blends from and back to.
+-- that is counting down or fighting and on its feet, coming up and going down over STANCE_BLEND (at once when it is
+-- knocked flying or takes up a weapon with none) and showing less while running fast (the arms swing a little): what
+-- an attack or a hit reaction blends from and back to.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -71,14 +72,24 @@ local function serverNow(): number
 	return Workspace:GetServerTimeNow()
 end
 
--- Hands the joints the drawing wrote back to the animation (put straight before the next animation step).
-local function release(d: Drawing)
-	for name in d.written do
-		local joint = d.joints[name]
+-- Calls `each` on the joints of `joints` named in `written` (the joints a drawing or a stance wrote).
+local function eachWritten(joints: { [string]: CharacterParts.Joint }, written: { [string]: any }, each: (CharacterParts.Joint) -> ())
+	for name in written do
+		local joint = joints[name]
 		if joint then
-			table.insert(loose, joint)
+			each(joint)
 		end
 	end
+end
+
+-- Puts `joint` straight once before the next animation step.
+local function loosen(joint: CharacterParts.Joint)
+	table.insert(loose, joint)
+end
+
+-- Hands the joints the drawing wrote back to the animation.
+local function release(d: Drawing)
+	eachWritten(d.joints, d.written, loosen)
 end
 
 -- Puts `joint` straight (when the character is still in the world). Both joint kinds have Transform; the type checker
@@ -121,19 +132,25 @@ local function frameOf(turn: AttackPoses.Joint): CFrame
 	return if turn.shift then CFrame.new(turn.shift) * frame else frame
 end
 
--- The stance `model` keeps now (nil: none - not in a round that is counting down or fighting, off its feet, or holding
--- a weapon with none).
-local function stanceOf(model: Model): AttackPoses.Pose?
+-- The stance `model` keeps now (nil: none), and whether one it had goes down gently: when the round is not counting
+-- down or fighting, or the fighter is out of it. Flying, lying fallen or holding a weapon with no stance, it goes at
+-- once (another pose takes over, and would show a stance's bent elbow it does not turn).
+local function stanceOf(model: Model): (AttackPoses.Pose?, boolean)
 	local phase = Workspace:GetAttribute(Names.Phase)
 	if model:GetAttribute(Names.Alive) ~= true or (phase ~= "Fight" and phase ~= "Countdown") then
-		return nil
+		return nil, true
 	end
 	local body = CharacterParts.body(model)
-	if not body or body.humanoid.PlatformStand or body.humanoid.Health <= 0 then
-		return nil -- flying, lying fallen or out
+	if not body or body.humanoid.Health <= 0 then
+		return nil, true
+	end
+	local now = drawing[model]
+	if body.humanoid.PlatformStand or (now and now.kind == "flail") then
+		return nil, false -- the flail may come before the stiffness reaches this client
 	end
 	local weapon = WeaponRules.named(Config.Weapons, model:GetAttribute(Names.Weapon))
-	return AttackPoses.stance(Config.Weapons[weapon].style)
+	local stance = AttackPoses.stance(Config.Weapons[weapon].style)
+	return stance, stance ~= nil
 end
 
 -- How much of a stance shows at `model`'s speed along the ground.
@@ -147,23 +164,22 @@ local function runShare(model: Model): number
 	return 1 - (1 - RUN_LEAST) * math.clamp((speed - RUN_FROM) / (RUN_TO - RUN_FROM), 0, 1)
 end
 
--- The stance's joints of `model` (found again when its body parts were replaced).
-local function stanceJoints(model: Model, stance: Stance): { [string]: CharacterParts.Joint }
-	local root = stance.joints.Root or stance.joints.Waist
-	if not (root and root:IsDescendantOf(model)) then
-		stance.joints = CharacterParts.joints(model)
+-- The joints of `model` for `pose`, found again when one it turns is missing or gone (any of its body parts replaced,
+-- or one arriving late).
+local function stanceJoints(model: Model, stance: Stance, pose: AttackPoses.Pose): { [string]: CharacterParts.Joint }
+	for name in pose do
+		local joint = stance.joints[name]
+		if not (joint and joint:IsDescendantOf(model)) then
+			stance.joints = CharacterParts.joints(model)
+			break
+		end
 	end
 	return stance.joints
 end
 
 -- Hands the joints a stance wrote back to the animation.
 local function dropStance(stance: Stance)
-	for name in stance.written do
-		local joint = stance.joints[name]
-		if joint then
-			table.insert(loose, joint)
-		end
-	end
+	eachWritten(stance.joints, stance.written, loosen)
 	table.clear(stance.written)
 end
 
@@ -192,20 +208,10 @@ RunService.PreAnimation:Connect(function()
 	end
 	table.clear(loose)
 	for _, stance in stances do
-		for name in stance.written do
-			local joint = stance.joints[name]
-			if joint then
-				straighten(joint)
-			end
-		end
+		eachWritten(stance.joints, stance.written, straighten)
 	end
 	for _, d in drawing do
-		for name in d.written do
-			local joint = d.joints[name]
-			if joint then
-				straighten(joint)
-			end
-		end
+		eachWritten(d.joints, d.written, straighten)
 	end
 end)
 
@@ -223,19 +229,23 @@ RunService.Stepped:Connect(function(_time: number, dt: number)
 			dropStance(stance)
 			continue
 		end
-		local pose = stanceOf(model)
+		local pose, gentle = stanceOf(model)
 		if pose then
 			stance.pose = pose
 		end
-		local target = if pose then runShare(model) else 0
-		local step = dt / STANCE_BLEND
-		stance.weight = if stance.weight < target then math.min(stance.weight + step, target) else math.max(stance.weight - step, target)
+		if pose or gentle then
+			local target = if pose then runShare(model) else 0
+			local step = dt / STANCE_BLEND
+			stance.weight = if stance.weight < target then math.min(stance.weight + step, target) else math.max(stance.weight - step, target)
+		else
+			stance.weight = 0
+		end
 		local shown = stance.pose
 		if stance.weight <= 0 or not shown then
 			dropStance(stance)
 			continue
 		end
-		local joints = stanceJoints(model, stance)
+		local joints = stanceJoints(model, stance, shown)
 		local w = stance.weight * stance.weight * (3 - 2 * stance.weight)
 		for name, turn in shown do
 			local joint = joints[name]

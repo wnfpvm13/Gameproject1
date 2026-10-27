@@ -377,7 +377,9 @@ Config.Hit = {
 	-- Light: held still Config.Feedback.HitStop.light, then pushed along the ground for SlideSeconds at a speed from
 	-- LightFull (full health) to LightEmpty (none); no swinging for LightStun. Measured 2026-10-25: 1.2 studs at 88
 	-- health, 2 at 40 (the Humanoid carries on a little after the push).
-	LightStun = 0.28, -- with the fist's 0.4 cooldown the one hit can still answer first (0.3 before)
+	-- With the fist's 0.4 cooldown the one hit can still answer first, with bare fists or a bat (its 0.12 to land):
+	-- 0.26 + 0.12 < 0.4 (tests; 0.3 before, with 0.45).
+	LightStun = 0.26,
 	SlideSeconds = 0.18,
 	LightFull = 5.5,
 	LightEmpty = 14,
@@ -404,7 +406,7 @@ Config.Knock = {
 	-- A swing reaching the server this soon after its swinger was hit was pressed before the hit reached that player's
 	-- screen (about a round trip), so it is still taken; later, while the hit's stun lasts (Config.Hit.LightStun or
 	-- MinSeconds), the server refuses swings.
-	SwingGrace = 0.25,
+	SwingGrace = 0.22, -- under Config.Hit.LightStun, so the server still refuses swings for part of a light stun
 	-- A home run's body tumbles head over heels the way it was pushed, this many turns over its flight. A plain launch
 	-- does not: measured 2026-10-26 (Studio, same rig with and without), a quarter turn sent a health-64 launch 6.9 studs
 	-- instead of 3.1 (the body lands on its back and slides) - near the 7.5 from a roof's middle to its edge, so it

@@ -11,6 +11,7 @@ local Workspace = game:GetService("Workspace")
 
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Config = require(shared:WaitForChild("Config"))
+local Names = require(shared:WaitForChild("Names"))
 
 local AvatarRules = {}
 
@@ -19,21 +20,9 @@ local AvatarRules = {}
 local BODY_PARTS = { "Torso", "LeftArm", "RightArm", "LeftLeg", "RightLeg" }
 local ANIMATIONS = { "IdleAnimation", "WalkAnimation", "RunAnimation", "JumpAnimation", "FallAnimation", "ClimbAnimation", "SwimAnimation" }
 
--- Makes `model`'s body the standard one with the standard animations (yields; nothing when it already is, or when
--- Roblox cannot read or apply its description). Returns whether it changed anything. A description is applied only to
--- a character in the world (Roblox refuses it before: "DataModel was not available"), so this waits for that a moment.
-function AvatarRules.apply(model: Model): boolean
-	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	if not humanoid then
-		return false
-	end
-	local deadline = os.clock() + 5
-	while not model:IsDescendantOf(Workspace) and os.clock() < deadline do
-		task.wait()
-	end
-	if not model:IsDescendantOf(Workspace) then
-		return false
-	end
+-- Gives the character in the world with `humanoid` the standard body (nothing when it already has it, or when Roblox
+-- cannot read or apply its description). Returns whether it changed anything.
+local function standardize(model: Model, humanoid: Humanoid): boolean
 	local read, description = pcall(function()
 		return humanoid:GetAppliedDescription()
 	end)
@@ -66,6 +55,28 @@ function AvatarRules.apply(model: Model): boolean
 		warn("[TrainBrawl] could not make " .. model.Name .. "'s body standard: " .. tostring(problem))
 	end
 	return applied
+end
+
+-- Makes `model`'s body the standard one with the standard animations (yields) and marks it Names.BodyReady (rounds
+-- take only such players: nobody fights in an avatar's own body that arrives late). Also marked when Roblox cannot
+-- read or apply its description - a warning, not a player kept out of every round. A description is applied only to
+-- a character in the world (Roblox refuses it before: "DataModel was not available"), so this waits for that a moment
+-- (and gives up unmarked). Returns whether it changed anything.
+function AvatarRules.apply(model: Model): boolean
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return false
+	end
+	local deadline = os.clock() + 5
+	while not model:IsDescendantOf(Workspace) and os.clock() < deadline do
+		task.wait()
+	end
+	if not model:IsDescendantOf(Workspace) then
+		return false
+	end
+	local changed = standardize(model, humanoid)
+	model:SetAttribute(Names.BodyReady, true)
+	return changed
 end
 
 return AvatarRules

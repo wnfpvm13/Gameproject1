@@ -192,7 +192,8 @@ local function punch(step: number, finisher: boolean, k: number): { Key }
 			local back = with(GUARD, { Waist = { y = -14 }, Neck = { y = 14 }, LeftShoulder = { x = 64, z = 8 }, LeftElbow = { x = 72 } })
 			return fromGuard(load, drive, out, back, k, 0.06)
 		end
-		-- a right straight: coiled a little further, then the hips drive the rear hand through
+		-- a right straight: coiled a little further, then the hips drive the rear hand through (the legs keep walking: a
+		-- joint a punch names is held by it all through)
 		local load = with(GUARD, { Root = { y = -6 }, Waist = { y = -18 }, Neck = { y = 22 }, RightShoulder = { x = 34, z = -14 }, RightElbow = { x = 135 } })
 		local drive = with(GUARD, { Root = { y = 10 }, Waist = { y = 6 }, Neck = { y = -14 }, RightShoulder = { x = 74, z = -6 }, RightElbow = { x = 70 } })
 		local out = with(LEAD, {
@@ -201,7 +202,6 @@ local function punch(step: number, finisher: boolean, k: number): { Key }
 			Neck = { y = -34 },
 			RightShoulder = { x = 92, z = -4 },
 			RightElbow = { x = 2 },
-			RightKnee = { x = -12 },
 		})
 		local back = with(GUARD, { Root = { y = 6 }, Waist = { y = 4 }, Neck = { y = -8 }, RightShoulder = { x = 58, z = -8 }, RightElbow = { x = 80 } })
 		return fromGuard(load, drive, out, back, k, 0.06)

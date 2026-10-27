@@ -28,7 +28,8 @@ export type Brain = {
 
 -- target: whom it goes for; seen: when it last thought (a long gap means it was flying or held: it reacts anew);
 -- thinkAt: when it looks again; inReach: the target was in reach last time; readyAt: no punch before this (reacting);
--- nextPunch: the next punch of the string no sooner; left: punches left in this string; wanderAt: a new spot then.
+-- nextPunch: the next punch of the string no sooner; left: punches left in this string; wanderAt: a new spot then;
+-- stepping: it is stepping straight in (Humanoid:Move goes on until stopped).
 type Mind = {
 	target: Model?,
 	seen: number,
@@ -38,6 +39,7 @@ type Mind = {
 	nextPunch: number,
 	left: number,
 	wanderAt: number,
+	stepping: boolean,
 }
 
 -- A random number between the two of `range`.
@@ -50,7 +52,8 @@ local function planString(): number
 	return if math.random() < Config.Sandbag.FullString then Config.Attack.StringCount else math.random(1, Config.Attack.StringCount - 1)
 end
 
--- Walks `humanoid` to `spot` (a step straight in, Humanoid:Move, ends first).
+-- Walks `humanoid` to `spot` (a step straight in, Humanoid:Move, ends first: Move(zero) alone would not end a MoveTo,
+-- and a MoveTo after a Move takes over - Studio 2026-10-27).
 local function walkTo(humanoid: Humanoid, spot: Vector3)
 	humanoid:Move(Vector3.zero)
 	humanoid:MoveTo(spot)
@@ -71,7 +74,17 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 	local function think(model: Model, body: CharacterParts.Body, now: number)
 		local mind = minds[model]
 		if not mind then
-			mind = { target = nil, seen = now, thinkAt = now, inReach = false, readyAt = now, nextPunch = now, left = planString(), wanderAt = now }
+			mind = {
+				target = nil,
+				seen = now,
+				thinkAt = now,
+				inReach = false,
+				readyAt = now,
+				nextPunch = now,
+				left = planString(),
+				wanderAt = now,
+				stepping = false,
+			}
 			minds[model] = mind
 		end
 		if now < mind.thinkAt then
@@ -82,16 +95,20 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 		end
 		mind.seen = now
 		mind.thinkAt = now + c.ThinkSeconds
+		local stepping = mind.stepping -- each look decides anew (only the step-in below goes on with it)
+		mind.stepping = false
 		local humanoid = body.humanoid
 		local here, top = placeOf(body)
 		if not top then
 			walkTo(humanoid, here) -- on a plank, a boiler's side or the sand: stand still
 			return
 		end
-		-- Everyone else on this top, and how many other bots go for each.
+		-- Everyone else on this top, and how many other bots still in the round go for each.
 		local others: { BotPlan.Seen } = {}
 		local current: BotPlan.Seen? = nil
+		local fighting: { [Model]: boolean } = {}
 		for _, other in hooks.fighters() do
+			fighting[other] = true
 			local otherBody = if other ~= model then CharacterParts.body(other) else nil
 			if otherBody then
 				local at, otherTop = placeOf(otherBody)
@@ -104,7 +121,7 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 		end
 		local taken: { [any]: number } = {}
 		for other, otherMind in minds do
-			if other ~= model and otherMind.target then
+			if other ~= model and fighting[other] and otherMind.target then
 				taken[otherMind.target] = (taken[otherMind.target] or 0) + 1
 			end
 		end
@@ -116,6 +133,8 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 				mind.wanderAt = now + c.WanderSeconds * (0.6 + math.random() * 0.8)
 				local x, z = BotPlan.wanderSpot(top, here.Z, 8, c.Margin, math.random)
 				walkTo(humanoid, Vector3.new(x, here.Y, z))
+			elseif stepping then
+				walkTo(humanoid, here) -- its target went away mid-step: stop rather than walk on off the top
 			end
 			return
 		end
@@ -135,9 +154,10 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 				walkTo(humanoid, Vector3.new(x, here.Y, z))
 			else
 				-- Close: straight at it, slower (a MoveTo this short stops about a stud early). Both stand on the same
-				-- top, so the way between stays on it.
+				-- top, so the way between stays on it (one look later, 0.6 at most, it looks again).
 				humanoid.WalkSpeed = c.StepSpeed
 				humanoid:Move(toward.Unit)
+				mind.stepping = true
 			end
 			return
 		end

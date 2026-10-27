@@ -31,8 +31,8 @@ export type Service = {
 }
 
 -- stiffSince: launched by a hit at this os.clock(); drifting: below the fall line last frame; flinchUntil: a light hit's
--- stun lasts until this os.clock() (it does nothing meanwhile).
-type Bag = { body: CharacterParts.Body, stiffSince: number?, drifting: boolean, flinchUntil: number }
+-- stun lasts until this os.clock() (it does nothing meanwhile); acting: its mind ran last frame.
+type Bag = { body: CharacterParts.Body, stiffSince: number?, drifting: boolean, flinchUntil: number, acting: boolean }
 
 -- Stops a walk already under way (a MoveTo target lasts until reached or for 8 s, and a step straight in until its
 -- mind says otherwise, even after the bag was knocked onto another top, where walking on could take it over an edge).
@@ -72,7 +72,11 @@ function Sandbags.start(fallLine: number, think: (model: Model, body: CharacterP
 					BodyMotion.getUp(body)
 				end
 			elseif Workspace:GetAttribute(Names.Phase) == "Fight" and now >= bag.flinchUntil then
+				bag.acting = true
 				think(model, body, now)
+			elseif bag.acting then
+				bag.acting = false
+				stopWalking(body) -- the fight is over (a hit stopped it already): no walking on off the roof
 			end
 		end
 	end)
@@ -102,7 +106,7 @@ function Sandbags.start(fallLine: number, think: (model: Model, body: CharacterP
 					-- The weapon first: welding it on changes the assembly, which puts ownership back on automatic.
 					equip(model)
 					body.root:SetNetworkOwner(nil) -- the server moves and knocks it
-					bags[model] = { body = body, stiffSince = nil, drifting = false, flinchUntil = 0 }
+					bags[model] = { body = body, stiffSince = nil, drifting = false, flinchUntil = 0, acting = false }
 					table.insert(made, model)
 				else
 					model:Destroy()

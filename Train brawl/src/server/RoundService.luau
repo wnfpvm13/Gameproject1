@@ -58,12 +58,13 @@ local function hold(model: Model, still: boolean)
 	end
 end
 
--- Players with a living character, ready to fight.
+-- Players with a living character that was given the standard body (Names.BodyReady, AvatarRules through Main),
+-- ready to fight.
 local function readyPlayers(): { Player }
 	local ready = {}
 	for _, player in Players:GetPlayers() do
 		local body = CharacterParts.body(player.Character)
-		if body and body.humanoid.Health > 0 then
+		if body and body.humanoid.Health > 0 and body.model:GetAttribute(Names.BodyReady) == true then
 			table.insert(ready, player)
 		end
 	end

@@ -111,6 +111,15 @@ local function onPlayer(player: Player)
 		equip(model)
 	end
 	player.CharacterAppearanceLoaded:Connect(onAppearance)
+	-- An appearance that never says it loaded (a failed asset) is made standard anyway after a while, so the player is
+	-- not kept out of the rounds (they take only standard bodies, Names.BodyReady).
+	player.CharacterAdded:Connect(function(model: Model)
+		task.delay(10, function()
+			if model.Parent and model:GetAttribute(Names.BodyReady) ~= true then
+				onAppearance(model)
+			end
+		end)
+	end)
 	if player.Character then
 		task.spawn(onCharacter, player.Character)
 		if player:HasAppearanceLoaded() then

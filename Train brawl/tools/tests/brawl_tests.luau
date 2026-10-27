@@ -383,6 +383,12 @@ do
 	end
 	local a = Config.Attack
 	check("a light hit's stun ends before any weapon can attack again (the one hit can answer)", h.LightStun + 0.1 < quickest)
+	local fist = Config.Weapons.Fist
+	check(
+		"one punched can land first, with bare fists or a bat, before the puncher's next punch",
+		h.LightStun + fist.hitAt < fist.cooldown and h.LightStun + Config.Weapons.Bat.hitAt < fist.cooldown
+	)
+	check("the server still refuses swings for part of a light stun", Config.Knock.SwingGrace < h.LightStun)
 	check("a launched fighter stays unhittable past lying down", h.LaunchImmune > Config.Knock.MinSeconds + 0.2)
 	check("a string waits a moment for the next press, then starts again", a.StringGap >= 0.2 and a.StringGap <= 0.6 and a.StringSlack < a.StringGap and a.StringCount == 3)
 	check("a crowd's hits launch within the same window the old combo had", h.GangWindow >= 1 and h.GangHits == 3)

@@ -31,6 +31,7 @@ return {
 	-- attacks apart by it, OwnSwing)
 	SwingTag = "SwingTag",
 	Weapon = "Weapon", -- the weapon a character holds (Config.Weapons; "Fist" or none = bare fists)
+	BodyReady = "BodyReady", -- a player's character was given the standard body (AvatarRules): it may join a round
 	WeaponUses = "WeaponUses", -- attacks left with it (when it has uses)
 	WeaponEndsAt = "WeaponEndsAt", -- server time it runs out (when it lasts a time)
 	-- Ground marks (drawn on each client by GroundMarks over the server's invisible flat parts)

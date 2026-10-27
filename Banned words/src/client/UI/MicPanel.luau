@@ -36,6 +36,7 @@ function MicPanel.build(onChat: (boolean) -> ())
 	chatButton.Position = UDim2.new(0.5, 0, 0, Style.row(2) + 2)
 	chatButton.Size = UDim2.fromOffset(240, 34)
 	chatButton.Visible = false
+	chatButton.ZIndex = 5 -- (stays reachable where a mission card may reach it on a short phone screen)
 	chatButton.Parent = Style.gui()
 	chatButton.Activated:Connect(function()
 		onChat(not chatMode)

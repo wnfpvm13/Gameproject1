@@ -14386,6 +14386,7 @@ function MicPanel.build(onChat: (boolean) -> ())
 	chatButton.Position = UDim2.new(0.5, 0, 0, Style.row(2) + 2)
 	chatButton.Size = UDim2.fromOffset(240, 34)
 	chatButton.Visible = false
+	chatButton.ZIndex = 5 -- (stays reachable where a mission card may reach it on a short phone screen)
 	chatButton.Parent = Style.gui()
 	chatButton.Activated:Connect(function()
 		onChat(not chatMode)
@@ -15596,9 +15597,17 @@ function MissionPanel.tick(now: number)
 			local view = camera.ViewportSize
 			-- (the card's position counts from under the top bar; the line is the screen's)
 			local barHeight = GuiService:GetGuiInset().Y
+			-- Under the lines and buttons shown above it, but never so low that it would have to shrink below
+			-- CARD_MIN_SCALE (a spectator on a short phone, Codex re-check 2026-10-27): then the buttons stay on top.
+			local top = if state.slim then TALK_TOP else CARD_TOP
+			if aboveBottom then
+				local lowest = view.Y * SCREEN_ROOM - barHeight - height * CARD_MIN_SCALE
+				top = math.max(top, math.min(aboveBottom + 8, lowest))
+			end
+			card.Position = UDim2.new(0.5, 0, 0, top)
 			local room = if state.slim then view.Y * SLIM_ROOM
-				else view.Y * CARD_ROOM - barHeight - card.AbsolutePosition.Y -- (the lower part stays for the chairs)
-			local most = math.min((view.Y * SCREEN_ROOM - barHeight - card.AbsolutePosition.Y) / height, view.X * 0.9 / width)
+				else view.Y * CARD_ROOM - barHeight - top -- (the lower part stays for the chairs)
+			local most = math.min((view.Y * SCREEN_ROOM - barHeight - top) / height, view.X * 0.9 / width)
 			cardScale.Scale = math.clamp(math.min(math.max(math.min(1, room / height), CARD_MIN_SCALE), most), 0.1, 1)
 		end
 	end

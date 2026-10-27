@@ -2475,6 +2475,36 @@ do
 	NetStub.listeners.Sync(p1)
 	got = sentTo(p1, since)
 	check("18i Sync sends the settings again", got ~= nil and got.music == 0.3 and got.effects == 0.8)
+	-- 18j: a slow save with a change made during it: the change is saved after it (one save at a time), last value wins.
+	settingsSetDelay = 2
+	local p5 = settingsPlayer(905)
+	Settings.join(p5)
+	at(now + 0.1)
+	writes = settingsWrites
+	Settings.change(p5, { music = 0.1, effects = 1 })
+	at(now + Config.SETTINGS_SAVE_DELAY + 0.5) -- (the first save is under way)
+	Settings.change(p5, { music = 0.8, effects = 1 })
+	at(now + 2)
+	local firstDone = settingsWrites == writes + 1 and settingsData["905"].music == 0.1
+	at(now + Config.SETTINGS_SAVE_DELAY + 3)
+	check("18j a change made during a slow save is saved after it (saves one at a time, the last value stays)", firstDone
+		and settingsWrites == writes + 2 and settingsData["905"].music == 0.8)
+	-- 18k: the server's closing waits for the save of a player who just left (live servers only).
+	Settings.change(p5, { music = 0.3, effects = 1 })
+	Settings.leave(p5)
+	RunService.IsStudio = function() return false end
+	local closed = false
+	task.spawn(function()
+		Settings.closeAll()
+		closed = true
+	end)
+	at(now + 1)
+	local waiting = not closed
+	at(now + 2)
+	RunService.IsStudio = function() return true end
+	settingsSetDelay = 0
+	check("18k the server's closing waits for a leaving player's save still running", waiting and closed
+		and settingsData["905"].music == 0.3)
 	Settings.leave(p1)
 	Settings.leave(p2)
 end

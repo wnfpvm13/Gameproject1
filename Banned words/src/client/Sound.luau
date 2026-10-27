@@ -4,6 +4,8 @@
 -- (init.client hands the groups to Fx and Music: client parts do not require each other.)
 local SoundService = game:GetService("SoundService")
 
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("BannedWords"):WaitForChild("Config"))
+
 local Sound = {}
 
 export type Groups = { music: SoundGroup, effects: SoundGroup }
@@ -25,6 +27,7 @@ end
 function Sound.init(): Groups
 	local made = { music = group("BW_Music"), effects = group("BW_Effects") }
 	groups = made
+	Sound.apply(Config.SETTINGS_DEFAULT) -- (until the saved ones come: a new group starts at 0.5)
 	return made
 end
 

@@ -230,6 +230,7 @@ local settingsData: { [string]: any } = {}
 local settingsWrites = 0
 local settingsGetBroken, settingsSetBroken = false, false
 local settingsGetDelay = 0 -- each load yields this long
+local settingsSetDelay = 0 -- each save yields this long (then writes)
 local DataStoreService = {
 	GetDataStore = function(_, _name)
 		return {
@@ -243,6 +244,9 @@ local DataStoreService = {
 				return settingsData[key]
 			end,
 			SetAsync = function(_, key, value)
+				if settingsSetDelay > 0 then
+					task.wait(settingsSetDelay)
+				end
 				if settingsSetBroken then
 					error("settings save unavailable")
 				end

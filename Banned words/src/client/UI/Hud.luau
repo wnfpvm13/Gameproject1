@@ -40,7 +40,16 @@ function Hud.build(): Frame
 		local camera = workspace.CurrentCamera
 		local phone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 		local width = if not camera then 580 elseif phone then camera.ViewportSize.X * 0.6 else camera.ViewportSize.X - 560
-		limit.MaxSize = Vector2.new(math.clamp(width, 320, 580), 200)
+		local board = math.clamp(width, 320, 580)
+		limit.MaxSize = Vector2.new(board, 200)
+		-- (a PC window too narrow for even the smallest board: it moves left until the key's right end, 28 px past the
+		-- board, stops 250 px from the screen's edge — review 2026-10-27)
+		local shift = 0
+		if camera and not phone then
+			local viewport = camera.ViewportSize.X
+			shift = math.min(0, (viewport - 250) - (viewport / 2 + board / 2 + 28))
+		end
+		top.Position = UDim2.new(0.5, shift, 0, 8)
 	end
 	fit()
 	local watched: Camera? = nil

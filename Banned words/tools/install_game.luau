@@ -9643,6 +9643,7 @@ type Entry = {
 local CLOSE_WAIT = 25 -- seconds the server's closing waits for the last saves (Roblox gives 30)
 
 local entries: { [Player]: Entry } = {}
+local leaving = 0 -- saves of players who left, still running (the server's closing waits for them too)
 local store: Store? = nil
 local send: (Player, Settings) -> () = function(_player: Player, _settings: Settings) end
 
@@ -9842,12 +9843,16 @@ function SettingsService.leave(player: Player)
 		entry.timer = nil
 	end
 	if entry.loaded and entry.version > entry.savedVersion then
-		task.spawn(saveNow, player, entry)
+		leaving += 1
+		task.spawn(function()
+			saveNow(player, entry)
+			leaving -= 1
+		end)
 	end
 end
 
--- The server closes: everyone with unsaved changes is saved at once, and the closing waits for those saves (at most
--- CLOSE_WAIT seconds). Not in Studio (stopping a test would wait each time).
+-- The server closes: everyone with unsaved changes is saved at once, and the closing waits for those saves and for the
+-- saves of players who just left (at most CLOSE_WAIT seconds). Not in Studio (stopping a test would wait each time).
 function SettingsService.closeAll()
 	if RunService:IsStudio() then
 		return
@@ -9867,7 +9872,7 @@ function SettingsService.closeAll()
 		end
 	end
 	local deadline = os.clock() + CLOSE_WAIT
-	while pending > 0 and os.clock() < deadline do
+	while (pending > 0 or leaving > 0) and os.clock() < deadline do
 		task.wait(0.2)
 	end
 end
@@ -10673,8 +10678,8 @@ local function refresh()
 	refreshBell()
 	refreshVoice()
 	applySeatLock()
+	refreshDucking() -- (before the phase: a track change then fades once, at its own pace)
 	Music.setPhase(round.phase)
-	refreshDucking()
 end
 
 -- Build UI and systems.
@@ -10691,6 +10696,7 @@ local settingsSentAt = -math.huge
 SettingsPanel.build(board, function(settings)
 	settingsTouched = true
 	Sound.apply(settings)
+	Music.release() -- (my own choice: no need to wait for the saved one)
 	settingsToSend = settings
 	if settingsSending then
 		return
@@ -12339,6 +12345,7 @@ local DUCK_SECONDS = 0.4 -- ducking and the mic test move this fast (a track cha
 
 local tracks: { [string]: Sound } = {}
 local tweens: { [string]: Tween } = {}
+local targets: { [string]: number } = {} -- each track's volume it is going to (a fade under way keeps its own pace)
 local wanted: string? = nil -- the track for the phase now (nil: none)
 local released = false -- my settings came
 local ducked = false
@@ -12367,9 +12374,10 @@ local function update(seconds: number)
 	end
 	for name, sound in tracks do
 		local target = if name == wanted then Config.MUSIC_VOLUME * level else 0
-		if math.abs(sound.Volume - target) < 1e-3 and (target > 0) == sound.IsPlaying then
-			continue
+		if targets[name] == target and (target > 0) == sound.IsPlaying then
+			continue -- (already going there: a fade of one speed is not cut by a call of another)
 		end
+		targets[name] = target
 		local running = tweens[name]
 		if running then
 			running:Cancel()
@@ -12808,6 +12816,8 @@ do local s = Instance.new("ModuleScript"); s.Name = "Sound"; s.Source = [====[--
 -- (init.client hands the groups to Fx and Music: client parts do not require each other.)
 local SoundService = game:GetService("SoundService")
 
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("BannedWords"):WaitForChild("Config"))
+
 local Sound = {}
 
 export type Groups = { music: SoundGroup, effects: SoundGroup }
@@ -12829,6 +12839,7 @@ end
 function Sound.init(): Groups
 	local made = { music = group("BW_Music"), effects = group("BW_Effects") }
 	groups = made
+	Sound.apply(Config.SETTINGS_DEFAULT) -- (until the saved ones come: a new group starts at 0.5)
 	return made
 end
 
@@ -13372,7 +13383,16 @@ function Hud.build(): Frame
 		local camera = workspace.CurrentCamera
 		local phone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 		local width = if not camera then 580 elseif phone then camera.ViewportSize.X * 0.6 else camera.ViewportSize.X - 560
-		limit.MaxSize = Vector2.new(math.clamp(width, 320, 580), 200)
+		local board = math.clamp(width, 320, 580)
+		limit.MaxSize = Vector2.new(board, 200)
+		-- (a PC window too narrow for even the smallest board: it moves left until the key's right end, 28 px past the
+		-- board, stops 250 px from the screen's edge — review 2026-10-27)
+		local shift = 0
+		if camera and not phone then
+			local viewport = camera.ViewportSize.X
+			shift = math.min(0, (viewport - 250) - (viewport / 2 + board / 2 + 28))
+		end
+		top.Position = UDim2.new(0.5, shift, 0, 8)
 	end
 	fit()
 	local watched: Camera? = nil

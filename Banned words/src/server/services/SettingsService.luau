@@ -38,6 +38,7 @@ type Entry = {
 local CLOSE_WAIT = 25 -- seconds the server's closing waits for the last saves (Roblox gives 30)
 
 local entries: { [Player]: Entry } = {}
+local leaving = 0 -- saves of players who left, still running (the server's closing waits for them too)
 local store: Store? = nil
 local send: (Player, Settings) -> () = function(_player: Player, _settings: Settings) end
 
@@ -237,12 +238,16 @@ function SettingsService.leave(player: Player)
 		entry.timer = nil
 	end
 	if entry.loaded and entry.version > entry.savedVersion then
-		task.spawn(saveNow, player, entry)
+		leaving += 1
+		task.spawn(function()
+			saveNow(player, entry)
+			leaving -= 1
+		end)
 	end
 end
 
--- The server closes: everyone with unsaved changes is saved at once, and the closing waits for those saves (at most
--- CLOSE_WAIT seconds). Not in Studio (stopping a test would wait each time).
+-- The server closes: everyone with unsaved changes is saved at once, and the closing waits for those saves and for the
+-- saves of players who just left (at most CLOSE_WAIT seconds). Not in Studio (stopping a test would wait each time).
 function SettingsService.closeAll()
 	if RunService:IsStudio() then
 		return
@@ -262,7 +267,7 @@ function SettingsService.closeAll()
 		end
 	end
 	local deadline = os.clock() + CLOSE_WAIT
-	while pending > 0 and os.clock() < deadline do
+	while (pending > 0 or leaving > 0) and os.clock() < deadline do
 		task.wait(0.2)
 	end
 end

@@ -15,6 +15,7 @@ local DUCK_SECONDS = 0.4 -- ducking and the mic test move this fast (a track cha
 
 local tracks: { [string]: Sound } = {}
 local tweens: { [string]: Tween } = {}
+local targets: { [string]: number } = {} -- each track's volume it is going to (a fade under way keeps its own pace)
 local wanted: string? = nil -- the track for the phase now (nil: none)
 local released = false -- my settings came
 local ducked = false
@@ -43,9 +44,10 @@ local function update(seconds: number)
 	end
 	for name, sound in tracks do
 		local target = if name == wanted then Config.MUSIC_VOLUME * level else 0
-		if math.abs(sound.Volume - target) < 1e-3 and (target > 0) == sound.IsPlaying then
-			continue
+		if targets[name] == target and (target > 0) == sound.IsPlaying then
+			continue -- (already going there: a fade of one speed is not cut by a call of another)
 		end
+		targets[name] = target
 		local running = tweens[name]
 		if running then
 			running:Cancel()

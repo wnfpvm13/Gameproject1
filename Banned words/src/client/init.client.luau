@@ -175,8 +175,8 @@ local function refresh()
 	refreshBell()
 	refreshVoice()
 	applySeatLock()
+	refreshDucking() -- (before the phase: a track change then fades once, at its own pace)
 	Music.setPhase(round.phase)
-	refreshDucking()
 end
 
 -- Build UI and systems.
@@ -193,6 +193,7 @@ local settingsSentAt = -math.huge
 SettingsPanel.build(board, function(settings)
 	settingsTouched = true
 	Sound.apply(settings)
+	Music.release() -- (my own choice: no need to wait for the saved one)
 	settingsToSend = settings
 	if settingsSending then
 		return

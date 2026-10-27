@@ -44,8 +44,8 @@ local function update(seconds: number)
 	end
 	for name, sound in tracks do
 		local target = if name == wanted then Config.MUSIC_VOLUME * level else 0
-		if targets[name] == target and (target > 0) == sound.IsPlaying then
-			continue -- (already going there: a fade of one speed is not cut by a call of another)
+		if targets[name] == target and not (target > 0 and not sound.IsPlaying) then
+			continue -- (already going there, a fade-out too: a fade of one speed is not cut by a call of another)
 		end
 		targets[name] = target
 		local running = tweens[name]

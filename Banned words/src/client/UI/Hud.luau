@@ -48,6 +48,8 @@ function Hud.build(): Frame
 		if camera and not phone then
 			local viewport = camera.ViewportSize.X
 			shift = math.min(0, (viewport - 250) - (viewport / 2 + board / 2 + 28))
+			-- (but never off the left edge: on a very narrow window the board wins over the player list's room)
+			shift = math.max(shift, 8 - (viewport / 2 - board / 2))
 		end
 		top.Position = UDim2.new(0.5, shift, 0, 8)
 	end

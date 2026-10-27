@@ -460,6 +460,8 @@ return {
 		QUIZ_ANSWER = "정답: %s",
 		QUIZ_ALL_RIGHT = "모두 정답!",
 		PICKS_REVEAL = "모두의 답 공개!",
+		CHAT_ANSWERED = "채팅 답 '%s' 접수! 다른 사람에겐 안 보여요", -- (a quiz answer typed in chat, bundle 12)
+		CHAT_ANSWER_KEPT = "답은 처음 낸 것만 쳐요",
 		ROULETTE_TITLE = "룰렛",
 		ROULETTE_BRIEF = "룰렛에 걸린 한 명이 날아가요", -- (the briefing before it, owner 2026-10-24)
 		ROULETTE_START = "룰렛 돌아갑니다!",

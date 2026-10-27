@@ -202,10 +202,12 @@ function OXQuiz.run(ctx: Ctx): boolean?
 		end
 		local rightIds = {} -- (who the server counted right: their "correct" sound)
 		local still = present()
+		local judgedNow = {} -- (asked and still here: only they get a right / wrong tag)
 		for _, player in from do
 			if not table.find(still, player) then
 				continue -- (launched or gone meanwhile: this one does not count for them)
 			end
+			table.insert(judgedNow, player)
 			asked[player] = true
 			local choice = answers[player]
 			if choice then
@@ -218,7 +220,7 @@ function OXQuiz.run(ctx: Ctx): boolean?
 			end
 		end
 		ctx.screen({ kind = "quizResult", final = false, question = question, choices = choices, answer = right,
-			right = rightIds, picks = Picks.build(still, label, function(player)
+			right = rightIds, picks = Picks.build(judgedNow, label, function(player)
 				return if answers[player] == right then "right" else "wrong"
 			end) })
 		if not ctx.wait(Config.OX_REVEAL_SECONDS) then

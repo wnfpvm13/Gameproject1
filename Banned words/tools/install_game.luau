@@ -473,6 +473,8 @@ return {
 		QUIZ_ANSWER = "정답: %s",
 		QUIZ_ALL_RIGHT = "모두 정답!",
 		PICKS_REVEAL = "모두의 답 공개!",
+		CHAT_ANSWERED = "채팅 답 '%s' 접수! 다른 사람에겐 안 보여요", -- (a quiz answer typed in chat, bundle 12)
+		CHAT_ANSWER_KEPT = "답은 처음 낸 것만 쳐요",
 		ROULETTE_TITLE = "룰렛",
 		ROULETTE_BRIEF = "룰렛에 걸린 한 명이 날아가요", -- (the briefing before it, owner 2026-10-24)
 		ROULETTE_START = "룰렛 돌아갑니다!",
@@ -2561,7 +2563,7 @@ function RoundService.start()
 		talkStart = onTalkStart,
 	})
 	RescueService.start(onRescueResolved)
-	ChatGate.start(onChat, WordService.hides)
+	ChatGate.start(onChat, WordService.hides, MissionRunner.chatAnswer)
 	JudgeService.start(onSpeechHit)
 	MissionRunner.start()
 	BellService.start(SeatService.isFlying)
@@ -4817,15 +4819,19 @@ function Estimate.run(ctx: Ctx): boolean?
 	if ctx.cancelled() then
 		return nil
 	end
-	-- (still here, alive and on the ground: a player launched meanwhile is neither judged nor shown)
-	local present, guesses, typed, none = {}, {}, {}, {}
-	for _, player in asked do
-		if table.find(ctx.players(), player) and not ctx.flying(player) then
-			table.insert(present, player)
-			guesses[player] = answers[player]
-			table.insert(if answers[player] then typed else none, player)
+	-- (still here, alive and on the ground: a player launched meanwhile is neither judged nor shown — looked at after
+	-- the answers and again after everyone's numbers showed, Codex review 2026-10-27)
+	local function stillThere(players: { Player }): { Player }
+		local out = {}
+		for _, player in players do
+			if table.find(ctx.players(), player) and not ctx.flying(player) then
+				table.insert(out, player)
+			end
 		end
+		return out
 	end
+	local guesses = answers
+	local present = stillThere(asked)
 	if #present < Config.ESTIMATE_MIN_PLAYERS then
 		ctx.screen(nil)
 		ctx.show(Config.TEXT.MINIGAME_TOO_FEW)
@@ -4840,6 +4846,16 @@ function Estimate.run(ctx: Ctx): boolean?
 	ctx.show(Config.TEXT.PICKS_REVEAL)
 	if not ctx.wait(Config.PICKS_SECONDS) then
 		return nil
+	end
+	present = stillThere(present)
+	if #present < Config.ESTIMATE_MIN_PLAYERS then
+		ctx.screen(nil)
+		ctx.show(Config.TEXT.MINIGAME_TOO_FEW)
+		return nil
+	end
+	local typed, none = {}, {}
+	for _, player in present do
+		table.insert(if guesses[player] then typed else none, player)
 	end
 	local losers = Estimate.losers(present, guesses, question.answer)
 	local ids, shownGuesses, loserIds, names = {}, {}, {}, {}
@@ -5600,10 +5616,12 @@ function OXQuiz.run(ctx: Ctx): boolean?
 		end
 		local rightIds = {} -- (who the server counted right: their "correct" sound)
 		local still = present()
+		local judgedNow = {} -- (asked and still here: only they get a right / wrong tag)
 		for _, player in from do
 			if not table.find(still, player) then
 				continue -- (launched or gone meanwhile: this one does not count for them)
 			end
+			table.insert(judgedNow, player)
 			asked[player] = true
 			local choice = answers[player]
 			if choice then
@@ -5616,7 +5634,7 @@ function OXQuiz.run(ctx: Ctx): boolean?
 			end
 		end
 		ctx.screen({ kind = "quizResult", final = false, question = question, choices = choices, answer = right,
-			right = rightIds, picks = Picks.build(still, label, function(player)
+			right = rightIds, picks = Picks.build(judgedNow, label, function(player)
 				return if answers[player] == right then "right" else "wrong"
 			end) })
 		if not ctx.wait(Config.OX_REVEAL_SECONDS) then
@@ -6290,9 +6308,11 @@ local BellQuiz = {
 	title = Config.TEXT.BELL_QUIZ_TITLE,
 	brief = Config.TEXT.BELL_QUIZ_BRIEF, -- (the briefing before it)
 	-- The longest run: every question with every answer chance (each its own bells, an answer by chat, judged at the
-	-- last moment).
+	-- last moment), then four choices for everyone instead of the answer shown (the presenter left at the last verdict;
+	-- a successor brings the bells back, so any question may; Codex review 2026-10-27). By mode: bellExpected.
 	expectedSeconds = Config.BELL_QUIZ_QUESTIONS * (Config.BELL_TRIES
-		* (Config.BELL_WAIT_SECONDS + Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS) + Config.QUIZ_REVEAL_SECONDS),
+		* (Config.BELL_WAIT_SECONDS + Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS)
+		+ Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.PICKS_SECONDS + Config.QUIZ_REVEAL_SECONDS),
 	briefFor = nil :: ((mode: string) -> string)?,
 	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
@@ -6300,6 +6320,12 @@ local BellQuiz = {
 	maxPlayers = nil :: number?,
 	needsPresenter = true :: boolean?,
 }
+
+local function bellExpected(players: number, mode: string): number
+	local bells = Config.BELL_TRIES * (Config.BELL_WAIT_SECONDS + Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS)
+	return Config.BELL_QUIZ_QUESTIONS * (bells + quizExpected(players, mode))
+end
+BellQuiz.expectedFor = bellExpected
 
 function BellQuiz.available(final: boolean): boolean
 	return not final and #bankFor(Match.mode, false, true) > 0
@@ -7787,6 +7813,13 @@ local onMessage: (Player, string) -> () = function(_player, _text) end
 local hides: (Player, string) -> boolean = function(_receiver, _text)
 	return false
 end
+-- Bundle 12: a quiz answer typed in chat (MissionRunner decides and counts it once per message) goes to nobody but its
+-- sender, guarded round or not.
+local answerLine: (Player, string) -> boolean = function(_sender, _text)
+	return false
+end
+local answerOf: { [string]: boolean } = {} -- MessageId -> was it an answer (decided once)
+local answersKept = 0
 
 local function playerOf(source: Instance?): Player?
 	local untyped: any = source
@@ -7849,8 +7882,13 @@ local function watch(channel: Instance)
 	local textChannel = channel :: TextChannel
 	textChannel.ShouldDeliverCallback = function(message: TextChatMessage, target: TextSource): boolean
 		local sender = playerOf(message.TextSource)
+		local receiver = playerOf(target)
 		ChatGate.received(message.MessageId, sender, message.Text)
-		return ChatGate.shouldDeliver(textChannel, sender, playerOf(target), message.Text)
+		-- (a quiz answer: counted once, whoever this call is for, and only its sender sees it; bundle 12)
+		if sender and ChatGate.isAnswer(message.MessageId, sender, message.Text) and receiver ~= sender then
+			return false
+		end
+		return ChatGate.shouldDeliver(textChannel, sender, receiver, message.Text)
 	end
 end
 
@@ -7862,12 +7900,34 @@ local function setWhisperCommand(on: boolean)
 	end
 end
 
+-- Whether the message is a quiz answer (asked once per MessageId: the first call counts it; never yields).
+function ChatGate.isAnswer(messageId: string, sender: Player, text: string): boolean
+	local known = answerOf[messageId]
+	if known ~= nil then
+		return known
+	end
+	local ok, result = pcall(answerLine, sender, text)
+	local answer = ok and result == true
+	if answersKept > 500 then -- (only the last moments matter: a message is decided within one delivery)
+		table.clear(answerOf)
+		answersKept = 0
+	end
+	answerOf[messageId] = answer
+	answersKept += 1
+	return answer
+end
+
 -- handle(player, text): an alive participant wrote `text` during a guarded round. hidesWord(receiver, text): `text`
--- holds a word `receiver` must not see (never yields).
-function ChatGate.start(handle: (Player, string) -> (), hidesWord: ((Player, string) -> boolean)?)
+-- holds a word `receiver` must not see (never yields). answer(sender, text): the line is a quiz answer, counted (never
+-- yields; bundle 12).
+function ChatGate.start(handle: (Player, string) -> (), hidesWord: ((Player, string) -> boolean)?,
+	answer: ((Player, string) -> boolean)?)
 	onMessage = handle
 	if hidesWord then
 		hides = hidesWord
+	end
+	if answer then
+		answerLine = answer
 	end
 	task.spawn(function()
 		-- The channels are made at run time (TextChatService): look until they are there, however late.
@@ -9030,6 +9090,60 @@ function MissionRunner.start()
 			open.answers[player] = choice
 		end
 	end)
+end
+
+-- A quiz answer typed in chat (bundle 12, owner 2026-10-27: "채팅으로 답을 입력하면 (ex:1,2,3,4) 바로 채팅이 출력되지
+-- 않고"): while a quiz question is open — the 4-choice quiz, 초성 and the final (a choice number, "3" or "3번"), the
+-- O/X quiz (O / X, or 1 / 2), 숫자 근사 (a whole number, commas allowed) — a line that is only an answer from someone
+-- asked counts as their answer (the first one: a button pressed first keeps its pick; they get a private notice) and
+-- goes to nobody else (ChatGate). Votes and the other games keep their chat. Returns whether the line was an answer
+-- (then hidden even when late, a second one or a number out of range: it would tell the others). Never yields.
+local function chatChoice(text: string, open: Question, shown: { [string]: any }): (boolean, number?)
+	local line = string.match(text, "^%s*(.-)%s*$") or ""
+	if shown.kind == "estimate" then
+		local digits = string.gsub(line, ",", "")
+		if not string.match(digits, "^%d+$") then
+			return false, nil
+		end
+		local number = tonumber(digits)
+		return true, if number and number >= 1 and number <= open.choices then number else nil
+	end
+	if open.choices == 2 then
+		local upper = string.upper(line)
+		if upper == "O" or line == "1" then
+			return true, 1
+		elseif upper == "X" or line == "2" then
+			return true, 2
+		end
+		return false, nil
+	end
+	-- ("3" or "3번": a pattern's `?` would cover only the last byte of 번)
+	local index = tonumber(string.match(line, "^(%d)$") or string.match(line, "^(%d)번$") or "")
+	if index and index >= 1 and index <= open.choices then
+		return true, index
+	end
+	return false, nil
+end
+
+function MissionRunner.chatAnswer(player: Player, text: string): boolean
+	local open, shown = question, screenNow
+	if not open or open.text or not open.from[player] or not shown or (shown.kind ~= "quiz" and shown.kind ~= "estimate") then
+		return false
+	end
+	local isAnswer, choice = chatChoice(text, open, shown)
+	if not isAnswer then
+		return false
+	end
+	if open.answers[player] then
+		Net.to(player, "Notice", { text = Config.TEXT.CHAT_ANSWER_KEPT })
+	elseif choice and Match.now() <= open.endsAt then
+		open.answers[player] = choice
+		local label = if shown.kind ~= "estimate" and open.choices == 2
+			then (if choice == 1 then Config.TEXT.OX_O else Config.TEXT.OX_X)
+			else tostring(choice)
+		Net.to(player, "Notice", { text = string.format(Config.TEXT.CHAT_ANSWERED, label) })
+	end
+	return true
 end
 
 -- The texts on the mission screen now (a question and its choices, a topic): a new banned word must not appear in
@@ -14355,6 +14469,7 @@ do local s = Instance.new("ModuleScript"); s.Name = "MissionPanel"; s.Source = [
 --     counts), red light (the light big on a green or red card, my steps), the liar (the category, the word — or "you
 --     are the liar" — on my own screen, whose clue it is, the vote, the liar's guess among four, who it was).
 -- It only shows what it is told and reports the button pressed; the server checks every answer.
+local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -14457,6 +14572,14 @@ local TALK_POSITION = UDim2.new(0.5, 0, 0, Style.row(4))
 local CARD_ALPHA = 0.3 -- the card's background
 local BUTTON_ALPHA = 0.12 -- its buttons'
 local CARD_ROOM = 0.6
+-- How small a card may get (Codex review 2026-10-27): still readable and its buttons still tappable. On a short phone
+-- screen that wins over CARD_ROOM — a Galaxy A06 (338 px high, a 58 px top bar) leaves the quiz card 35 px above the
+-- line, about 0.2 of its size; at 0.5 it ends at about 74% of the height (the card is see-through). A card too big even
+-- then (a 10-name wheel) still never passes SCREEN_ROOM of the height or 90% of the width. The slim talk line keeps its
+-- old rule: at most SLIM_ROOM of the height.
+local CARD_MIN_SCALE = 0.5
+local SCREEN_ROOM = 0.9
+local SLIM_ROOM = 0.8
 
 local function place()
 	card.Position = if state.slim then TALK_POSITION else CARD_TOP
@@ -15412,16 +15535,20 @@ end
 function MissionPanel.tick(now: number)
 	if card.Visible then
 		place()
-		-- Keep the card within 80% of the screen height and 90% of its width (a big wheel on a small phone screen), and
-		-- a card standing on the bottom row below the status board (the crocodile's jaws on a low phone screen).
+		-- Keep the card above CARD_ROOM of the screen height (the slim talk line: SLIM_ROOM tall at most) but readable
+		-- (CARD_MIN_SCALE), and always on the screen (a big wheel on a small phone screen).
 		local camera = workspace.CurrentCamera
 		local scale = math.max(cardScale.Scale, 0.01)
 		local height = card.AbsoluteSize.Y / scale
 		local width = math.max(card.AbsoluteSize.X, if wheel.Visible then wheel.AbsoluteSize.X + 28 else 0) / scale
 		if camera and height > 0 and width > 0 then
 			local view = camera.ViewportSize
-			local room = view.Y * CARD_ROOM - card.AbsolutePosition.Y -- (the lower part of the screen stays for the chairs)
-			cardScale.Scale = math.clamp(math.min(1, room / height, view.X * 0.9 / width), 0.3, 1)
+			-- (the card's position counts from under the top bar; the line is the screen's)
+			local barHeight = GuiService:GetGuiInset().Y
+			local room = if state.slim then view.Y * SLIM_ROOM
+				else view.Y * CARD_ROOM - barHeight - card.AbsolutePosition.Y -- (the lower part stays for the chairs)
+			local most = math.min((view.Y * SCREEN_ROOM - barHeight - card.AbsolutePosition.Y) / height, view.X * 0.9 / width)
+			cardScale.Scale = math.clamp(math.min(math.max(math.min(1, room / height), CARD_MIN_SCALE), most), 0.1, 1)
 		end
 	end
 	if state.kind == "talk" then

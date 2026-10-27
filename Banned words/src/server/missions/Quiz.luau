@@ -272,9 +272,11 @@ local BellQuiz = {
 	title = Config.TEXT.BELL_QUIZ_TITLE,
 	brief = Config.TEXT.BELL_QUIZ_BRIEF, -- (the briefing before it)
 	-- The longest run: every question with every answer chance (each its own bells, an answer by chat, judged at the
-	-- last moment).
+	-- last moment), then four choices for everyone instead of the answer shown (the presenter left at the last verdict;
+	-- a successor brings the bells back, so any question may; Codex review 2026-10-27). By mode: bellExpected.
 	expectedSeconds = Config.BELL_QUIZ_QUESTIONS * (Config.BELL_TRIES
-		* (Config.BELL_WAIT_SECONDS + Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS) + Config.QUIZ_REVEAL_SECONDS),
+		* (Config.BELL_WAIT_SECONDS + Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS)
+		+ Config.QUIZ_INTRO_SECONDS + Config.QUIZ_SECONDS + Config.PICKS_SECONDS + Config.QUIZ_REVEAL_SECONDS),
 	briefFor = nil :: ((mode: string) -> string)?,
 	expectedFor = nil :: ((players: number, mode: string) -> number)?,
 	maxPerRound = Config.GAME_PER_ROUND :: number?,
@@ -282,6 +284,12 @@ local BellQuiz = {
 	maxPlayers = nil :: number?,
 	needsPresenter = true :: boolean?,
 }
+
+local function bellExpected(players: number, mode: string): number
+	local bells = Config.BELL_TRIES * (Config.BELL_WAIT_SECONDS + Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS)
+	return Config.BELL_QUIZ_QUESTIONS * (bells + quizExpected(players, mode))
+end
+BellQuiz.expectedFor = bellExpected
 
 function BellQuiz.available(final: boolean): boolean
 	return not final and #bankFor(Match.mode, false, true) > 0

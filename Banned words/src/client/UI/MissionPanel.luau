@@ -32,6 +32,7 @@
 --     counts), red light (the light big on a green or red card, my steps), the liar (the category, the word — or "you
 --     are the liar" — on my own screen, whose clue it is, the vote, the liar's guess among four, who it was).
 -- It only shows what it is told and reports the button pressed; the server checks every answer.
+local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
@@ -134,6 +135,14 @@ local TALK_POSITION = UDim2.new(0.5, 0, 0, Style.row(4))
 local CARD_ALPHA = 0.3 -- the card's background
 local BUTTON_ALPHA = 0.12 -- its buttons'
 local CARD_ROOM = 0.6
+-- How small a card may get (Codex review 2026-10-27): still readable and its buttons still tappable. On a short phone
+-- screen that wins over CARD_ROOM — a Galaxy A06 (338 px high, a 58 px top bar) leaves the quiz card 35 px above the
+-- line, about 0.2 of its size; at 0.5 it ends at about 74% of the height (the card is see-through). A card too big even
+-- then (a 10-name wheel) still never passes SCREEN_ROOM of the height or 90% of the width. The slim talk line keeps its
+-- old rule: at most SLIM_ROOM of the height.
+local CARD_MIN_SCALE = 0.5
+local SCREEN_ROOM = 0.9
+local SLIM_ROOM = 0.8
 
 local function place()
 	card.Position = if state.slim then TALK_POSITION else CARD_TOP
@@ -1089,16 +1098,20 @@ end
 function MissionPanel.tick(now: number)
 	if card.Visible then
 		place()
-		-- Keep the card within 80% of the screen height and 90% of its width (a big wheel on a small phone screen), and
-		-- a card standing on the bottom row below the status board (the crocodile's jaws on a low phone screen).
+		-- Keep the card above CARD_ROOM of the screen height (the slim talk line: SLIM_ROOM tall at most) but readable
+		-- (CARD_MIN_SCALE), and always on the screen (a big wheel on a small phone screen).
 		local camera = workspace.CurrentCamera
 		local scale = math.max(cardScale.Scale, 0.01)
 		local height = card.AbsoluteSize.Y / scale
 		local width = math.max(card.AbsoluteSize.X, if wheel.Visible then wheel.AbsoluteSize.X + 28 else 0) / scale
 		if camera and height > 0 and width > 0 then
 			local view = camera.ViewportSize
-			local room = view.Y * CARD_ROOM - card.AbsolutePosition.Y -- (the lower part of the screen stays for the chairs)
-			cardScale.Scale = math.clamp(math.min(1, room / height, view.X * 0.9 / width), 0.3, 1)
+			-- (the card's position counts from under the top bar; the line is the screen's)
+			local barHeight = GuiService:GetGuiInset().Y
+			local room = if state.slim then view.Y * SLIM_ROOM
+				else view.Y * CARD_ROOM - barHeight - card.AbsolutePosition.Y -- (the lower part stays for the chairs)
+			local most = math.min((view.Y * SCREEN_ROOM - barHeight - card.AbsolutePosition.Y) / height, view.X * 0.9 / width)
+			cardScale.Scale = math.clamp(math.min(math.max(math.min(1, room / height), CARD_MIN_SCALE), most), 0.1, 1)
 		end
 	end
 	if state.kind == "talk" then

@@ -2236,6 +2236,44 @@ do
 	finish(since)
 end
 
+-- Bundle 12 (Codex review 2026-10-27): a quiz answer typed in chat, through the real delivery callback — counted for
+-- its sender and delivered to nobody else (no presenter or guard needed); other lines, and chat after the question,
+-- pass as before.
+do
+	local channel = { Name = "RBXGeneral", IsA = function(_, className) return className == "TextChannel" end }
+	fakeChannels.ChildAdded.fire(channel)
+	local cb = channel.ShouldDeliverCallback
+	local ps = newPlayers(3)
+	local seen = {}
+	Scripted.extra = function(ctx)
+		if seen.answers == nil then
+			seen.answers = ctx.ask({ kind = "quiz", final = false, question = "채팅 문제", choices = { "가", "나", "다", "라" } },
+				4, 5, ctx.players())
+		end
+	end
+	local since = begin(ps, 10, nil, nil)
+	advanceUntil(function() return #Scripted.runs >= 1 end, 200)
+	at(now + Scripted.expectedSeconds + 0.3) -- (the question is open now)
+	local function message(id, from, text)
+		return { MessageId = id, TextSource = { UserId = from.UserId }, Text = text }
+	end
+	local askedAt = now
+	local toOther = cb and cb(message("ans1", ps[1], " 2번 "), { UserId = ps[2].UserId })
+	local toSelf = cb and cb(message("ans1", ps[1], " 2번 "), { UserId = ps[1].UserId })
+	local toThird = cb and cb(message("ans1", ps[1], " 2번 "), { UserId = ps[3].UserId })
+	local again = cb and cb(message("ans2", ps[1], "3"), { UserId = ps[2].UserId }) -- (a second one: hidden, not counted)
+	local plain = cb and cb(message("talk1", ps[2], "2번 아닌가"), { UserId = ps[3].UserId })
+	local notice = lastSent("Notice", askedAt, ps[1])
+	at(now + 6)
+	check("15g a quiz answer typed in chat counts for its sender, reaches nobody else; a line that is not only an answer passes",
+		cb ~= nil and toOther == false and toThird == false and toSelf == true and again == false and plain == true
+		and seen.answers ~= nil and seen.answers[ps[1]] == 2 and seen.answers[ps[2]] == nil and notice ~= nil)
+	local after = cb and cb(message("ans3", ps[2], "3"), { UserId = ps[3].UserId })
+	check("15h with no question open a number in chat passes again", after == true)
+	Scripted.extra = nil
+	finish(since)
+end
+
 ---------------------------------------------------------------- 16. a client flipping "ready" fast
 do
 	local ready = NetStub.listeners.Ready

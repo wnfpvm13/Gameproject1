@@ -812,7 +812,49 @@ do
 	check("7i the time budget covers the longest run (every answer chance with its own bells, by chat, judged last)",
 		BellQuiz.expectedSeconds >= Config.BELL_QUIZ_QUESTIONS * (Config.BELL_TRIES * (Config.BELL_WAIT_SECONDS
 			+ Config.BELL_ANSWER_CHAT_SECONDS + Config.BELL_VERDICT_SECONDS) + Config.QUIZ_REVEAL_SECONDS) and run4.done)
+	-- Measured (Codex review 2026-10-27): the slowest 바보 mode run — every bell open its full time, every answer by chat
+	-- judged at the last moment, and the presenter gone at the very last verdict (four choices for everyone, nobody
+	-- answers) — ends within the mode's budget.
+	local realEasy = QuizBank.easy
+	QuizBank.easy = QuizBank.main
+	Match.mode = "easy"
+	Match.presenter = presenter
+	for _, p in ps do
+		Match.participants[p] = { player = p, words = {}, alive = true, lives = 3, afkMisses = 0, chat = true }
+	end
+	local record5 = fakeCtx(ps, false, nil)
+	record5.bellOverride = function(from, seconds)
+		task.wait(seconds)
+		return { from[1] }, { [from[1]] = 1 }, {}
+	end
+	local verdicts5 = 0
+	record5.verdict = function(_answer)
+		verdicts5 += 1
+		task.wait(record5.verdicts[#record5.verdicts].seconds)
+		if verdicts5 == Config.BELL_QUIZ_QUESTIONS * Config.BELL_TRIES then
+			Match.presenter = nil
+			return nil
+		end
+		return "wrong"
+	end
+	local since5 = now
+	local run5 = start(BellQuiz, record5)
+	local budget5 = BellQuiz.expectedFor(#ps, "easy")
+	while not run5.done and now < since5 + budget5 + 60 do
+		at(now + 0.5)
+	end
+	check(string.format("7j the slowest 바보 run (presenter gone at the last verdict) fits its budget (%.1f of %d s)",
+		now - since5, budget5), run5.done and now - since5 <= budget5 + 0.5 and verdicts5 == 9
+		and lastScreenOf(since5, "quiz") ~= nil)
+	check("7k the bell quiz's budget grows with the mode's answer time",
+		BellQuiz.expectedFor(3, "easy") > BellQuiz.expectedFor(3, "normal")
+			and BellQuiz.expectedFor(3, "normal") > BellQuiz.expectedFor(3, "hard"))
+	for _, p in ps do
+		Match.participants[p] = nil
+	end
+	Match.mode = nil
 	Match.presenter = nil
+	QuizBank.easy = realEasy
 	QuizBank.main = realMain
 end
 
@@ -1927,6 +1969,160 @@ do
 	check("17p 숫자 근사: everyone's number over the heads first (no box, none = ?), then the one who flies turned wrong",
 		picksFirst ~= nil and picksFirst.id == nil and fp[tostring(b.UserId)] ~= nil and fp[tostring(c.UserId)].text == "?"
 		and rp[tostring(c.UserId)].verdict == "wrong" and rp[tostring(a.UserId)].verdict == "right")
+end
+do
+	-- Codex review 2026-10-27. 숫자 근사: who leaves while the numbers show is looked at again — the farthest of those
+	-- still there flies (not the one gone), and too few left ends it without a launch.
+	local a, b, c, d = table.unpack(newPlayers(4))
+	local alive = { a, b, c, d }
+	local record = fakeCtx(alive, false, nil)
+	local since = now
+	local run = start(Estimate, record)
+	at(now + Config.ESTIMATE_INTRO_SECONDS + 0.2)
+	local shown = lastScreenOf(since, "estimate")
+	local target = 1
+	for _, item in EstimateBank do
+		if shown and item.q == shown.question then
+			target = item.answer
+		end
+	end
+	local sign = if target > 2000 then -1 else 1
+	answer(a, target)
+	answer(b, target + sign * 10)
+	answer(c, target + sign * 1000) -- (the farthest of those who answered; d answers nothing)
+	at(now + Config.ESTIMATE_SECONDS + 0.2) -- (everyone's numbers show now)
+	table.remove(alive, table.find(alive, d) :: number) -- d leaves while they show
+	at(now + Config.PICKS_SECONDS + Config.MINIGAME_RESULT_SECONDS + 1)
+	local result = lastScreenOf(since, "estimateResult")
+	local f = record.fails[1]
+	local rp = result and result.picks or {}
+	check("17q 숫자 근사: who left while the numbers showed is not judged; the farthest of the rest flies",
+		run.done and f ~= nil and #f.players == 1 and f.players[1] == c and rp[tostring(d.UserId)] == nil
+		and not has(record.missed, d))
+	local e, g = table.unpack(newPlayers(2))
+	local alive2 = { e, g }
+	local record2 = fakeCtx(alive2, false, nil)
+	local since2 = now
+	local run2 = start(Estimate, record2)
+	at(now + Config.ESTIMATE_INTRO_SECONDS + 0.2)
+	answer(e, 5)
+	answer(g, 7)
+	at(now + 0.3) -- (both answered: the numbers show)
+	table.remove(alive2, table.find(alive2, g) :: number)
+	at(now + Config.PICKS_SECONDS + Config.MINIGAME_RESULT_SECONDS + 1)
+	check("17r 숫자 근사: too few left after the numbers showed: nobody flies, no result", run2.done
+		and #record2.fails == 0 and lastScreenOf(since2, "estimateResult") == nil
+		and table.find(record2.shows, Config.TEXT.MINIGAME_TOO_FEW) ~= nil)
+
+	-- O/X: someone not asked (flying when the statement opened) who is back while the answers show gets no tag.
+	local oa, ob, oc = table.unpack(newPlayers(3))
+	local flying = { [oc] = true }
+	local record3 = fakeCtx({ oa, ob, oc }, false, flying)
+	local since3 = now
+	start(OXQuiz, record3)
+	at(now + Config.OX_INTRO_SECONDS + 0.2)
+	answer(oa, 1)
+	answer(ob, 2)
+	at(now + 0.3) -- (both asked answered: the answers show)
+	flying[oc] = nil
+	at(now + Config.PICKS_SECONDS + 0.2)
+	local result3 = nil
+	for _, m in screens(since3) do
+		if m.payload.kind == "quizResult" and m.payload.answer ~= nil and not result3 then
+			result3 = m.payload
+		end
+	end
+	local p3 = result3 and result3.picks or {}
+	check("17s O/X: who was not asked gets no right / wrong tag when back during the reveal", result3 ~= nil
+		and p3[tostring(oc.UserId)] == nil and p3[tostring(oa.UserId)] ~= nil and p3[tostring(ob.UserId)] ~= nil)
+	record3.cancel = true
+	at(now + 2)
+end
+do
+	-- Bundle 12 (Codex review 2026-10-27): a quiz answer typed in chat (MissionRunner.chatAnswer; ChatGate hides it).
+	QuizBank.main = { q("채팅 질문", "가", "나", "다", "라") }
+	local qa, qb, qc, qd = table.unpack(newPlayers(4))
+	local record = fakeCtx({ qa, qb, qc, qd }, false, { [qd] = true })
+	local since = now
+	local run = start(Quiz, record)
+	local early = MissionRunner.chatAnswer(qa, "1") -- (the question shows; the answers are not open yet)
+	at(now + Config.QUIZ_INTRO_SECONDS + 0.1)
+	local open = lastScreenOf(since, "quiz")
+	local rightAt = open and table.find(open.choices, "가") or 1
+	local wrongAt = if rightAt == 1 then 2 else 1
+	local c1 = MissionRunner.chatAnswer(qa, " " .. rightAt .. "번 ")
+	local c1b = MissionRunner.chatAnswer(qa, tostring(wrongAt)) -- (a second one: hidden, not counted)
+	answer(qa, wrongAt) -- (a button after it: the first answer stays)
+	local c2 = MissionRunner.chatAnswer(qb, "아마 " .. wrongAt)
+	local c3 = MissionRunner.chatAnswer(qb, "5")
+	local c4 = MissionRunner.chatAnswer(qd, tostring(rightAt)) -- (flying: not asked)
+	answer(qb, wrongAt)
+	at(now + Config.QUIZ_SECONDS + 0.2)
+	local picks = nil
+	for _, m in screens(since) do
+		if m.payload.kind == "quizResult" and m.payload.picks and m.payload.answer == nil then
+			picks = m.payload.picks
+		end
+	end
+	local late = MissionRunner.chatAnswer(qc, "1") -- (the time is up)
+	local notices = {}
+	for _, m in NetStub.sent do
+		if m.name == "Notice" and m.to == qa and m.at >= since then
+			table.insert(notices, m.payload.text)
+		end
+	end
+	check("17t a 4-choice answer typed in chat (\"3\" or \"3번\") counts, the first one only (a private notice); other"
+		.. " lines, other numbers, someone not asked, before or after the answer time: not an answer",
+		early == false and c1 == true and c1b == true and c2 == false and c3 == false and c4 == false and late == false
+		and picks ~= nil and picks[tostring(qa.UserId)].text == tostring(rightAt)
+		and picks[tostring(qb.UserId)].text == tostring(wrongAt) and picks[tostring(qc.UserId)].text == "?"
+		and #notices == 2 and notices[1] == string.format(Config.TEXT.CHAT_ANSWERED, tostring(rightAt))
+		and notices[2] == Config.TEXT.CHAT_ANSWER_KEPT)
+	at(now + Config.PICKS_SECONDS + Config.QUIZ_REVEAL_SECONDS + 1)
+	check("17u (and the quiz ends)", run.done)
+
+	local xa, xb, xc = table.unpack(newPlayers(3))
+	local record2 = fakeCtx({ xa, xb, xc }, false, nil)
+	local since2 = now
+	start(OXQuiz, record2)
+	at(now + Config.OX_INTRO_SECONDS + 0.2)
+	local o1 = MissionRunner.chatAnswer(xa, "o")
+	local o2 = MissionRunner.chatAnswer(xb, " X ")
+	local o3 = MissionRunner.chatAnswer(xc, "3")
+	at(now + Config.OX_SECONDS + 0.2)
+	local oxPicks = nil
+	for _, m in screens(since2) do
+		if m.payload.kind == "quizResult" and m.payload.picks and m.payload.answer == nil and not oxPicks then
+			oxPicks = m.payload.picks
+		end
+	end
+	check("17v O/X typed in chat: O / X (either case) count, a 3 does not", o1 == true and o2 == true and o3 == false
+		and oxPicks ~= nil and oxPicks[tostring(xa.UserId)].text == "O" and oxPicks[tostring(xb.UserId)].text == "X"
+		and oxPicks[tostring(xc.UserId)].text == "?")
+	record2.cancel = true
+	at(now + 2)
+
+	local ea, eb, ec = table.unpack(newPlayers(3))
+	local record3 = fakeCtx({ ea, eb, ec }, false, nil)
+	local since3 = now
+	start(Estimate, record3)
+	at(now + Config.ESTIMATE_INTRO_SECONDS + 0.2)
+	local e1 = MissionRunner.chatAnswer(ea, "1,500")
+	local e2 = MissionRunner.chatAnswer(eb, "99999999") -- (out of range: hidden, not counted)
+	local e3 = MissionRunner.chatAnswer(ec, "약 300")
+	at(now + Config.ESTIMATE_SECONDS + 0.2)
+	local numbers = nil
+	for _, m in screens(since3) do
+		if m.payload.kind == "estimate" and m.payload.picks and not numbers then
+			numbers = m.payload.picks
+		end
+	end
+	check("17w 숫자 근사 typed in chat: a whole number (commas fine) counts; too big is hidden but not counted",
+		e1 == true and e2 == true and e3 == false and numbers ~= nil and numbers[tostring(ea.UserId)].text == "1,500"
+		and numbers[tostring(eb.UserId)].text == "?" and numbers[tostring(ec.UserId)].text == "?")
+	record3.cancel = true
+	at(now + 3)
+	QuizBank.main = realMain
 end
 do
 	-- The right O/X answer of the statement on screen now.

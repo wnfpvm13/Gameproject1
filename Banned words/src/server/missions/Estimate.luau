@@ -160,15 +160,19 @@ function Estimate.run(ctx: Ctx): boolean?
 	if ctx.cancelled() then
 		return nil
 	end
-	-- (still here, alive and on the ground: a player launched meanwhile is neither judged nor shown)
-	local present, guesses, typed, none = {}, {}, {}, {}
-	for _, player in asked do
-		if table.find(ctx.players(), player) and not ctx.flying(player) then
-			table.insert(present, player)
-			guesses[player] = answers[player]
-			table.insert(if answers[player] then typed else none, player)
+	-- (still here, alive and on the ground: a player launched meanwhile is neither judged nor shown — looked at after
+	-- the answers and again after everyone's numbers showed, Codex review 2026-10-27)
+	local function stillThere(players: { Player }): { Player }
+		local out = {}
+		for _, player in players do
+			if table.find(ctx.players(), player) and not ctx.flying(player) then
+				table.insert(out, player)
+			end
 		end
+		return out
 	end
+	local guesses = answers
+	local present = stillThere(asked)
 	if #present < Config.ESTIMATE_MIN_PLAYERS then
 		ctx.screen(nil)
 		ctx.show(Config.TEXT.MINIGAME_TOO_FEW)
@@ -183,6 +187,16 @@ function Estimate.run(ctx: Ctx): boolean?
 	ctx.show(Config.TEXT.PICKS_REVEAL)
 	if not ctx.wait(Config.PICKS_SECONDS) then
 		return nil
+	end
+	present = stillThere(present)
+	if #present < Config.ESTIMATE_MIN_PLAYERS then
+		ctx.screen(nil)
+		ctx.show(Config.TEXT.MINIGAME_TOO_FEW)
+		return nil
+	end
+	local typed, none = {}, {}
+	for _, player in present do
+		table.insert(if guesses[player] then typed else none, player)
 	end
 	local losers = Estimate.losers(present, guesses, question.answer)
 	local ids, shownGuesses, loserIds, names = {}, {}, {}, {}

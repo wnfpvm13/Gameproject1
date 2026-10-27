@@ -631,6 +631,60 @@ function MissionRunner.start()
 	end)
 end
 
+-- A quiz answer typed in chat (bundle 12, owner 2026-10-27: "채팅으로 답을 입력하면 (ex:1,2,3,4) 바로 채팅이 출력되지
+-- 않고"): while a quiz question is open — the 4-choice quiz, 초성 and the final (a choice number, "3" or "3번"), the
+-- O/X quiz (O / X, or 1 / 2), 숫자 근사 (a whole number, commas allowed) — a line that is only an answer from someone
+-- asked counts as their answer (the first one: a button pressed first keeps its pick; they get a private notice) and
+-- goes to nobody else (ChatGate). Votes and the other games keep their chat. Returns whether the line was an answer
+-- (then hidden even when late, a second one or a number out of range: it would tell the others). Never yields.
+local function chatChoice(text: string, open: Question, shown: { [string]: any }): (boolean, number?)
+	local line = string.match(text, "^%s*(.-)%s*$") or ""
+	if shown.kind == "estimate" then
+		local digits = string.gsub(line, ",", "")
+		if not string.match(digits, "^%d+$") then
+			return false, nil
+		end
+		local number = tonumber(digits)
+		return true, if number and number >= 1 and number <= open.choices then number else nil
+	end
+	if open.choices == 2 then
+		local upper = string.upper(line)
+		if upper == "O" or line == "1" then
+			return true, 1
+		elseif upper == "X" or line == "2" then
+			return true, 2
+		end
+		return false, nil
+	end
+	-- ("3" or "3번": a pattern's `?` would cover only the last byte of 번)
+	local index = tonumber(string.match(line, "^(%d)$") or string.match(line, "^(%d)번$") or "")
+	if index and index >= 1 and index <= open.choices then
+		return true, index
+	end
+	return false, nil
+end
+
+function MissionRunner.chatAnswer(player: Player, text: string): boolean
+	local open, shown = question, screenNow
+	if not open or open.text or not open.from[player] or not shown or (shown.kind ~= "quiz" and shown.kind ~= "estimate") then
+		return false
+	end
+	local isAnswer, choice = chatChoice(text, open, shown)
+	if not isAnswer then
+		return false
+	end
+	if open.answers[player] then
+		Net.to(player, "Notice", { text = Config.TEXT.CHAT_ANSWER_KEPT })
+	elseif choice and Match.now() <= open.endsAt then
+		open.answers[player] = choice
+		local label = if shown.kind ~= "estimate" and open.choices == 2
+			then (if choice == 1 then Config.TEXT.OX_O else Config.TEXT.OX_X)
+			else tostring(choice)
+		Net.to(player, "Notice", { text = string.format(Config.TEXT.CHAT_ANSWERED, label) })
+	end
+	return true
+end
+
 -- The texts on the mission screen now (a question and its choices, a topic): a new banned word must not appear in
 -- them (docs/DESIGN_V3.md §6).
 function MissionRunner.screenTexts(): { string }

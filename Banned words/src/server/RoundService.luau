@@ -1073,7 +1073,7 @@ function RoundService.start()
 		talkStart = onTalkStart,
 	})
 	RescueService.start(onRescueResolved)
-	ChatGate.start(onChat, WordService.hides)
+	ChatGate.start(onChat, WordService.hides, MissionRunner.chatAnswer)
 	JudgeService.start(onSpeechHit)
 	MissionRunner.start()
 	BellService.start(SeatService.isFlying)

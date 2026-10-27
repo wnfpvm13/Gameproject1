@@ -24,6 +24,13 @@ local onMessage: (Player, string) -> () = function(_player, _text) end
 local hides: (Player, string) -> boolean = function(_receiver, _text)
 	return false
 end
+-- Bundle 12: a quiz answer typed in chat (MissionRunner decides and counts it once per message) goes to nobody but its
+-- sender, guarded round or not.
+local answerLine: (Player, string) -> boolean = function(_sender, _text)
+	return false
+end
+local answerOf: { [string]: boolean } = {} -- MessageId -> was it an answer (decided once)
+local answersKept = 0
 
 local function playerOf(source: Instance?): Player?
 	local untyped: any = source
@@ -86,8 +93,13 @@ local function watch(channel: Instance)
 	local textChannel = channel :: TextChannel
 	textChannel.ShouldDeliverCallback = function(message: TextChatMessage, target: TextSource): boolean
 		local sender = playerOf(message.TextSource)
+		local receiver = playerOf(target)
 		ChatGate.received(message.MessageId, sender, message.Text)
-		return ChatGate.shouldDeliver(textChannel, sender, playerOf(target), message.Text)
+		-- (a quiz answer: counted once, whoever this call is for, and only its sender sees it; bundle 12)
+		if sender and ChatGate.isAnswer(message.MessageId, sender, message.Text) and receiver ~= sender then
+			return false
+		end
+		return ChatGate.shouldDeliver(textChannel, sender, receiver, message.Text)
 	end
 end
 
@@ -99,12 +111,34 @@ local function setWhisperCommand(on: boolean)
 	end
 end
 
+-- Whether the message is a quiz answer (asked once per MessageId: the first call counts it; never yields).
+function ChatGate.isAnswer(messageId: string, sender: Player, text: string): boolean
+	local known = answerOf[messageId]
+	if known ~= nil then
+		return known
+	end
+	local ok, result = pcall(answerLine, sender, text)
+	local answer = ok and result == true
+	if answersKept > 500 then -- (only the last moments matter: a message is decided within one delivery)
+		table.clear(answerOf)
+		answersKept = 0
+	end
+	answerOf[messageId] = answer
+	answersKept += 1
+	return answer
+end
+
 -- handle(player, text): an alive participant wrote `text` during a guarded round. hidesWord(receiver, text): `text`
--- holds a word `receiver` must not see (never yields).
-function ChatGate.start(handle: (Player, string) -> (), hidesWord: ((Player, string) -> boolean)?)
+-- holds a word `receiver` must not see (never yields). answer(sender, text): the line is a quiz answer, counted (never
+-- yields; bundle 12).
+function ChatGate.start(handle: (Player, string) -> (), hidesWord: ((Player, string) -> boolean)?,
+	answer: ((Player, string) -> boolean)?)
 	onMessage = handle
 	if hidesWord then
 		hides = hidesWord
+	end
+	if answer then
+		answerLine = answer
 	end
 	task.spawn(function()
 		-- The channels are made at run time (TextChatService): look until they are there, however late.

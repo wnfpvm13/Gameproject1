@@ -6076,20 +6076,22 @@ local function pick(bank: { QuizBank.Question }, rng: Random): QuizBank.Question
 	for _, question in bank do
 		if not mentions(question, words) then
 			table.insert(clean, question)
-			if not used[question] then
+			if not used[question] and not usedThisRound[question] then
 				table.insert(fresh, question)
 			end
 		end
 	end
 	if #fresh == 0 then
+		-- (every clean one was asked: they come again, but not this round's — their history stays, so a later pick in
+		-- this round skips them too; review 2026-10-27)
 		for _, question in clean do
-			used[question] = nil
 			if not usedThisRound[question] then
+				used[question] = nil
 				table.insert(fresh, question)
 			end
 		end
 		if #fresh == 0 then
-			fresh = clean
+			fresh = clean -- (this round asked the whole bank: one of them again)
 		end
 	end
 	if #fresh == 0 then

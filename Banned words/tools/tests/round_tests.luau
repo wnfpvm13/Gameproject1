@@ -2580,4 +2580,35 @@ do
 	advanceUntil(function() return Match.phase == "Lobby" end, 60)
 end
 
+do
+	-- 19e: with a presenter: the presenter is not a voter (their vote alone would make it hard; not counted, nobody voted:
+	-- normal); a player syncing during the vote gets the vote screen again.
+	local volunteer = NetStub.listeners.Volunteer
+	local answerListener = NetStub.listeners.MissionAnswer
+	local ps = newPlayers(3) -- ps[1] presents, two play
+	at(now + Config.VOLUNTEER_COOLDOWN)
+	volunteer(ps[1], true)
+	local synced = nil
+	local since = now
+	task.spawn(function()
+		while true do
+			local m = lastSent("Mission", since, nil, "nextVote")
+			if m and m.payload.title == Config.TEXT.MODE_VOTE then
+				answerListener(ps[1], m.payload.id, 3) -- (the presenter)
+				task.wait(Config.SYNC_COOLDOWN + 0.1)
+				local before = now
+				NetStub.listeners.Sync(ps[3])
+				local again = lastSent("Mission", before, ps[3], "nextVote")
+				synced = again ~= nil and again.payload.title == Config.TEXT.MODE_VOTE
+				return
+			end
+			task.wait(0.1)
+		end
+	end)
+	begin(ps, 10, nil, nil)
+	check("19e with a presenter: they are not a voter (their hard vote alone does not count: normal); a sync during the"
+		.. " vote gets the vote screen", Match.presenter == ps[1] and Match.mode == "normal" and synced == true)
+	finish(since)
+end
+
 print(if fails == 0 then "ALL PASS" else fails .. " FAILED")

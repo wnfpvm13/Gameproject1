@@ -2560,9 +2560,24 @@ do
 	Match.roundId = 901
 	local third = askedIn(nil, false)
 	local fourth = askedIn(nil, false)
+	local fifth = askedIn(nil, false)
 	QuizBank.main = saved
-	check("20f a round never asks a question twice: the bank's last fresh one, then (history over) not that one again",
-		third ~= nil and not table.find(first, third) and fourth ~= nil and fourth ~= third)
+	check("20f a round never asks a question twice: the bank's last fresh one, then (history over) the other two, each"
+		.. " once", third ~= nil and not table.find(first, third) and fourth ~= nil and fifth ~= nil and fourth ~= third
+		and fifth ~= third and fifth ~= fourth)
+	-- 20l: the time budget sees the mode: a quiz fits 15 s + the flight back in the normal mode, not in the easy one.
+	local budget = 15 + Config.FLING_RETURN_SECONDS
+	local function offered(mode)
+		Match.mode = mode
+		local found = false
+		for _, mission in MissionRunner.candidates(budget, 3, false) do
+			found = found or mission.id == "quiz"
+		end
+		Match.mode = nil
+		return found
+	end
+	check("20l the time budget counts the mode: the quiz fits a normal round's last 20 s, not an easy one's", offered(nil)
+		and not offered("easy") and offered("hard"))
 end
 do
 	-- 20g: the O/X banks by mode.

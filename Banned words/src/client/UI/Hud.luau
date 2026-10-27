@@ -2,7 +2,6 @@
 -- Status board at the top centre: phase + message, timer, my lives (hearts) and survivors. Kept short (64 px) so the
 -- chair row under it stays visible.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Hearts = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hearts"))
@@ -29,8 +28,12 @@ local livesL: TextLabel
 function Hud.build(): Frame
 	local top = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 14)
 	top.AnchorPoint = Vector2.new(0.5, 0)
-	top.Position = UDim2.new(0.5, 0, 0, 8)
-	top.Size = UDim2.new(0.5, 0, 0, 64)
+	top.Position = UDim2.new(0.5, 0, 0, Style.BOARD_TOP)
+	top.Size = UDim2.new(0.5, 0, 0, Style.BOARD_HEIGHT)
+	-- (smaller on a phone, with the mode tag and the settings key on it; the rows under it follow: Style.row)
+	local scale = Instance.new("UIScale")
+	scale.Scale = Style.BOARD_SCALE
+	scale.Parent = top
 	-- (at most the screen less 250 px each side where Roblox's player list sits open at the top right — a small PC window,
 	-- review 2026-10-25; a phone keeps it folded, so the board keeps its width there — and 30 px more for the settings
 	-- key that sticks out of its right edge, bundle 11a)
@@ -39,7 +42,7 @@ function Hud.build(): Frame
 	limit.Parent = top
 	local function fit()
 		local camera = workspace.CurrentCamera
-		local phone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		local phone = Style.PHONE
 		local width = if not camera then 580 elseif phone then camera.ViewportSize.X * 0.6 else camera.ViewportSize.X - 560
 		local board = math.clamp(width, 320, 580)
 		limit.MaxSize = Vector2.new(board, 200)
@@ -52,7 +55,7 @@ function Hud.build(): Frame
 			-- (but never off the left edge: on a very narrow window the board wins over the player list's room)
 			shift = math.max(shift, 8 - (viewport / 2 - board / 2))
 		end
-		top.Position = UDim2.new(0.5, shift, 0, 8)
+		top.Position = UDim2.new(0.5, shift, 0, Style.BOARD_TOP)
 	end
 	fit()
 	local watched: Camera? = nil

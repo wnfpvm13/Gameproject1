@@ -14165,7 +14165,6 @@ do local s = Instance.new("ModuleScript"); s.Name = "Hud"; s.Source = [====[--!s
 -- Status board at the top centre: phase + message, timer, my lives (hearts) and survivors. Kept short (64 px) so the
 -- chair row under it stays visible.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Config"))
 local Hearts = require(ReplicatedStorage:WaitForChild("BannedWords"):WaitForChild("Hearts"))
@@ -14192,8 +14191,12 @@ local livesL: TextLabel
 function Hud.build(): Frame
 	local top = Style.panel(Style.gui(), Style.PAPER, Style.PAPER_ALPHA, 14)
 	top.AnchorPoint = Vector2.new(0.5, 0)
-	top.Position = UDim2.new(0.5, 0, 0, 8)
-	top.Size = UDim2.new(0.5, 0, 0, 64)
+	top.Position = UDim2.new(0.5, 0, 0, Style.BOARD_TOP)
+	top.Size = UDim2.new(0.5, 0, 0, Style.BOARD_HEIGHT)
+	-- (smaller on a phone, with the mode tag and the settings key on it; the rows under it follow: Style.row)
+	local scale = Instance.new("UIScale")
+	scale.Scale = Style.BOARD_SCALE
+	scale.Parent = top
 	-- (at most the screen less 250 px each side where Roblox's player list sits open at the top right — a small PC window,
 	-- review 2026-10-25; a phone keeps it folded, so the board keeps its width there — and 30 px more for the settings
 	-- key that sticks out of its right edge, bundle 11a)
@@ -14202,7 +14205,7 @@ function Hud.build(): Frame
 	limit.Parent = top
 	local function fit()
 		local camera = workspace.CurrentCamera
-		local phone = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		local phone = Style.PHONE
 		local width = if not camera then 580 elseif phone then camera.ViewportSize.X * 0.6 else camera.ViewportSize.X - 560
 		local board = math.clamp(width, 320, 580)
 		limit.MaxSize = Vector2.new(board, 200)
@@ -14215,7 +14218,7 @@ function Hud.build(): Frame
 			-- (but never off the left edge: on a very narrow window the board wins over the player list's room)
 			shift = math.max(shift, 8 - (viewport / 2 - board / 2))
 		end
-		top.Position = UDim2.new(0.5, shift, 0, 8)
+		top.Position = UDim2.new(0.5, shift, 0, Style.BOARD_TOP)
 	end
 	fit()
 	local watched: Camera? = nil
@@ -16240,8 +16243,17 @@ do local s = Instance.new("ModuleScript"); s.Name = "Style"; s.Source = [====[--
 -- thick dark outline, dark text; colour where it means something (my pick, right / wrong, a warning). (2026-10-24 it
 -- was black panels, white text.)
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 
 local Style = {}
+
+-- A phone (a touch screen without a keyboard): the status board is drawn smaller there, and the rows under it move up
+-- with it (owner 2026-10-27: "모바일의 경우 위쪽에 있는 모드 이름, 퀴즈, 미션, 내 목숨, 생존, 설정이 있는 UI가 되게 커
+-- 보이는데 모바일만 크기를 좀 줄일 수 있어?").
+Style.PHONE = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+Style.BOARD_SCALE = if Style.PHONE then 0.75 else 1
+Style.BOARD_TOP = 8 -- the status board's top and height (pixels, before BOARD_SCALE)
+Style.BOARD_HEIGHT = 64
 
 Style.BOLD = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.ExtraBold)
 Style.REGULAR = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.SemiBold)
@@ -16364,9 +16376,9 @@ function Style.limit(frame: GuiObject, min: Vector2, max: Vector2)
 	c.Parent = frame
 end
 
--- The top (pixels) of row 0, 1, 2 ... under the status board.
+-- The top (pixels) of row 0, 1, 2 ... under the status board (8 px under it: room for the outlines).
 function Style.row(row: number): number
-	return 80 + row * 30 -- (room for the outlines)
+	return math.round(Style.BOARD_TOP + Style.BOARD_HEIGHT * Style.BOARD_SCALE + 8) + row * 30
 end
 
 -- Keeps `object` at most `fraction` of the screen wide (and `maxWidth` pixels), following the screen size.

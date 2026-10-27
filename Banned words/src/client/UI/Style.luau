@@ -4,8 +4,17 @@
 -- thick dark outline, dark text; colour where it means something (my pick, right / wrong, a warning). (2026-10-24 it
 -- was black panels, white text.)
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 
 local Style = {}
+
+-- A phone (a touch screen without a keyboard): the status board is drawn smaller there, and the rows under it move up
+-- with it (owner 2026-10-27: "모바일의 경우 위쪽에 있는 모드 이름, 퀴즈, 미션, 내 목숨, 생존, 설정이 있는 UI가 되게 커
+-- 보이는데 모바일만 크기를 좀 줄일 수 있어?").
+Style.PHONE = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+Style.BOARD_SCALE = if Style.PHONE then 0.75 else 1
+Style.BOARD_TOP = 8 -- the status board's top and height (pixels, before BOARD_SCALE)
+Style.BOARD_HEIGHT = 64
 
 Style.BOLD = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.ExtraBold)
 Style.REGULAR = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.SemiBold)
@@ -128,9 +137,9 @@ function Style.limit(frame: GuiObject, min: Vector2, max: Vector2)
 	c.Parent = frame
 end
 
--- The top (pixels) of row 0, 1, 2 ... under the status board.
+-- The top (pixels) of row 0, 1, 2 ... under the status board (8 px under it: room for the outlines).
 function Style.row(row: number): number
-	return 80 + row * 30 -- (room for the outlines)
+	return math.round(Style.BOARD_TOP + Style.BOARD_HEIGHT * Style.BOARD_SCALE + 8) + row * 30
 end
 
 -- Keeps `object` at most `fraction` of the screen wide (and `maxWidth` pixels), following the screen size.

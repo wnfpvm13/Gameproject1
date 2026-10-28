@@ -18,6 +18,10 @@ return {
 	-- On a held weapon: the two points a blow's streak runs between (WeaponGear makes them, SwingTrail draws it)
 	TrailTip = "TrailTip",
 	TrailBase = "TrailBase",
+	-- What weapons leave in the arena folder (the server's Missiles, Wheels, Slicks; DropShow sounds them)
+	LumpPart = "CoalLump",
+	WheelModel = "RollingWheel",
+	SlickPart = "OilSlick",
 	CratesFolder = "TrainBrawlCrates",
 	SandbagTag = "TrainBrawlSandbag",
 	-- Workspace attributes (the round, written by the server)

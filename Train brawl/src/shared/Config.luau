@@ -32,6 +32,13 @@ type Weapon = {
 	throwSpeed: number?,
 	throwLift: number?,
 	fuse: number?,
+	hitRadius: number?,
+	flight: number?,
+	rollSpeed: number?,
+	rollSeconds: number?,
+	lasts: number?,
+	pull: number?,
+	stun: number?,
 	cooldown: number,
 	hitAt: number,
 	seconds: number,
@@ -277,10 +284,14 @@ Config.Bat = {
 -- is fists again (WeaponService). Every hit goes through the health rules (HitRules): damage replaces a fist's, push
 -- multiplies the push health gives (so a weapon throws a full-health fighter no farther off than health allows: no
 -- single hit carries one off a roof from its middle, tests), launch makes even a first hit a launch. style: how it
--- attacks and is drawn (punch, swing: a cone of reach and halfAngle; slam: an area of radius just ahead; throw: a lit
--- stick that bursts after its fuse). hitAt: seconds after pressing when it lands; seconds: the drawn attack. weight:
--- how often a crate holds it. offHand: held in both hands, the free hand there along the grip (+Z: back toward the
--- handle's end; WeaponGear makes the handle that long). (Its name on screen is in Words.Weapons.)
+-- attacks and is drawn (punch, swing: a cone of reach and halfAngle, the 1-2-3 string; spray: a cone, everyone in it,
+-- no string; lasso: a narrow cone, the nearest one only, pulled in; slam: an area of radius just ahead; burst: an area
+-- of radius around the attacker; throw: a lit stick that bursts after its fuse; toss: a lump that hits the first one it
+-- passes near; roll: a wheel rolling on along the top; pour: a slick that makes whoever steps in slip). hitAt: seconds
+-- after pressing when it lands (or leaves the hand); seconds: the drawn attack. weight: how often a crate holds it.
+-- offHand: held in both hands, the free hand there along the grip (+Z: back toward the handle's end; WeaponGear makes
+-- the handle that long). (Its name on screen is in Words.Weapons.) The owner asked for about twelve kinds (2026-10-28:
+-- "무기를 더 다양하게 12가지정도로 늘려"): each new one has an effect of its own, and every push still goes by health.
 Config.Weapons = {
 	-- A quick jab: short reach, light damage, a little push (13 punches empty health). Quicker since 2026-10-27 (owner:
 	-- punching looked slow; 0.45 / 0.26 before): the guard fills the time between punches.
@@ -348,7 +359,140 @@ Config.Weapons = {
 		weight = 1.5,
 		offHand = Vector3.new(0, 0, -1.5), -- carried by both ends
 	},
+	-- A long whip in one hand: the farthest-reaching blow, a narrow line, quick and light; its string as the bat's.
+	Whip = {
+		style = "swing",
+		damage = 9,
+		push = 0.9,
+		reach = 7.5,
+		halfAngle = 22,
+		cooldown = 0.52,
+		hitAt = 0.15,
+		seconds = 0.34,
+		uses = 15,
+		weight = 2,
+	},
+	-- A coal shovel in both hands: swept wide (it reaches those beside its holder too), a little slower than the bat.
+	Shovel = {
+		style = "swing",
+		damage = 11,
+		push = 1,
+		reach = 5,
+		halfAngle = 105,
+		cooldown = 0.65,
+		hitAt = 0.17,
+		seconds = 0.42,
+		uses = 12,
+		weight = 2,
+		offHand = Vector3.new(0, 0, 0.8), -- under the right fist, toward the handle's end
+	},
+	-- A lasso: thrown far ahead, it catches the nearest one in a narrow line and yanks them in to `pull` in front, tied
+	-- up (no attacking) for `stun`: the one throw, then bare fists again at once to hit the one tied. The yank never takes
+	-- anyone past the edge of what they stand on (WeaponService).
+	Lasso = {
+		style = "lasso",
+		damage = 5,
+		push = 1,
+		reach = 9,
+		halfAngle = 16,
+		pull = 2.6,
+		stun = 0.8,
+		cooldown = 0.45,
+		hitAt = 0.32,
+		seconds = 0.6,
+		uses = 1,
+		weight = 1.5,
+	},
+	-- Lumps of coal, thrown one at a time in a low arc: the first fighter one passes within hitRadius of takes a light
+	-- hit (never a launch); a lump that meets the train breaks there or flies on for at most `flight`.
+	Coal = {
+		style = "toss",
+		damage = 6,
+		push = 1,
+		throwSpeed = 60,
+		throwLift = 20,
+		hitRadius = 1.6,
+		flight = 0.9,
+		cooldown = 0.42,
+		hitAt = 0.12,
+		seconds = 0.32,
+		uses = 6,
+		weight = 2,
+	},
+	-- A steam hose in both hands: a hissing blast ahead pushes everyone in a wide cone back (the farthest of the light
+	-- pushes), with hardly any damage and never a launch.
+	SteamHose = {
+		style = "spray",
+		damage = 3,
+		push = 1.8,
+		reach = 8,
+		halfAngle = 32,
+		cooldown = 0.8,
+		hitAt = 0.16,
+		seconds = 0.5,
+		uses = 4,
+		weight = 1.5,
+		offHand = Vector3.new(0, 0, -1.2), -- out ahead on the pipe
+	},
+	-- An oil can: poured `ahead`, a slick of `radius` lies on the top for `lasts` seconds; anyone but its pourer who
+	-- steps in slips and falls (a launch the way they were going, pushed by health like any).
+	OilCan = {
+		style = "pour",
+		damage = 4,
+		push = 0.5,
+		launch = true,
+		radius = 4,
+		ahead = 3.5,
+		lasts = 10,
+		cooldown = 0.8,
+		hitAt = 0.3,
+		seconds = 0.6,
+		uses = 2,
+		weight = 1.5,
+	},
+	-- A bundle of firecrackers dropped at the feet: a moment later they pop all around, pushing everyone within `radius`
+	-- away (light hits): the way out when crowded.
+	Firecracker = {
+		style = "burst",
+		damage = 6,
+		push = 1.5,
+		radius = 6,
+		ahead = 0,
+		cooldown = 1,
+		hitAt = 0.4,
+		seconds = 0.65,
+		uses = 2,
+		weight = 1.5,
+	},
+	-- A locomotive's spare wheel, bowled along the top: it rolls straight on at rollSpeed, launching everyone it passes
+	-- within hitRadius of (each once), until it meets something tall, rolls off an edge or rollSeconds run out.
+	Wheel = {
+		style = "roll",
+		damage = 12,
+		push = 1,
+		launch = true,
+		rollSpeed = 30,
+		rollSeconds = 1.6,
+		hitRadius = 2,
+		cooldown = 1,
+		hitAt = 0.3,
+		seconds = 0.6,
+		uses = 1,
+		weight = 1.5,
+		offHand = Vector3.new(0, 0, -1.1), -- by the other end of its axle
+	},
 } :: { [string]: Weapon }
+
+-- The things weapons leave in the arena (the server's Missiles, Wheels and Slicks): a thrown coal lump's size, the
+-- bowled wheel's (it rolls up a step no higher than StepUp, a taller one stops it), and how often one fighter may slip
+-- on the same slick (longer than a launch's unhittable moment and getting up).
+Config.Thrown = {
+	LumpSize = 0.7,
+	WheelRadius = 1.3,
+	WheelWidth = 0.55,
+	StepUp = 0.8,
+	SlipEvery = 1.6,
+}
 
 -- The weapon crates (WeaponDrops): the first some seconds into a fight, then one every few seconds while fewer are on
 -- the map than one for every three fighters left (at most MaxOnMap). Each floats down FallSeconds from FallHeight with
@@ -496,6 +640,17 @@ Config.Sounds = {
 	StarPop = { id = "rbxassetid://9113263649", volume = 0.6 }, -- Balloon Pop 3 (a home-run flight popping out of the sky)
 	Blast = { id = "rbxassetid://9120769331", volume = 1, seconds = 2.5 }, -- Wind Whoosh Sonic Boom Low End Impact 1
 	Fuse = { id = "rbxassetid://9119380593", volume = 0.5, seconds = 1.6 }, -- Soldering From Sparklers 1 (a fizzing fuse)
+	WhipCrack = { id = "rbxassetid://9113612888", volume = 0.6, vary = 0.06 }, -- Buggy Whip Quick Swish Crack 11 (a whip's swing)
+	WhipHit = { id = "rbxassetid://9113615753", volume = 0.8, vary = 0.06 }, -- Buggy Whip Slap Couch Light Crack Swish 6
+	ShovelHit = { id = "rbxassetid://9125819216", volume = 0.75, seconds = 1, vary = 0.06 }, -- Robot Impact Miscellaneous Metal Clangs Clunks 4
+	LassoThrow = { id = "rbxassetid://9119739660", volume = 0.5, vary = 0.06 }, -- Swoosh Pack High End Multiple Variations 9
+	LassoCatch = { id = "rbxassetid://9118717475", volume = 0.8, seconds = 1.2, vary = 0.05 }, -- Rope Impacts 4
+	CoalHit = { id = "rbxassetid://9118630399", volume = 0.8, vary = 0.08 }, -- Rock Impacts 5
+	Steam = { id = "rbxassetid://9116496074", volume = 0.7, seconds = 0.9, vary = 0.05 }, -- Medium Pressure Air Release 6 (a steam blast)
+	OilSplat = { id = "rbxassetid://9120644082", volume = 0.7, seconds = 1, vary = 0.06 }, -- Wet Impacts 7 (oil poured on the roof)
+	Slip = { id = "rbxassetid://9113476527", volume = 0.85, vary = 0.05 }, -- Body Fall Master 36 (a skid and a fall)
+	WheelRoll = { id = "rbxassetid://9116537457", volume = 0.6, seconds = 1.8 }, -- Metal Cart 3 (a wheel rolling on the roof)
+	WheelHit = { id = "rbxassetid://9125672726", volume = 0.8, seconds = 1.2, vary = 0.05 }, -- Metal Impact Sledge Hammer Hits On 5 Ft I-Beam 13
 	Parachute = { id = "rbxassetid://9117235033", volume = 0.5, seconds = 2 }, -- Parachute Blossom 9
 	CrateLand = { id = "rbxassetid://9113466920", volume = 0.7, seconds = 1.5, vary = 0.08 }, -- Board Drops Wood Impacts Wobble 3
 	Pickup = { id = "rbxassetid://9120873789", volume = 0.7, seconds = 0.8 }, -- Wooden Chest Open Close Cedar Box 9 (a weapon taken from a crate)

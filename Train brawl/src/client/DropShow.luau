@@ -1,13 +1,43 @@
 --!strict
 -- The sounds of the weapon crates on this client (the crates themselves are the server's: WeaponDrops): a parachute
 -- opening as one starts falling, a wooden thump when it lands (Names.CrateLanded), and the weapon being taken up at
--- whoever takes it (Names.CrateTakenBy), and the fizz of a lit dynamite stick while it flies (the server's "Dynamite" parts).
+-- whoever takes it (Names.CrateTakenBy); and of what weapons leave in the arena (the server's): the fizz of a lit
+-- dynamite stick while it flies ("Dynamite" parts), a wheel rumbling while it rolls (Names.WheelModel), oil splashing
+-- down as a slick is poured (Names.SlickPart), and a coal lump cracking with a puff of black dust where it ends
+-- (Names.LumpPart).
+local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Names = require(shared:WaitForChild("Names"))
+local PartUtil = require(shared:WaitForChild("PartUtil"))
 local SoundBank = require(shared:WaitForChild("SoundBank"))
+
+local DUST_TEXTURE = "rbxasset://textures/particles/smoke_main.dds"
+
+-- A coal lump ended at `at` (it hit someone or the train): a crack and a puff of coal dust.
+local function crumble(at: Vector3)
+	local part = PartUtil.decor("TrainBrawlCoalDust", Vector3.new(0.2, 0.2, 0.2), CFrame.new(at), Color3.new(0, 0, 0), Enum.Material.SmoothPlastic, Workspace)
+	part.Transparency = 1
+	local attachment = Instance.new("Attachment")
+	attachment.Parent = part
+	local dust = Instance.new("ParticleEmitter")
+	dust.Texture = DUST_TEXTURE
+	dust.Enabled = false
+	dust.Lifetime = NumberRange.new(0.3, 0.5)
+	dust.Speed = NumberRange.new(4, 9)
+	dust.SpreadAngle = Vector2.new(180, 180)
+	dust.Drag = 4
+	dust.Size = NumberSequence.new(0.6, 1.8)
+	dust.Transparency = NumberSequence.new(0.3, 1)
+	dust.Color = ColorSequence.new(Color3.fromRGB(40, 38, 40))
+	dust.Parent = attachment
+	dust:Emit(10)
+	SoundBank.play("CoalHit", part)
+	Debris:AddItem(part, 1.5)
+end
 
 local DropShow = {}
 
@@ -49,6 +79,19 @@ function DropShow.start(crates: Instance, arena: Instance)
 	arena.ChildAdded:Connect(function(child: Instance)
 		if child.Name == "Dynamite" and child:IsA("BasePart") then
 			SoundBank.play("Fuse", child)
+		elseif child.Name == Names.SlickPart and child:IsA("BasePart") then
+			SoundBank.play("OilSplat", child)
+		elseif child.Name == Names.WheelModel and child:IsA("Model") then
+			local rim = child.PrimaryPart or child:WaitForChild("Rim", 2)
+			if rim and rim:IsA("BasePart") then
+				SoundBank.play("WheelRoll", rim)
+			end
+		elseif child.Name == Names.LumpPart and child:IsA("BasePart") then
+			child.AncestryChanged:Connect(function()
+				if not child:IsDescendantOf(Workspace) then
+					crumble(child.Position)
+				end
+			end)
 		end
 	end)
 end

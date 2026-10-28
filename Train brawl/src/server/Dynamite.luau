@@ -9,8 +9,6 @@
 -- there). The stick fizzes at its fuse end
 -- (FuseSparks). Who the burst reaches is the caller's to judge.
 -- clear() puts out every stick still burning (the round is over).
-local CollectionService = game:GetService("CollectionService")
-local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -21,6 +19,7 @@ local Names = require(shared:WaitForChild("Names"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
 local WeaponRules = require(shared:WaitForChild("WeaponRules"))
 local FuseSparks = require(shared:WaitForChild("FuseSparks"))
+local ArenaRay = require(shared:WaitForChild("ArenaRay"))
 
 local Dynamite = {}
 
@@ -32,38 +31,12 @@ local RED = Color3.fromRGB(220, 50, 40)
 type Lit = { stick: BasePart, ring: BasePart?, connection: RBXScriptConnection }
 local burning: { Lit } = {}
 
--- What a stick flies through: characters (players' and sandbags').
-local function passThrough(): RaycastParams
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Exclude
-	local skip: { Instance } = CollectionService:GetTagged(Names.SandbagTag)
-	for _, player in Players:GetPlayers() do
-		if player.Character then
-			table.insert(skip, player.Character)
-		end
-	end
-	params.FilterDescendantsInstances = skip
-	return params
-end
-
--- The first thing of the arena between `a` and `b`, flying through everything else (up to a few things in the way).
-local function arenaHit(a: Vector3, b: Vector3, arena: Instance, params: RaycastParams): RaycastResult?
-	for _ = 1, 4 do
-		local hit = Workspace:Raycast(a, b - a, params)
-		if not hit or hit.Instance:IsDescendantOf(arena) then
-			return hit
-		end
-		params:AddToFilter(hit.Instance) -- not the arena's: fly through it and look again
-	end
-	return nil
-end
-
 -- The floor under a stick that met a wall at `at` (normal `normal`): straight down from just off the wall; nil when
 -- nothing of the arena is under it.
 local function floorBelow(at: Vector3, normal: Vector3, arena: Instance): Vector3?
 	local out = Vector3.new(normal.X, 0, normal.Z)
 	local start = at + (if out.Magnitude > 1e-3 then out.Unit * OFF_WALL else Vector3.zero)
-	local hit = arenaHit(start, start - Vector3.new(0, 200, 0), arena, passThrough())
+	local hit = ArenaRay.hit(start, start - Vector3.new(0, 200, 0), arena, ArenaRay.params())
 	return if hit then hit.Position else nil
 end
 
@@ -76,7 +49,7 @@ end
 -- Where the arc first meets the arena within `limit` seconds, and when; nil when it is still flying by then. When what
 -- it meets is a wall, also the floor it drops to.
 local function landing(from: Vector3, facing: Vector3, speed: number, lift: number, limit: number, arena: Instance): (Vector3?, number, Vector3?)
-	local params = passThrough()
+	local params = ArenaRay.params()
 	local gravity = Workspace.Gravity
 	local previous = from
 	local t = 0
@@ -84,7 +57,7 @@ local function landing(from: Vector3, facing: Vector3, speed: number, lift: numb
 		t += STEP
 		local x, y, z = WeaponRules.arc(from.X, from.Y, from.Z, facing.X, facing.Z, speed, lift, gravity, t)
 		local nextAt = Vector3.new(x, y, z)
-		local hit = arenaHit(previous, nextAt, arena, params)
+		local hit = ArenaRay.hit(previous, nextAt, arena, params)
 		if hit then
 			local share = (hit.Position - previous).Magnitude / math.max((nextAt - previous).Magnitude, 1e-6)
 			local floor = if hit.Normal.Y < WALL then floorBelow(hit.Position, hit.Normal, arena) else nil
@@ -106,7 +79,7 @@ function Dynamite.throw(parent: Instance, arena: Instance, root: Vector3, facing
 	local radius = assert(w.radius, "Config.Weapons.Dynamite.radius")
 	-- From the hand, a little ahead and up; from just short of a wall when the hand would be inside it.
 	local from = root + Vector3.new(0, 1.5, 0) + facing * 1.5
-	local blocked = arenaHit(root, from, arena, passThrough())
+	local blocked = ArenaRay.hit(root, from, arena, ArenaRay.params())
 	if blocked then
 		from = blocked.Position - (from - root).Unit * 0.4
 	end

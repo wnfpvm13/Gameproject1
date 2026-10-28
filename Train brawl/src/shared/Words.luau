@@ -13,6 +13,14 @@ Words.Weapons = {
 	Hammer = "망치",
 	Dynamite = "다이너마이트",
 	GoldBar = "금괴",
+	Whip = "채찍",
+	Shovel = "삽",
+	Lasso = "올가미",
+	Coal = "석탄 덩이",
+	SteamHose = "증기 호스",
+	OilCan = "기름통",
+	Firecracker = "폭죽",
+	Wheel = "열차 바퀴",
 } :: { [string]: string }
 
 -- The round line and the big centre text.

@@ -1,5 +1,6 @@
 --!strict
--- The player's own character, hit: a light hit flinches it (BodyMotion.stagger, no swinging for Config.Hit.LightStun);
+-- The player's own character, hit: a light hit flinches it (BodyMotion.stagger, no swinging for Config.Hit.LightStun or
+-- the weapon's own stun - a lasso's tie - and never less than a stun still running);
 -- a launch or smash sends it flying (BodyMotion.launch), back on its feet once it has landed (BodyMotion.landed). The
 -- player's client moves its own character, so the server sends the hit here (WeaponService) instead of applying it.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,17 +13,17 @@ local BodyMotion = require(shared:WaitForChild("BodyMotion"))
 local KnockFlight = {}
 KnockFlight.__index = KnockFlight
 
--- flying: launched (lying down until it lands) rather than flinching.
-type Fields = { body: CharacterParts.Body?, since: number?, flying: boolean }
+-- flying: launched (lying down until it lands) rather than flinching; stunUntil: when a flinch's stun ends (os.clock).
+type Fields = { body: CharacterParts.Body?, since: number?, flying: boolean, stunUntil: number }
 export type Flight = typeof(setmetatable({} :: Fields, KnockFlight))
 
 function KnockFlight.new(): Flight
-	local fields: Fields = { body = nil, since = nil, flying = false }
+	local fields: Fields = { body = nil, since = nil, flying = false, stunUntil = 0 }
 	return setmetatable(fields, KnockFlight)
 end
 
--- A hit of this kind ("light", "launch" or "smash") with this velocity on the character.
-function KnockFlight.hit(self: Flight, model: Model, velocity: Vector3, kind: string)
+-- A hit of this kind ("light", "launch" or "smash") with this velocity on the character; `stun`: a light hit's stun.
+function KnockFlight.hit(self: Flight, model: Model, velocity: Vector3, kind: string, stun: number)
 	local body = CharacterParts.body(model)
 	if not body then
 		return
@@ -35,8 +36,10 @@ function KnockFlight.hit(self: Flight, model: Model, velocity: Vector3, kind: st
 	else
 		BodyMotion.stagger(body, velocity)
 	end
+	local now = os.clock()
+	self.stunUntil = if launched then 0 elseif self.since and not self.flying then math.max(self.stunUntil, now + stun) else now + stun
 	self.body = body
-	self.since = os.clock()
+	self.since = now
 	self.flying = launched
 end
 
@@ -62,7 +65,7 @@ function KnockFlight.update(self: Flight)
 	if inStands then
 		body.root.AssemblyLinearVelocity = Vector3.zero
 	end
-	local over = inStands or (if self.flying then BodyMotion.landed(body, elapsed) else elapsed >= Config.Hit.LightStun)
+	local over = inStands or (if self.flying then BodyMotion.landed(body, elapsed) else os.clock() >= self.stunUntil)
 	if not body.model.Parent or over then
 		local wasFlying = self.flying
 		self.since = nil

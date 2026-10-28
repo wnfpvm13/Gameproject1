@@ -2,7 +2,8 @@
 -- How a fighter's body moves when it attacks, is hit, has landed or fell off, the same wherever its physics runs: on
 -- the player's own client for a player (KnockFlight, FallDrift, the player's own attack) and on the server for a
 -- sandbag (Sandbags, a bot's attack). An attack steps the body in (lunge); a light hit flinches (stagger: held still,
--- then pushed along the ground on its feet); a launch or smash sends the body flying (launch).
+-- then pushed along the ground on its feet, or pulled in by a lasso); a launch or smash sends the body flying (launch).
+-- How far a body may go along the ground without leaving its top is room().
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -131,8 +132,9 @@ end
 
 -- How far `body` may step along the flat unit `flat`, up to `studs`: Config.Attack.LungeGap short of whatever is in
 -- the way ahead (a fighter, a chimney), and only as far as there is still something solid to stand on (half a stud at
--- a time back from the whole step: never off the edge of a roof).
-local function room(body: CharacterParts.Body, flat: Vector3, studs: number): number
+-- a time back from the whole step: never off the edge of a roof). Also how far a lasso may pull its catch
+-- (WeaponService).
+function BodyMotion.room(body: CharacterParts.Body, flat: Vector3, studs: number): number
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = { body.model }
@@ -163,7 +165,7 @@ function BodyMotion.lunge(body: CharacterParts.Body, facing: Vector3, studs: num
 		return 0
 	end
 	flat = flat.Unit
-	local go = room(body, flat, studs)
+	local go = BodyMotion.room(body, flat, studs)
 	if go <= 0.05 then
 		return 0
 	end

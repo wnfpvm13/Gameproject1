@@ -1,7 +1,8 @@
 --!strict
 -- How hits feel on this client: a whoosh when someone attacks (each weapon's own: a punch, a bat's swing, a hammer's
--- heavy swing, a gold bar's, a throw; a string's launching last step deeper and longer), and for a hit a thump at the
--- victim (each weapon's own: a punch, a bat, a hammer's slam, a gold bar's clang; a dynamite blast is heard from
+-- heavy swing, a gold bar's, a throw, a whip's crack, a lasso's swish; a string's launching last step deeper and
+-- longer), and for a hit a thump at the victim (each weapon's own: a punch, a bat, a hammer's slam, a gold bar's clang,
+-- a whip's slap, a shovel's clang, a rope's snap, a rock, a slip, a wheel's iron ring; a dynamite blast is heard from
 -- ExplosionShow), a hard white flash on them (all white for a frame or two, then gone), and a camera kick: the player
 -- hit is knocked the way the hit pushed (harder and with the view narrowing for a moment on a launch or smash), the
 -- player who hit gets a small push toward the blow (bigger, with the view narrowing a little, when it launches). A
@@ -45,13 +46,62 @@ local function flash(model: Model)
 end
 
 -- Each weapon's thump when it lands (none for a blast: its boom is the sound).
-local THUMPS: { [string]: string? } = { Fist = "PunchHit", Bat = "BatHit", Hammer = "HammerHit", GoldBar = "GoldHit" }
+-- (A steam blast's hiss and a firecracker's pops are the attack's own sounds: AttackShow.)
+local THUMPS: { [string]: string? } = {
+	Fist = "PunchHit",
+	Bat = "BatHit",
+	Hammer = "HammerHit",
+	GoldBar = "GoldHit",
+	Whip = "WhipHit",
+	Shovel = "ShovelHit",
+	Lasso = "LassoCatch",
+	Coal = "PunchHit", -- the lump's own crack is DropShow's
+	SteamHose = "PunchHit",
+	OilCan = "Slip",
+	Firecracker = "PunchHit",
+	Wheel = "WheelHit",
+}
 -- Each weapon's whoosh when it is used.
-local WHOOSHES: { [string]: string? } = { Fist = "Punch", Bat = "Swing", Hammer = "HeavySwing", GoldBar = "GoldSwing", Dynamite = "Throw" }
+local WHOOSHES: { [string]: string? } = {
+	Fist = "Punch",
+	Bat = "Swing",
+	Hammer = "HeavySwing",
+	GoldBar = "GoldSwing",
+	Dynamite = "Throw",
+	Whip = "WhipCrack",
+	Shovel = "GoldSwing",
+	Lasso = "LassoThrow",
+	Coal = "Throw",
+	OilCan = "Throw",
+	Firecracker = "Fuse",
+	Wheel = "HeavySwing",
+}
 -- The heavier layer a launch adds at the victim.
-local LAUNCHES: { [string]: string? } = { Fist = "BodyLaunch", Bat = "HitLaunch", Hammer = "BodyLaunch", GoldBar = "BodyLaunch" }
+local LAUNCHES: { [string]: string? } = {
+	Fist = "BodyLaunch",
+	Bat = "HitLaunch",
+	Hammer = "BodyLaunch",
+	GoldBar = "BodyLaunch",
+	Whip = "BodyLaunch",
+	Shovel = "BodyLaunch",
+	OilCan = "BodyLaunch",
+	Wheel = "BodyLaunch",
+}
 -- A home run's finishing sound, for the whole screen, over the weapon's thump (a different recording from it).
-local SMASHES: { [string]: string? } = { Fist = "BodyLaunch", Bat = "HomeRun", Hammer = "BodyLaunch", GoldBar = "BodyLaunch" }
+local SMASHES: { [string]: string? } = {
+	Fist = "BodyLaunch",
+	Bat = "HomeRun",
+	Hammer = "BodyLaunch",
+	GoldBar = "BodyLaunch",
+	Whip = "BodyLaunch",
+	Shovel = "BodyLaunch",
+	Lasso = "BodyLaunch",
+	Coal = "BodyLaunch",
+	SteamHose = "BodyLaunch",
+	OilCan = "BodyLaunch",
+	Firecracker = "BodyLaunch",
+	Wheel = "BodyLaunch",
+}
 
 -- The plain hit: the weapon's thump and a flash.
 local function show(victim: Model, weapon: string)

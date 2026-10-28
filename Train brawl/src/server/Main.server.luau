@@ -1,7 +1,7 @@
 --!strict
 -- Train brawl server entry point: only wiring. The arena is built once (ArenaBuilder); rounds run on their own
 -- (RoundService); attacks with fists or a picked-up weapon are judged by WeaponService (a thrown stick burns and
--- bursts in Dynamite); weapon crates drop onto the trains during a fight (WeaponDrops); falls are noticed by FallWatch
+-- bursts in Dynamite; coal lumps fly in Missiles, bowled wheels roll in Wheels, oil slicks lie in Slicks); weapon crates drop onto the trains during a fight (WeaponDrops); falls are noticed by FallWatch
 -- and end that fighter's round, as does a home run (health emptied, kept by FighterHealth); knock-offs and dynamite
 -- bursts go to every client; every character holds its weapon in its hand (WeaponGear), and every player's body is
 -- made the standard size with the standard animations (AvatarRules). For testing alone in Studio, the Workspace
@@ -22,6 +22,9 @@ local FallWatch = require(script.Parent:WaitForChild("FallWatch"))
 local WeaponService = require(script.Parent:WaitForChild("WeaponService"))
 local WeaponDrops = require(script.Parent:WaitForChild("WeaponDrops"))
 local Dynamite = require(script.Parent:WaitForChild("Dynamite"))
+local Missiles = require(script.Parent:WaitForChild("Missiles"))
+local Wheels = require(script.Parent:WaitForChild("Wheels"))
+local Slicks = require(script.Parent:WaitForChild("Slicks"))
 local RoundService = require(script.Parent:WaitForChild("RoundService"))
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Config = require(shared:WaitForChild("Config"))
@@ -82,7 +85,22 @@ local weapons = WeaponService.start(remotes.Swing, remotes.Hit, {
 	throw = function(from: Vector3, facing: Vector3, burst: (Vector3) -> ())
 		Dynamite.throw(arena.folder, arena.folder, from, facing, burst)
 	end,
-	putOut = Dynamite.clear,
+	send = function(weapon: string, attacker: Model, from: Vector3, facing: Vector3, hit: (Model, Vector3) -> ())
+		local w = Config.Weapons[weapon]
+		if w.style == "toss" then
+			Missiles.toss(arena.folder, arena.folder, round.fighters, attacker, from, facing, w, hit)
+		elseif w.style == "roll" then
+			Wheels.roll(arena.folder, arena.folder, round.fighters, attacker, from, facing, w, hit)
+		elseif w.style == "pour" then
+			Slicks.pour(arena.folder, arena.folder, round.fighters, attacker, from, facing, w, hit)
+		end
+	end,
+	putOut = function()
+		Dynamite.clear()
+		Missiles.clear()
+		Wheels.clear()
+		Slicks.clear()
+	end,
 	blast = function(at: Vector3, radius: number)
 		remotes.Blast:FireAllClients(at, radius)
 	end,

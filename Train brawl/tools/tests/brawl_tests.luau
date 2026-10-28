@@ -191,13 +191,14 @@ do
 	end
 	check("every spawn spot is on its train's flat top, away from its ends", onTop)
 	check("no spawn spot is in or against something higher", roomy)
-	-- The farthest any weapon reaches at once (a cone's reach, or a slam's spot ahead plus its radius), with the slack.
+	-- The farthest any weapon reaches at once (a cone's reach, or a slam's or burst's spot plus its radius), with the
+	-- slack. (What is thrown, bowled or poured comes later: nobody starts holding a weapon.)
 	local farthest = 0
 	for _, w in Config.Weapons do
 		if w.reach then
 			farthest = math.max(farthest, w.reach)
 		end
-		if w.style == "slam" and w.ahead and w.radius then
+		if WeaponRules.area(w.style) and w.ahead and w.radius then
 			farthest = math.max(farthest, w.ahead + w.radius)
 		end
 	end
@@ -494,22 +495,36 @@ end
 -- 7. Weapons (stage 4b): fists by default, weapons from crates, every hit pushed by health.
 do
 	local W, h = Config.Weapons, Config.Hit
-	local styles = { punch = true, swing = true, slam = true, throw = true }
-	local shaped, lasting = true, true
+	local styles = { punch = true, swing = true, spray = true, lasso = true, slam = true, burst = true, throw = true, toss = true, roll = true, pour = true }
+	local shaped, lasting, shapeDetail = true, true, ""
+	local count = 0
 	for name, w in W do
-		shaped = shaped and styles[w.style] == true and w.damage > 0 and w.push > 0 and (Words.Weapons[name] or "") ~= ""
-		if w.style == "punch" or w.style == "swing" then
-			shaped = shaped and w.reach ~= nil and w.halfAngle ~= nil
-		elseif w.style == "slam" then
-			shaped = shaped and w.radius ~= nil and w.ahead ~= nil
-		else
-			shaped = shaped and w.radius ~= nil and w.throwSpeed ~= nil and w.throwLift ~= nil and w.fuse ~= nil
+		count += 1
+		local ok = styles[w.style] == true and w.damage > 0 and w.push > 0 and (Words.Weapons[name] or "") ~= ""
+		if w.style == "punch" or w.style == "swing" or w.style == "spray" then
+			ok = ok and w.reach ~= nil and w.halfAngle ~= nil
+		elseif w.style == "lasso" then
+			ok = ok and w.reach ~= nil and w.halfAngle ~= nil and w.pull ~= nil and w.stun ~= nil
+		elseif WeaponRules.area(w.style) then
+			ok = ok and w.radius ~= nil and w.ahead ~= nil
+		elseif w.style == "throw" then
+			ok = ok and w.radius ~= nil and w.throwSpeed ~= nil and w.throwLift ~= nil and w.fuse ~= nil
+		elseif w.style == "toss" then
+			ok = ok and w.throwSpeed ~= nil and w.throwLift ~= nil and w.hitRadius ~= nil and w.flight ~= nil
+		elseif w.style == "roll" then
+			ok = ok and w.rollSpeed ~= nil and w.rollSeconds ~= nil and w.hitRadius ~= nil
+		elseif w.style == "pour" then
+			ok = ok and w.radius ~= nil and w.ahead ~= nil and w.lasts ~= nil
+		end
+		if not ok then
+			shaped, shapeDetail = false, name
 		end
 		if name ~= "Fist" then
 			lasting = lasting and (w.weight or 0) > 0 and (w.uses ~= nil or w.heldSeconds ~= nil)
 		end
 	end
-	check("every weapon has what its style needs", shaped)
+	check("every weapon has what its style needs", shaped, shapeDetail)
+	check("about twelve weapons to pick up besides bare fists (owner 2026-10-28)", count - 1 >= 12, tostring(count - 1))
 	check("every weapon but the fists comes in crates and runs out", lasting)
 	check("bare fists never come in a crate and never run out", W.Fist and (W.Fist.weight or 0) == 0 and W.Fist.uses == nil and W.Fist.heldSeconds == nil)
 	check("fists reach less than the bat", W.Fist.reach ~= nil and W.Bat.reach ~= nil and W.Fist.reach < W.Bat.reach)
@@ -536,6 +551,39 @@ do
 	local stick = W.Dynamite
 	check("a thrown stick lands beyond its own blast", BatMath.flightDistance(stick.throwSpeed or 0, stick.throwLift or 0, GRAVITY) > (stick.radius or 0))
 	check("a stick's fuse outlasts its flight across a gap (time to run)", (stick.fuse or 0) > 2 * (stick.throwLift or 0) / GRAVITY + 0.8)
+	-- The newer weapons (2026-10-28).
+	local lasso = W.Lasso
+	check(
+		"a lasso pulls its catch in short of its reach and ties it past the jab that follows (then fists at once)",
+		(lasso.pull or 0) > 1.5 and (lasso.pull or 0) < (lasso.reach or 0) and lasso.uses == 1
+			and lasso.hitAt + (lasso.stun or 0) > lasso.cooldown + W.Fist.hitAt + 0.1 and (lasso.stun or 0) <= 1
+	)
+	local coal = W.Coal
+	local lift, speed = coal.throwLift or 0, coal.throwSpeed or 0
+	-- From the hand (1.5 over the middle) down to the feet (about 3 under it).
+	local down = (lift + math.sqrt(lift * lift + 2 * GRAVITY * 4.5)) / GRAVITY
+	check("a coal lump comes down on a roof well past a fist's reach, inside its flight", speed * down > 12 and down < (coal.flight or 0), string.format("%.1f studs in %.2f s", speed * down, down))
+	check("one fighter slips on the same slick again only after a launch's unhittable moment", Config.Thrown.SlipEvery > h.LaunchImmune)
+	check("a wheel rolls past a car's length", (W.Wheel.rollSpeed or 0) * (W.Wheel.rollSeconds or 0) > 30)
+	check("a wheel rolls up a step lower than its middle", Config.Thrown.StepUp < Config.Thrown.WheelRadius)
+	local mostLight = 0
+	for name, w in W do
+		if not w.launch and name ~= "SteamHose" then
+			mostLight = math.max(mostLight, w.push)
+		end
+	end
+	check("the steam hose's light push is the farthest of the light pushes", W.SteamHose.push > mostLight)
+	check(
+		"only punches and swings show their hits at once; the areas, the thrown and the bowled wait for the server",
+		WeaponRules.predicted("punch") and WeaponRules.predicted("swing") and not WeaponRules.predicted("lasso") and not WeaponRules.predicted("spray") and not WeaponRules.predicted("toss")
+	)
+	check("a slam and a burst hit an area; a stick, a lump, a wheel and a slick hit from afar", WeaponRules.area("slam") and WeaponRules.area("burst") and not WeaponRules.area("swing") and WeaponRules.fromAfar("throw") and WeaponRules.fromAfar("toss") and WeaponRules.fromAfar("roll") and WeaponRules.fromAfar("pour") and not WeaponRules.fromAfar("lasso"))
+	check(
+		"something moving passes whoever's middle is near its path, within its ends and its height",
+		WeaponRules.nearPath(0, 0, 0, 10, 0, 0, 5, 1, 1.5, 2, 3) and not WeaponRules.nearPath(0, 0, 0, 10, 0, 0, 5, 0, 2.5, 2, 3)
+			and not WeaponRules.nearPath(0, 0, 0, 10, 0, 0, 12, 0, 0, 1.5, 3) and not WeaponRules.nearPath(0, 0, 0, 10, 0, 0, 5, 4, 0, 2, 3)
+			and WeaponRules.nearPath(0, 0, 0, 0, 0, 0, 1, 0, 0, 1.5, 3)
+	)
 	-- Picking a crate's weapon.
 	check("a crate never holds bare fists", WeaponRules.pick(W, 0) ~= "Fist" and WeaponRules.pick(W, 0.999) ~= "Fist")
 	local counts: { [string]: number } = {}

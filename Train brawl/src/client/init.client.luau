@@ -5,8 +5,9 @@
 -- camera unless the player shows the cursor (AimLock); the attack control (SwingInput) starts the player's own attack
 -- with fists or the weapon held (OwnSwing: drawn at once by SwingPose, SwingTrail and HitFeedback, the character
 -- stepping in (BodyMotion.lunge), judged by the server; a mouse click attacks only while the mouse is locked); every
--- character's attacks are drawn from their Names.SwingAt (with a streak behind each blow: SwingTrail); what
--- everyone holds shows (WeaponHud), crates and lit sticks are heard (DropShow), where a stick will burst and a crate
+-- character's attacks are drawn from their Names.SwingAt (with a streak behind each blow: SwingTrail, and a steam
+-- blast, firecrackers' pops or a lasso's rope: AttackShow); what everyone holds shows (WeaponHud), crates, lit sticks,
+-- wheels, slicks and coal lumps are heard (DropShow), where a stick will burst and a crate
 -- will land is drawn on the roofs (GroundMarks), dynamite bursts show (ExplosionShow) (the roof wind, WindDust, is not
 -- built for now: nearly invisible in Studio, to be redone - docs/FEEL_REVIEW_2026-10-26.md);
 -- a hit from the server flinches or
@@ -40,6 +41,7 @@ local Stands = require(script:WaitForChild("Stands"))
 local SwingInput = require(script:WaitForChild("SwingInput"))
 local SwingPose = require(script:WaitForChild("SwingPose"))
 local SwingTrail = require(script:WaitForChild("SwingTrail"))
+local AttackShow = require(script:WaitForChild("AttackShow"))
 local OwnSwing = require(script:WaitForChild("OwnSwing"))
 local KnockFlight = require(script:WaitForChild("KnockFlight"))
 local HitFeedback = require(script:WaitForChild("HitFeedback"))
@@ -120,6 +122,7 @@ local own = OwnSwing.new(swingRemote, {
 	draw = function(model: Model, at: number, weapon: string, step: number)
 		SwingPose.play(model, at, weapon, step)
 		SwingTrail.play(model, weapon, step, at)
+		AttackShow.play(model, weapon, step, at)
 		HitFeedback.swing(model, weapon, AttackString.launches(STRING, step, Config.Weapons[weapon].style))
 	end,
 	lunge = function(model: Model, facing: Vector3, weapon: string, step: number)
@@ -161,6 +164,7 @@ local function follow(model: Model)
 		return false
 	end, function(weapon: string, step: number, at: number)
 		SwingTrail.play(model, weapon, step, at)
+		AttackShow.play(model, weapon, step, at)
 		HitFeedback.swing(model, weapon, AttackString.launches(STRING, step, Config.Weapons[weapon].style))
 	end)
 end
@@ -193,12 +197,14 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 	local hitKind = if typeof(kind) == "string" then kind else "launch"
 	local push = if typeof(velocity) == "Vector3" then velocity else nil
 	local me = victim == player.Character
+	local hitWeapon = WeaponRules.named(Config.Weapons, weapon)
+	local w = Config.Weapons[hitWeapon]
+	local stun = w.stun or Config.Hit.LightStun
 	if me and push then
-		knock:hit(victim, push, hitKind)
+		knock:hit(victim, push, hitKind, stun)
 		own:broken() -- being hit breaks the player's own string, as on the server
 	end
 	SwingPose.react(victim, hitKind, push)
-	local hitWeapon = if typeof(weapon) == "string" then weapon else WeaponRules.FIST
 	local mine = swinger == player.Character
 	-- What this screen showed at once for that attack of the player's on this victim (nil: nothing), and whether it is
 	-- the attack drawn now.
@@ -208,13 +214,16 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 	end
 	local shown = HitFeedback.hit(victim, guess ~= nil, mine, me, hitKind, hitWeapon, push)
 	local attacker = if typeof(swinger) == "Instance" and swinger:IsA("Model") then swinger else nil
-	local thrown = Config.Weapons[hitWeapon] ~= nil and Config.Weapons[hitWeapon].style == "throw"
+	local thrown = WeaponRules.fromAfar(w.style)
+	if w.pull and attacker and hitKind == "light" then
+		AttackShow.caught(attacker, victim, stun) -- a lasso's catch: pulled in and tied
+	end
 	local burst = if ganged == true then "crowd" elseif hitKind == "light" then "light" else "launch"
 	-- The player's own hit shown at once as a lighter one than the server made it (a crowd's launch, or a light hit
 	-- that emptied health: a home run) shows the bigger burst now too.
 	local bigger = guess ~= nil and BURST_SIZE[burst] > (BURST_SIZE[guess] or 0)
 	if shown or bigger then
-		-- A blast's burst is on the victim (its thrower is far away); a blow's toward whoever struck it.
+		-- A burst from afar (a blast, a lump, a wheel, a slick) is on the victim; a blow's toward whoever struck it.
 		local from = if attacker and not thrown then attacker:GetPivot().Position else nil
 		ImpactBurst.play(ImpactBurst.at(victim, from), burst, hitWeapon, push)
 	end

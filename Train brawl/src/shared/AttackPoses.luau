@@ -8,7 +8,9 @@
 -- - bare fists: a boxing guard; 1 a left jab, 2 a right straight (then 1, 2 again), the last a dip into a rising
 --   uppercut with a short step in. The hips turn first, the torso and shoulder follow and the elbow straightens last,
 --   as the blow lands; the arm stays out only a moment and snaps back to the guard;
--- - the bat, the gold bar, the hammer and the dynamite stick: see their sets below (the first three in both hands);
+-- - the bat, the gold bar, the hammer, the dynamite stick, the whip, the lasso, the steam hose, the oil can, the
+--   firecrackers and the spare wheel: see their sets below (the bat, the gold bar, the hammer, the hose and the wheel in
+--   both hands); the shovel swings as the bat, coal is thrown as the stick;
 -- - hit reactions: a light hit snaps the torso and head the way the hit pushed (back when hit from the front, forward
 --   from behind, sideways from the side); a launch flails the arms while flying.
 -- Each segment between keys has its own easing: a blow speeds into the hit and carries on through it (no stop at the
@@ -374,8 +376,134 @@ local function dynamite(k: number): { Key }
 	})
 end
 
+-- The whip, in the right hand low ahead with the lash lying out ahead (the left fist up): 1 raised back over the
+-- shoulder (the lash trailing behind) and cracked down ahead, 2 cracked across from the right with the hips turning,
+-- the last a big overhead crack with a step in, leaning into it (held a moment). Where the lash points is about the sum
+-- of the shoulder's, elbow's and wrist's x (0: straight ahead, 90: up, 180: back; Studio pose sheet 2026-10-28): it
+-- trails behind the head on a wind-up and lies out level ahead as it lands, not up in the air.
+local WHIP_STANCE: Pose = { Root = { y = -5 }, Waist = { y = -10 }, Neck = { y = 10 }, RightShoulder = { x = 20, z = -10 }, RightElbow = { x = 20 }, RightWrist = { x = -60, y = 0 }, LeftShoulder = { x = 40, z = 12 }, LeftElbow = { x = 95 } }
+local WHIP_GUARD: Pose = { LeftShoulder = { x = 40, z = 12 }, LeftElbow = { x = 95 } }
+local function whip(step: number, finisher: boolean, k: number): { Key }
+	if not finisher then
+		if step % 2 == 1 then
+			return strike(
+				WHIP_STANCE,
+				with(WHIP_GUARD, { Root = { y = -12 }, Waist = { x = 12, y = -20 }, Neck = { x = -6, y = 20 }, RightShoulder = { x = 165, z = -20 }, RightElbow = { x = 40 }, RightWrist = { x = 0 } }),
+				with(WHIP_GUARD, { Root = { y = -4 }, Waist = { x = 4, y = -6 }, Neck = { x = -2, y = 8 }, RightShoulder = { x = 130, z = -15 }, RightElbow = { x = 20 }, RightWrist = { x = -10 } }),
+				with(WHIP_GUARD, { Root = { y = 8, shift = Vector3.new(0, -0.1, -0.2) }, Waist = { x = -12, y = 12 }, Neck = { x = 8, y = -12 }, RightShoulder = { x = 75, z = -5 }, RightElbow = { x = 0 }, RightWrist = { x = -80 } }),
+				with(WHIP_GUARD, { Root = { y = 10, shift = Vector3.new(0, -0.1, -0.2) }, Waist = { x = -16, y = 16 }, Neck = { x = 10, y = -16 }, RightShoulder = { x = 50, z = 5 }, RightElbow = { x = 5 }, RightWrist = { x = -85 } }),
+				with(WHIP_GUARD, { Root = { y = 2 }, Waist = { x = -4, y = 0 }, Neck = { y = 2 }, RightShoulder = { x = 30, z = -5 }, RightElbow = { x = 20 }, RightWrist = { x = -65 } }),
+				k,
+				0.12
+			)
+		end
+		return strike(
+			WHIP_STANCE,
+			with(WHIP_GUARD, { Root = { y = -25 }, Waist = { y = -30 }, Neck = { y = 45 }, RightShoulder = { x = 60, z = 70 }, RightElbow = { x = 40 }, RightWrist = { x = -40 } }),
+			with(WHIP_GUARD, { Root = { y = -5 }, Waist = { y = -5 }, Neck = { y = 10 }, RightShoulder = { x = 80, z = 45 }, RightElbow = { x = 20 }, RightWrist = { x = -60 } }),
+			with(WHIP_GUARD, { Root = { y = 20, shift = Vector3.new(0, -0.05, -0.15) }, Waist = { y = 25 }, Neck = { y = -35 }, RightShoulder = { x = 85, z = 10 }, RightElbow = { x = 0 }, RightWrist = { x = -80 } }),
+			with(WHIP_GUARD, { Root = { y = 30, shift = Vector3.new(0, -0.05, -0.15) }, Waist = { y = 40 }, Neck = { y = -45 }, RightShoulder = { x = 75, z = -30 }, RightElbow = { x = 10 }, RightWrist = { x = -80 } }),
+			with(WHIP_GUARD, { Root = { y = 8 }, Waist = { y = 12 }, Neck = { y = -12 }, RightShoulder = { x = 40, z = -15 }, RightElbow = { x = 20 }, RightWrist = { x = -65 } }),
+			k,
+			0.12
+		)
+	end
+	local through: Pose = with(WHIP_GUARD, { Root = { y = 10, shift = Vector3.new(0, -0.3, -0.4) }, Waist = { x = -22, y = 14 }, Neck = { x = 14, y = -14 }, RightShoulder = { x = 55, z = 0 }, RightElbow = { x = 5 }, RightWrist = { x = -95 }, LeftHip = { x = 28 }, RightHip = { x = -10 }, RightKnee = { x = -18 }, LeftKnee = { x = -10 } })
+	return ordered({
+		{ t = 0, pose = WHIP_STANCE },
+		{ t = k * 0.6, pose = with(WHIP_GUARD, { Root = { y = -15, shift = Vector3.new(0, -0.15, 0.15) }, Waist = { x = 20, y = -22 }, Neck = { x = -10, y = 24 }, RightShoulder = { x = 175, z = -25 }, RightElbow = { x = 40 }, RightWrist = { x = 10 }, RightKnee = { x = -12 }, LeftKnee = { x = -12 }, RightHip = { x = 8 }, LeftHip = { x = 8 } }), ease = "out" },
+		{ t = k * 0.85, pose = with(WHIP_GUARD, { Root = { y = -2, shift = Vector3.new(0, -0.2, -0.15) }, Waist = { x = 2, y = -4 }, Neck = { x = 0, y = 6 }, RightShoulder = { x = 145, z = -15 }, RightElbow = { x = 25 }, RightWrist = { x = -20 }, LeftHip = { x = 18 }, RightKnee = { x = -12 }, LeftKnee = { x = -8 } }), ease = "in" },
+		{ t = k, pose = with(WHIP_GUARD, { Root = { y = 8, shift = Vector3.new(0, -0.25, -0.35) }, Waist = { x = -18, y = 12 }, Neck = { x = 12, y = -12 }, RightShoulder = { x = 80, z = -5 }, RightElbow = { x = 0 }, RightWrist = { x = -85 }, LeftHip = { x = 26 }, RightHip = { x = -8 }, RightKnee = { x = -16 }, LeftKnee = { x = -10 } }), ease = "linear" },
+		{ t = k + 0.15, pose = through, ease = "out" },
+		{ t = k + 0.3, pose = through, ease = "linear" },
+		{ t = 1, pose = WHIP_STANCE, ease = "out" },
+	})
+end
+
+-- The lasso, its coil held up by the right shoulder (the left hand out ahead): swung round overhead (the wrist
+-- turning the loop), thrown out ahead as it leaves the hand at `k`, then the rope hauled back in with a lean.
+local LASSO_STANCE: Pose = { Root = { y = -5 }, Waist = { y = -8 }, Neck = { y = 8 }, RightShoulder = { x = 40, z = 30 }, RightElbow = { x = 100 }, RightWrist = { y = 0 }, LeftShoulder = { x = 35, z = 8 }, LeftElbow = { x = 55 } }
+local function lasso(k: number): { Key }
+	local overhead: Pose = { Waist = { x = 8, y = -12 }, Neck = { x = -4, y = 12 }, LeftShoulder = { x = 50, z = 5 }, LeftElbow = { x = 30 } }
+	return ordered({
+		{ t = 0, pose = LASSO_STANCE },
+		{ t = k * 0.3, pose = with(overhead, { Root = { y = -10 }, RightShoulder = { x = 165, z = 25 }, RightElbow = { x = 35 }, RightWrist = { y = 160 } }), ease = "out" },
+		{ t = k * 0.65, pose = with(overhead, { Root = { y = -14 }, RightShoulder = { x = 170, z = 15 }, RightElbow = { x = 30 }, RightWrist = { y = 340 } }), ease = "linear" },
+		{ t = k, pose = { Root = { y = 12, shift = Vector3.new(0, -0.05, -0.2) }, Waist = { x = -12, y = 14 }, Neck = { x = 8, y = -14 }, RightShoulder = { x = 100, z = 0 }, RightElbow = { x = 0 }, RightWrist = { y = 400 }, LeftShoulder = { x = 30, z = 10 }, LeftElbow = { x = 70 } }, ease = "in" },
+		{ t = k + 0.12, pose = { Root = { y = 8, shift = Vector3.new(0, -0.05, -0.2) }, Waist = { x = -8, y = 10 }, Neck = { x = 6, y = -10 }, RightShoulder = { x = 75, z = 0 }, RightElbow = { x = 15 }, RightWrist = { y = 400 }, LeftShoulder = { x = 60, z = -5 }, LeftElbow = { x = 15 } }, ease = "out" },
+		-- Hauling in: both hands pull back, leaning away.
+		{ t = k + 0.12 + (1 - k - 0.12) * 0.5, pose = { Root = { y = -6, shift = Vector3.new(0, -0.1, 0.15) }, Waist = { x = 12, y = -6 }, Neck = { x = -6, y = 6 }, RightShoulder = { x = 45, z = 15 }, RightElbow = { x = 95 }, RightWrist = { y = 360 }, LeftShoulder = { x = 55, z = 0 }, LeftElbow = { x = 80 } }, ease = "out" },
+		{ t = 1, pose = LASSO_STANCE },
+	})
+end
+
+-- The steam hose, both hands on the pipe at the hip, its nozzle ahead: braced (knees giving) as the valve opens at `k`,
+-- kicked back and up by the blast, held, and settled back.
+local HOSE_STANCE: Pose = { Root = { y = -10 }, Waist = { y = -12 }, Neck = { y = 18 }, RightShoulder = { x = 20, z = 5 }, RightElbow = { x = 80 }, RightWrist = { x = -88, y = 0 } }
+local function hose(k: number): { Key }
+	local blast: Pose = { Root = { y = -10, shift = Vector3.new(0, -0.2, 0.3) }, Waist = { x = 8, y = -12 }, Neck = { x = -6, y = 18 }, RightShoulder = { x = 24, z = 5 }, RightElbow = { x = 72 }, RightWrist = { x = -86 }, RightHip = { x = 14 }, LeftHip = { x = 24 }, RightKnee = { x = -22 }, LeftKnee = { x = -14 } }
+	return ordered({
+		{ t = 0, pose = HOSE_STANCE },
+		{ t = k * 0.7, pose = { Root = { y = -10, shift = Vector3.new(0, -0.2, -0.05) }, Waist = { x = -8, y = -12 }, Neck = { x = 6, y = 18 }, RightShoulder = { x = 18, z = 5 }, RightElbow = { x = 82 }, RightWrist = { x = -90 }, RightHip = { x = 14 }, LeftHip = { x = 24 }, RightKnee = { x = -22 }, LeftKnee = { x = -14 } }, ease = "out" },
+		{ t = k, pose = blast, ease = "in" },
+		{ t = k + 0.3, pose = blast, ease = "linear" },
+		{ t = 1, pose = HOSE_STANCE, ease = "out" },
+	})
+end
+
+-- The oil can, held by its handle at the right side (the left fist up): swung back, then up and out ahead and tipped
+-- over as the oil leaves it at `k`, held pouring a moment, and brought back.
+local CAN_STANCE: Pose = { Root = { y = -5 }, Waist = { y = -8 }, Neck = { y = 8 }, RightShoulder = { x = 20, z = 8 }, RightElbow = { x = 30 }, RightWrist = { x = 0, y = 0 }, LeftShoulder = { x = 40, z = 12 }, LeftElbow = { x = 95 } }
+local function oilCan(k: number): { Key }
+	local pour: Pose = { Root = { y = 10, shift = Vector3.new(0, -0.1, -0.15) }, Waist = { x = -14, y = 10 }, Neck = { x = 8, y = -10 }, RightShoulder = { x = 88, z = 0 }, RightElbow = { x = 10 }, RightWrist = { x = -70 }, LeftShoulder = { x = 40, z = 12 }, LeftElbow = { x = 95 } }
+	return strike(
+		CAN_STANCE,
+		{ Root = { y = -15 }, Waist = { x = 6, y = -20 }, Neck = { y = 20 }, RightShoulder = { x = -25, z = 10 }, RightElbow = { x = 20 }, RightWrist = { x = 10 }, LeftShoulder = { x = 40, z = 12 }, LeftElbow = { x = 95 } },
+		nil,
+		pour,
+		pour,
+		{ Root = { y = 4 }, Waist = { x = -4, y = 2 }, Neck = { y = -2 }, RightShoulder = { x = 50, z = 4 }, RightElbow = { x = 25 }, RightWrist = { x = -30 }, LeftShoulder = { x = 40, z = 12 }, LeftElbow = { x = 95 } },
+		k,
+		0.22
+	)
+end
+
+-- The firecrackers, held up at the chest (the left fist up): slapped down at the feet, then a hop back with both arms
+-- up over the face as they pop at `k`, and back.
+local CRACKER_STANCE: Pose = { Root = { y = -5 }, Waist = { y = -8 }, Neck = { y = 8 }, RightShoulder = { x = 45, z = 20 }, RightElbow = { x = 110 }, LeftShoulder = { x = 40, z = 12 }, LeftElbow = { x = 95 } }
+local function firecracker(k: number): { Key }
+	local cover: Pose = { Root = { shift = Vector3.new(0, 0.1, 0.35) }, Waist = { x = 12 }, Neck = { x = 10 }, RightShoulder = { x = 125, z = -15 }, RightElbow = { x = 115 }, LeftShoulder = { x = 125, z = 15 }, LeftElbow = { x = 115 }, RightHip = { x = -10 }, LeftHip = { x = -10 } }
+	return ordered({
+		{ t = 0, pose = CRACKER_STANCE },
+		{ t = k * 0.35, pose = { Root = { y = -5, shift = Vector3.new(0, 0.05, 0) }, Waist = { x = 10, y = -8 }, Neck = { y = 8 }, RightShoulder = { x = 150, z = 15 }, RightElbow = { x = 60 }, LeftShoulder = { x = 40, z = 12 }, LeftElbow = { x = 95 } }, ease = "out" },
+		{ t = k * 0.65, pose = { Root = { shift = Vector3.new(0, -0.45, -0.1) }, Waist = { x = -35 }, Neck = { x = 18 }, RightShoulder = { x = 40, z = 10 }, RightElbow = { x = 10 }, LeftShoulder = { x = 45, z = 12 }, LeftElbow = { x = 60 }, RightHip = { x = 25 }, LeftHip = { x = 25 }, RightKnee = { x = -40 }, LeftKnee = { x = -40 } }, ease = "in" },
+		{ t = k, pose = cover, ease = "out" },
+		{ t = k + 0.25, pose = cover, ease = "linear" },
+		{ t = 1, pose = CRACKER_STANCE, ease = "out" },
+	})
+end
+
+-- The spare wheel, carried by both ends of its axle in front (as the gold bar): swung back low at the right side with
+-- the knees bent, then bowled out low ahead with a step in as it leaves the hands at `k`, and back up.
+local function wheel(k: number): { Key }
+	local release: Pose = { Root = { shift = Vector3.new(0, -0.45, -0.4) }, Waist = { x = -30 }, Neck = { x = 18 }, RightShoulder = { x = 40, y = 58, z = 30 }, RightElbow = { x = 80 }, RightWrist = { x = -55, y = 20, z = -27 }, RightHip = { x = 10 }, LeftHip = { x = 35 }, RightKnee = { x = -30 }, LeftKnee = { x = -25 } }
+	return ordered({
+		{ t = 0, pose = GOLD_STANCE },
+		{ t = k * 0.6, pose = { Root = { y = -25, shift = Vector3.new(0, -0.5, 0.15) }, Waist = { x = -20, y = -30 }, Neck = { x = 10, y = 35 }, RightShoulder = { x = 10, y = 66, z = -3 }, RightElbow = { x = 76 }, RightWrist = { x = -44, y = 18, z = -14 }, RightHip = { x = 30 }, LeftHip = { x = 30 }, RightKnee = { x = -45 }, LeftKnee = { x = -45 } }, ease = "out" },
+		{ t = k, pose = release, ease = "in" },
+		{ t = k + 0.18, pose = release, ease = "linear" },
+		{ t = 1, pose = GOLD_STANCE, ease = "out" },
+	})
+end
+
+local function only(keys: (k: number) -> { Key }): (step: number, finisher: boolean, k: number) -> { Key }
+	return function(_step: number, _finisher: boolean, k: number): { Key }
+		return keys(k)
+	end
+end
+
 -- Each weapon's stance and attack keys, by its name (Config.Weapons); a weapon without a set of its own is drawn with
--- its style's (the first weapon of that style).
+-- its style's (the first weapon of that style: the shovel swings as the bat does, coal is thrown as the stick is).
 type Set = { stance: Pose, keys: (step: number, finisher: boolean, k: number) -> { Key } }
 local SETS: { [string]: Set } = {
 	Fist = { stance = GUARD, keys = punch },
@@ -393,8 +521,25 @@ local SETS: { [string]: Set } = {
 			return dynamite(k)
 		end,
 	},
+	Whip = { stance = WHIP_STANCE, keys = whip },
+	Lasso = { stance = LASSO_STANCE, keys = only(lasso) },
+	SteamHose = { stance = HOSE_STANCE, keys = only(hose) },
+	OilCan = { stance = CAN_STANCE, keys = only(oilCan) },
+	Firecracker = { stance = CRACKER_STANCE, keys = only(firecracker) },
+	Wheel = { stance = GOLD_STANCE, keys = only(wheel) },
 }
-local BY_STYLE: { [string]: string } = { punch = "Fist", swing = "Bat", slam = "Hammer", throw = "Dynamite" }
+local BY_STYLE: { [string]: string } = {
+	punch = "Fist",
+	swing = "Bat",
+	slam = "Hammer",
+	throw = "Dynamite",
+	toss = "Dynamite",
+	lasso = "Lasso",
+	spray = "SteamHose",
+	pour = "OilCan",
+	burst = "Firecracker",
+	roll = "Wheel",
+}
 
 local function setOf(weapon: string, style: string): Set
 	return SETS[weapon] or SETS[BY_STYLE[style] or "Bat"]

@@ -5,8 +5,8 @@
 -- the next step of the
 -- player's 1-2-3 string (AttackString, counted here the same way the server counts it: it goes on hit or miss while
 -- the presses come in time, a hit on the player breaks it, and the server's word corrects it); a punch's or swing's hits are
--- shown at once too (the same cone the server uses, without the network slack: SwingTargets; a slam's or a thrown
--- stick's hits wait for the server's word); and the server is told where the character aims (it turns with the camera
+-- shown at once too (the same cone the server uses, without the network slack: SwingTargets; every other style's hits
+-- wait for the server's word); and the server is told where the character aims (it turns with the camera
 -- under the mouse lock), which step was drawn and the attack's number (counted here: the server hands it back with
 -- the attack, Names.SwingTag, and with its hits, so each word is matched to the attack it is about, however late it
 -- comes). The server judges it for real (WeaponService). A press a moment too early (Config.Attack.PressBuffer before
@@ -132,8 +132,8 @@ local function try(self: Swing, model: Model?): string
 	self.hooks.lunge(body.model, aim, weapon, step)
 	self.remote:FireServer(aim, step, tag)
 	local reach = w.reach
-	if not reach then
-		return "started" -- a slam or a throw: its hits are shown when the server says
+	if not (reach and WeaponRules.predicted(w.style)) then
+		return "started" -- not a punch or a swing (a lasso, a spray, an area, a thing sent out): shown when the server says
 	end
 	task.delay(AttackString.hitAt(STRING, w.hitAt, step, w.style), function()
 		local me = CharacterParts.body(body.model)

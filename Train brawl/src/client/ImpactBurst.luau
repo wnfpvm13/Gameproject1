@@ -32,7 +32,21 @@ local STYLES: { [string]: { size: number, centre: Color3, ray: Color3 } } = {
 	crowd = { size = 3.8, centre = Color3.fromRGB(255, 236, 220), ray = Color3.fromRGB(255, 104, 72) },
 }
 -- How much bigger each weapon's burst is.
-local WEAPON_SIZE: { [string]: number } = { Fist = 0.85, Bat = 1, GoldBar = 1.1, Hammer = 1.25, Dynamite = 1.3 }
+local WEAPON_SIZE: { [string]: number } = {
+	Fist = 0.85,
+	Bat = 1,
+	GoldBar = 1.1,
+	Hammer = 1.25,
+	Dynamite = 1.3,
+	Whip = 0.9,
+	Shovel = 1.05,
+	Lasso = 0.85,
+	Coal = 0.8,
+	SteamHose = 0.9,
+	OilCan = 1,
+	Firecracker = 0.9,
+	Wheel = 1.2,
+}
 
 local function frame(parent: Instance, name: string, outlined: boolean): Frame
 	local f = Instance.new("Frame")

@@ -15,9 +15,12 @@
 -- hit breaks a fighter's string; the launching last step lands a moment later). It marks the character's
 -- Names.SwingStep, Names.SwingTag (the attack's number its client sent) and Names.SwingAt (every client draws the
 -- weapon's attack and step from them) and, the weapon's hitAt
--- later, lands it by its style: a punch or a swing hits every other fighter in a cone in front (SwingTargets, reach
--- widened by the network slack), a slam everyone around a point just ahead, a throw sends a lit dynamite stick
--- (Dynamite) whose blast hits everyone around where it bursts (not the thrower).
+-- later, lands it by its style: a punch, a swing or a spray hits every other fighter in a cone in front (SwingTargets,
+-- reach widened by the network slack), a lasso only the nearest one in its cone (pulled in to just in front of its
+-- thrower: never past the edge of what the catch stands on, BodyMotion.room, and tied for the weapon's stun), a slam
+-- everyone around a point just ahead, a burst everyone around the attacker, a throw sends a lit dynamite stick (Dynamite)
+-- whose blast hits everyone around where it bursts (not the thrower), and a toss, a roll or a pour sends out a coal lump,
+-- a wheel or an oil slick (hooks.send) that hits on its own whoever it reaches (not its sender).
 --
 -- Every hit asks the health keeper what it was (hooks.hit with the weapon's damage and the attacker; the string's last
 -- step of a punch or swing, or a weapon that always launches, makes the hit a launch, still pushed by health) and pushes by health (HitRules.force) times the weapon's push and
@@ -40,6 +43,7 @@ local HitRules = require(shared:WaitForChild("HitRules"))
 local AttackString = require(shared:WaitForChild("AttackString"))
 local SwingTargets = require(shared:WaitForChild("SwingTargets"))
 local WeaponRules = require(shared:WaitForChild("WeaponRules"))
+local BodyMotion = require(shared:WaitForChild("BodyMotion"))
 
 local WeaponService = {}
 
@@ -56,7 +60,11 @@ export type Hooks = {
 	-- Throws a lit stick from a fighter standing at `from` along the flat `facing`; `burst(at)` when its fuse runs out
 	-- (Dynamite).
 	throw: (from: Vector3, facing: Vector3, burst: (Vector3) -> ()) -> (),
-	putOut: () -> (), -- puts out every stick still burning (no fight is running)
+	-- Sends out what `weapon` (a toss, a roll or a pour) leaves in the arena, from `attacker` standing at `from` along the
+	-- flat `facing`: `hit(victim, push)` for every other fighter it reaches, pushed away from `push` (Missiles, Wheels,
+	-- Slicks).
+	send: (weapon: string, attacker: Model, from: Vector3, facing: Vector3, hit: (Model, Vector3) -> ()) -> (),
+	putOut: () -> (), -- puts out every stick still burning and takes away what was sent out (no fight is running)
 	blast: (at: Vector3, radius: number) -> (), -- tells every client a dynamite burst here
 }
 export type Service = {
@@ -112,6 +120,23 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		hooks.equip(model)
 	end
 
+	-- The velocity that yanks a lassoed `victim` in to `pull` in front of `attacker` over a light hit's slide, as far as
+	-- the victim has floor to slide on (never off its own top) and short of the attacker's body.
+	local function pulled(victim: CharacterParts.Body, attacker: Model, pull: number): Vector3
+		local me = CharacterParts.body(attacker)
+		if not me then
+			return Vector3.zero
+		end
+		local gap = me.root.Position - victim.root.Position
+		local flat = Vector3.new(gap.X, 0, gap.Z)
+		local distance = flat.Magnitude
+		if distance <= pull + 0.05 then
+			return Vector3.zero
+		end
+		local unit = flat / distance
+		return unit * (BodyMotion.room(victim, unit, distance - pull) / Config.Hit.SlideSeconds)
+	end
+
 	-- One hit of `weapon` by `attacker` on `victim` at `step` of the attacker's string, pushed away from `from` (or along
 	-- `facing` when on top of it). `tag`: the attack's number its player's client sent (Names.SwingTag; nil for a blast
 	-- or none sent), sent with the hit so the attacker's screen knows which of its attacks it was.
@@ -131,10 +156,17 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 			push *= w.push * (weapons[holding(victim.model)].resist or 1)
 		end
 		local at = victim.root.Position
-		local vx, vy, vz = BatMath.knock(from.X, from.Z, facing.X, facing.Z, at.X, at.Z, push, lift)
-		local velocity = Vector3.new(vx, vy, vz)
+		local velocity: Vector3
+		if w.pull and kind == "light" then
+			velocity = pulled(victim, attacker, w.pull)
+		else
+			local vx, vy, vz = BatMath.knock(from.X, from.Z, facing.X, facing.Z, at.X, at.Z, push, lift)
+			velocity = Vector3.new(vx, vy, vz)
+		end
 		hitAt[victim.model] = now
-		stunUntil[victim.model] = now + (if kind == "light" then Config.Hit.LightStun else Config.Knock.MinSeconds)
+		-- A hit never shortens a stun still running (a lasso's tie outlasts the jab that follows it).
+		local stun = if kind == "light" then w.stun or Config.Hit.LightStun else Config.Knock.MinSeconds
+		stunUntil[victim.model] = math.max(stunUntil[victim.model] or now, now + stun)
 		hooks.knockHere(victim.model, velocity, kind)
 		hitRemote:FireAllClients(victim.model, velocity, attacker, kind, weapon, ganged, tag)
 		hooks.onHit(victim.model, attacker)
@@ -166,7 +198,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		local w = weapons[weapon]
 		local now = Workspace:GetServerTimeNow()
 		local from = body.root.Position
-		if w.style == "slam" then
+		if WeaponRules.area(w.style) then
 			local center = from + facing * assert(w.ahead, weapon .. ".ahead")
 			for _, victim in around(center, assert(w.radius, weapon .. ".radius"), attacker) do
 				land(victim, attacker, weapon, from, facing, now, step, tag)
@@ -182,6 +214,29 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 					land(victim, attacker, weapon, at, facing, Workspace:GetServerTimeNow(), step)
 				end
 			end)
+		elseif w.style == "toss" or w.style == "roll" or w.style == "pour" then
+			hooks.send(weapon, attacker, from, facing, function(victim: Model, push: Vector3)
+				local reached = if victim ~= attacker then CharacterParts.body(victim) else nil
+				if reached and Workspace:GetAttribute(Names.Phase) == "Fight" then
+					local along = reached.root.Position - push
+					local flat = Vector3.new(along.X, 0, along.Z)
+					land(reached, attacker, weapon, push, if flat.Magnitude > 1e-3 then flat.Unit else facing, Workspace:GetServerTimeNow(), step)
+				end
+			end)
+		elseif w.style == "lasso" then
+			-- Only the nearest one in its line is caught.
+			local reach = assert(w.reach, weapon .. ".reach") + attack.ReachSlack
+			local caught: CharacterParts.Body? = nil
+			local best = math.huge
+			for _, victim in SwingTargets.find(body, hooks.fighters(), reach, facing, w.halfAngle) do
+				local d = (victim.root.Position - from).Magnitude
+				if d < best then
+					caught, best = victim, d
+				end
+			end
+			if caught then
+				land(caught, attacker, weapon, from, facing, now, step, tag)
+			end
 		else
 			local reach = assert(w.reach, weapon .. ".reach") + attack.ReachSlack
 			for _, victim in SwingTargets.find(body, hooks.fighters(), reach, facing, w.halfAngle) do

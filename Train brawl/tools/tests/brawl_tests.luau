@@ -320,12 +320,15 @@ do
 	check("push scales from full to empty", HitRules.scale(100, 100, 9, 29) == 9 and HitRules.scale(0, 100, 9, 29) == 29 and HitRules.scale(50, 100, 9, 29) == 19)
 	check("push stays in range outside the health range", HitRules.scale(-5, 100, 9, 29) == 29 and HitRules.scale(150, 100, 9, 29) == 9)
 	check("the real numbers: a bat empties health on the 9th hit, fists on the 13th", math.ceil(Config.Health.Max / Config.Weapons.Bat.damage) == 9 and math.ceil(Config.Health.Max / Config.Weapons.Fist.damage) == 13)
-	local forces = { LightFull = 5, LightEmpty = 15, LaunchFull = 1, LaunchEmpty = 27, LaunchLift = 20, LaunchLiftEmpty = 36, SmashPush = 70, SmashLift = 60 }
+	local forces = { LightFull = 5, LightEmpty = 15, LaunchFull = 1, LaunchEmpty = 27, LaunchLift = 20, LaunchLiftEmpty = 36, LaunchLiftCurve = 8, SmashPush = 70, SmashLift = 60 }
 	local sp, sl = HitRules.force("smash", 0, 100, forces)
 	local lp, ll = HitRules.force("launch", 50, 100, forces)
 	local gp, gl = HitRules.force("light", 50, 100, forces)
 	check("a smash pushes and lifts at its own fixed force", sp == 70 and sl == 60)
-	check("a launch pushes and lifts by health", lp == 14 and ll == 28)
+	check("a launch pushes and lifts by health (and lifts more near the end)", lp == 14 and ll == 30)
+	local _, empty = HitRules.force("launch", 0, 100, forces)
+	local _, full = HitRules.force("launch", 100, 100, forces)
+	check("a launch at full health lifts as before, at none the whole curve more", full == 20 and empty == 44)
 	check("a light hit pushes by health along the ground only", gp == 10 and gl == 0)
 end
 
@@ -356,10 +359,11 @@ do
 		farther = farther and BatMath.flightDistance(push, lift, GRAVITY) > BatMath.flightDistance(oldPush, 28, GRAVITY)
 	end
 	check("every launch flies farther than it did", farther)
-	-- Bare fists' launches as measured in Studio (2026-10-27, a server-physics standard body along a boxcar roof, the
-	-- fists' push multiplier applied; the third at 28 went 14.01, a bat's first at 64 8.83): the travel includes landing
-	-- and sliding, so it is longer than the formula's. A tuning change to these pushes must be measured again.
-	local MEASURED = { { health = 76, push = 14.37, lift = 26.88, travel = 4.79 }, { health = 52, push = 24.74, lift = 29.76, travel = 9.16 } }
+	-- Bare fists' launches as measured in Studio (2026-10-28 with the lift curve, a server-physics standard body along a
+	-- boxcar roof, the fists' push multiplier applied; the third at 28 went 15.62 peaking 4.4 high, at 10 health 22.84
+	-- peaking 6.1, a bat's first at 64 9.26, a full-health hammer at 84 5.61): the travel includes landing and sliding,
+	-- so it is longer than the formula's. A tuning change to these pushes must be measured again.
+	local MEASURED = { { health = 76, push = 14.37, lift = 27.9168, travel = 4.91 }, { health = 52, push = 24.74, lift = 33.9072, travel = 9.91 } }
 	local same = true
 	for _, m in MEASURED do
 		local push, lift = HitRules.force("launch", m.health, max, h)
@@ -525,6 +529,15 @@ do
 	end
 	check("every weapon has what its style needs", shaped, shapeDetail)
 	check("about twelve weapons to pick up besides bare fists (owner 2026-10-28)", count - 1 >= 12, tostring(count - 1))
+	local damages: { [number]: string } = {}
+	local distinct, twin = true, ""
+	for name, w in W do
+		if damages[w.damage] then
+			distinct, twin = false, damages[w.damage] .. " = " .. name
+		end
+		damages[w.damage] = name
+	end
+	check("every weapon's damage is its own (owner 2026-10-28)", distinct, twin)
 	check("every weapon but the fists comes in crates and runs out", lasting)
 	check("bare fists never come in a crate and never run out", W.Fist and (W.Fist.weight or 0) == 0 and W.Fist.uses == nil and W.Fist.heldSeconds == nil)
 	check("fists reach less than the bat", W.Fist.reach ~= nil and W.Bat.reach ~= nil and W.Fist.reach < W.Bat.reach)

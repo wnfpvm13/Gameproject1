@@ -13,7 +13,7 @@
 -- a hit from the server flinches or
 -- launches the player's own character (KnockFlight) and is shown for everyone (HitFeedback with the camera kick, a
 -- flinch or flail pose and the attacker's hold in SwingPose, a hit spark from ImpactBurst, a launch's streak and
--- landing dust from LaunchShow; a home run also HomeRunShow); a fall lays the player down behind the train (FallDrift); health shows over heads and at the bottom
+-- blast, tumble trail and landing dust from LaunchShow; a home run also HomeRunShow); a fall lays the player down behind the train (FallDrift); health shows over heads and at the bottom
 -- (HealthBars), the round at the top (RoundHud) with the knock-off feed under it (FeedHud) and the round's sound
 -- (RoundAudio), the first-ride card shows the controls once (RideCard), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
 -- is watched first).
@@ -232,6 +232,10 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 		-- made it bigger (a home run off the third). A thrower is long done, and a word on an older attack of the
 		-- player's comes while the next one is drawn (it is not held for this).
 		SwingPose.hold(attacker, Config.Feedback.AttackerHold[hitKind] or 0)
+	end
+	if hitKind ~= "light" then
+		-- It goes off like a blast where it was hit (a home run bigger).
+		LaunchShow.blast(victim:GetPivot().Position, push, hitKind == "smash")
 	end
 	if hitKind == "launch" then
 		LaunchShow.play(victim)

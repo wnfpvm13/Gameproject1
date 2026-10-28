@@ -5,8 +5,8 @@
 -- over the weapon's `seconds` with the blow when AttackString says it lands. An attack starts at the character's
 -- Names.SwingAt (server time, set by WeaponService with Names.SwingWeapon and Names.SwingStep), or at once for the
 -- player's own (play(); redrawn as another step when the server counted it differently, restep()). A hit reaction
--- (react(): a light hit's flinch the way the hit pushed, a launch's flail, the body shaking along the push while the
--- hit holds it: AttackPoses.shaken) takes over from an attack at once, and no
+-- (react(): a light hit's flinch the way the hit pushed, a launch's flail and tumble, the body shaking along the push
+-- while the hit holds it: AttackPoses.shaken) takes over from an attack at once, and no
 -- attack is drawn over a flail; an attack taking over from another pose fades from where that one left each joint
 -- (FADE), the joints it does not turn back to the animation. The pose is blended in from what the walking or idle
 -- animation shows and back out to it (no snap through standing straight). The joints are written in
@@ -517,7 +517,9 @@ function SwingPose.react(model: Model, kind: string, push: Vector3?)
 	local stance = stances[model]
 	begin(model, if light then "light" else "flail", os.clock(), length, os.clock, function(u: number): AttackPoses.Pose
 		local settle = if stance and stance.weight > 0 then shownStance(stance) else nil
-		return AttackPoses.shaken(AttackPoses.react(kind, u, back, side, settle), u * length, hold, shake, back, side)
+		-- A launch tumbles (a home run spins for real: BodyMotion).
+		local turns = if kind == "launch" then Config.Feedback.TumbleTurns else 0
+		return AttackPoses.shaken(AttackPoses.react(kind, u, back, side, settle, turns), u * length, hold, shake, back, side)
 	end, 0, false)
 end
 

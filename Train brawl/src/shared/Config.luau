@@ -292,6 +292,8 @@ Config.Bat = {
 -- offHand: held in both hands, the free hand there along the grip (+Z: back toward the handle's end; WeaponGear makes
 -- the handle that long). (Its name on screen is in Words.Weapons.) The owner asked for about twelve kinds (2026-10-28:
 -- "무기를 더 다양하게 12가지정도로 늘려"): each new one has an effect of its own, and every push still goes by health.
+-- Every weapon's damage is its own (owner 2026-10-28: "무기마다 데미지가 달라야 해"; tests): from the steam hose's 3 to
+-- the dynamite's 18.
 Config.Weapons = {
 	-- A quick jab: short reach, light damage, a little push (13 punches empty health). Quicker since 2026-10-27 (owner:
 	-- punching looked slow; 0.45 / 0.26 before): the guard fills the time between punches.
@@ -454,7 +456,7 @@ Config.Weapons = {
 	-- away (light hits): the way out when crowded.
 	Firecracker = {
 		style = "burst",
-		damage = 6,
+		damage = 7,
 		push = 1.5,
 		radius = 6,
 		ahead = 0,
@@ -468,7 +470,7 @@ Config.Weapons = {
 	-- within hitRadius of (each once), until it meets something tall, rolls off an edge or rollSeconds run out.
 	Wheel = {
 		style = "roll",
-		damage = 12,
+		damage = 13,
 		push = 1,
 		launch = true,
 		rollSpeed = 30,
@@ -557,10 +559,16 @@ Config.Hit = {
 	-- third at 28 (about 15 in the air: on toward the next train); a bat's first comes at 64, already off from the middle
 	-- (a weapon's edge). The two light hits before it push too: taken all the same way from the middle of a roof, a first
 	-- string can carry a fighter off.
+	-- Higher near the end since 2026-10-28 (owner: "금칙어게임의 의자 날라가기처럼 아주 쾅 하고 날라가야 해"): LaunchLiftCurve
+	-- more lift grows with the square of the health lost, so a launch at high health is nearly as it was (the first
+	-- string's at 76 lifts 27.9 instead of 26.9; a full-health hammer or dynamite still stays on the roof: tests) while a
+	-- low one rockets up (36 + 18 = 54 at none, 2.8 times as high as before), hangs longer and goes farther. The speed
+	-- along the ground is unchanged (owner 2026-10-27). The blast, tumble and trail are LaunchShow's.
 	LaunchFull = 5,
 	LaunchEmpty = 59,
 	LaunchLift = 24,
 	LaunchLiftEmpty = 36,
+	LaunchLiftCurve = 18,
 	LaunchImmune = 0.9, -- a launched fighter cannot be hit for this long (flight, getting up and a moment more)
 	-- Smash, the home run: high into the sky and away. With this lift a body is still in the air (higher than the
 	-- highest top) when Config.Fall.HomeRunSeconds ends and it twinkles out - hit on the lowest deck it would reach the
@@ -606,7 +614,18 @@ Config.Feedback = {
 	RingSeconds = 0.3, -- the ring a launch's burst sends out
 	KickSeconds = 0.2, -- the camera kick
 	-- dealt: the attacker's own kick toward the blow (dealtLaunch when it launches, with the view narrowing DealtFov)
-	KickStuds = { light = 0.35, launch = 0.8, smash = 1.1, dealt = 0.15, dealtLaunch = 0.45 } :: { [string]: number },
+	-- near: anyone else within NearReach of a launch or smash feels its boom (owner 2026-10-28: "아주 쾅").
+	KickStuds = { light = 0.35, launch = 0.8, smash = 1.1, dealt = 0.15, dealtLaunch = 0.45, near = 0.3 } :: { [string]: number },
+	NearReach = 30,
+	-- A launch or smash goes off like a blast where it is hit (LaunchShow, after the banned-words game's flying chair the
+	-- owner pointed to): a white-hot flash and a fireball BlastSize studs across (SmashBlast for a home run), a shock
+	-- dome, smoke and embers, a light, and a low boom; the body tumbles TumbleTurns times head over heels the way it was
+	-- pushed while it flies (drawn by the joints only: a real spin made a launch slide farther, Config.Knock), trailing
+	-- fire, smoke and sparkles until it lands.
+	BlastSize = 7,
+	SmashBlast = 10,
+	BlastSeconds = 0.3,
+	TumbleTurns = 1,
 	FovPunch = 7, -- a launch or smash taken narrows the view this many degrees for a moment
 	DealtFov = 3,
 	-- The streak behind a blow lasts this long behind a fist, behind a weapon (SwingTrail).
@@ -651,6 +670,8 @@ Config.Sounds = {
 	Slip = { id = "rbxassetid://9113476527", volume = 0.85, vary = 0.05 }, -- Body Fall Master 36 (a skid and a fall)
 	WheelRoll = { id = "rbxassetid://9116537457", volume = 0.6, seconds = 1.8 }, -- Metal Cart 3 (a wheel rolling on the roof)
 	WheelHit = { id = "rbxassetid://9125672726", volume = 0.8, seconds = 1.2, vary = 0.05 }, -- Metal Impact Sledge Hammer Hits On 5 Ft I-Beam 13
+	-- The boom a launch goes off with (LaunchShow.blast; slower and deeper for a home run).
+	LaunchBoom = { id = "rbxassetid://1841351403", volume = 0.75, seconds = 1.4, vary = 0.05 }, -- Granular Thumpatron Metal Crash Hit 2 (APM)
 	Parachute = { id = "rbxassetid://9117235033", volume = 0.5, seconds = 2 }, -- Parachute Blossom 9
 	CrateLand = { id = "rbxassetid://9113466920", volume = 0.7, seconds = 1.5, vary = 0.08 }, -- Board Drops Wood Impacts Wobble 3
 	Pickup = { id = "rbxassetid://9120873789", volume = 0.7, seconds = 0.8 }, -- Wooden Chest Open Close Cedar Box 9 (a weapon taken from a crate)

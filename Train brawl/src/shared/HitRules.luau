@@ -21,6 +21,7 @@ export type Forces = {
 	LaunchEmpty: number,
 	LaunchLift: number,
 	LaunchLiftEmpty: number,
+	LaunchLiftCurve: number, -- more lift on top, growing with the square of the health lost (all of it at none)
 	SmashPush: number,
 	SmashLift: number,
 }
@@ -72,12 +73,15 @@ function HitRules.scale(health: number, max: number, full: number, empty: number
 end
 
 -- The push (along the ground) and lift a hit of `kind` gives a fighter left with `health` of `max` (a launch lifts more
--- as health drops, too: higher and longer flights).
+-- as health drops, too: higher and longer flights, and much higher near the end - LaunchLiftCurve - while a launch at
+-- high health stays as it was).
 function HitRules.force(kind: Kind, health: number, max: number, forces: Forces): (number, number)
 	if kind == "smash" then
 		return forces.SmashPush, forces.SmashLift
 	elseif kind == "launch" then
-		return HitRules.scale(health, max, forces.LaunchFull, forces.LaunchEmpty), HitRules.scale(health, max, forces.LaunchLift, forces.LaunchLiftEmpty)
+		local lost = 1 - math.clamp(health / max, 0, 1)
+		local lift = HitRules.scale(health, max, forces.LaunchLift, forces.LaunchLiftEmpty) + forces.LaunchLiftCurve * lost * lost
+		return HitRules.scale(health, max, forces.LaunchFull, forces.LaunchEmpty), lift
 	end
 	return HitRules.scale(health, max, forces.LightFull, forces.LightEmpty), 0
 end

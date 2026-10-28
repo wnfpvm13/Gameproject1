@@ -31,6 +31,7 @@ export type Key = { t: number, pose: Pose, ease: string? }
 -- How long a light hit's flinch and a launch's flail are drawn (seconds).
 AttackPoses.FlinchSeconds = 0.28
 AttackPoses.FlailSeconds = 0.7
+local TUMBLE = 0.55 -- a launch's tumble takes this share of the flail (about the flight)
 
 local JOINTS = { "Root", "Waist", "Neck", "RightShoulder", "LeftShoulder", "RightElbow", "LeftElbow", "RightWrist", "LeftWrist", "RightHip", "LeftHip", "RightKnee", "LeftKnee" }
 
@@ -586,8 +587,10 @@ end
 -- A hit reaction ("light" or a launch), `u` (0..1) through it. `back` and `side` say which way the hit pushed, in the
 -- body's own frame (back: +1 straight backward, -1 forward; side: +1 to its right): a light hit snaps the torso and
 -- head that way at once, knocks the arms open and eases back into `stance` (the fighter's stance; nil: none); a launch
--- throws the arms up and flails them while flying.
-function AttackPoses.react(kind: string, u: number, back: number, side: number, stance: Pose?): Pose
+-- throws the arms up and flails them while flying, the whole body tumbling `turns` times (default none) head over heels
+-- the way it was pushed (a backflip when pushed back, a cartwheel when pushed sideways) over the first TUMBLE share
+-- of it: whole turns, so the flail settles from upright.
+function AttackPoses.react(kind: string, u: number, back: number, side: number, stance: Pose?, turns: number?): Pose
 	if kind == "light" then
 		local peak: Pose = {
 			Waist = { x = 20 * back, y = -10 * side, z = -14 * side },
@@ -605,7 +608,13 @@ function AttackPoses.react(kind: string, u: number, back: number, side: number, 
 		return blend(held, stance or REST, ease(nil, (u - 0.25) / 0.75))
 	end
 	local wave = math.sin(u * math.pi * 6) * 30 * (1 - u) -- the arms flail, less as the flight ends
+	local spin = 360 * math.floor(turns or 0) * ease("out", math.min(u / TUMBLE, 1))
+	if u >= TUMBLE then
+		spin = 0 -- a whole number of turns: the same as upright
+	end
+	local root: Joint = if math.abs(back) >= math.abs(side) then { x = spin * (if back >= 0 then 1 else -1) } else { z = -spin * (if side >= 0 then 1 else -1) }
 	local flail: Pose = {
+		Root = root,
 		Waist = { x = 14 * back },
 		Neck = { x = 18 },
 		RightShoulder = { x = 150 + wave, z = 25 },

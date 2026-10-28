@@ -5,7 +5,8 @@
 -- a whip's slap, a shovel's clang, a rope's snap, a rock, a slip, a wheel's iron ring; a dynamite blast is heard from
 -- ExplosionShow), a hard white flash on them (all white for a frame or two, then gone), and a camera kick: the player
 -- hit is knocked the way the hit pushed (harder and with the view narrowing for a moment on a launch or smash), the
--- player who hit gets a small push toward the blow (bigger, with the view narrowing a little, when it launches). A
+-- player who hit gets a small push toward the blow (bigger, with the view narrowing a little, when it launches), and
+-- anyone else near a launch or a home run a smaller one (its boom). A
 -- launch adds a heavier layer (the bat's whack, a heavy body
 -- blow for the rest), a home run (the smash that empties health) a finishing sound for the whole screen over the
 -- weapon's own thump (the bat's crack, a heavy blow for the rest: never the thump's own recording twice) and a cartoon
@@ -216,6 +217,13 @@ function HitFeedback.hit(victim: Model, seen: boolean, mine: boolean, me: boolea
 		startKick(push, Config.Feedback.KickStuds[kind] or 0, if kind == "light" then 0 else Config.Feedback.FovPunch)
 	elseif mine and shownNow and push then
 		dealt(push, kind) -- a hit this client did not show at once (a slam, a blast)
+	elseif not mine and not me and kind ~= "light" and body and push then
+		-- Anyone near a launch or a home run feels its boom (less the farther away).
+		local away = (body.root.Position - Workspace.CurrentCamera.CFrame.Position).Magnitude
+		local f = Config.Feedback
+		if away < f.NearReach then
+			startKick(push, f.KickStuds.near * (1 - away / f.NearReach), 0)
+		end
 	end
 	return shownNow
 end

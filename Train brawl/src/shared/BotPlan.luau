@@ -1,7 +1,7 @@
 --!strict
 -- Where a practice bot walks and whom it goes for, as pure math over the arena's walkable tops (ArenaLayout): the
 -- nearest other fighter on the same top (no more than a few bots on one, so they do not all crowd one fighter), the
--- spot just short of that fighter to punch from, and a spot to wander to. Every spot stays a margin inside its top, so
+-- spot just short of that fighter to punch from, a spot to wander to, and the nearest crate on its top to go and take. Every spot stays a margin inside its top, so
 -- a bot never walks off an edge by itself. Requires nothing.
 
 local BotPlan = {}
@@ -43,6 +43,22 @@ function BotPlan.standSpot(top: Top, x: number, z: number, tx: number, tz: numbe
 		dx, dz, length = 0, 1, 1 -- right on top of it: step back along the track
 	end
 	return inside(top, tx + dx / length * standOff, tz + dz / length * standOff, margin)
+end
+
+-- Of `crates` (where landed crates lie), the nearest to (x, z) on `top`'s footprint, and its distance along the ground;
+-- nil when none lies on it.
+function BotPlan.crateOn(top: Top, x: number, z: number, crates: { { x: number, z: number } }): ({ x: number, z: number }?, number)
+	local best: { x: number, z: number }? = nil
+	local bestDistance = math.huge
+	for _, crate in crates do
+		if math.abs(crate.x - top.x) <= top.width / 2 and math.abs(crate.z - top.z) <= top.length / 2 then
+			local distance = math.sqrt((crate.x - x) ^ 2 + (crate.z - z) ^ 2)
+			if distance < bestDistance then
+				best, bestDistance = crate, distance
+			end
+		end
+	end
+	return best, bestDistance
 end
 
 -- A spot to wander to on `top` from `z` along it: anywhere across it, up to `reach` along it, `margin` inside. `random`

@@ -623,7 +623,12 @@ do
 	local bx, by, _ = WeaponRules.arc(0, 0, 0, 1, 0, 10, 20, GRAVITY, 20 / GRAVITY)
 	check("a throw starts at the hand and tops out where the lift runs out", ax == 1 and ay == 2 and az == 3 and near(bx, 10 * 20 / GRAVITY) and near(by, 20 * 20 / GRAVITY / 2))
 	local d = Config.Drops
-	check("crates: one for every three fighters, at least one, at most MaxOnMap", WeaponRules.cratesFor(1, d.MaxOnMap) == 1 and WeaponRules.cratesFor(3, d.MaxOnMap) == 1 and WeaponRules.cratesFor(4, d.MaxOnMap) == math.min(2, d.MaxOnMap) and WeaponRules.cratesFor(30, d.MaxOnMap) == d.MaxOnMap)
+	check("crates: one for every FightersPerCrate fighters, at least one, at most MaxOnMap", WeaponRules.cratesFor(1, 3, 2) == 1
+		and WeaponRules.cratesFor(2, 3, 2) == 1 and WeaponRules.cratesFor(3, 3, 2) == 2 and WeaponRules.cratesFor(6, 3, 2) == 3
+		and WeaponRules.cratesFor(30, 3, 2) == 3 and WeaponRules.cratesFor(4, 2, 3) == 2)
+	-- Persona fix 3 (2026-10-29): two weapons picked up in eight rounds, out after 33 s on average.
+	check("the first crate comes early (5 s in) and a solo practice round (6) gets three on the map", d.FirstAfter <= 5
+		and WeaponRules.cratesFor(1 + Config.Sandbag.Count, d.MaxOnMap, d.FightersPerCrate) == 3 and d.Every <= 12)
 	check("a crate lands before the next is due and lies a while", d.FallSeconds < d.Every and d.LifeSeconds > d.FallSeconds and d.FirstAfter < Config.Round.MaxSeconds)
 end
 
@@ -1019,6 +1024,15 @@ do
 		{ name = "b", tickets = 0, kos = 4, health = 99 },
 		{ name = "c", tickets = 1, kos = 1, health = 50 },
 	})) == "a,c" and #RoundRules.winners({}) == 0)
+end
+
+-- 19. A practice bot with bare fists goes for a crate on its own top (persona fix 3).
+do
+	local top = { x = 0, z = 0, width = 15, length = 30 }
+	local crate, away = BotPlan.crateOn(top, 0, 0, { { x = 20, z = 0 }, { x = 3, z = 4 }, { x = 1, z = -10 } })
+	check("a bot finds the nearest crate on its own top, and how far it is", crate ~= nil and crate.x == 3 and crate.z == 4 and math.abs(away - 5) < 1e-9)
+	local none, far = BotPlan.crateOn(top, 0, 0, { { x = 20, z = 0 } })
+	check("a crate on another top is not its to take", none == nil and far == math.huge)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

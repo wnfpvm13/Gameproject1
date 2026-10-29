@@ -128,6 +128,14 @@ local weapons = WeaponService.start(remotes.Swing, remotes.Hit, {
 		remotes.Blast:FireAllClients(at, radius)
 	end,
 })
+local drops = WeaponDrops.start(arena.layout.surfaces, PartUtil.folder(Workspace, Names.CratesFolder), {
+	fighters = round.fighters,
+	-- Anyone with bare fists (players, and practice bots since persona fix 3).
+	canTake = function(model: Model): boolean
+		return weapons.holding(model) == WeaponRules.FIST
+	end,
+	give = weapons.give,
+})
 local stringRules = AttackString.rules(Config.Attack)
 brain = BotBrain.new(arena.layout.surfaces, {
 	fighters = round.fighters,
@@ -145,14 +153,7 @@ brain = BotBrain.new(arena.layout.surfaces, {
 		local step = PartUtil.number(model, Names.SwingStep) or 1
 		return BodyMotion.lunge(body, facing, WeaponRules.lunge(style, AttackString.launches(stringRules, step, style), Config.Attack))
 	end,
-})
-WeaponDrops.start(arena.layout.surfaces, PartUtil.folder(Workspace, Names.CratesFolder), {
-	fighters = round.fighters,
-	-- Players only (the practice bots do not pick crates up yet), with bare fists.
-	canTake = function(model: Model): boolean
-		return Players:GetPlayerFromCharacter(model) ~= nil and weapons.holding(model) == WeaponRules.FIST
-	end,
-	give = weapons.give,
+	crates = drops.landed,
 })
 
 -- The avatar's own body parts arrive after the character and replace the default hand: the body is made standard,

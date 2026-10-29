@@ -124,9 +124,9 @@ function WeaponRules.arc(x: number, y: number, z: number, fx: number, fz: number
 	return x + fx * speed * t, y + lift * t - gravity / 2 * t * t, z + fz * speed * t
 end
 
--- How many crates may be on the map with `alive` fighters left: one for every three, at least one, at most `most`.
-function WeaponRules.cratesFor(alive: number, most: number): number
-	return math.clamp(math.ceil(alive / 3), 1, most)
+-- How many crates may be on the map with `alive` fighters left: one for every `per`, at least one, at most `most`.
+function WeaponRules.cratesFor(alive: number, most: number, per: number): number
+	return math.clamp(math.ceil(alive / per), 1, most)
 end
 
 return WeaponRules

@@ -2,9 +2,10 @@
 -- Weapon crates on the server (Config.Drops). While a fight runs, crates float down under parachutes onto random spots
 -- on the trains' wide tops (roofs and decks, never under a lookout or a crate), each holding a weapon picked by weight
 -- (WeaponRules.pick) and showing its name. Its shadow on the top shows where one will land while it falls (drawn by every
--- client: GroundMarks). Coal tenders get none (a crate half sunk in coal, its shadow lost on it). A player with
--- bare fists who walks into a landed crate takes its weapon (hooks.give). How many crates the map holds follows the
--- fighters left (WeaponRules.cratesFor); a crate nobody takes blinks and goes away. Nothing here collides or is seen by
+-- client: GroundMarks). Coal tenders get none (a crate half sunk in coal, its shadow lost on it). A fighter with
+-- bare fists who walks into a landed crate takes its weapon (hooks.give; practice bots go for one on their top: landed()).
+-- How many crates the map holds follows the fighters left (WeaponRules.cratesFor); a crate nobody takes blinks and goes
+-- away. Nothing here collides or is seen by
 -- raycasts. The crates carry their state as attributes (Names.CrateWeapon, CrateLanded, CrateTakenBy) for the clients'
 -- sounds (DropShow).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,10 +26,11 @@ local WeaponDrops = {}
 
 export type Hooks = {
 	fighters: () -> { Model }, -- the fighters still in the round
-	canTake: (model: Model) -> boolean, -- a player's character holding bare fists
+	canTake: (model: Model) -> boolean, -- a fighter holding bare fists
 	give: (model: Model, weapon: string) -> (), -- hands the weapon over
 }
-export type Drops = { clear: () -> (), stop: () -> () }
+-- landed: where the landed crates nobody has taken yet lie (on their tops).
+export type Drops = { clear: () -> (), landed: () -> { Vector3 }, stop: () -> () }
 
 type Crate = { model: Model, box: Part, weapon: string, landAt: number, marker: Part?, chute: { BasePart } }
 
@@ -178,7 +180,7 @@ function WeaponDrops.start(surfaces: { ArenaLayout.Surface }, folder: Instance, 
 		end
 		local fighters = hooks.fighters()
 		if now >= nextDrop then
-			if #crates < WeaponRules.cratesFor(#fighters, d.MaxOnMap) then
+			if #crates < WeaponRules.cratesFor(#fighters, d.MaxOnMap, d.FightersPerCrate) then
 				drop(now)
 			end
 			nextDrop = now + d.Every
@@ -236,6 +238,16 @@ function WeaponDrops.start(surfaces: { ArenaLayout.Surface }, folder: Instance, 
 
 	return {
 		clear = clear,
+		landed = function(): { Vector3 }
+			local list = {}
+			local now = Workspace:GetServerTimeNow()
+			for _, crate in crates do
+				if now >= crate.landAt then
+					table.insert(list, crate.box.Position)
+				end
+			end
+			return list
+		end,
 		stop = function()
 			running = false
 		end,

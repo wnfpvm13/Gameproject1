@@ -5,12 +5,15 @@
 -- up to it and steps straight in the last bit, turns to it and punches its 1-2-3 string through the same server judging as a
 -- player's attacks (hooks.attack: cooldown, stun, string and hits are all checked there) - after a moment to react,
 -- sometimes stopping after one or two, with a breather after each string. With nobody on its top it wanders the top.
--- For now bots punch with bare fists (they do not pick crates up) and stay on the car top they stand on (crossing
--- between tops comes with B).
+-- With bare fists it goes for a landed crate on its top first when that is nearer than its target (hooks.crates; it
+-- takes the weapon by walking into it, as a player does, and attacks with it the same way: persona fix 3, so solo
+-- practice shows the weapons). Bots stay on the car top they stand on (crossing between tops comes with B).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Config = require(shared:WaitForChild("Config"))
+local Names = require(shared:WaitForChild("Names"))
+local WeaponRules = require(shared:WaitForChild("WeaponRules"))
 local CharacterParts = require(shared:WaitForChild("CharacterParts"))
 local ArenaLayout = require(shared:WaitForChild("ArenaLayout"))
 local BotPlan = require(shared:WaitForChild("BotPlan"))
@@ -21,6 +24,7 @@ export type Hooks = {
 	fighters: () -> { Model }, -- the models still in the round
 	-- The bot attacks along the flat facing: how far the attack stepped it in (nil: not now).
 	attack: (model: Model, facing: Vector3) -> number?,
+	crates: () -> { Vector3 }, -- where the landed crates nobody has taken lie
 }
 export type Brain = {
 	-- `model` (its `body`) is free to act at `now` (os.clock()) in a fight.
@@ -127,6 +131,21 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 			end
 		end
 		local target = current or BotPlan.nearest(here.X, here.Z, top, others, taken, c.PerTarget)
+		-- Bare fists: a crate on this top nearer than the target first.
+		if WeaponRules.named(Config.Weapons, model:GetAttribute(Names.Weapon)) == WeaponRules.FIST then
+			local spots = {}
+			for _, at in hooks.crates() do
+				table.insert(spots, { x = at.X, z = at.Z })
+			end
+			local crate, away = BotPlan.crateOn(top, here.X, here.Z, spots)
+			local targetAway = if target then math.sqrt((target.x - here.X) ^ 2 + (target.z - here.Z) ^ 2) else math.huge
+			if crate and away < targetAway then
+				mind.target = nil
+				humanoid.WalkSpeed = c.ChaseSpeed
+				walkTo(humanoid, Vector3.new(crate.x, here.Y, crate.z))
+				return
+			end
+		end
 		if not target then
 			mind.target = nil
 			humanoid.WalkSpeed = c.WalkSpeed

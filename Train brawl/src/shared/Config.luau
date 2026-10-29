@@ -499,10 +499,14 @@ Config.Thrown = {
 -- The weapon crates (WeaponDrops): the first some seconds into a fight, then one every few seconds while fewer are on
 -- the map than one for every three fighters left (at most MaxOnMap). Each floats down FallSeconds from FallHeight with
 -- its shadow growing where it lands; a crate nobody takes goes away after LifeSeconds.
+-- Persona fix 3 (2026-10-29): the testers picked a weapon up twice in eight rounds (the first crate came at 15 s, they
+-- were out at 33 s on average), so the first comes 5 s into the fight, then every 12 s, one for every two fighters left
+-- (at most 3; it was one for every three, at most 2).
 Config.Drops = {
-	FirstAfter = 15,
-	Every = 15,
-	MaxOnMap = 2,
+	FirstAfter = 5,
+	Every = 12,
+	MaxOnMap = 3,
+	FightersPerCrate = 2,
 	FallSeconds = 3,
 	FallHeight = 40,
 	LifeSeconds = 25,

@@ -16,7 +16,8 @@
 -- blast, tumble trail and landing dust from LaunchShow; a home run also HomeRunShow); a fall lays the player down behind the train (FallDrift); health shows over heads and at the bottom
 -- (HealthBars) with the tickets left (TicketHud), the round at the top (RoundHud) with the knock-off feed under it (FeedHud) and the round's sound
 -- (RoundAudio), the first-ride card shows the controls once (RideCard), a fighter coming back after a fall drops in under a parachute and
--- shimmers while guarded (ComebackShow), the player's own 1-2-3 string shows under the aim dot (StringHud), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
+-- shimmers while guarded (ComebackShow), the player's own 1-2-3 string shows by the aim dot (StringHud), crates out of sight get an arrow
+-- at the screen's edge (CrateArrows), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
 -- is watched first).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -64,6 +65,7 @@ local RideCard = require(script:WaitForChild("RideCard"))
 local TicketHud = require(script:WaitForChild("TicketHud"))
 local ComebackShow = require(script:WaitForChild("ComebackShow"))
 local StringHud = require(script:WaitForChild("StringHud"))
+local CrateArrows = require(script:WaitForChild("CrateArrows"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
@@ -93,6 +95,7 @@ local weaponHud = WeaponHud.new(playerGui)
 local card = RideCard.new(playerGui)
 local tickets = TicketHud.new(playerGui)
 local stringHud = StringHud.new(playerGui)
+local crateArrows = CrateArrows.new(playerGui, Workspace:WaitForChild(Names.CratesFolder))
 DropShow.start(Workspace:WaitForChild(Names.CratesFolder), Workspace:WaitForChild(Names.ArenaFolder))
 GroundMarks.start({ Workspace:WaitForChild(Names.ArenaFolder), Workspace:WaitForChild(Names.CratesFolder) })
 
@@ -307,6 +310,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 	local holding = WeaponRules.named(Config.Weapons, if character then character:GetAttribute(Names.Weapon) else nil)
 	local stringing = Workspace:GetAttribute(Names.Phase) == "Fight" and alive and not back and AttackString.uses(Config.Weapons[holding].style)
 	stringHud:update(own:stringView(serverNow, holding), stringing, Config.Attack.StringGap, serverNow, os.clock(), character)
+	crateArrows:update(Workspace:GetAttribute(Names.Phase) == "Fight" and alive and not back)
 	local standing = if back then "back" elseif alive then "in" elseif state == false then "out" else "watching"
 	hud:update(Workspace:GetServerTimeNow(), standing, if character then PartUtil.number(character, Names.KOs) or 0 else 0, character)
 	local phase = Workspace:GetAttribute(Names.Phase)

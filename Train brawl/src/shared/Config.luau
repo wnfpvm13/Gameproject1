@@ -730,6 +730,15 @@ Config.Block = {
 	WalkShare = 0.5,
 }
 
+-- The warning band on a roof edge that drops into nothing (EdgeWarning, persona fix 5): shown within Within of the
+-- edge, Length long along it where the player is and Width across, judged by stepping Probe past the edge.
+Config.Edge = {
+	Within = 3,
+	Length = 10,
+	Width = 0.9,
+	Probe = 0.75,
+}
+
 -- The way back for a fighter who fell with a ticket left (Comebacks): the fall plays on, then up to the stands (the
 -- gondola the balloons hold) for WaitSeconds, then down by parachute from DropHeight over the clearest spawn spot at
 -- DropSpeed (its shadow on the roof meanwhile), then unhittable for GuardSeconds unless it attacks.

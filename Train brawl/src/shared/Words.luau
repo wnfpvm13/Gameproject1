@@ -41,6 +41,26 @@ Words.Dropping = "낙하산으로 내려가는 중"
 Words.Guarded = "보호 중, 때리면 풀린다"
 Words.StringBroken = "끊김!" -- under the string marks when a hit breaks the player's 1-2-3 string
 Words.GuardBroken = "막기 깨짐!" -- over a blocker whose guard a string's third broke
+Words.ResultTitle = "이번 판"
+
+-- Under the big text when the player is knocked off: who did it and how, and how many hits it took since its last fall.
+function Words.knockedOff(by: string?, how: string, hits: number): string
+	local taken = if hits > 0 then string.format(", %d대 맞음", hits) else ""
+	if how == "homerun" then
+		return if by then string.format("%s의 홈런%s", by, taken) else string.format("홈런%s", taken)
+	end
+	return if by then string.format("%s에게 밀려 떨어짐%s", by, taken) else string.format("발을 헛디딤%s", taken)
+end
+
+-- The player's round on the result card: its rows (a name, then the number).
+function Words.resultRows(kos: number, homers: number, landed: number, seconds: number): { { string } }
+	return {
+		{ "떨어뜨린 수", tostring(kos) },
+		{ "홈런", tostring(homers) },
+		{ "맞힌 수", tostring(landed) },
+		{ "버틴 시간", Words.clock(seconds) },
+	}
+end
 
 function Words.ticketsLeft(count: number): string
 	return string.format("승차권 %d장 남음", count)

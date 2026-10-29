@@ -18,7 +18,8 @@
 -- (RoundAudio), the first-ride card shows the controls once (RideCard), a fighter coming back after a fall drops in under a parachute and
 -- shimmers while guarded (ComebackShow), the player's own 1-2-3 string shows by the aim dot (StringHud), crates out of sight get an arrow
 -- at the screen's edge (CrateArrows), the block control (BlockInput) raises the guard drawn with a shield (BlockShow; its blocked and
--- broken hits clang in HitFeedback), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
+-- broken hits clang in HitFeedback), a roof edge that drops into nothing gets a warning band near the player (EdgeWarning), the player's
+-- own numbers are counted (RoundStats) for the line on who knocked it off (RoundHud) and the card at the round's end (ResultCard), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
 -- is watched first).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -32,6 +33,7 @@ local Names = require(shared:WaitForChild("Names"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
 local ArenaLayout = require(shared:WaitForChild("ArenaLayout"))
 local SoundBank = require(shared:WaitForChild("SoundBank"))
+local Words = require(shared:WaitForChild("Words"))
 local WeaponRules = require(shared:WaitForChild("WeaponRules"))
 local AttackString = require(shared:WaitForChild("AttackString"))
 local CharacterParts = require(shared:WaitForChild("CharacterParts"))
@@ -70,6 +72,9 @@ local CrateArrows = require(script:WaitForChild("CrateArrows"))
 local BlockInput = require(script:WaitForChild("BlockInput"))
 local BlockShow = require(script:WaitForChild("BlockShow"))
 local BlockRules = require(shared:WaitForChild("BlockRules"))
+local EdgeWarning = require(script:WaitForChild("EdgeWarning"))
+local RoundStats = require(script:WaitForChild("RoundStats"))
+local ResultCard = require(script:WaitForChild("ResultCard"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
@@ -101,6 +106,9 @@ local card = RideCard.new(playerGui)
 local tickets = TicketHud.new(playerGui)
 local stringHud = StringHud.new(playerGui)
 local crateArrows = CrateArrows.new(playerGui, Workspace:WaitForChild(Names.CratesFolder))
+local edges = EdgeWarning.new(layout)
+local stats = RoundStats.new()
+local results = ResultCard.new(playerGui)
 DropShow.start(Workspace:WaitForChild(Names.CratesFolder), Workspace:WaitForChild(Names.ArenaFolder))
 GroundMarks.start({ Workspace:WaitForChild(Names.ArenaFolder), Workspace:WaitForChild(Names.CratesFolder) })
 
@@ -257,6 +265,7 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 	local w = Config.Weapons[hitWeapon]
 	-- On a block (the server says "blocked" or "broken"): a short flinch (a broken guard: a light hit's).
 	local met = if guarded == "blocked" or guarded == "broken" then guarded else nil
+	stats:hit(swinger == player.Character, me, met)
 	local stun = if met == "blocked" then Config.Block.Stun elseif met == "broken" then Config.Hit.LightStun else w.stun or Config.Hit.LightStun
 	if me and push then
 		knock:hit(victim, push, hitKind, stun)
@@ -332,7 +341,13 @@ end)
 -- A knock-out, from the server: a line in the feed.
 feedRemote.OnClientEvent:Connect(function(victim: unknown, by: unknown, how: unknown, out: unknown)
 	if typeof(victim) == "string" and typeof(how) == "string" then
-		feed:add(victim, if typeof(by) == "string" then by else nil, how, out ~= false)
+		local credited = if typeof(by) == "string" then by else nil
+		feed:add(victim, credited, how, out ~= false)
+		-- (Names as shown: the feed carries display names.)
+		local hits = stats:feed(credited == player.DisplayName, victim == player.DisplayName, how, out ~= false)
+		if hits then
+			hud:knockedOff(Words.knockedOff(credited, how, hits))
+		end
 	end
 end)
 
@@ -362,6 +377,11 @@ RunService.RenderStepped:Connect(function(dt: number)
 	local stringing = Workspace:GetAttribute(Names.Phase) == "Fight" and alive and not back and AttackString.uses(Config.Weapons[holding].style)
 	stringHud:update(own:stringView(serverNow, holding), stringing, Config.Attack.StringGap, serverNow, os.clock(), character)
 	crateArrows:update(Workspace:GetAttribute(Names.Phase) == "Fight" and alive and not back)
+	edges:update(character, Workspace:GetAttribute(Names.Phase) == "Fight" and alive and not back)
+	local phaseNow = Workspace:GetAttribute(Names.Phase)
+	local phaseName = if typeof(phaseNow) == "string" then phaseNow else "Waiting"
+	stats:update(phaseName, alive)
+	results:update(phaseName, stats:summary(character))
 	local standing = if back then "back" elseif alive then "in" elseif state == false then "out" else "watching"
 	hud:update(Workspace:GetServerTimeNow(), standing, if character then PartUtil.number(character, Names.KOs) or 0 else 0, character)
 	local phase = Workspace:GetAttribute(Names.Phase)

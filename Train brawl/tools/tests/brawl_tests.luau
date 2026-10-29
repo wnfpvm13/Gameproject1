@@ -657,6 +657,13 @@ do
 		and Words.feed("B", nil, "fall", false) == "B 떨어짐" and Words.feed("B", "A", "homerun", false) == "A → B 홈런!")
 	check("the way back reads the tickets left and the seconds to the parachute", Words.ticketsLeft(1) == "승차권 1장 남음" and Words.dropIn(3) == "3초 뒤 낙하산 출발")
 	check("a broken string says so under its marks", Words.StringBroken == "끊김!")
+	check("the knock-off line says who, how and how many hits", Words.knockedOff("봇 3", "homerun", 12) == "봇 3의 홈런, 12대 맞음"
+		and Words.knockedOff("봇 1", "fall", 4) == "봇 1에게 밀려 떨어짐, 4대 맞음" and Words.knockedOff(nil, "fall", 0) == "발을 헛디딤")
+	local rows = Words.resultRows(2, 1, 23, 72)
+	check("the result card lists knock-offs, home runs, hits landed and the time on the trains", #rows == 4 and rows[1][2] == "2"
+		and rows[3][1] == "맞힌 수" and rows[4][2] == "1:12")
+	check("the edge warning shows from a little further in than a light hit pushes, along a short stretch",
+		Config.Edge.Within >= 2 and Config.Edge.Within <= 4 and Config.Edge.Length < A.CarKinds.Boxcar.length and Config.Edge.Probe < 1)
 	check("what the player holds reads its name and what is left", Words.uses("Hammer", 3) == "망치 ×3" and Words.secondsLeft("GoldBar", 12) == "금괴 12초")
 end
 

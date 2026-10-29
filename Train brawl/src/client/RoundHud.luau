@@ -47,6 +47,9 @@ type Fields = {
 	shownKos: number?,
 	shownTick: number?,
 	bigUntil: number, -- os.clock when a passing big text ("출발!", "하차!") has faded (math.huge = it stays)
+	-- A line under a passing big text (who knocked the player off: knockedOff) and until when it shows (os.clock).
+	noteText: string,
+	noteUntil: number,
 }
 export type Hud = typeof(setmetatable({} :: Fields, RoundHud))
 
@@ -106,6 +109,8 @@ function RoundHud.new(playerGui: Instance): Hud
 		shownKos = nil,
 		shownTick = nil,
 		bigUntil = 0,
+		noteText = "",
+		noteUntil = 0,
 	}
 	return setmetatable(fields, RoundHud)
 end
@@ -133,6 +138,12 @@ local function shout(self: Hud, text: string, seconds: number?, color: Color3?, 
 	self.bigUntil = if seconds then os.clock() + seconds else math.huge
 	UiStyle.fade(self.big, 0)
 	UiStyle.pop(self.big, 1.45, scale)
+end
+
+-- The player was knocked off: `line` (Words.knockedOff) shows under the big text ("하차!" or the tickets left) a moment.
+function RoundHud.knockedOff(self: Hud, line: string)
+	self.noteText = line
+	self.noteUntil = os.clock() + OUT_SECONDS + 0.8
 end
 
 -- Every frame. now: server time; standing: "in" (on the trains), "back" (fell with a ticket left, on the way back),
@@ -179,7 +190,7 @@ function RoundHud.update(self: Hud, now: number, standing: string, kos: number, 
 		shout(self, Words.Back, GO_SECONDS, UiStyle.Gold)
 	end
 	if phase ~= "Ended" then
-		setText(self.note, "")
+		setText(self.note, if os.clock() < self.noteUntil then self.noteText else "")
 	end
 	local fadeLeft = self.bigUntil - os.clock()
 	if fadeLeft <= 0 then

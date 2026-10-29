@@ -642,13 +642,15 @@ do
 	local cards = true
 	for _, control in { "mouse", "touch", "gamepad" } do
 		local rows = Words.cardRows(control)
-		cards = cards and #rows >= 4 and #rows <= 6
+		cards = cards and #rows >= 4 and #rows <= 7
 		for _, row in rows do
 			cards = cards and #row == 2 and row[1] ~= "" and row[2] ~= ""
 		end
 	end
-	check("every kind of control has a first-ride card of 4 to 6 rows", cards)
-	check("the mouse card names Alt, the touch card does not", Words.cardRows("mouse")[6][1] == "왼쪽 Alt" and #Words.cardRows("touch") == 5)
+	check("every kind of control has a first-ride card of 4 to 7 rows", cards)
+	check("the mouse card names Alt, the touch card does not", Words.cardRows("mouse")[7][1] == "왼쪽 Alt" and #Words.cardRows("touch") == 6)
+	check("every card names the block control", Words.cardRows("mouse")[2][1] == "오른쪽 클릭 꾹" and Words.cardRows("touch")[2][1] == "막기 버튼 꾹"
+		and Words.cardRows("gamepad")[2][1] == "LT / L2 꾹")
 	check("the clock reads minutes and seconds", Words.clock(113) == "1:53" and Words.clock(5) == "0:05" and Words.clock(0) == "0:00")
 	check("the feed credits who knocked who off, and a fall with nobody to credit", Words.feed("B", "A", "homerun", true) == "A → B 홈런!" and Words.feed("B", "A", "fall", true) == "A → B 하차" and Words.feed("B", nil, "fall", true) == "B 하차")
 	check("a fall with a ticket to spare is not 하차 (the fighter comes back)", Words.feed("B", "A", "fall", false) == "A → B 떨어뜨림"
@@ -1033,6 +1035,31 @@ do
 	check("a bot finds the nearest crate on its own top, and how far it is", crate ~= nil and crate.x == 3 and crate.z == 4 and math.abs(away - 5) < 1e-9)
 	local none, far = BotPlan.crateOn(top, 0, 0, { { x = 20, z = 0 } })
 	check("a crate on another top is not its to take", none == nil and far == math.huge)
+end
+
+-- 20. Hold to block (decision 11, persona fix 4).
+do
+	local B = Config.Block
+	check("a block takes attacks from the front only", BlockRules.covers(0, 0, 0, -1, 0, -5, B.Arc) and BlockRules.covers(0, 0, 0, -1, 3, -3, B.Arc)
+		and not BlockRules.covers(0, 0, 0, -1, 5, 0, B.Arc) and not BlockRules.covers(0, 0, 0, -1, 0, 5, B.Arc))
+	check("the edge of the block is its arc either side", BlockRules.covers(0, 0, 0, -1, math.sin(math.rad(B.Arc - 1)), -math.cos(math.rad(B.Arc - 1)), B.Arc)
+		and not BlockRules.covers(0, 0, 0, -1, math.sin(math.rad(B.Arc + 1)), -math.cos(math.rad(B.Arc + 1)), B.Arc))
+	local always = {}
+	for name, w in Config.Weapons do
+		if not BlockRules.blockable(w.launch) then
+			table.insert(always, name)
+		end
+	end
+	table.sort(always)
+	check("a hammer, dynamite, a wheel and oil break through a block; fists and the rest can be blocked",
+		table.concat(always, ",") == "Dynamite,Hammer,OilCan,Wheel" and BlockRules.blockable(Config.Weapons.Fist.launch))
+	local damage, push, broke = BlockRules.outcome(false, B)
+	check("a blocked light hit lands softened and the blocker keeps blocking", damage == B.Damage and push == B.Push and not broke and damage < 0.5 and push < 0.5)
+	local breakDamage, breakPush, breaks = BlockRules.outcome(true, B)
+	check("a blocked string finisher breaks the guard instead of launching", breaks and breakDamage == B.BreakDamage and breakPush == 1)
+	check("a blocked hit's flinch is shorter than a light hit's, so the blocker can let go and answer", B.Stun < Config.Hit.LightStun)
+	check("a broken guard lasts longer than a fist's string takes to start again", B.BreakSeconds > Config.Weapons.Fist.cooldown * 2)
+	check("a blocker walks slower but still moves", B.WalkShare > 0 and B.WalkShare < 1)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

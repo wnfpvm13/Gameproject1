@@ -40,6 +40,7 @@ Words.Back = "다시 탑승!"
 Words.Dropping = "낙하산으로 내려가는 중"
 Words.Guarded = "보호 중, 때리면 풀린다"
 Words.StringBroken = "끊김!" -- under the string marks when a hit breaks the player's 1-2-3 string
+Words.GuardBroken = "막기 깨짐!" -- over a blocker whose guard a string's third broke
 
 function Words.ticketsLeft(count: number): string
 	return string.format("승차권 %d장 남음", count)
@@ -95,14 +96,17 @@ end
 Words.MusicOn = "음악 ON"
 Words.MusicOff = "음악 OFF"
 Words.AttackButton = "때리기"
+Words.BlockButton = "막기"
 
 -- The first-ride card: its title and its rows (the control, then what it does) for the kind of control in use:
 -- "mouse", "touch" or "gamepad".
 Words.CardTitle = "탑승 안내"
 function Words.cardRows(control: string): { { string } }
 	local attack = if control == "touch" then "오른쪽 버튼" elseif control == "gamepad" then "RT / R2" else "클릭"
+	local block = if control == "touch" then "막기 버튼 꾹" elseif control == "gamepad" then "LT / L2 꾹" else "오른쪽 클릭 꾹"
 	local rows = {
 		{ attack, "때리기" },
+		{ block, "앞에서 오는 공격 막기" },
 		{ "3연타", "상대가 날아간다" },
 		{ "체력이 낮을수록", "더 멀리 날아간다" },
 		{ "낙하산 상자", "맨손으로 닿으면 무기" },

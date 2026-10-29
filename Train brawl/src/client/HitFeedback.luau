@@ -189,6 +189,32 @@ function HitFeedback.predict(victim: Model, weapon: string, from: Vector3, kind:
 	return true
 end
 
+-- A hit that met `victim`'s block ("blocked": softened, "broken": a string's third broke the guard), as the server says
+-- or as the player's own attack showed it at once: a metal clang off the shield (a heavier one when it breaks) instead
+-- of the flesh thump and flash; me: the blocker is the player (a soft nudge, a light one when it breaks); mine: the
+-- attacker is the player and this was not shown at once (its small kick). No sound or kick on a victim that cannot be
+-- hit just now (it returns false).
+function HitFeedback.guarded(victim: Model, guard: string, me: boolean, mine: boolean, push: Vector3?): boolean
+	local endsAt = unhittable[victim]
+	if not me and endsAt and os.clock() < endsAt then
+		return false
+	end
+	local body = CharacterParts.body(victim)
+	if body then
+		if guard == "broken" then
+			SoundBank.play("WheelHit", body.root, 1.15)
+		else
+			SoundBank.play("ShovelHit", body.root, 1.3 * (0.95 + math.random() * 0.1))
+		end
+	end
+	if me and push then
+		startKick(push, if guard == "broken" then Config.Feedback.KickStuds.light else Config.Feedback.KickStuds.blocked, 0)
+	elseif mine and push then
+		dealt(push, "light")
+	end
+	return true
+end
+
 -- The server's word on a hit. seen: this client showed it already from the player's own attack (OwnSwing knows); mine:
 -- the attacker is the player; me: the victim is the player; kind: "light", "launch" or "smash"; weapon: what hit; push:
 -- the knock's velocity. Returns whether the plain hit (thump, flash) was shown now - not when it was seen already.

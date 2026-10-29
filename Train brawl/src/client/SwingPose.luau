@@ -171,6 +171,9 @@ local function stanceOf(model: Model): (AttackPoses.Pose?, boolean, Vector3?)
 	if not body or body.humanoid.Health <= 0 then
 		return nil, true
 	end
+	if model:GetAttribute(Names.Blocking) == true then
+		return AttackPoses.block(), true, nil -- both forearms up (the left lets go of a two-handed grip)
+	end
 	local weapon = WeaponRules.named(Config.Weapons, model:GetAttribute(Names.Weapon))
 	local w = Config.Weapons[weapon]
 	return AttackPoses.stance(weapon, w.style), true, w.offHand

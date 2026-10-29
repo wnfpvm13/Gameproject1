@@ -7,6 +7,7 @@ return {
 	HitRemote = "Hit", -- server -> every client: who was hit, and the knock for the one it hit
 	FeedRemote = "Feed", -- server -> every client: who knocked whom out and how ("homerun" or "fall")
 	BlastRemote = "Blast", -- server -> every client: a dynamite burst (where, how wide)
+	BlockRemote = "Block", -- client -> server: the block control went down (true) or up (false)
 	ArenaFolder = "TrainBrawlArena",
 	SceneryFolder = "TrainBrawlScenery",
 	CanyonFolder = "TrainBrawlCanyon",
@@ -60,4 +61,5 @@ return {
 	ReturnPhase = "ReturnPhase",
 	ReturnAt = "ReturnAt", -- server time the parachute drop starts (while "Up")
 	GuardUntil = "GuardUntil", -- server time a fighter just back stops being unhittable (FighterHealth; 0 = attacked)
+	Blocking = "Blocking", -- the fighter is blocking now (Guarding; true or none)
 }

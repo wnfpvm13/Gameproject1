@@ -38,6 +38,7 @@ export type Hooks = {
 	fighters: () -> { Model }, -- the characters still in the round
 	stunned: () -> boolean, -- the player's character is flinching or flying from a hit
 	launched: () -> boolean, -- flying from a launch (lying down until it lands)
+	blocking: () -> boolean, -- the player holds the block (no attacking meanwhile)
 	-- Draw and sound an attack that started at server time `at`, at `step` of the string.
 	draw: (model: Model, at: number, weapon: string, step: number) -> (),
 	-- Step the character in along the flat `aim` for an attack at `step` (BodyMotion.lunge).
@@ -110,8 +111,8 @@ local function try(self: Swing, model: Model?): string
 	if not body or body.model:GetAttribute(Names.Alive) ~= true or Workspace:GetAttribute(Names.Phase) ~= "Fight" then
 		return "no"
 	end
-	if body.model:GetAttribute(Names.ReturnPhase) ~= nil then
-		return "no" -- on the way back after a fall (the server takes no attacks then)
+	if body.model:GetAttribute(Names.ReturnPhase) ~= nil or self.hooks.blocking() then
+		return "no" -- on the way back after a fall, or blocking (the server takes no attacks then)
 	end
 	local weapon = WeaponRules.named(Config.Weapons, body.model:GetAttribute(Names.Weapon))
 	local w = Config.Weapons[weapon]

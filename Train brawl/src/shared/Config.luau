@@ -619,7 +619,8 @@ Config.Feedback = {
 	KickSeconds = 0.2, -- the camera kick
 	-- dealt: the attacker's own kick toward the blow (dealtLaunch when it launches, with the view narrowing DealtFov)
 	-- near: anyone else within NearReach of a launch or smash feels its boom (owner 2026-10-28: "아주 쾅").
-	KickStuds = { light = 0.35, launch = 0.8, smash = 1.1, dealt = 0.15, dealtLaunch = 0.45, near = 0.3 } :: { [string]: number },
+	-- blocked: a hit taken on the block (Config.Block), a soft nudge.
+	KickStuds = { light = 0.35, launch = 0.8, smash = 1.1, dealt = 0.15, dealtLaunch = 0.45, near = 0.3, blocked = 0.12 } :: { [string]: number },
 	NearReach = 30,
 	-- A launch or smash goes off like a blast where it is hit (LaunchShow, after the banned-words game's flying chair the
 	-- owner pointed to): a white-hot flash and a fireball BlastSize studs across (SmashBlast for a home run), a shock
@@ -710,6 +711,23 @@ Config.Round = {
 	-- others come back: Config.Comeback). Decision 11, brought forward by the persona playtest (2026-10-29): fighters were
 	-- out after 33 s on average and then only watched.
 	Tickets = 2,
+}
+
+-- Hold to block (decision 11's "누르고 버티는 막기", no counter; brought forward by the persona playtest 2026-10-29: "no
+-- block, whoever hits first wins"). While the block control is held (Guarding) an attack reaching the blocker from the
+-- front (within Arc degrees either side of where it faces) does Damage of its damage and Push of its push, with only a
+-- Stun flinch; the string's launching third does not launch but breaks the guard: BreakDamage of its damage, a light
+-- hit's full push and stun, and no blocking for BreakSeconds. Weapons that always launch (hammer, dynamite, wheel, oil)
+-- break through, and so does anything from the side or behind or a crowd's launch. A blocker cannot attack and walks at
+-- WalkShare of its speed; it is only pushed less, so blocking at an edge still ends in a fall.
+Config.Block = {
+	Arc = 75,
+	Damage = 0.25,
+	Push = 0.3,
+	Stun = 0.12,
+	BreakDamage = 0.5,
+	BreakSeconds = 1,
+	WalkShare = 0.5,
 }
 
 -- The way back for a fighter who fell with a ticket left (Comebacks): the fall plays on, then up to the stands (the

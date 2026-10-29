@@ -3,7 +3,8 @@
 -- (RoundService); attacks with fists or a picked-up weapon are judged by WeaponService (a thrown stick burns and
 -- bursts in Dynamite; coal lumps fly in Missiles, bowled wheels roll in Wheels, oil slicks lie in Slicks); weapon crates drop onto the trains during a fight (WeaponDrops); falls are noticed by FallWatch
 -- and cost that fighter a ticket, as does a home run (health emptied, kept by FighterHealth): with one left it comes
--- back by balloon and parachute (Comebacks, full health, a short guard on landing), with none it is out; knock-offs and dynamite
+-- back by balloon and parachute (Comebacks, full health, a short guard on landing), with none it is out; a held block
+-- softens hits from the front (Guarding, judged in WeaponService); knock-offs and dynamite
 -- bursts go to every client; every character holds its weapon in its hand (WeaponGear), and every player's body is
 -- made the standard size with the standard animations (AvatarRules). For testing alone in Studio, the Workspace
 -- attribute Names.Solo makes practice bots (bodies: Sandbags, minds: BotBrain) join every round and fight.
@@ -28,6 +29,7 @@ local Wheels = require(script.Parent:WaitForChild("Wheels"))
 local Slicks = require(script.Parent:WaitForChild("Slicks"))
 local RoundService = require(script.Parent:WaitForChild("RoundService"))
 local Comebacks = require(script.Parent:WaitForChild("Comebacks"))
+local Guarding = require(script.Parent:WaitForChild("Guarding"))
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
@@ -92,6 +94,16 @@ FallWatch.start(arena.fallLine, round.fighters, function(model: Model)
 	end
 end)
 
+-- Blocking needs the weapons (a blocker walks slower), made right below.
+local weaponsMade: WeaponService.Service? = nil
+local guarding = Guarding.start(remotes.Block, {
+	canBlock = round.isFighting,
+	repace = function(model: Model)
+		if weaponsMade then
+			weaponsMade.repace(model)
+		end
+	end,
+})
 local weapons = WeaponService.start(remotes.Swing, remotes.Hit, {
 	canSwing = round.isFighting,
 	fighters = round.fighters,
@@ -101,6 +113,8 @@ local weapons = WeaponService.start(remotes.Swing, remotes.Hit, {
 	attacked = function(model: Model)
 		health.unguard(model, Workspace:GetServerTimeNow())
 	end,
+	blocking = guarding.blocking,
+	guardBroken = guarding.breakGuard,
 	onSmash = function(victim: Model)
 		round.eliminate(victim, "homerun")
 	end,
@@ -128,6 +142,7 @@ local weapons = WeaponService.start(remotes.Swing, remotes.Hit, {
 		remotes.Blast:FireAllClients(at, radius)
 	end,
 })
+weaponsMade = weapons
 local drops = WeaponDrops.start(arena.layout.surfaces, PartUtil.folder(Workspace, Names.CratesFolder), {
 	fighters = round.fighters,
 	-- Anyone with bare fists (players, and practice bots since persona fix 3).

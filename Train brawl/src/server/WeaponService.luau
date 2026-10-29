@@ -25,9 +25,12 @@
 -- Every hit asks the health keeper what it was (hooks.hit with the weapon's damage and the attacker; the string's last
 -- step of a punch or swing, or a weapon that always launches, makes the hit a launch, still pushed by health) and pushes by health (HitRules.force) times the weapon's push and
 -- the victim's resistance (a held gold bar), away from the attacker (a blast: from where it burst); a smash (health
--- emptied) flies the same home run whatever hit it. A blast after the fight is over hits nobody. It is
--- sent to every client (Names.HitRemote: victim, velocity, attacker, kind, weapon, whether a crowd launched it, and
--- the attack's number as its player's client counted them - none for a blast): the victim's own client moves its
+-- emptied) flies the same home run whatever hit it. A hit meeting a block (hooks.blocking, from the front, a weapon that
+-- can be blocked: BlockRules) lands softened, and a blocked string finisher breaks the guard instead of launching
+-- (hooks.guardBroken); a blocker cannot attack and walks slower. A blast after the fight is over hits nobody. It is
+-- sent to every client (Names.HitRemote: victim, velocity, attacker, kind, weapon, whether a crowd launched it, the
+-- attack's number as its player's client counted them - none for a blast - and "blocked" or "broken" when it met a
+-- block): the victim's own client moves its
 -- character, everyone shows it; a sandbag is moved here. A weapon goes back to bare fists when used up, when its time
 -- is over, when its holder is out or fell off (on its way back: Names.ReturnPhase), and whenever no fight is running.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -44,6 +47,7 @@ local AttackString = require(shared:WaitForChild("AttackString"))
 local SwingTargets = require(shared:WaitForChild("SwingTargets"))
 local WeaponRules = require(shared:WaitForChild("WeaponRules"))
 local BodyMotion = require(shared:WaitForChild("BodyMotion"))
+local BlockRules = require(shared:WaitForChild("BlockRules"))
 
 local WeaponService = {}
 
@@ -56,6 +60,8 @@ export type Hooks = {
 	knockHere: (model: Model, velocity: Vector3, kind: HitRules.Kind) -> boolean, -- moves a server-owned model (a sandbag)
 	onHit: (victim: Model, attacker: Model) -> (), -- for the knock-off credit
 	attacked: (model: Model) -> (), -- an attack of the model's was taken (a fighter just back loses its guard)
+	blocking: (model: Model) -> boolean, -- the model holds its block now (Guarding)
+	guardBroken: (model: Model, now: number) -> (), -- a string finisher met its block: the guard breaks
 	onSmash: (victim: Model) -> (), -- health emptied: out of the round
 	equip: (model: Model) -> (), -- puts the model's Names.Weapon in its hand (WeaponGear)
 	-- Throws a lit stick from a fighter standing at `from` along the flat `facing`; `burst(at)` when its fuse runs out
@@ -73,6 +79,7 @@ export type Service = {
 	holding: (model: Model) -> string, -- the weapon the model holds ("Fist" for bare fists)
 	-- A fighter the server runs (a practice bot) attacks along the flat `facing`; false when it may not now.
 	attack: (model: Model, facing: Vector3) -> boolean,
+	repace: (model: Model) -> (), -- sets the model's walk again (it started or stopped blocking)
 	stop: () -> (),
 }
 
@@ -95,11 +102,13 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		return WeaponRules.named(weapons, model:GetAttribute(Names.Weapon))
 	end
 
-	-- Walking speed for what the model holds (a gold bar slows), unless the round holds it still (speed 0).
+	-- Walking speed for what the model holds (a gold bar slows) and whether it blocks, unless the round or a parachute
+	-- holds it still (speed 0).
 	local function pace(model: Model, weapon: string)
 		local body = CharacterParts.body(model)
 		if body and body.humanoid.WalkSpeed > 0 then
-			body.humanoid.WalkSpeed = StarterPlayer.CharacterWalkSpeed * (weapons[weapon].slow or 1)
+			local block = if hooks.blocking(model) then Config.Block.WalkShare else 1
+			body.humanoid.WalkSpeed = StarterPlayer.CharacterWalkSpeed * (weapons[weapon].slow or 1) * block
 		end
 	end
 
@@ -144,10 +153,24 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 	local function land(victim: CharacterParts.Body, attacker: Model, weapon: string, from: Vector3, facing: Vector3, now: number, step: number, tag: number?)
 		local w = weapons[weapon]
 		local launch = w.launch == true or AttackString.launches(stringRules, step, w.style)
-		local kind, health, ganged = hooks.hit(victim.model, now, w.damage, launch, attacker)
+		local at = victim.root.Position
+		-- Met by a block: from the front, with a weapon that can be blocked (Config.Block).
+		local look = victim.root.CFrame.LookVector
+		local blocked = hooks.blocking(victim.model) and BlockRules.blockable(w.launch)
+			and BlockRules.covers(at.X, at.Z, look.X, look.Z, from.X, from.Z, Config.Block.Arc)
+		local damage, pushShare, broke = w.damage, 1, false
+		if blocked then
+			local share
+			share, pushShare, broke = BlockRules.outcome(launch, Config.Block)
+			damage *= share
+			launch = false
+		end
+		local kind, health, ganged = hooks.hit(victim.model, now, damage, launch, attacker)
 		if kind == "none" then
 			return
 		end
+		-- Only a light hit stays a blocked one (a crowd's launch or a hit that empties health goes through as it is).
+		local guard: string? = if blocked and kind == "light" then (if broke then "broken" else "blocked") else nil
 		local broken = strings[victim.model]
 		if broken then
 			AttackString.reset(broken) -- being hit breaks the victim's own string
@@ -156,9 +179,11 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		if kind ~= "smash" then
 			push *= w.push * (weapons[holding(victim.model)].resist or 1)
 		end
-		local at = victim.root.Position
+		if guard == "blocked" then
+			push *= pushShare
+		end
 		local velocity: Vector3
-		if w.pull and kind == "light" then
+		if w.pull and kind == "light" and not guard then
 			velocity = pulled(victim, attacker, w.pull)
 		else
 			local vx, vy, vz = BatMath.knock(from.X, from.Z, facing.X, facing.Z, at.X, at.Z, push, lift)
@@ -166,10 +191,16 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		end
 		hitAt[victim.model] = now
 		-- A hit never shortens a stun still running (a lasso's tie outlasts the jab that follows it).
-		local stun = if kind == "light" then w.stun or Config.Hit.LightStun else Config.Knock.MinSeconds
+		local stun = if kind ~= "light" then Config.Knock.MinSeconds
+			elseif guard == "blocked" then Config.Block.Stun
+			elseif guard == "broken" then Config.Hit.LightStun
+			else w.stun or Config.Hit.LightStun
 		stunUntil[victim.model] = math.max(stunUntil[victim.model] or now, now + stun)
+		if guard == "broken" then
+			hooks.guardBroken(victim.model, now)
+		end
 		hooks.knockHere(victim.model, velocity, kind)
-		hitRemote:FireAllClients(victim.model, velocity, attacker, kind, weapon, ganged, tag)
+		hitRemote:FireAllClients(victim.model, velocity, attacker, kind, weapon, ganged, tag, guard)
 		hooks.onHit(victim.model, attacker)
 		if kind == "smash" then
 			hooks.onSmash(victim.model)
@@ -251,8 +282,8 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 	-- allowances (taken a little early, and pressed before the hit that stuns it showed). Returns whether it was taken.
 	local function begin(model: Model, aim: unknown, claim: number?, tag: number?, allowance: boolean): boolean
 		local body = CharacterParts.body(model)
-		if not (body and body.humanoid.Health > 0 and hooks.canSwing(model)) then
-			return false
+		if not (body and body.humanoid.Health > 0 and hooks.canSwing(model)) or hooks.blocking(model) then
+			return false -- (a blocker cannot attack)
 		end
 		local now = Workspace:GetServerTimeNow()
 		local since = hitAt[model]
@@ -344,6 +375,9 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		holding = holding,
 		attack = function(model: Model, facing: Vector3): boolean
 			return begin(model, facing, nil, nil, false)
+		end,
+		repace = function(model: Model)
+			pace(model, holding(model))
 		end,
 		stop = function()
 			watching = false

@@ -134,6 +134,18 @@ local GUARD: Pose = {
 	RightElbow = REAR.RightElbow,
 }
 
+-- Blocking (decision 11, persona fix 4): both forearms up in front of the face, elbows forward, chin tucked, the body
+-- leaning in and a little lower. Whatever is held stays in the right hand; the left lets go of a two-handed grip.
+local BLOCK: Pose = {
+	Root = { shift = Vector3.new(0, -0.25, 0) },
+	Waist = { x = 10 },
+	Neck = { x = -10 },
+	LeftShoulder = { x = 88, z = 24 },
+	LeftElbow = { x = 120 },
+	RightShoulder = { x = 88, z = -24 },
+	RightElbow = { x = 120 },
+}
+
 -- Joins pose tables (later ones win for a joint both name).
 local function with(...: Pose): Pose
 	local out: Pose = {}
@@ -555,6 +567,11 @@ end
 -- The stance a fighter holding `weapon` (of `style`) keeps while fighting: bare fists' guard, or the weapon held ready.
 function AttackPoses.stance(weapon: string, style: string): Pose
 	return setOf(weapon, style).stance
+end
+
+-- The blocking stance (the same for every weapon).
+function AttackPoses.block(): Pose
+	return BLOCK
 end
 
 -- The keys of an attack with `weapon` (of `style`) at `step` of the string (`finisher`: its launching last step), the

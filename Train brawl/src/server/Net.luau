@@ -8,7 +8,7 @@ local Names = require(shared:WaitForChild("Names"))
 
 local Net = {}
 
-export type Remotes = { Swing: RemoteEvent, Hit: RemoteEvent, Feed: RemoteEvent, Blast: RemoteEvent }
+export type Remotes = { Swing: RemoteEvent, Hit: RemoteEvent, Feed: RemoteEvent, Blast: RemoteEvent, Block: RemoteEvent }
 
 local function child(parent: Instance, className: string, name: string): Instance
 	local existing = parent:FindFirstChild(name)
@@ -32,6 +32,7 @@ function Net.create(): Remotes
 		Hit = child(folder, "RemoteEvent", Names.HitRemote) :: RemoteEvent,
 		Feed = child(folder, "RemoteEvent", Names.FeedRemote) :: RemoteEvent,
 		Blast = child(folder, "RemoteEvent", Names.BlastRemote) :: RemoteEvent,
+		Block = child(folder, "RemoteEvent", Names.BlockRemote) :: RemoteEvent,
 	}
 end
 

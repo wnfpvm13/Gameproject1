@@ -17,7 +17,8 @@
 -- (HealthBars) with the tickets left (TicketHud), the round at the top (RoundHud) with the knock-off feed under it (FeedHud) and the round's sound
 -- (RoundAudio), the first-ride card shows the controls once (RideCard), a fighter coming back after a fall drops in under a parachute and
 -- shimmers while guarded (ComebackShow), the player's own 1-2-3 string shows by the aim dot (StringHud), crates out of sight get an arrow
--- at the screen's edge (CrateArrows), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
+-- at the screen's edge (CrateArrows), the block control (BlockInput) raises the guard drawn with a shield (BlockShow; its blocked and
+-- broken hits clang in HitFeedback), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
 -- is watched first).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -66,6 +67,9 @@ local TicketHud = require(script:WaitForChild("TicketHud"))
 local ComebackShow = require(script:WaitForChild("ComebackShow"))
 local StringHud = require(script:WaitForChild("StringHud"))
 local CrateArrows = require(script:WaitForChild("CrateArrows"))
+local BlockInput = require(script:WaitForChild("BlockInput"))
+local BlockShow = require(script:WaitForChild("BlockShow"))
+local BlockRules = require(shared:WaitForChild("BlockRules"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
@@ -73,6 +77,7 @@ local swingRemote = remotes:WaitForChild(Names.SwingRemote) :: RemoteEvent
 local hitRemote = remotes:WaitForChild(Names.HitRemote) :: RemoteEvent
 local feedRemote = remotes:WaitForChild(Names.FeedRemote) :: RemoteEvent
 local blastRemote = remotes:WaitForChild(Names.BlastRemote) :: RemoteEvent
+local blockRemote = remotes:WaitForChild(Names.BlockRemote) :: RemoteEvent
 
 SoundBank.preload()
 -- The same arena the server built (ArenaLayout is pure math from the shared Config).
@@ -133,6 +138,17 @@ local function fighters(): { Model }
 end
 
 local STRING = AttackString.rules(Config.Attack)
+local guard = BlockInput.bind(blockRemote)
+
+-- Whether `victim` blocks an attack with `weapon` from `from` now, as this client sees it (BlockRules, as the server
+-- judges it).
+local function blocks(victim: Model, weapon: string, from: Vector3): boolean
+	if victim:GetAttribute(Names.Blocking) ~= true or not BlockRules.blockable(Config.Weapons[weapon].launch) then
+		return false
+	end
+	local at = victim:GetPivot()
+	return BlockRules.covers(at.Position.X, at.Position.Z, at.LookVector.X, at.LookVector.Z, from.X, from.Z, Config.Block.Arc)
+end
 -- How big each kind of hit burst is, to tell a server's word that made the player's own hit bigger than shown.
 local BURST_SIZE: { [string]: number } = { light = 1, launch = 2, crowd = 3 }
 
@@ -143,6 +159,9 @@ local own = OwnSwing.new(swingRemote, {
 	end,
 	launched = function(): boolean
 		return knock:launched()
+	end,
+	blocking = function(): boolean
+		return guard:held()
 	end,
 	draw = function(model: Model, at: number, weapon: string, step: number)
 		SwingPose.play(model, at, weapon, step)
@@ -162,6 +181,18 @@ local own = OwnSwing.new(swingRemote, {
 		local character = player.Character
 		local from = if character then character:GetPivot().Position else victim:GetPivot().Position
 		local kind = if finisher then "launch" else "light"
+		if blocks(victim, weapon, from) then
+			-- On the block: its clang and the shield's flash at once instead of the hit (a third breaks the guard).
+			local met = if finisher then "broken" else "blocked"
+			if not HitFeedback.guarded(victim, met, false, true, victim:GetPivot().Position - from) then
+				return nil
+			end
+			BlockShow.hit(victim, met)
+			if character then
+				SwingPose.hold(character, Config.Feedback.AttackerHold.light)
+			end
+			return "blocked"
+		end
 		if not HitFeedback.predict(victim, weapon, from, kind) then
 			return nil
 		end
@@ -215,7 +246,7 @@ for _, instance in CollectionService:GetTagged(Names.SandbagTag) do
 end
 
 -- A hit, from the server: the victim's own client knocks it; everyone shows it.
-hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swinger: unknown, kind: unknown, weapon: unknown, ganged: unknown, tag: unknown)
+hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swinger: unknown, kind: unknown, weapon: unknown, ganged: unknown, tag: unknown, guarded: unknown)
 	if typeof(victim) ~= "Instance" or not victim:IsA("Model") then
 		return
 	end
@@ -224,12 +255,13 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 	local me = victim == player.Character
 	local hitWeapon = WeaponRules.named(Config.Weapons, weapon)
 	local w = Config.Weapons[hitWeapon]
-	local stun = w.stun or Config.Hit.LightStun
+	-- On a block (the server says "blocked" or "broken"): a short flinch (a broken guard: a light hit's).
+	local met = if guarded == "blocked" or guarded == "broken" then guarded else nil
+	local stun = if met == "blocked" then Config.Block.Stun elseif met == "broken" then Config.Hit.LightStun else w.stun or Config.Hit.LightStun
 	if me and push then
 		knock:hit(victim, push, hitKind, stun)
 		own:broken() -- being hit breaks the player's own string, as on the server
 	end
-	SwingPose.react(victim, hitKind, push)
 	local mine = swinger == player.Character
 	-- What this screen showed at once for that attack of the player's on this victim (nil: nothing), and whether it is
 	-- the attack drawn now.
@@ -237,7 +269,25 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 	if mine then
 		guess, latest = own:serverHit(if typeof(tag) == "number" then tag else nil, victim)
 	end
-	local shown = HitFeedback.hit(victim, guess ~= nil, mine, me, hitKind, hitWeapon, push)
+	if met then
+		if met == "broken" then
+			SwingPose.react(victim, "light", push) -- (a blocked hit keeps the block's pose)
+		end
+		-- (The player's own attack may have shown it at once; shown as a plain hit, the block still shows now, without a
+		-- second kick.)
+		if guess ~= "blocked" then
+			HitFeedback.guarded(victim, met, me, mine and guess == nil, push)
+			BlockShow.hit(victim, met)
+		end
+		local by = if typeof(swinger) == "Instance" and swinger:IsA("Model") then swinger else nil
+		if by and not WeaponRules.fromAfar(w.style) and (latest or not mine) then
+			SwingPose.hold(by, Config.Feedback.AttackerHold.light or 0)
+		end
+		return
+	end
+	SwingPose.react(victim, hitKind, push)
+	-- (Shown at once as met by a block that the server says was not: the plain hit shows now.)
+	local shown = HitFeedback.hit(victim, guess ~= nil and guess ~= "blocked", mine, me, hitKind, hitWeapon, push)
 	local attacker = if typeof(swinger) == "Instance" and swinger:IsA("Model") then swinger else nil
 	local thrown = WeaponRules.fromAfar(w.style)
 	if w.pull and attacker and hitKind == "light" then
@@ -302,6 +352,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 	bars:update(list, character, os.clock())
 	tickets:update(list, character)
 	ComebackShow.update(all)
+	BlockShow.update(all)
 	weaponHud:update(list, character, Workspace:GetServerTimeNow())
 	feed:update()
 	audio:update(Workspace:GetServerTimeNow())

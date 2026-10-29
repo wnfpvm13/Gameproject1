@@ -20,7 +20,7 @@
 -- at the screen's edge (CrateArrows), the block control (BlockInput) raises the guard drawn with a shield (BlockShow; its blocked and
 -- broken hits clang in HitFeedback), a roof edge that drops into nothing gets a warning band near the player (EdgeWarning), the player's
 -- own numbers are counted (RoundStats) for the line on who knocked it off (RoundHud) and the card at the round's end (ResultCard), a back car
--- coming off is warned of and its dressing follows it (UncoupleShow), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
+-- coming off is warned of and its dressing follows it (UncoupleShow), accessories pop off as fighters are worn down (AccessoryPop), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
 -- is watched first).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -77,6 +77,7 @@ local EdgeWarning = require(script:WaitForChild("EdgeWarning"))
 local RoundStats = require(script:WaitForChild("RoundStats"))
 local ResultCard = require(script:WaitForChild("ResultCard"))
 local UncoupleShow = require(script:WaitForChild("UncoupleShow"))
+local AccessoryPop = require(script:WaitForChild("AccessoryPop"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
@@ -111,6 +112,7 @@ local crateArrows = CrateArrows.new(playerGui, Workspace:WaitForChild(Names.Crat
 local edges = EdgeWarning.new(layout)
 local stats = RoundStats.new()
 local results = ResultCard.new(playerGui)
+local pops = AccessoryPop.new()
 local uncoupling = UncoupleShow.new(playerGui, Workspace:WaitForChild(Names.ArenaFolder), carDecor, layout)
 local function away(train: number, car: number): boolean
 	return uncoupling:away(train, car)
@@ -388,6 +390,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 	local phaseNow = Workspace:GetAttribute(Names.Phase)
 	local phaseName = if typeof(phaseNow) == "string" then phaseNow else "Waiting"
 	stats:update(phaseName, alive)
+	pops:update(all, phaseName)
 	results:update(phaseName, stats:summary(character))
 	local standing = if back then "back" elseif alive then "in" elseif state == false then "out" else "watching"
 	hud:update(Workspace:GetServerTimeNow(), standing, if character then PartUtil.number(character, Names.KOs) or 0 else 0, character)

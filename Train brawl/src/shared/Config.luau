@@ -748,6 +748,25 @@ Config.Uncouple = {
 	Sink = 25,
 }
 
+-- Accessories popping off (AccessoryPop, persona fix 7; decision 11's "체력 50·25에서 장신구 튕김"): at each health in
+-- At one goes, flying up at Up and out at Side, spinning Spin radians a second under Gravity of the world's, gone after
+-- Seconds. HatColors: the practice bots' cowboy hats (Sandbags).
+Config.Pop = {
+	At = { 50, 25 },
+	Up = 30,
+	Side = 9,
+	Spin = 9,
+	Gravity = 0.35,
+	Seconds = 1.3,
+	HatColors = {
+		Color3.fromRGB(120, 78, 44),
+		Color3.fromRGB(196, 160, 110),
+		Color3.fromRGB(52, 40, 32),
+		Color3.fromRGB(230, 214, 180),
+		Color3.fromRGB(150, 54, 40),
+	},
+}
+
 -- The warning band on a roof edge that drops into nothing (EdgeWarning, persona fix 5): shown within Within of the
 -- edge, Length long along it where the player is and Width across, judged by stepping Probe past the edge.
 Config.Edge = {

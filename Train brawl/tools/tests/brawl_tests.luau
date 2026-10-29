@@ -1108,6 +1108,15 @@ do
 	check("each plank rests on a car of each train it joins", every == 2 * #L.planks, every .. " vs " .. #L.planks)
 end
 
+-- 22. Accessories popping off (persona fix 7, decision 11).
+do
+	local P = Config.Pop
+	check("accessories pop at half and a quarter health (decision 11)", #P.At == 2 and P.At[1] == 50 and P.At[2] == 25)
+	local peak = P.Up * P.Up / (2 * GRAVITY * P.Gravity)
+	check("a popped hat rises a few studs and is gone in about a second", peak > 3 and peak < 12 and P.Seconds > 0.8 and P.Seconds < 2)
+	check("each practice bot can wear its own hat colour", #P.HatColors >= Config.Sandbag.Count)
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed == 0 then
 	print("ALL PASS")

@@ -2,7 +2,8 @@
 -- Studio practice bots' bodies: default-avatar characters (named Words.bot(N)) that fight in a round and take hits
 -- like players. The server owns their physics (SetNetworkOwner(nil)), so it moves them itself with the same rules a
 -- player's own client follows (BodyMotion): a short hold, stiff while flying, back on their feet after landing
--- (Config.Knock), and lying down and left behind once below the fall line. Whenever one is free to act in a fight
+-- (Config.Knock), and lying down and left behind once below the fall line. Each wears a cowboy hat of its own colour
+-- (so they are told apart, and so its hat can pop off as it is worn down: AccessoryPop). Whenever one is free to act in a fight
 -- (not flinching from a hit, flying or fallen) its mind decides what it does (think: BotBrain, wired by Main).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -33,6 +34,44 @@ export type Service = {
 -- stiffSince: launched by a hit at this os.clock(); drifting: below the fall line last frame; flinchUntil: a light hit's
 -- stun lasts until this os.clock() (it does nothing meanwhile); acting: its mind ran last frame.
 type Bag = { body: CharacterParts.Body, stiffSince: number?, drifting: boolean, flinchUntil: number, acting: boolean }
+
+-- A cowboy hat (drawn only: no collisions): a round flat brim with a rounded crown on it, as an accessory on the head.
+local function cowboyHat(color: Color3): Accessory
+	local accessory = Instance.new("Accessory")
+	accessory.Name = "CowboyHat"
+	accessory.AccessoryType = Enum.AccessoryType.Hat
+	local function piece(name: string, size: Vector3, flat: number): Part
+		local part = Instance.new("Part")
+		part.Name = name
+		part.Size = size
+		part.Color = color
+		part.Material = Enum.Material.Fabric
+		part.CanCollide = false
+		part.CanQuery = false
+		part.CanTouch = false
+		part.Massless = true
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Scale = Vector3.new(1, flat, 1)
+		mesh.Parent = part
+		return part
+	end
+	local brim = piece("Handle", Vector3.new(2.9, 2.9, 2.9), 0.07)
+	local crown = piece("Crown", Vector3.new(1.55, 1.3, 1.55), 1)
+	crown.CFrame = brim.CFrame * CFrame.new(0, 0.45, 0)
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = brim
+	weld.Part1 = crown
+	weld.Parent = crown
+	crown.Parent = brim
+	-- On the head's hat point, the brim a little under the top of the head (the crown covers it).
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "HatAttachment"
+	attachment.CFrame = CFrame.new(0, 0.2, 0)
+	attachment.Parent = brim
+	brim.Parent = accessory
+	return accessory
+end
 
 -- Stops a walk already under way (a MoveTo target lasts until reached or for 8 s, and a step straight in until its
 -- mind says otherwise, even after the bag was knocked onto another top, where walking on could take it over an edge).
@@ -101,6 +140,10 @@ function Sandbags.start(fallLine: number, think: (model: Model, body: CharacterP
 				end
 				CollectionService:AddTag(model, Names.SandbagTag)
 				model.Parent = parent
+				local hatHumanoid = model:FindFirstChildOfClass("Humanoid")
+				if hatHumanoid then
+					hatHumanoid:AddAccessory(cowboyHat(Config.Pop.HatColors[(i - 1) % #Config.Pop.HatColors + 1]))
+				end
 				local body = CharacterParts.body(model)
 				if body then
 					-- The weapon first: welding it on changes the assembly, which puts ownership back on automatic.

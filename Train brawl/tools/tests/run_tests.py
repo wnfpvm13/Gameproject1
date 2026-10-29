@@ -2,10 +2,11 @@
 
   python -I tools/tests/run_tests.py
 
-  brawl   src/shared/Config.luau (real numbers), ArenaLayout.luau, BatMath.luau, HitRules.luau, CanyonLayout.luau, WeaponRules.luau, Words.luau, AttackString.luau, AttackPoses.luau, BotPlan.luau: where the trains,
+  brawl   src/shared/Config.luau (real numbers), ArenaLayout.luau, BatMath.luau, HitRules.luau, CanyonLayout.luau, WeaponRules.luau, Words.luau, AttackString.luau, AttackPoses.luau, BotPlan.luau, RoundRules.luau: where the trains,
           cars, planks and spawn spots are, the fall line, the cone a swing covers and the knock it gives, what a hit
           does to health (light, launch, smash, the guard against a crowd, the unhittable moment), the attacker's 1-2-3
-          string and its poses, where a practice bot walks and whom it goes for, and that the tuning keeps its promises
+          string and its poses, where a practice bot walks and whom it goes for, the tickets and who wins when the time runs
+          out (RoundRules), and that the tuning keeps its promises
           (the gap is wider than a jump, a light hit's stun ends before the next swing, a low-health launch goes off)
   deps    check_deps.py: every require in src/ follows the layer rules (one-way dependencies, no cycles)
 
@@ -28,6 +29,7 @@ MODULES = [
     ("AttackString", "src/shared/AttackString.luau"),
     ("AttackPoses", "src/shared/AttackPoses.luau"),
     ("BotPlan", "src/shared/BotPlan.luau"),
+    ("RoundRules", "src/shared/RoundRules.luau"),
 ]
 PRELUDE = (
     "Color3 = { fromRGB = function(r, g, b) return { r = r, g = g, b = b } end }\n"

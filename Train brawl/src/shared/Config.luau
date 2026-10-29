@@ -696,10 +696,33 @@ Config.Fall = {
 Config.Round = {
 	MinPlayers = 2, -- counting sandbags in solo mode
 	CountdownSeconds = 3,
-	MaxSeconds = 180, -- then it ends with everyone still standing
+	-- Then the fighters still in are ranked (RoundRules.winners: tickets, knock-offs, health). 150 rather than 180 with
+	-- the tickets (decision 11: whoever falls for the second time still waits, so the round is kept short).
+	MaxSeconds = 150,
 	EndSeconds = 5, -- the result shows this long
 	IntermissionSeconds = 4, -- in the waiting room before the next count
 	KillCreditSeconds = 6, -- a fall counts as a KO for whoever hit the player within this long before
+	-- Every fighter boards with this many tickets; a fall or a home run costs one, and only the last one is out (the
+	-- others come back: Config.Comeback). Decision 11, brought forward by the persona playtest (2026-10-29): fighters were
+	-- out after 33 s on average and then only watched.
+	Tickets = 2,
+}
+
+-- The way back for a fighter who fell with a ticket left (Comebacks): the fall plays on, then up to the stands (the
+-- gondola the balloons hold) for WaitSeconds, then down by parachute from DropHeight over the clearest spawn spot at
+-- DropSpeed (its shadow on the roof meanwhile), then unhittable for GuardSeconds unless it attacks.
+Config.Comeback = {
+	WaitSeconds = 3,
+	DropHeight = 22,
+	DropSpeed = 14, -- studs per second: about 1.6 s down, a little slower than a crate's 3 s from 40
+	GuardSeconds = 2,
+	-- Landed when the feet are this close over the spot's top, or anyway this long after the drop should have ended (a
+	-- parachute caught on something).
+	LandedWithin = 0.6,
+	LandSlack = 0.75,
+	-- The pull holding the drop at DropSpeed, in multiples of the body's weight (enough to hold it up and to keep the
+	-- air control from steering; small enough not to press hard into the roof before the server sees it landed).
+	PullWeights = 3,
 }
 
 -- Studio-only practice (Workspace attribute Names.Solo): bots that count as players and fight (BotBrain): each goes for

@@ -14,8 +14,9 @@
 -- launches the player's own character (KnockFlight) and is shown for everyone (HitFeedback with the camera kick, a
 -- flinch or flail pose and the attacker's hold in SwingPose, a hit spark from ImpactBurst, a launch's streak and
 -- blast, tumble trail and landing dust from LaunchShow; a home run also HomeRunShow); a fall lays the player down behind the train (FallDrift); health shows over heads and at the bottom
--- (HealthBars), the round at the top (RoundHud) with the knock-off feed under it (FeedHud) and the round's sound
--- (RoundAudio), the first-ride card shows the controls once (RideCard), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
+-- (HealthBars) with the tickets left (TicketHud), the round at the top (RoundHud) with the knock-off feed under it (FeedHud) and the round's sound
+-- (RoundAudio), the first-ride card shows the controls once (RideCard), a fighter coming back after a fall drops in under a parachute and
+-- shimmers while guarded (ComebackShow), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
 -- is watched first).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -60,6 +61,8 @@ local ImpactBurst = require(script:WaitForChild("ImpactBurst"))
 local LaunchShow = require(script:WaitForChild("LaunchShow"))
 local GroundMarks = require(script:WaitForChild("GroundMarks"))
 local RideCard = require(script:WaitForChild("RideCard"))
+local TicketHud = require(script:WaitForChild("TicketHud"))
+local ComebackShow = require(script:WaitForChild("ComebackShow"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
@@ -87,11 +90,13 @@ local feed = FeedHud.new(playerGui)
 local audio = RoundAudio.new(playerGui)
 local weaponHud = WeaponHud.new(playerGui)
 local card = RideCard.new(playerGui)
+local tickets = TicketHud.new(playerGui)
 DropShow.start(Workspace:WaitForChild(Names.CratesFolder), Workspace:WaitForChild(Names.ArenaFolder))
 GroundMarks.start({ Workspace:WaitForChild(Names.ArenaFolder), Workspace:WaitForChild(Names.CratesFolder) })
 
--- The characters still in the round, as this client sees them (players' and sandbags').
-local function fighters(): { Model }
+-- The characters still in the round, as this client sees them (players' and sandbags'), those on their way back after
+-- a fall too.
+local function everyone(): { Model }
 	local list = {}
 	for _, other in Players:GetPlayers() do
 		local model = other.Character
@@ -105,6 +110,21 @@ local function fighters(): { Model }
 		end
 	end
 	return list
+end
+
+-- Of those, the ones on the trains (not on their way back): the ones to hit, follow and show bars over.
+local function onTrains(list: { Model }): { Model }
+	local on = {}
+	for _, model in list do
+		if model:GetAttribute(Names.ReturnPhase) == nil then
+			table.insert(on, model)
+		end
+	end
+	return on
+end
+
+local function fighters(): { Model }
+	return onTrains(everyone())
 end
 
 local STRING = AttackString.rules(Config.Attack)
@@ -255,14 +275,15 @@ blastRemote.OnClientEvent:Connect(function(at: unknown, radius: unknown)
 end)
 
 -- A knock-out, from the server: a line in the feed.
-feedRemote.OnClientEvent:Connect(function(victim: unknown, by: unknown, how: unknown)
+feedRemote.OnClientEvent:Connect(function(victim: unknown, by: unknown, how: unknown, out: unknown)
 	if typeof(victim) == "string" and typeof(how) == "string" then
-		feed:add(victim, if typeof(by) == "string" then by else nil, how)
+		feed:add(victim, if typeof(by) == "string" then by else nil, how, out ~= false)
 	end
 end)
 
 RunService.RenderStepped:Connect(function(dt: number)
-	local list = fighters()
+	local all = everyone()
+	local list = onTrains(all)
 	scenery:update(dt)
 	canyon:update(dt)
 	locomotives:update(dt, list)
@@ -274,11 +295,14 @@ RunService.RenderStepped:Connect(function(dt: number)
 	local alive = state == true
 	spectate:update(Workspace:GetAttribute(Names.Phase) == "Fight" and not alive and not drift:active() and not knock:launched(), character, list)
 	bars:update(list, character, os.clock())
+	tickets:update(list, character)
+	ComebackShow.update(all)
 	weaponHud:update(list, character, Workspace:GetServerTimeNow())
 	feed:update()
 	audio:update(Workspace:GetServerTimeNow())
-	local standing = if alive then "in" elseif state == false then "out" else "watching"
-	hud:update(Workspace:GetServerTimeNow(), standing, if character then PartUtil.number(character, Names.KOs) or 0 else 0)
+	local back = alive and character ~= nil and character:GetAttribute(Names.ReturnPhase) ~= nil
+	local standing = if back then "back" elseif alive then "in" elseif state == false then "out" else "watching"
+	hud:update(Workspace:GetServerTimeNow(), standing, if character then PartUtil.number(character, Names.KOs) or 0 else 0, character)
 	local phase = Workspace:GetAttribute(Names.Phase)
 	card:update(if typeof(phase) == "string" then phase else "Waiting", alive)
 end)

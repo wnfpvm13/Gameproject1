@@ -645,7 +645,10 @@ do
 	check("every kind of control has a first-ride card of 4 to 6 rows", cards)
 	check("the mouse card names Alt, the touch card does not", Words.cardRows("mouse")[6][1] == "왼쪽 Alt" and #Words.cardRows("touch") == 5)
 	check("the clock reads minutes and seconds", Words.clock(113) == "1:53" and Words.clock(5) == "0:05" and Words.clock(0) == "0:00")
-	check("the feed credits who knocked who off, and a fall with nobody to credit", Words.feed("B", "A", "homerun") == "A → B 홈런!" and Words.feed("B", "A", "fall") == "A → B 하차" and Words.feed("B", nil, "fall") == "B 하차")
+	check("the feed credits who knocked who off, and a fall with nobody to credit", Words.feed("B", "A", "homerun", true) == "A → B 홈런!" and Words.feed("B", "A", "fall", true) == "A → B 하차" and Words.feed("B", nil, "fall", true) == "B 하차")
+	check("a fall with a ticket to spare is not 하차 (the fighter comes back)", Words.feed("B", "A", "fall", false) == "A → B 떨어뜨림"
+		and Words.feed("B", nil, "fall", false) == "B 떨어짐" and Words.feed("B", "A", "homerun", false) == "A → B 홈런!")
+	check("the way back reads the tickets left and the seconds to the parachute", Words.ticketsLeft(1) == "승차권 1장 남음" and Words.dropIn(3) == "3초 뒤 낙하산 출발")
 	check("what the player holds reads its name and what is left", Words.uses("Hammer", 3) == "망치 ×3" and Words.secondsLeft("GoldBar", 12) == "금괴 12초")
 end
 
@@ -966,6 +969,55 @@ do
 		AttackPoses.shaken(pose, 0.06, 0.06, 0.2, 1, 0) == pose and (pose.Root.shift :: Vector3) == Vector3.new(0, 0.1, 0))
 	local side = AttackPoses.shaken({}, 0, 0.1, 0.3, 0, 1)
 	check("a hit from the side shakes it sideways (a pose without a root gets one)", side.Root ~= nil and near((side.Root.shift :: Vector3).X, 0.3))
+end
+
+-- 18. Tickets (decision 11, brought forward by the persona playtest 2026-10-29): two per fighter, a fall costs one, the
+-- way back by balloon and parachute, the winner when the time runs out.
+do
+	local R = Config.Round
+	local left, out = RoundRules.afterFall(R.Tickets)
+	check("a fighter boards with two tickets: the first fall comes back, the second is out", R.Tickets == 2 and left == 1 and not out
+		and select(2, RoundRules.afterFall(left)) == true and RoundRules.afterFall(0) == 0)
+	check("the round is kept short with the tickets (decision 11: 150 s)", R.MaxSeconds <= 150)
+	local C = Config.Comeback
+	local away = Config.Fall.ShowSeconds + C.WaitSeconds + C.DropHeight / C.DropSpeed
+	check("a fighter who falls is back on the trains within 7 s (the fall, the stands, the parachute)", away <= 7, tostring(away))
+	check("the guard after landing is short and a fist could attack within it", C.GuardSeconds > Config.Weapons.Fist.cooldown and C.GuardSeconds <= 2.5)
+	local below, clear = true, true
+	for _, spot in L.spots do
+		local top = spot.y + 3.5 + C.DropHeight
+		-- Under the stands (a body higher than that is taken for arrived there and stopped: KnockFlight).
+		below = below and top < A.WaitingRoomHeight - A.StandsMargin
+		for _, surface in L.surfaces do
+			local over = math.abs(spot.x - surface.x) < surface.width / 2 + 1 and math.abs(spot.z - surface.z) < surface.length / 2 + 1
+			if over and surface.top > spot.y + 1e-6 and surface.top < top + 4 then
+				clear = false -- a parachute coming down onto this spot would catch on a higher top
+			end
+		end
+	end
+	check("a parachute starts under the stands over every landing spot", below)
+	check("nothing higher stands over a landing spot for a parachute to catch on", clear)
+	local spots = { { x = 0, y = 10, z = 0, train = 1 }, { x = 20, y = 10, z = 0, train = 2 }, { x = 0, y = 10, z = 40, train = 1 } }
+	check("someone coming back lands on the spot farthest from everyone on the trains",
+		ArenaLayout.clearest(spots, { { x = 1, z = 1 }, { x = 19, z = 2 } }) == spots[3] and ArenaLayout.clearest(spots, { { x = 0, z = 39 } }) == spots[2])
+	check("with nobody on the trains the first spot, with no spots none", ArenaLayout.clearest(spots, {}) == spots[1] and ArenaLayout.clearest({}, {}) == nil)
+	local function names(list: { string }): string
+		return table.concat(list, ",")
+	end
+	check("when the time runs out the most tickets win", names(RoundRules.winners({
+		{ name = "a", tickets = 1, kos = 5, health = 90 },
+		{ name = "b", tickets = 2, kos = 0, health = 10 },
+	})) == "b")
+	check("then the most knock-offs, then the most health", names(RoundRules.winners({
+		{ name = "a", tickets = 1, kos = 2, health = 10 },
+		{ name = "b", tickets = 1, kos = 3, health = 5 },
+		{ name = "c", tickets = 1, kos = 3, health = 40 },
+	})) == "c")
+	check("tied on all three they win together, in order", names(RoundRules.winners({
+		{ name = "a", tickets = 1, kos = 1, health = 50 },
+		{ name = "b", tickets = 0, kos = 4, health = 99 },
+		{ name = "c", tickets = 1, kos = 1, health = 50 },
+	})) == "a,c" and #RoundRules.winners({}) == 0)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

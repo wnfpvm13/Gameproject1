@@ -2,7 +2,8 @@
 -- Train brawl server entry point: only wiring. The arena is built once (ArenaBuilder); rounds run on their own
 -- (RoundService); attacks with fists or a picked-up weapon are judged by WeaponService (a thrown stick burns and
 -- bursts in Dynamite; coal lumps fly in Missiles, bowled wheels roll in Wheels, oil slicks lie in Slicks); weapon crates drop onto the trains during a fight (WeaponDrops); falls are noticed by FallWatch
--- and end that fighter's round, as does a home run (health emptied, kept by FighterHealth); knock-offs and dynamite
+-- and cost that fighter a ticket, as does a home run (health emptied, kept by FighterHealth): with one left it comes
+-- back by balloon and parachute (Comebacks, full health, a short guard on landing), with none it is out; knock-offs and dynamite
 -- bursts go to every client; every character holds its weapon in its hand (WeaponGear), and every player's body is
 -- made the standard size with the standard animations (AvatarRules). For testing alone in Studio, the Workspace
 -- attribute Names.Solo makes practice bots (bodies: Sandbags, minds: BotBrain) join every round and fight.
@@ -26,6 +27,7 @@ local Missiles = require(script.Parent:WaitForChild("Missiles"))
 local Wheels = require(script.Parent:WaitForChild("Wheels"))
 local Slicks = require(script.Parent:WaitForChild("Slicks"))
 local RoundService = require(script.Parent:WaitForChild("RoundService"))
+local Comebacks = require(script.Parent:WaitForChild("Comebacks"))
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
@@ -45,6 +47,8 @@ local sandbags = Sandbags.start(arena.fallLine, function(model: Model, body, now
 	end
 end)
 local health = FighterHealth.start()
+-- The way back after a fall needs the round's fighters and stands, made below.
+local comebacks: Comebacks.Service? = nil
 
 local function equip(model: Model)
 	if not WeaponGear.equip(model) then
@@ -62,8 +66,24 @@ local round = RoundService.start(arena.spots, #arena.layout.trains, arena.waitin
 	end,
 	clearSandbags = sandbags.clear,
 	resetHealth = health.reset,
-	announce = function(victim: string, by: string?, how: string)
-		remotes.Feed:FireAllClients(victim, by, how)
+	announce = function(victim: string, by: string?, how: string, out: boolean)
+		remotes.Feed:FireAllClients(victim, by, how, out)
+	end,
+	-- Full health for the way back (its bar shows it full), and unhittable for a moment once it has landed.
+	comeback = function(model: Model, after: number, back: () -> ()): () -> ()
+		health.reset(model)
+		-- (Made right below; the first fight starts well after.)
+		return assert(comebacks, "comebacks").send(model, after, function()
+			health.guard(model, Workspace:GetServerTimeNow(), Config.Comeback.GuardSeconds)
+			back()
+		end)
+	end,
+})
+comebacks = Comebacks.start(arena.spots, arena.folder, {
+	fighters = round.fighters,
+	stands = round.stands,
+	isPlayer = function(model: Model): boolean
+		return Players:GetPlayerFromCharacter(model) ~= nil
 	end,
 })
 FallWatch.start(arena.fallLine, round.fighters, function(model: Model)
@@ -78,6 +98,9 @@ local weapons = WeaponService.start(remotes.Swing, remotes.Hit, {
 	hit = health.hit,
 	knockHere = sandbags.knock,
 	onHit = round.noteHit,
+	attacked = function(model: Model)
+		health.unguard(model, Workspace:GetServerTimeNow())
+	end,
 	onSmash = function(victim: Model)
 		round.eliminate(victim, "homerun")
 	end,

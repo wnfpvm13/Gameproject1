@@ -29,7 +29,7 @@
 -- sent to every client (Names.HitRemote: victim, velocity, attacker, kind, weapon, whether a crowd launched it, and
 -- the attack's number as its player's client counted them - none for a blast): the victim's own client moves its
 -- character, everyone shows it; a sandbag is moved here. A weapon goes back to bare fists when used up, when its time
--- is over, when its holder is out, and whenever no fight is running.
+-- is over, when its holder is out or fell off (on its way back: Names.ReturnPhase), and whenever no fight is running.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterPlayer = game:GetService("StarterPlayer")
 local Workspace = game:GetService("Workspace")
@@ -55,6 +55,7 @@ export type Hooks = {
 	hit: (victim: Model, now: number, damage: number, launch: boolean, by: Model) -> (HitRules.Kind, number, boolean),
 	knockHere: (model: Model, velocity: Vector3, kind: HitRules.Kind) -> boolean, -- moves a server-owned model (a sandbag)
 	onHit: (victim: Model, attacker: Model) -> (), -- for the knock-off credit
+	attacked: (model: Model) -> (), -- an attack of the model's was taken (a fighter just back loses its guard)
 	onSmash: (victim: Model) -> (), -- health emptied: out of the round
 	equip: (model: Model) -> (), -- puts the model's Names.Weapon in its hand (WeaponGear)
 	-- Throws a lit stick from a fighter standing at `from` along the flat `facing`; `burst(at)` when its fuse runs out
@@ -288,6 +289,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		model:SetAttribute(Names.SwingStep, step)
 		model:SetAttribute(Names.SwingTag, tag)
 		model:SetAttribute(Names.SwingAt, now)
+		hooks.attacked(model)
 		-- One use spent; the last one goes back to bare fists once the attack is out of the hand.
 		local uses = model:GetAttribute(Names.WeaponUses)
 		local spent = typeof(uses) == "number" and uses <= 1
@@ -315,7 +317,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		begin(model, aim, claim, tag, true)
 	end)
 
-	-- Weapons run out of time, and go back to bare fists when their holder is out or no fight is running.
+	-- Weapons run out of time, and go back to bare fists when their holder is out or fell off, or no fight is running.
 	local watching = true
 	task.spawn(function()
 		while watching do
@@ -326,7 +328,7 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 				local over = typeof(ends) == "number" and now >= ends
 				if not model.Parent then
 					armed[model] = nil -- its player left: nothing to put back in a hand
-				elseif not fighting or model:GetAttribute(Names.Alive) ~= true or over then
+				elseif not fighting or model:GetAttribute(Names.Alive) ~= true or model:GetAttribute(Names.ReturnPhase) ~= nil or over then
 					set(model, FIST)
 				end
 			end

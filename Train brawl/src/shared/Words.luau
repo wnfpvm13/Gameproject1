@@ -33,6 +33,21 @@ Words.LateWatching = "다음 열차를 기다리는 중"
 Words.Draw = "무승부"
 Words.WinnerNote = "끝까지 버텼다!"
 Words.HomeRun = "홈런!"
+Words.SharedWin = "공동 우승!"
+Words.Tickets = "승차권" -- over the player's own tickets
+-- Coming back after a fall with a ticket left: landed, under the parachute, unhittable for a moment.
+Words.Back = "다시 탑승!"
+Words.Dropping = "낙하산으로 내려가는 중"
+Words.Guarded = "보호 중, 때리면 풀린다"
+
+function Words.ticketsLeft(count: number): string
+	return string.format("승차권 %d장 남음", count)
+end
+
+-- While waiting in the stands for the parachute.
+function Words.dropIn(seconds: number): string
+	return string.format("%d초 뒤 낙하산 출발", seconds)
+end
 
 function Words.aboard(count: number): string
 	return string.format("탑승객 %d", count)
@@ -50,11 +65,13 @@ function Words.winner(name: string): string
 	return string.format("%s 승리!", name)
 end
 
--- A line in the knock-off feed: who went out, who gets the credit (nil = nobody: nobody hit them lately), and how
--- ("homerun" or "fall").
-function Words.feed(victim: string, by: string?, how: string): string
+-- A line in the knock-off feed: who fell, who gets the credit (nil = nobody: nobody hit them lately), how ("homerun"
+-- or "fall") and whether it was their last ticket (out: "하차") or they come back (a fall: "떨어뜨림").
+function Words.feed(victim: string, by: string?, how: string, out: boolean): string
 	if how == "homerun" then
 		return if by then string.format("%s → %s 홈런!", by, victim) else string.format("%s 홈런!", victim)
+	elseif not out then
+		return if by then string.format("%s → %s 떨어뜨림", by, victim) else string.format("%s 떨어짐", victim)
 	end
 	return if by then string.format("%s → %s 하차", by, victim) else string.format("%s 하차", victim)
 end
@@ -88,7 +105,7 @@ function Words.cardRows(control: string): { { string } }
 		{ "3연타", "상대가 날아간다" },
 		{ "체력이 낮을수록", "더 멀리 날아간다" },
 		{ "낙하산 상자", "맨손으로 닿으면 무기" },
-		{ "기차에서 떨어지면", "탈락" },
+		{ "떨어지면", "승차권 1장 쓰고 복귀" },
 	}
 	if control == "mouse" then
 		table.insert(rows, { "왼쪽 Alt", "커서 켜기·끄기" })

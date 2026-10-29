@@ -248,6 +248,24 @@ function ArenaLayout.preferMiddle(spots: { Spot }, trains: number, shuffle: <T>(
 	return list
 end
 
+-- The spawn spot farthest from everyone in `others` (flat positions: the fighters on the trains), where someone coming
+-- back lands (decision 11's "safe car"): the one whose nearest other is farthest away, the first of equally far ones
+-- (the caller shuffles for variety), the first spot when nobody else is there. Nil for no spots.
+function ArenaLayout.clearest(spots: { Spot }, others: { { x: number, z: number } }): Spot?
+	local best: Spot? = nil
+	local bestRoom = -1
+	for _, spot in spots do
+		local room = math.huge
+		for _, other in others do
+			room = math.min(room, math.sqrt((spot.x - other.x) ^ 2 + (spot.z - other.z) ^ 2))
+		end
+		if room > bestRoom then
+			best, bestRoom = spot, room
+		end
+	end
+	return best
+end
+
 -- The top someone with feet at height `feet` over (x, z) stands on: the highest of `surfaces` there that is not above
 -- the feet (a little slack for standing on it), nil over a gap, a plank or the sand.
 function ArenaLayout.topUnder(surfaces: { Surface }, x: number, z: number, feet: number): Surface?

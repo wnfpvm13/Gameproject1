@@ -108,6 +108,9 @@ local function try(self: Swing, model: Model?): string
 	if not body or body.model:GetAttribute(Names.Alive) ~= true or Workspace:GetAttribute(Names.Phase) ~= "Fight" then
 		return "no"
 	end
+	if body.model:GetAttribute(Names.ReturnPhase) ~= nil then
+		return "no" -- on the way back after a fall (the server takes no attacks then)
+	end
 	local weapon = WeaponRules.named(Config.Weapons, body.model:GetAttribute(Names.Weapon))
 	local w = Config.Weapons[weapon]
 	if self.hooks.stunned() or now < self.ready then

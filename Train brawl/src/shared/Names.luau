@@ -28,7 +28,8 @@ return {
 	Phase = "Phase", -- "Waiting" | "Countdown" | "Fight" | "Ended"
 	PhaseEndsAt = "PhaseEndsAt", -- server time the phase ends (0 = waiting for players)
 	AliveCount = "AliveCount",
-	Winner = "Winner", -- the last one standing's name ("" = none yet or nobody)
+	Winner = "Winner", -- the last one standing's name ("" = none yet or nobody; several winners' names joined)
+	WinnerCount = "WinnerCount", -- how many won (more than one: tied when the time ran out)
 	Solo = "TrainBrawlSolo", -- set in Studio: sandbags join so one tester can play
 	-- Character attributes
 	SwingAt = "SwingAt", -- server time the character's last attack started (every client draws it)
@@ -53,4 +54,10 @@ return {
 	Alive = "Alive", -- in the current round and still on the trains
 	KOs = "KOs", -- knock-offs this round (on the fighter's character or sandbag model)
 	Health = "Health", -- combat health this round (not the Humanoid's), written by the server (FighterHealth)
+	Tickets = "Tickets", -- tickets left this round (Config.Round.Tickets; RoundService)
+	-- On the way back after a fall with a ticket left (Comebacks): "Up" (the fall, then the stands) or "Down" (under a
+	-- parachute); none when not coming back
+	ReturnPhase = "ReturnPhase",
+	ReturnAt = "ReturnAt", -- server time the parachute drop starts (while "Up")
+	GuardUntil = "GuardUntil", -- server time a fighter just back stops being unhittable (FighterHealth; 0 = attacked)
 }

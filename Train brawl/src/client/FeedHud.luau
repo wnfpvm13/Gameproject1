@@ -1,6 +1,7 @@
 --!strict
--- The knock-off feed: a short line under the round's plates at the top for each fighter knocked out by a home run or a
--- fall (Words.feed: "A → B 홈런!", "A → B 하차", or "B 하차" with nobody to credit). The newest is on
+-- The knock-off feed: a short line under the round's plates at the top for each fighter knocked off by a home run or a
+-- fall (Words.feed: "A → B 홈런!", "A → B 하차" for a last ticket, "A → B 떨어뜨림" for a fall with one to spare, or
+-- "B 하차" with nobody to credit). The newest is on
 -- top; a line fades after Config.Feedback.FeedSeconds, and at most Config.Feedback.FeedLines show.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -41,11 +42,12 @@ local function place(self: Feed)
 	end
 end
 
--- A knock-out: the victim's name, who gets the credit (nil = nobody) and how ("homerun" or "fall").
-function FeedHud.add(self: Feed, victim: string, by: string?, how: string)
+-- A knock-off: the victim's name, who gets the credit (nil = nobody), how ("homerun" or "fall") and whether it was the
+-- victim's last ticket (out).
+function FeedHud.add(self: Feed, victim: string, by: string?, how: string, out: boolean)
 	-- Text scaled to fit: long names shrink instead of running off.
 	local label = UiStyle.label(self.frame, "Line", UDim2.new(1, 0, 0, LINE_HEIGHT), 18, if how == "homerun" then HOME_RUN_COLOR else nil)
-	label.Text = Words.feed(victim, by, how)
+	label.Text = Words.feed(victim, by, how, out)
 	table.insert(self.lines, 1, { label = label, endsAt = os.clock() + Config.Feedback.FeedSeconds })
 	while #self.lines > Config.Feedback.FeedLines do
 		local oldest = table.remove(self.lines)

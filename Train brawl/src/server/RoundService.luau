@@ -1,11 +1,15 @@
 --!strict
 -- The rounds, on the server. Wait in the waiting room until enough are in (players, plus sandbags in Studio practice)
 -- → count down on the roofs, everyone held still (Config.Round.CountdownSeconds) → fight until one is left or the time
--- runs out → show the winner → everyone back to the waiting room → again. The phase is published on the Workspace
--- (Names.Phase, PhaseEndsAt, AliveCount, Winner) and each fighter carries Names.Alive and Names.KOs. A fighter who
--- falls off (FallWatch, through Main) or dies is out; the last one to hit them within Config.Round.KillCreditSeconds
--- gets the knock-off. Players who come in during a fight watch until the next round. The knocked out go to a spot
--- of their own in the waiting room (stands()), so nobody lands on top of anyone.
+-- runs out (then the ones still in are ranked: RoundRules.winners) → show the winner(s) → everyone back to the waiting
+-- room → again. The phase is published on the Workspace (Names.Phase, PhaseEndsAt, AliveCount, Winner, WinnerCount)
+-- and each fighter carries Names.Alive, Names.KOs and Names.Tickets. Every fighter boards with Config.Round.Tickets
+-- tickets (decision 11): a fall (FallWatch, through Main) or a home run costs one, and the last one is out; with one
+-- left, the fighter is sent back (hooks.comeback: up to the stands, down by parachute) and stays in the round, but is
+-- not among the fighters on the trains (fighters(), isFighting) until it has landed. A fighter who dies or leaves is out
+-- at once. The last one to hit a fighter within Config.Round.KillCreditSeconds before a fall gets the knock-off.
+-- Players who come in during a fight watch until the next round. The knocked out go to a spot of their own in the
+-- waiting room (stands()), so nobody lands on top of anyone.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterPlayer = game:GetService("StarterPlayer")
@@ -17,14 +21,17 @@ local Names = require(shared:WaitForChild("Names"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
 local CharacterParts = require(shared:WaitForChild("CharacterParts"))
 local ArenaLayout = require(shared:WaitForChild("ArenaLayout"))
+local RoundRules = require(shared:WaitForChild("RoundRules"))
 
 local RoundService = {}
 
 export type Service = {
-	fighters: () -> { Model }, -- the models still in the running round
-	isFighting: (model: Model) -> boolean, -- still in, and the fight has started
+	fighters: () -> { Model }, -- the models on the trains in the running round (not those on their way back)
+	isFighting: (model: Model) -> boolean, -- on the trains, and the fight has started
+	stands: () -> CFrame, -- a spot of its own in the waiting room (the stands)
 	noteHit: (victim: Model, swinger: Model) -> (),
-	-- Out of the round: how is "homerun" (health emptied), "fall" (fell off) or "gone" (died or left).
+	-- Fell or flew out: how is "homerun" (health emptied), "fall" (fell off) or "gone" (died or left: out at once). A
+	-- fall or a home run costs a ticket; only the last one puts the fighter out.
 	eliminate: (model: Model, how: string) -> (),
 	stop: () -> (),
 }
@@ -34,11 +41,16 @@ export type Hooks = {
 	spawnSandbags: (count: number) -> { Model },
 	clearSandbags: () -> (),
 	resetHealth: (model: Model) -> (), -- full combat health for a fighter entering a round
-	-- A fighter knocked out by a home run or a fall: its name, the name of who gets the knock-off (nil = nobody).
-	announce: (victim: string, by: string?, how: string) -> (),
+	-- A fighter knocked off by a home run or a fall: its name, the name of who gets the knock-off (nil = nobody), how,
+	-- and whether it was its last ticket (out).
+	announce: (victim: string, by: string?, how: string, out: boolean) -> (),
+	-- Sends a fighter that fell with a ticket left back onto the trains once its fall has played for `after` seconds;
+	-- back() when it has landed. Returns a function that calls it off (the round ended, or the fighter is out).
+	comeback: (model: Model, after: number, back: () -> ()) -> () -> (),
 }
 
-type Fighter = { model: Model, player: Player? }
+-- tickets: left this round; returning: calls off its way back while it is on it (nil: on the trains).
+type Fighter = { model: Model, player: Player?, tickets: number, returning: (() -> ())? }
 
 local function now(): number
 	return Workspace:GetServerTimeNow()
@@ -90,6 +102,7 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 	local running = true
 	local connections: { RBXScriptConnection } = {}
 
+	-- Everyone still in, those on their way back too.
 	local function count(): number
 		local n = 0
 		for _ in alive do
@@ -118,6 +131,15 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 		return waitingSpot + Vector3.new((math.random() * 2 - 1) * half, 0, (math.random() * 2 - 1) * half)
 	end
 
+	-- Calls off a fighter's way back, if it is on it (it stays wherever it is: the stands, or the air it now falls from).
+	local function callOff(fighter: Fighter)
+		local cancel = fighter.returning
+		if cancel then
+			fighter.returning = nil
+			cancel()
+		end
+	end
+
 	-- A fighter's shown name (the player's display name or the sandbag's).
 	local function nameOf(model: Model): string
 		local player = Players:GetPlayerFromCharacter(model)
@@ -126,28 +148,48 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 	end
 
 	local function eliminate(model: Model, how: string)
+		local gone = how == "gone"
+		-- The fall (drifting behind the train) or the home-run flight (twinkling out in the sky) plays on before the
+		-- fighter goes up to the stands; a sandbag that is out just goes.
+		local show = if how == "homerun" then Config.Fall.HomeRunSeconds else Config.Fall.ShowSeconds
 		local fighter = alive[model]
-		if not fighter then
+		if not fighter or (fighter.returning and not gone) then
 			return
 		end
-		alive[model] = nil
-		model:SetAttribute(Names.Alive, false)
-		if fighter.player then
-			hold(model, false) -- out during the count-down: free to move in the stands
+		local left, out = RoundRules.afterFall(fighter.tickets)
+		if gone or not fighting then
+			left, out = 0, true -- died or left; or fell outside the fight (the count-down)
 		end
+		fighter.tickets = left
+		model:SetAttribute(Names.Tickets, left)
 		local hit = lastHit[model]
+		lastHit[model] = nil -- a fall after coming back is credited afresh
 		local by: Model? = nil
 		if hit and now() - hit.at <= r.KillCreditSeconds and hit.swinger ~= model then
 			by = hit.swinger
 			hit.swinger:SetAttribute(Names.KOs, (PartUtil.number(hit.swinger, Names.KOs) or 0) + 1)
 		end
-		publishAlive()
-		if how ~= "gone" then
-			hooks.announce(nameOf(model), if by then nameOf(by) else nil, how)
+		if not gone then
+			hooks.announce(nameOf(model), if by then nameOf(by) else nil, how, out)
 		end
-		-- The fall (drifting behind the train) or the home-run flight (twinkling out in the sky) plays on before the
-		-- player goes up to the stands; a sandbag just goes.
-		local show = if how == "homerun" then Config.Fall.HomeRunSeconds else Config.Fall.ShowSeconds
+		if not out then
+			local landed = false
+			local cancel = hooks.comeback(model, show, function()
+				landed = true
+				fighter.returning = nil
+			end)
+			if not landed then -- (back() could come at once, when there is nowhere to land)
+				fighter.returning = cancel
+			end
+			return
+		end
+		callOff(fighter) -- died or left on the way back
+		alive[model] = nil
+		model:SetAttribute(Names.Alive, false)
+		if fighter.player then
+			hold(model, false) -- out during the count-down: free to move in the stands
+		end
+		publishAlive()
 		task.delay(show, function()
 			if fighter.player then
 				if fighter.player.Character == model and model.Parent then
@@ -171,10 +213,10 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 		local fighters: { Fighter } = {}
 		local players = readyPlayers()
 		for _, player in players do
-			table.insert(fighters, { model = player.Character :: Model, player = player })
+			table.insert(fighters, { model = player.Character :: Model, player = player, tickets = r.Tickets, returning = nil })
 		end
 		for _, model in sandbags do
-			table.insert(fighters, { model = model, player = nil })
+			table.insert(fighters, { model = model, player = nil, tickets = r.Tickets, returning = nil })
 		end
 		if #players < 1 or #fighters < r.MinPlayers then
 			hooks.clearSandbags()
@@ -195,6 +237,7 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 			end
 			fighter.model:SetAttribute(Names.Alive, true)
 			fighter.model:SetAttribute(Names.KOs, 0)
+			fighter.model:SetAttribute(Names.Tickets, fighter.tickets)
 			hooks.resetHealth(fighter.model)
 			if fighter.player then
 				hold(fighter.model, true)
@@ -205,9 +248,10 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 		return true
 	end
 
-	-- Everyone still standing goes back to the waiting room; sandbags go away.
+	-- Everyone still standing (or on the way back) goes back to the waiting room; sandbags go away.
 	local function leave()
 		for model, fighter in alive do
+			callOff(fighter)
 			model:SetAttribute(Names.Alive, false)
 			if fighter.player and model.Parent then
 				hold(model, false)
@@ -223,6 +267,7 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 		while running do
 			setPhase("Waiting", 0)
 			Workspace:SetAttribute(Names.Winner, "")
+			Workspace:SetAttribute(Names.WinnerCount, 0)
 			repeat
 				task.wait(0.5)
 				local players = #readyPlayers()
@@ -248,13 +293,33 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 			while running and count() > 1 and now() < fightEnds and playerIn() do
 				task.wait(0.1)
 			end
+			local timeUp = now() >= fightEnds
 			fighting = false
-			local winner = ""
-			local last = if count() == 1 then next(alive) else nil
-			if last then
-				winner = nameOf(last)
+			-- Nobody comes down onto the roofs during the result: those on their way back stay where they are (still in).
+			for _, fighter in alive do
+				callOff(fighter)
 			end
-			Workspace:SetAttribute(Names.Winner, winner)
+			-- The last one in wins; when the time ran out, the best ranked of those still in (tied ones win together).
+			local winners: { string } = {}
+			if count() == 1 then
+				local last = next(alive)
+				if last then
+					winners = { nameOf(last) }
+				end
+			elseif timeUp then
+				local standings: { RoundRules.Standing } = {}
+				for model, fighter in alive do
+					table.insert(standings, {
+						name = nameOf(model),
+						tickets = fighter.tickets,
+						kos = PartUtil.number(model, Names.KOs) or 0,
+						health = PartUtil.number(model, Names.Health) or 0,
+					})
+				end
+				winners = RoundRules.winners(standings)
+			end
+			Workspace:SetAttribute(Names.Winner, table.concat(winners, ", "))
+			Workspace:SetAttribute(Names.WinnerCount, #winners)
 			setPhase("Ended", now() + r.EndSeconds)
 			task.wait(r.EndSeconds)
 			leave()
@@ -285,6 +350,7 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 	table.insert(connections, Players.PlayerRemoving:Connect(function(player)
 		for model, fighter in alive do
 			if fighter.player == player then
+				callOff(fighter)
 				alive[model] = nil
 			end
 		end
@@ -294,14 +360,18 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 	return {
 		fighters = function(): { Model }
 			local list = {}
-			for model in alive do
-				table.insert(list, model)
+			for model, fighter in alive do
+				if not fighter.returning then
+					table.insert(list, model)
+				end
 			end
 			return list
 		end,
 		isFighting = function(model: Model): boolean
-			return fighting and alive[model] ~= nil
+			local fighter = alive[model]
+			return fighting and fighter ~= nil and not fighter.returning
 		end,
+		stands = stands,
 		noteHit = function(victim: Model, swinger: Model)
 			lastHit[victim] = { swinger = swinger, at = now() }
 		end,

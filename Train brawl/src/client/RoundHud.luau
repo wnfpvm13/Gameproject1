@@ -1,9 +1,12 @@
 --!strict
 -- The round on screen. During a fight: the time on a plate at the top, with the fighters still aboard on its left and
 -- the player's knock-offs on its right (each number bounces when it changes; the time turns gold for the last 30
--- seconds). Under it a status line while waiting, watching, or out. Big centre text for the moments: the count-down
--- numbers, "출발!" as the fight starts, "하차!" when the player goes out, and the winner with a short note. Reads the
--- Workspace round attributes each frame; the words are Words', the look UiStyle's.
+-- seconds). Under it a status line while waiting, watching, out, on the way back after a fall (how long until the
+-- parachute, then coming down) or guarded just after landing. Big centre text for the moments: the count-down numbers,
+-- "출발!" as the fight starts, the tickets left when the player falls with one to spare, "다시 탑승!" when it lands,
+-- "하차!" when it goes out, and the winner (or a shared win when the time ran out on a tie) with a short note. Reads
+-- the Workspace round attributes and the player's own character's each frame; the words are Words', the look
+-- UiStyle's.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -132,9 +135,10 @@ local function shout(self: Hud, text: string, seconds: number?, color: Color3?, 
 	UiStyle.pop(self.big, 1.45, scale)
 end
 
--- Every frame. now: server time; standing: "in" (still in the round), "out" (knocked out of it) or "watching"
--- (came in during it); kos: the player's knock-offs.
-function RoundHud.update(self: Hud, now: number, standing: string, kos: number)
+-- Every frame. now: server time; standing: "in" (on the trains), "back" (fell with a ticket left, on the way back),
+-- "out" (knocked out of the round) or "watching" (came in during it); kos: the player's knock-offs; own: the player's
+-- character (its tickets, way back and guard).
+function RoundHud.update(self: Hud, now: number, standing: string, kos: number, own: Model?)
 	local raw = Workspace:GetAttribute(Names.Phase)
 	local phase = if typeof(raw) == "string" then raw else "Waiting"
 	local endsAt = PartUtil.number(Workspace, Names.PhaseEndsAt) or 0
@@ -152,8 +156,10 @@ function RoundHud.update(self: Hud, now: number, standing: string, kos: number)
 		elseif phase == "Ended" then
 			local winner = Workspace:GetAttribute(Names.Winner)
 			local won = typeof(winner) == "string" and winner ~= ""
-			shout(self, if won then Words.winner(winner :: string) else Words.Draw, nil, if won then UiStyle.Gold else nil)
-			setText(self.note, if won then Words.WinnerNote else "")
+			local tied = (PartUtil.number(Workspace, Names.WinnerCount) or 0) > 1
+			local title = if not won then Words.Draw elseif tied then Words.SharedWin else Words.winner(winner :: string)
+			shout(self, title, nil, if won then UiStyle.Gold else nil)
+			setText(self.note, if tied then winner :: string elseif won then Words.WinnerNote else "")
 		elseif phase ~= "Countdown" then
 			self.bigUntil = math.min(self.bigUntil, os.clock() + FADE_SECONDS) -- whatever was up fades out
 		end
@@ -166,6 +172,11 @@ function RoundHud.update(self: Hud, now: number, standing: string, kos: number)
 		end
 	elseif phase == "Fight" and standing == "out" and beforeStanding == "in" then
 		shout(self, Words.Out, OUT_SECONDS, UiStyle.Red)
+	elseif phase == "Fight" and standing == "back" and beforeStanding == "in" then
+		local tickets = if own then PartUtil.number(own, Names.Tickets) else nil
+		shout(self, Words.ticketsLeft(tickets or 0), OUT_SECONDS, UiStyle.Gold)
+	elseif phase == "Fight" and standing == "in" and beforeStanding == "back" then
+		shout(self, Words.Back, GO_SECONDS, UiStyle.Gold)
 	end
 	if phase ~= "Ended" then
 		setText(self.note, "")
@@ -201,7 +212,17 @@ function RoundHud.update(self: Hud, now: number, standing: string, kos: number)
 	-- The status line.
 	local status = ""
 	if fighting then
-		status = if standing == "out" then Words.OutWatching elseif standing == "watching" then Words.LateWatching else ""
+		if standing == "out" then
+			status = Words.OutWatching
+		elseif standing == "watching" then
+			status = Words.LateWatching
+		elseif standing == "back" and own then
+			local dropAt = PartUtil.number(own, Names.ReturnAt)
+			status = if own:GetAttribute(Names.ReturnPhase) == "Down" or not dropAt then Words.Dropping else Words.dropIn(math.max(1, math.ceil(dropAt - now)))
+		elseif own then
+			local guardUntil = PartUtil.number(own, Names.GuardUntil)
+			status = if guardUntil and now < guardUntil then Words.Guarded else ""
+		end
 	elseif phase == "Waiting" then
 		-- The server starts when enough are in (sandbags count in Studio practice).
 		local solo = RunService:IsStudio() and Workspace:GetAttribute(Names.Solo) == true

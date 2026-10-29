@@ -1117,6 +1117,27 @@ do
 	check("each practice bot can wear its own hat colour", #P.HatColors >= Config.Sandbag.Count)
 end
 
+-- 23. Streaks and titles (persona fix 8: the cheap part; healing and ranked play wait for the owner).
+do
+	local streaks = {}
+	local a = RoundRules.homerunStreak(streaks, "b", "a", "homerun")
+	local b = RoundRules.homerunStreak(streaks, "c", "a", "homerun")
+	local fallBy = RoundRules.homerunStreak(streaks, "d", "a", "fall")
+	local c = RoundRules.homerunStreak(streaks, "a", "e", "homerun")
+	check("home runs in a row grow until the hitter falls itself; a push-off counts none but keeps it", a == 1 and b == 2 and fallBy == 0
+		and streaks.a == nil and c == 1 and RoundRules.homerunStreak(streaks, "x", nil, "homerun") == 0)
+	local runs = {}
+	local first = RoundRules.winStreak(runs, { 1, 2, 3 }, 2)
+	local second = RoundRules.winStreak(runs, { 1, 2, 3 }, 2)
+	local other = RoundRules.winStreak(runs, { 1, 2, 3 }, 3)
+	check("wins in a row grow for the winner and end for the rest", first == 1 and second == 2 and other == 1 and runs[2] == nil
+		and RoundRules.winStreak(runs, { 1, 3 }, nil) == 0 and runs[3] == nil)
+	check("the streak calls read naturally", Words.homerunStreak(2) == "더블 홈런!" and Words.homerunStreak(3) == "트리플 홈런!"
+		and Words.homerunStreak(5) == "5연속 홈런!" and Words.winStreak(3) == "3연승!")
+	check("the feed tells a home-run streak of two or more", Words.feed("B", "A", "homerun", true, 2) == "A → B 홈런! 2연속"
+		and Words.feed("B", "A", "homerun", true, 1) == "A → B 홈런!")
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed == 0 then
 	print("ALL PASS")

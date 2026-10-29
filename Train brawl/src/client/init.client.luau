@@ -347,14 +347,19 @@ blastRemote.OnClientEvent:Connect(function(at: unknown, radius: unknown)
 end)
 
 -- A knock-out, from the server: a line in the feed.
-feedRemote.OnClientEvent:Connect(function(victim: unknown, by: unknown, how: unknown, out: unknown)
+feedRemote.OnClientEvent:Connect(function(victim: unknown, by: unknown, how: unknown, out: unknown, streak: unknown)
 	if typeof(victim) == "string" and typeof(how) == "string" then
 		local credited = if typeof(by) == "string" then by else nil
-		feed:add(victim, credited, how, out ~= false)
+		local row = if typeof(streak) == "number" then streak else 0
+		feed:add(victim, credited, how, out ~= false, row)
 		-- (Names as shown: the feed carries display names.)
-		local hits = stats:feed(credited == player.DisplayName, victim == player.DisplayName, how, out ~= false)
+		local byMe = credited == player.DisplayName
+		local hits = stats:feed(credited, byMe, victim == player.DisplayName, how, out ~= false)
 		if hits then
 			hud:knockedOff(Words.knockedOff(credited, how, hits))
+		end
+		if byMe and how == "homerun" and row >= 2 then
+			hud:callout(Words.homerunStreak(row))
 		end
 	end
 end)
@@ -391,7 +396,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 	local phaseName = if typeof(phaseNow) == "string" then phaseNow else "Waiting"
 	stats:update(phaseName, alive)
 	pops:update(all, phaseName)
-	results:update(phaseName, stats:summary(character))
+	results:update(phaseName, stats:summary(character, player.DisplayName))
 	local standing = if back then "back" elseif alive then "in" elseif state == false then "out" else "watching"
 	hud:update(Workspace:GetServerTimeNow(), standing, if character then PartUtil.number(character, Names.KOs) or 0 else 0, character)
 	local phase = Workspace:GetAttribute(Names.Phase)

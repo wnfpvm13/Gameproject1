@@ -42,12 +42,12 @@ local function place(self: Feed)
 	end
 end
 
--- A knock-off: the victim's name, who gets the credit (nil = nobody), how ("homerun" or "fall") and whether it was the
--- victim's last ticket (out).
-function FeedHud.add(self: Feed, victim: string, by: string?, how: string, out: boolean)
+-- A knock-off: the victim's name, who gets the credit (nil = nobody), how ("homerun" or "fall"), whether it was the
+-- victim's last ticket (out), and the home runs in a row it makes for who hit it.
+function FeedHud.add(self: Feed, victim: string, by: string?, how: string, out: boolean, streak: number)
 	-- Text scaled to fit: long names shrink instead of running off.
 	local label = UiStyle.label(self.frame, "Line", UDim2.new(1, 0, 0, LINE_HEIGHT), 18, if how == "homerun" then HOME_RUN_COLOR else nil)
-	label.Text = Words.feed(victim, by, how, out)
+	label.Text = Words.feed(victim, by, how, out, streak)
 	table.insert(self.lines, 1, { label = label, endsAt = os.clock() + Config.Feedback.FeedSeconds })
 	while #self.lines > Config.Feedback.FeedLines do
 		local oldest = table.remove(self.lines)

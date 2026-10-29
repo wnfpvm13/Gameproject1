@@ -42,8 +42,8 @@ export type Hooks = {
 	clearSandbags: () -> (),
 	resetHealth: (model: Model) -> (), -- full combat health for a fighter entering a round
 	-- A fighter knocked off by a home run or a fall: its name, the name of who gets the knock-off (nil = nobody), how,
-	-- and whether it was its last ticket (out).
-	announce: (victim: string, by: string?, how: string, out: boolean) -> (),
+	-- whether it was its last ticket (out), and the home runs in a row the knock-off makes for who hit it (0: none).
+	announce: (victim: string, by: string?, how: string, out: boolean, streak: number) -> (),
 	-- Sends a fighter that fell with a ticket left back onto the trains once its fall has played for `after` seconds;
 	-- back() when it has landed. Returns a function that calls it off (the round ended, or the fighter is out).
 	comeback: (model: Model, after: number, back: () -> ()) -> () -> (),
@@ -100,6 +100,10 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 	local lastHit: { [Model]: { swinger: Model, at: number } } = {}
 	local fighting = false
 	local running = true
+	-- Home runs in a row this round (RoundRules.homerunStreak), and wins in a row this visit by player (or bot name).
+	local homers: { [Model]: number } = {}
+	local wins: { [any]: number } = {}
+	local entrants: { any } = {}
 	local connections: { RBXScriptConnection } = {}
 
 	-- Everyone still in, those on their way back too.
@@ -169,8 +173,9 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 			by = hit.swinger
 			hit.swinger:SetAttribute(Names.KOs, (PartUtil.number(hit.swinger, Names.KOs) or 0) + 1)
 		end
+		local streak = RoundRules.homerunStreak(homers, model, by, how)
 		if not gone then
-			hooks.announce(nameOf(model), if by then nameOf(by) else nil, how, out)
+			hooks.announce(nameOf(model), if by then nameOf(by) else nil, how, out, streak)
 		end
 		if not out then
 			local landed = false
@@ -206,6 +211,7 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 	local function enter(): boolean
 		table.clear(alive)
 		table.clear(lastHit)
+		table.clear(homers)
 		-- Sandbags made first: making them can take frames, and the players are read after it, with nothing yielding
 		-- between reading them and placing them (a player who died or left meanwhile is simply not read).
 		local sandbags = hooks.spawnSandbags(hooks.sandbagCount())
@@ -221,6 +227,10 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 		if #players < 1 or #fighters < r.MinPlayers then
 			hooks.clearSandbags()
 			return false
+		end
+		entrants = {}
+		for _, fighter in fighters do
+			table.insert(entrants, if fighter.player then fighter.player.UserId else nameOf(fighter.model))
 		end
 		local free = ArenaLayout.preferMiddle(spots, trains, shuffled)
 		for i, fighter in fighters do
@@ -268,6 +278,7 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 			setPhase("Waiting", 0)
 			Workspace:SetAttribute(Names.Winner, "")
 			Workspace:SetAttribute(Names.WinnerCount, 0)
+			Workspace:SetAttribute(Names.WinnerStreak, 0)
 			repeat
 				task.wait(0.5)
 				local players = #readyPlayers()
@@ -301,10 +312,13 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 			end
 			-- The last one in wins; when the time ran out, the best ranked of those still in (tied ones win together).
 			local winners: { string } = {}
+			local single: any = nil -- the one winner, as entrants counts it
 			if count() == 1 then
 				local last = next(alive)
 				if last then
 					winners = { nameOf(last) }
+					local fighter = alive[last]
+					single = if fighter and fighter.player then fighter.player.UserId else nameOf(last)
 				end
 			elseif timeUp then
 				local standings: { RoundRules.Standing } = {}
@@ -320,6 +334,7 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 			end
 			Workspace:SetAttribute(Names.Winner, table.concat(winners, ", "))
 			Workspace:SetAttribute(Names.WinnerCount, #winners)
+			Workspace:SetAttribute(Names.WinnerStreak, RoundRules.winStreak(wins, entrants, single))
 			setPhase("Ended", now() + r.EndSeconds)
 			task.wait(r.EndSeconds)
 			leave()

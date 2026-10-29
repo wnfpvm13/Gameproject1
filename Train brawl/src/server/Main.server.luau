@@ -70,8 +70,8 @@ local round = RoundService.start(arena.spots, #arena.layout.trains, arena.waitin
 	end,
 	clearSandbags = sandbags.clear,
 	resetHealth = health.reset,
-	announce = function(victim: string, by: string?, how: string, out: boolean)
-		remotes.Feed:FireAllClients(victim, by, how, out)
+	announce = function(victim: string, by: string?, how: string, out: boolean, streak: number)
+		remotes.Feed:FireAllClients(victim, by, how, out, streak)
 	end,
 	-- Full health for the way back (its bar shows it full), and unhittable for a moment once it has landed.
 	comeback = function(model: Model, after: number, back: () -> ()): () -> ()

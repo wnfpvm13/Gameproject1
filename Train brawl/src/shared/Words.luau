@@ -42,6 +42,23 @@ Words.Guarded = "보호 중, 때리면 풀린다"
 Words.StringBroken = "끊김!" -- under the string marks when a hit breaks the player's 1-2-3 string
 Words.GuardBroken = "막기 깨짐!" -- over a blocker whose guard a string's third broke
 Words.ResultTitle = "이번 판"
+-- Titles on the result card (persona fix 8): the most home runs, the most knock-offs, still aboard at the end.
+Words.Titles = { homers = "홈런왕", kos = "KO왕", survived = "끝까지 버팀" } :: { [string]: string }
+
+-- The big call when the player hits home runs in a row (two or more).
+function Words.homerunStreak(count: number): string
+	if count == 2 then
+		return "더블 홈런!"
+	elseif count == 3 then
+		return "트리플 홈런!"
+	end
+	return string.format("%d연속 홈런!", count)
+end
+
+-- Under the winner's name when it has won rounds in a row (two or more).
+function Words.winStreak(count: number): string
+	return string.format("%d연승!", count)
+end
 Words.CarLeaving = "맨 뒤 칸이 떨어져 나간다! 앞 칸으로!" -- a back car is about to come off
 
 -- Under the big text when the player is knocked off: who did it and how, and how many hits it took since its last fall.
@@ -89,10 +106,12 @@ function Words.winner(name: string): string
 end
 
 -- A line in the knock-off feed: who fell, who gets the credit (nil = nobody: nobody hit them lately), how ("homerun"
--- or "fall") and whether it was their last ticket (out: "하차") or they come back (a fall: "떨어뜨림").
-function Words.feed(victim: string, by: string?, how: string, out: boolean): string
+-- or "fall"), whether it was their last ticket (out: "하차") or they come back (a fall: "떨어뜨림"), and the home runs
+-- in a row it makes for who hit it (two or more are told).
+function Words.feed(victim: string, by: string?, how: string, out: boolean, streak: number?): string
 	if how == "homerun" then
-		return if by then string.format("%s → %s 홈런!", by, victim) else string.format("%s 홈런!", victim)
+		local row = if streak and streak >= 2 then string.format(" %d연속", streak) else ""
+		return if by then string.format("%s → %s 홈런!%s", by, victim, row) else string.format("%s 홈런!", victim)
 	elseif not out then
 		return if by then string.format("%s → %s 떨어뜨림", by, victim) else string.format("%s 떨어짐", victim)
 	end

@@ -1,7 +1,8 @@
 --!strict
 -- The player's own round at its end (persona fix 5: no result screen; the testers asked how they did). While the
 -- result shows (phase "Ended") and the player took part, a plate under the winner's name lists its knock-offs, home
--- runs, hits landed and how long it stayed on the trains (RoundStats), each number counting up as the card comes in.
+-- runs, hits landed and how long it stayed on the trains (RoundStats), each number counting up as the card comes in,
+-- with the titles it earned this round in gold under the heading (persona fix 8: Words.Titles).
 -- The words are Words', the look UiStyle's.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -20,10 +21,12 @@ local BELOW_BIG = 110 -- the card starts this far under it (clear of the winner 
 local COUNT_SECONDS = 0.6 -- the numbers count up this long
 
 -- The summary shown (RoundStats.Summary).
-export type Summary = { kos: number, homers: number, landed: number, seconds: number, played: boolean }
+export type Summary = { kos: number, homers: number, landed: number, seconds: number, played: boolean, titles: { string } }
+
+local TITLE_ROW = 26
 
 type Row = { name: TextLabel, value: TextLabel }
-type Fields = { gui: ScreenGui, frame: Frame, rows: { Row }, shownAt: number?, summary: Summary? }
+type Fields = { gui: ScreenGui, frame: Frame, titles: TextLabel, rows: { Row }, shownAt: number?, summary: Summary? }
 export type Card = typeof(setmetatable({} :: Fields, ResultCard))
 
 function ResultCard.new(playerGui: Instance): Card
@@ -41,6 +44,8 @@ function ResultCard.new(playerGui: Instance): Card
 	local title = UiStyle.label(frame, "Title", UDim2.fromOffset(WIDTH - 24, 28), 22, UiStyle.Gold)
 	title.Position = UDim2.fromOffset(12, 8)
 	title.Text = Words.ResultTitle
+	local earned = UiStyle.label(frame, "Titles", UDim2.fromOffset(WIDTH - 24, TITLE_ROW - 2), 20, UiStyle.Gold)
+	earned.Position = UDim2.fromOffset(12, 8 + 28)
 	local rows = {}
 	for i = 1, 4 do
 		local y = 8 + 30 + (i - 1) * ROW
@@ -52,7 +57,7 @@ function ResultCard.new(playerGui: Instance): Card
 		value.TextXAlignment = Enum.TextXAlignment.Right
 		table.insert(rows, { name = name, value = value })
 	end
-	local fields: Fields = { gui = gui, frame = frame, rows = rows, shownAt = nil, summary = nil }
+	local fields: Fields = { gui = gui, frame = frame, titles = earned, rows = rows, shownAt = nil, summary = nil }
 	return setmetatable(fields, ResultCard)
 end
 
@@ -68,6 +73,20 @@ function ResultCard.update(self: Card, phase: string, summary: Summary)
 		self.summary = summary -- the numbers as the fight ended
 		self.frame.Visible = true
 		UiStyle.pop(self.frame, 1.12)
+		-- The titles, when earned, take a row under the heading and push the numbers down.
+		local names = {}
+		for _, key in summary.titles do
+			table.insert(names, Words.Titles[key] or key)
+		end
+		local extra = if #names > 0 then TITLE_ROW else 0
+		self.titles.Text = table.concat(names, "   ")
+		self.titles.Visible = #names > 0
+		self.frame.Size = UDim2.fromOffset(WIDTH, 8 + 30 + extra + 4 * ROW + 10)
+		for i, labels in self.rows do
+			local y = 8 + 30 + extra + (i - 1) * ROW
+			labels.name.Position = UDim2.fromOffset(18, y)
+			labels.value.Position = UDim2.fromOffset(WIDTH - 18 - 110, y)
+		end
 	end
 	local y = math.max(Workspace.CurrentCamera.ViewportSize.Y * TOP, 130) + BELOW_BIG
 	self.frame.Position = UDim2.new(0.5, 0, 0, y)

@@ -140,6 +140,11 @@ local function shout(self: Hud, text: string, seconds: number?, color: Color3?, 
 	UiStyle.pop(self.big, 1.45, scale)
 end
 
+-- A call in the middle for something the player did (home runs in a row: Words.homerunStreak), gold, a moment.
+function RoundHud.callout(self: Hud, text: string)
+	shout(self, text, GO_SECONDS, UiStyle.Gold)
+end
+
 -- The player was knocked off: `line` (Words.knockedOff) shows under the big text ("하차!" or the tickets left) a moment.
 function RoundHud.knockedOff(self: Hud, line: string)
 	self.noteText = line
@@ -170,7 +175,8 @@ function RoundHud.update(self: Hud, now: number, standing: string, kos: number, 
 			local tied = (PartUtil.number(Workspace, Names.WinnerCount) or 0) > 1
 			local title = if not won then Words.Draw elseif tied then Words.SharedWin else Words.winner(winner :: string)
 			shout(self, title, nil, if won then UiStyle.Gold else nil)
-			setText(self.note, if tied then winner :: string elseif won then Words.WinnerNote else "")
+			local run = PartUtil.number(Workspace, Names.WinnerStreak) or 0
+			setText(self.note, if tied then winner :: string elseif won and run >= 2 then Words.winStreak(run) elseif won then Words.WinnerNote else "")
 		elseif phase ~= "Countdown" then
 			self.bigUntil = math.min(self.bigUntil, os.clock() + FADE_SECONDS) -- whatever was up fades out
 		end

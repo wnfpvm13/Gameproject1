@@ -31,6 +31,7 @@ return {
 	AliveCount = "AliveCount",
 	Winner = "Winner", -- the last one standing's name ("" = none yet or nobody; several winners' names joined)
 	WinnerCount = "WinnerCount", -- how many won (more than one: tied when the time ran out)
+	WinnerStreak = "WinnerStreak", -- the single winner's wins in a row this visit (0: none)
 	Solo = "TrainBrawlSolo", -- set in Studio: sandbags join so one tester can play
 	-- Character attributes
 	SwingAt = "SwingAt", -- server time the character's last attack started (every client draws it)

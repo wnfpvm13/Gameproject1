@@ -649,6 +649,7 @@ do
 	check("a fall with a ticket to spare is not 하차 (the fighter comes back)", Words.feed("B", "A", "fall", false) == "A → B 떨어뜨림"
 		and Words.feed("B", nil, "fall", false) == "B 떨어짐" and Words.feed("B", "A", "homerun", false) == "A → B 홈런!")
 	check("the way back reads the tickets left and the seconds to the parachute", Words.ticketsLeft(1) == "승차권 1장 남음" and Words.dropIn(3) == "3초 뒤 낙하산 출발")
+	check("a broken string says so under its marks", Words.StringBroken == "끊김!")
 	check("what the player holds reads its name and what is left", Words.uses("Hammer", 3) == "망치 ×3" and Words.secondsLeft("GoldBar", 12) == "금괴 12초")
 end
 

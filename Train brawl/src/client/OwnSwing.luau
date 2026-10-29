@@ -13,7 +13,7 @@
 -- the weapon is ready again or a light hit's flinch ends) is kept and made as soon as it may (update(), every frame), so
 -- a press in time with the attacks is never lost; it is dropped if the character takes up another weapon meanwhile or
 -- is hit, and a press while flying from a launch is not kept. The drawing and the hit effects come in as hooks (SwingPose, HitFeedback via
--- init).
+-- init). The string as it stands is read for the screen (stringView: StringHud).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -59,7 +59,7 @@ type Showing = { shown: { [Model]: string }, confirmed: { [Model]: boolean } }
 -- model: the character it was made by. count: the attacks pressed so far (the last one's number); cut: the count when
 -- the string was last broken (a word on an attack pressed before that does not touch the string). showings: the last
 -- KEEP attacks' showings, by number. queued: when (server time) a press that came a moment too early was made, still
--- waiting to start, and queuedWith: the weapon held then.
+-- waiting to start, and queuedWith: the weapon held then. breaks: how many running strings a hit has broken.
 type Fields = {
 	remote: RemoteEvent,
 	hooks: Hooks,
@@ -73,6 +73,7 @@ type Fields = {
 	showings: { [number]: Showing },
 	queued: number?,
 	queuedWith: string?,
+	breaks: number,
 }
 export type Swing = typeof(setmetatable({} :: Fields, OwnSwing))
 
@@ -90,6 +91,7 @@ function OwnSwing.new(remote: RemoteEvent, hooks: Hooks): Swing
 		showings = {},
 		queued = nil,
 		queuedWith = nil,
+		breaks = 0,
 	}
 	return setmetatable(fields, OwnSwing)
 end
@@ -209,6 +211,9 @@ end
 -- The player was hit: the string is broken (the next attack is a 1, as on the server), and words on the attacks
 -- pressed before it leave the string alone.
 function OwnSwing.broken(self: Swing)
+	if self.chain.step > 0 and AttackString.next(self.chain, STRING, Workspace:GetServerTimeNow()) > 1 then
+		self.breaks += 1 -- it was running: the screen shows the break
+	end
 	AttackString.reset(self.chain)
 	self.cut = self.count
 	self.queued, self.queuedWith = nil, nil -- a press kept from before the hit is not made after it
@@ -227,6 +232,15 @@ function OwnSwing.settle(self: Swing, tag: number, step: number)
 	if model and weapon then
 		self.hooks.restep(model, self.last, weapon, step)
 	end
+end
+
+-- The player's string as it stands at server time `now`, for the screen (StringHud.View): the last step taken, when
+-- its weapon is ready again, whether a press now goes on with it (not with another weapon in hand than the string's:
+-- that starts over), and how many running strings a hit has broken. `holding`: the weapon held now.
+function OwnSwing.stringView(self: Swing, now: number, holding: string): { step: number, ready: number, live: boolean, breaks: number }
+	local chain = self.chain
+	local live = holding == self.weapon and AttackString.next(chain, STRING, now) > 1
+	return { step = chain.step, ready = chain.ready, live = live, breaks = self.breaks }
 end
 
 -- Whether attack number `tag` of the player's character (Names.SwingTag) was drawn when pressed (every one this

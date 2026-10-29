@@ -2,7 +2,8 @@
 -- The way back onto the trains for a fighter who fell with a ticket left (decision 11; the round keeps the tickets and
 -- sends the fighter here: send). The fall (or the home-run flight) plays on for `after` seconds; then the fighter goes up
 -- to the stands, the gondola the balloons hold (hooks.stands), and waits there Config.Comeback.WaitSeconds. Then it is put
--- DropHeight over the clearest spawn spot (farthest from every fighter on the trains: ArenaLayout.clearest) and comes
+-- DropHeight over the clearest spawn spot (farthest from every fighter on the trains: ArenaLayout.clearest; never on a
+-- car coming off: hooks.away) and comes
 -- down under a parachute at DropSpeed: a LinearVelocity on its root that its owner's physics runs (a player's client or
 -- this server for a bot), with no walking or jumping meanwhile, and its shadow on the roof where it will land
 -- (Names.LandingMark, drawn by GroundMarks). Once its feet are on the spot's top (or a moment after they should be), the
@@ -26,6 +27,7 @@ export type Hooks = {
 	fighters: () -> { Model }, -- the fighters on the trains (not those on their way back)
 	stands: () -> CFrame, -- a spot of its own in the stands
 	isPlayer: (model: Model) -> boolean, -- a player's character (held still under the parachute; a bot is not walked)
+	away: (train: number, car: number) -> boolean, -- that car is coming off or gone (nobody comes down there)
 }
 export type Service = {
 	-- Sends `model` back: up to the stands after `after` seconds, down by parachute after the wait, back() once landed.
@@ -84,7 +86,12 @@ function Comebacks.start(spots: { ArenaLayout.Spot }, folder: Instance, hooks: H
 				table.insert(others, { x = at.X, z = at.Z })
 			end
 		end
-		local shuffled = table.clone(spots)
+		local shuffled = {}
+		for _, spot in spots do
+			if not (spot.car and hooks.away(spot.train, spot.car)) then
+				table.insert(shuffled, spot)
+			end
+		end
 		for i = #shuffled, 2, -1 do
 			local j = math.random(i)
 			shuffled[i], shuffled[j] = shuffled[j], shuffled[i]

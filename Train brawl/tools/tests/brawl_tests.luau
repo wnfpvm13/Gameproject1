@@ -1069,6 +1069,45 @@ do
 	check("a blocker walks slower but still moves", B.WalkShare > 0 and B.WalkShare < 1)
 end
 
+-- 21. Back cars coming off (persona fix 6).
+do
+	local U = Config.Uncouple
+	local back, down, v = Uncouple.motion(U.DriftSeconds, U)
+	check("a car lets go slowly: the gap to the car ahead stays jumpable most of the drift", back == 0.5 * U.DriftSpeed * U.DriftSeconds
+		and down == 0 and v == U.DriftSpeed and select(1, Uncouple.motion(U.DriftSeconds * 0.75, U)) + A.CarGap < 9)
+	local endBack, endDown = Uncouple.motion(U.DriftSeconds + U.FallSeconds, U)
+	local highest = 0
+	for _, surface in L.surfaces do
+		highest = math.max(highest, surface.top)
+	end
+	check("then it drops away: even a caboose's lookout ends up under the fall line", highest - endDown < L.fallLine and endBack > 20)
+	check("its motion is smooth where the drift turns into the drop", math.abs(select(1, Uncouple.motion(U.DriftSeconds + 1e-6, U)) - back) < 1e-4)
+	check("the first car comes off well into the fight and leaves time for more", U.FirstAfter >= 60 and U.FirstAfter + U.Warning < Config.Round.MaxSeconds
+		and U.Every > U.Warning + U.DriftSeconds + U.FallSeconds)
+	check("only a train still longer than it keeps loses a car", Uncouple.pick({ 2, 4, 2 }, 2, function() return 0.99 end) == 2
+		and Uncouple.pick({ 2, 2 }, 2, math.random) == nil)
+	check("every top and spawn spot knows its car", (function()
+		for _, surface in L.surfaces do
+			if not surface.car or L.trains[surface.train].cars[surface.car] == nil then
+				return false
+			end
+		end
+		for _, spot in L.spots do
+			if not spot.car then
+				return false
+			end
+		end
+		return true
+	end)())
+	local every = 0
+	for i, train in L.trains do
+		for k in train.cars do
+			every += #ArenaLayout.planksOn(L, i, k)
+		end
+	end
+	check("each plank rests on a car of each train it joins", every == 2 * #L.planks, every .. " vs " .. #L.planks)
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed == 0 then
 	print("ALL PASS")

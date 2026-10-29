@@ -730,6 +730,24 @@ Config.Block = {
 	WalkShare = 0.5,
 }
 
+-- The back cars coming off (Uncoupling, persona fix 6; B's "칸 떨어져 나가기": "1분 30초쯤부터 맨 뒤 칸이 예고 후 천천히
+-- 떨어짐, 탈출 시간 줌"), against the stand-offs the persona playtest found (one tester hid 136 s). FirstAfter seconds
+-- into the fight, then every Every, the last car of a random train still longer than KeepCars cars is warned Warning
+-- seconds ahead, then lets go: it eases back over DriftSeconds to DriftSpeed (the gap to the car ahead opening past a
+-- jump only near the end), then drops away behind over FallSeconds, speeding to FallSpeed and sinking Sink (its roof
+-- well under the fall line: anyone still on it falls off). The planks on it go with it. All back at the next round.
+Config.Uncouple = {
+	FirstAfter = 75,
+	Every = 20,
+	Warning = 5,
+	KeepCars = 2,
+	DriftSeconds = 4,
+	DriftSpeed = 6,
+	FallSeconds = 2.5,
+	FallSpeed = 30,
+	Sink = 25,
+}
+
 -- The warning band on a roof edge that drops into nothing (EdgeWarning, persona fix 5): shown within Within of the
 -- edge, Length long along it where the player is and Width across, judged by stepping Probe past the edge.
 Config.Edge = {

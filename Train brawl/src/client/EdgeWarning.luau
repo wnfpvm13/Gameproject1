@@ -3,7 +3,8 @@
 -- without knowing they were at an edge). While the player fights on the trains and stands within Config.Edge.Within of
 -- an edge of the top under it that drops into nothing (just past it there is no lower top: ArenaLayout.topUnder, and
 -- no plank), a red-and-cream striped band lies along that edge where the player is, stronger the closer it gets. Edges
--- that only step down onto another car (the next car of the train, a lookout's roof below) get none. Drawn on this
+-- that only step down onto another car (the next car of the train, a lookout's roof below) get none; a car coming off
+-- counts as not there (its edges, and the edge it leaves behind, are judged without it). Drawn on this
 -- client only, with a SurfaceGui (no uploaded image, not the glowing Neon that read as a debug marker); no collisions
 -- or raycasts.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -26,7 +27,7 @@ local PLANK_HALF = 2 -- a plank is 4 wide (Config.Arena.PlankWidth)
 
 -- One band per side of a top: -x, +x, -z, +z.
 type Band = { part: Part, fill: Frame }
-type Fields = { surfaces: { ArenaLayout.Surface }, planks: { ArenaLayout.Plank }, bands: { Band }, folder: Folder }
+type Fields = { all: { ArenaLayout.Surface }, surfaces: { ArenaLayout.Surface }, planks: { ArenaLayout.Plank }, bands: { Band }, folder: Folder }
 export type Warning = typeof(setmetatable({} :: Fields, EdgeWarning))
 
 local function makeBand(folder: Folder): Band
@@ -66,7 +67,7 @@ function EdgeWarning.new(layout: ArenaLayout.Layout): Warning
 	for _ = 1, 4 do
 		table.insert(bands, makeBand(folder))
 	end
-	local fields: Fields = { surfaces = layout.surfaces, planks = layout.planks, bands = bands, folder = folder }
+	local fields: Fields = { all = layout.surfaces, surfaces = layout.surfaces, planks = layout.planks, bands = bands, folder = folder }
 	return setmetatable(fields, EdgeWarning)
 end
 
@@ -84,9 +85,17 @@ local function dropsOff(self: Warning, x: number, z: number, feet: number): bool
 	return true
 end
 
--- Every frame. own: the player's character; fighting: it fights on the trains now.
-function EdgeWarning.update(self: Warning, own: Model?, fighting: boolean)
+-- Every frame. own: the player's character; fighting: it fights on the trains now; away: whether a car is coming off
+-- or gone (UncoupleShow).
+function EdgeWarning.update(self: Warning, own: Model?, fighting: boolean, away: (train: number, car: number) -> boolean)
 	local e = Config.Edge
+	local here = {}
+	for _, surface in self.all do
+		if not away(surface.train, surface.car) then
+			table.insert(here, surface)
+		end
+	end
+	self.surfaces = here
 	local body = if fighting then CharacterParts.body(own) else nil
 	local top: ArenaLayout.Surface? = nil
 	local feet = 0
@@ -103,14 +112,14 @@ function EdgeWarning.update(self: Warning, own: Model?, fighting: boolean)
 			-- This side: how far the player is from it, which way is out, and the run along it.
 			local across = i <= 2
 			local sign = if i % 2 == 1 then -1 else 1
-			local away = if across then halfWidth - sign * (at.X - top.x) else halfLength - sign * (at.Z - top.z)
-			if away < e.Within then
+			local gap = if across then halfWidth - sign * (at.X - top.x) else halfLength - sign * (at.Z - top.z)
+			if gap < e.Within then
 				local edgeX = if across then top.x + sign * halfWidth else at.X
 				local edgeZ = if across then at.Z else top.z + sign * halfLength
 				local probeX = if across then edgeX + sign * e.Probe else edgeX
 				local probeZ = if across then edgeZ else edgeZ + sign * e.Probe
 				if dropsOff(self, probeX, probeZ, feet) then
-					shown = math.clamp(1 - math.max(away, 0) / e.Within, 0, 1)
+					shown = math.clamp(1 - math.max(gap, 0) / e.Within, 0, 1)
 					-- Along the edge where the player is, kept on the top's side and within its length.
 					local run = math.min(e.Length, if across then top.length else top.width)
 					local along = if across then at.Z else at.X

@@ -42,6 +42,7 @@ Words.Guarded = "보호 중, 때리면 풀린다"
 Words.StringBroken = "끊김!" -- under the string marks when a hit breaks the player's 1-2-3 string
 Words.GuardBroken = "막기 깨짐!" -- over a blocker whose guard a string's third broke
 Words.ResultTitle = "이번 판"
+Words.CarLeaving = "맨 뒤 칸이 떨어져 나간다! 앞 칸으로!" -- a back car is about to come off
 
 -- Under the big text when the player is knocked off: who did it and how, and how many hits it took since its last fall.
 function Words.knockedOff(by: string?, how: string, hits: number): string

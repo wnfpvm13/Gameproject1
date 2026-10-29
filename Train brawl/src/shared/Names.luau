@@ -62,4 +62,13 @@ return {
 	ReturnAt = "ReturnAt", -- server time the parachute drop starts (while "Up")
 	GuardUntil = "GuardUntil", -- server time a fighter just back stops being unhittable (FighterHealth; 0 = attacked)
 	Blocking = "Blocking", -- the fighter is blocking now (Guarding; true or none)
+	-- The arena's cars: each a Model named CarModel..k in its train's Model (TrainModel..i), its planks named PlankPart
+	-- with PlankNumber (ArenaBuilder). A back car coming off (Uncoupling) carries CarLeavingAt (server time it lets go)
+	-- and, once gone, CarGone.
+	TrainModel = "Train",
+	CarModel = "Car",
+	PlankPart = "Plank",
+	PlankNumber = "Number",
+	CarLeavingAt = "LeavingAt",
+	CarGone = "Gone",
 }

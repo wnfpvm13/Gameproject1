@@ -4,7 +4,7 @@
 -- bursts in Dynamite; coal lumps fly in Missiles, bowled wheels roll in Wheels, oil slicks lie in Slicks); weapon crates drop onto the trains during a fight (WeaponDrops); falls are noticed by FallWatch
 -- and cost that fighter a ticket, as does a home run (health emptied, kept by FighterHealth): with one left it comes
 -- back by balloon and parachute (Comebacks, full health, a short guard on landing), with none it is out; a held block
--- softens hits from the front (Guarding, judged in WeaponService); knock-offs and dynamite
+-- softens hits from the front (Guarding, judged in WeaponService); late in a fight the back cars come off (Uncoupling); knock-offs and dynamite
 -- bursts go to every client; every character holds its weapon in its hand (WeaponGear), and every player's body is
 -- made the standard size with the standard animations (AvatarRules). For testing alone in Studio, the Workspace
 -- attribute Names.Solo makes practice bots (bodies: Sandbags, minds: BotBrain) join every round and fight.
@@ -30,6 +30,7 @@ local Slicks = require(script.Parent:WaitForChild("Slicks"))
 local RoundService = require(script.Parent:WaitForChild("RoundService"))
 local Comebacks = require(script.Parent:WaitForChild("Comebacks"))
 local Guarding = require(script.Parent:WaitForChild("Guarding"))
+local Uncoupling = require(script.Parent:WaitForChild("Uncoupling"))
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
@@ -49,6 +50,7 @@ local sandbags = Sandbags.start(arena.fallLine, function(model: Model, body, now
 	end
 end)
 local health = FighterHealth.start()
+local uncoupling = Uncoupling.start(arena.folder, arena.layout)
 -- The way back after a fall needs the round's fighters and stands, made below.
 local comebacks: Comebacks.Service? = nil
 
@@ -87,6 +89,7 @@ comebacks = Comebacks.start(arena.spots, arena.folder, {
 	isPlayer = function(model: Model): boolean
 		return Players:GetPlayerFromCharacter(model) ~= nil
 	end,
+	away = uncoupling.away,
 })
 FallWatch.start(arena.fallLine, round.fighters, function(model: Model)
 	if round.isFighting(model) then -- a winner falling during the result stays the winner
@@ -150,6 +153,7 @@ local drops = WeaponDrops.start(arena.layout.surfaces, PartUtil.folder(Workspace
 		return weapons.holding(model) == WeaponRules.FIST
 	end,
 	give = weapons.give,
+	away = uncoupling.away,
 })
 local stringRules = AttackString.rules(Config.Attack)
 brain = BotBrain.new(arena.layout.surfaces, {

@@ -6,7 +6,9 @@
 -- lookout's too) and red marker lamps. The planks between the trains get iron straps. All of it drawn only
 -- (PartUtil.decor): nothing here collides, casts a shadow or is seen by raycasts, so where anyone can stand stays
 -- the server's. What lies on a top is mostly a few hundredths high, under the feet; the coal (up to about 0.4), the
--- tender's rim (0.35) and the flatcar's stakes along its edges (1) stand higher and are walked through.
+-- tender's rim (0.35) and the flatcar's stakes along its edges (1) stand higher and are walked through. Each car's
+-- dressing is a model of its own (Names.TrainModel..i / Names.CarModel..k, as the server's cars) and each plank's
+-- straps too (Names.PlankPart..n), so a car coming off can take its dressing along (UncoupleShow).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -239,26 +241,35 @@ function CarDecor.build(layout: ArenaLayout.Layout): Folder
 	end
 	local folder = PartUtil.folder(Workspace, Names.CarDecorFolder)
 	for i, train in layout.trains do
+		local trainModel = Instance.new("Model")
+		trainModel.Name = Names.TrainModel .. i
+		trainModel.Parent = folder
 		for k, place in train.cars do
 			local kind = Config.Arena.CarKinds[place.kind]
 			if kind.boiler then
 				continue -- LocomotiveDecor's
 			end
+			local car = Instance.new("Model")
+			car.Name = Names.CarModel .. k
+			car.Parent = trainModel
 			local number = 100 * i + k
-			runningGear(folder, train.x, place)
+			runningGear(car, train.x, place)
 			if place.kind == "Tender" then
-				tender(folder, train.x, place, number)
+				tender(car, train.x, place, number)
 			elseif place.kind == "Flatcar" then
-				flatcar(folder, train.x, place, kind, number)
+				flatcar(car, train.x, place, kind, number)
 			elseif place.kind == "Caboose" then
-				caboose(folder, train.x, place, kind)
+				caboose(car, train.x, place, kind)
 			else
-				boxcar(folder, train.x, place, number)
+				boxcar(car, train.x, place, number)
 			end
 		end
 	end
-	for _, plank in layout.planks do
-		plankStraps(folder, plank)
+	for n, plank in layout.planks do
+		local straps = Instance.new("Model")
+		straps.Name = Names.PlankPart .. n
+		straps.Parent = folder
+		plankStraps(straps, plank)
 	end
 	return folder
 end

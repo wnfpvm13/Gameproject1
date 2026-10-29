@@ -171,15 +171,20 @@ function ArenaBuilder.build(): Arena
 	local layout = ArenaLayout.layout(a, Config.Fall.Margin)
 	for i, train in layout.trains do
 		local model = Instance.new("Model")
-		model.Name = "Train" .. i
-		for _, place in train.cars do
-			addCar(model, train.x, place)
+		model.Name = Names.TrainModel .. i
+		-- Each car its own model (a back car can come off: Uncoupling).
+		for k, place in train.cars do
+			local car = Instance.new("Model")
+			car.Name = Names.CarModel .. k
+			addCar(car, train.x, place)
+			car.Parent = model
 		end
 		model.Parent = folder
 	end
-	for _, plank in layout.planks do
-		local part = PartUtil.solidBlock("Plank", Vector3.new(plank.length, a.PlankThickness, a.PlankWidth), a.Colors.Plank, Enum.Material.WoodPlanks, folder)
+	for n, plank in layout.planks do
+		local part = PartUtil.solidBlock(Names.PlankPart, Vector3.new(plank.length, a.PlankThickness, a.PlankWidth), a.Colors.Plank, Enum.Material.WoodPlanks, folder)
 		part.CFrame = CFrame.new(plank.x, plank.top + a.PlankThickness / 2, plank.z)
+		part:SetAttribute(Names.PlankNumber, n)
 	end
 	addGround(folder)
 	local waitingSpot = addWaitingRoom(folder)

@@ -39,11 +39,12 @@ export type Spec = {
 	PlankSpacing: number,
 }
 
-export type CarPlace = { kind: string, train: number, front: number, back: number, middle: number, length: number, roof: number }
--- A walkable top: its middle (x, z), size across (width) and along the track (length), and height.
-export type Surface = { train: number, kind: string, x: number, z: number, width: number, length: number, top: number, plank: boolean }
+-- car: its number along its train (1 = the locomotive in front).
+export type CarPlace = { kind: string, train: number, car: number, front: number, back: number, middle: number, length: number, roof: number }
+-- A walkable top: its train and car, its middle (x, z), size across (width) and along the track (length), and height.
+export type Surface = { train: number, car: number, kind: string, x: number, z: number, width: number, length: number, top: number, plank: boolean }
 export type Plank = { x: number, z: number, top: number, length: number }
-export type Spot = { x: number, y: number, z: number, train: number }
+export type Spot = { x: number, y: number, z: number, train: number, car: number? }
 export type Train = { x: number, cars: { CarPlace } }
 export type Layout = { trains: { Train }, surfaces: { Surface }, planks: { Plank }, spots: { Spot }, fallLine: number, outerEdge: number }
 
@@ -61,11 +62,12 @@ function ArenaLayout.carPlaces(cars: { string }, kinds: { [string]: Kind }, carG
 	end
 	local places = {}
 	local z = shift - total / 2
-	for _, name in cars do
+	for k, name in cars do
 		local kind = kinds[name]
 		table.insert(places, {
 			kind = name,
 			train = train,
+			car = k,
 			front = z,
 			back = z + kind.length,
 			middle = z + kind.length / 2,
@@ -83,6 +85,7 @@ local function carSurfaces(place: CarPlace, kind: Kind, x: number, roofWidth: nu
 	local from = place.front + place.length * (kind.roofFrom or 0)
 	table.insert(list, {
 		train = place.train,
+		car = place.car,
 		kind = place.kind,
 		x = x,
 		z = (from + place.back) / 2,
@@ -94,18 +97,19 @@ local function carSurfaces(place: CarPlace, kind: Kind, x: number, roofWidth: nu
 	local boiler = kind.boiler
 	if boiler then
 		local to = place.front + place.length * boiler.to
-		table.insert(list, { train = place.train, kind = place.kind, x = x, z = (place.front + to) / 2, width = boiler.width, length = to - place.front, top = boiler.top, plank = false })
+		table.insert(list, { train = place.train, car = place.car, kind = place.kind, x = x, z = (place.front + to) / 2, width = boiler.width, length = to - place.front, top = boiler.top, plank = false })
 		local stack = kind.stack
 		if stack then
 			-- Round, taken as the square around it (like the boiler).
 			local z = place.front + place.length * stack.along
-			table.insert(list, { train = place.train, kind = place.kind, x = x, z = z, width = stack.width, length = stack.width, top = boiler.top + stack.height, plank = false })
+			table.insert(list, { train = place.train, car = place.car, kind = place.kind, x = x, z = z, width = stack.width, length = stack.width, top = boiler.top + stack.height, plank = false })
 		end
 	end
 	local crates: { Box } = kind.crates or {}
 	for _, crate in crates do
 		table.insert(list, {
 			train = place.train,
+			car = place.car,
 			kind = place.kind,
 			x = x,
 			z = place.front + place.length * crate.along,
@@ -118,7 +122,7 @@ local function carSurfaces(place: CarPlace, kind: Kind, x: number, roofWidth: nu
 	local cupola = kind.cupola
 	if cupola then
 		local a, b = place.front + place.length * cupola.from, place.front + place.length * cupola.to
-		table.insert(list, { train = place.train, kind = place.kind, x = x, z = (a + b) / 2, width = cupola.width, length = b - a, top = place.roof + cupola.height, plank = false })
+		table.insert(list, { train = place.train, car = place.car, kind = place.kind, x = x, z = (a + b) / 2, width = cupola.width, length = b - a, top = place.roof + cupola.height, plank = false })
 	end
 	return list
 end
@@ -185,7 +189,7 @@ function ArenaLayout.layout(spec: Spec, fallMargin: number): Layout
 				table.insert(surfaces, surface)
 			end
 			for _, share in kind.spawns do
-				table.insert(spots, { x = x, y = place.roof, z = place.front + place.length * share, train = i })
+				table.insert(spots, { x = x, y = place.roof, z = place.front + place.length * share, train = i, car = place.car })
 			end
 		end
 	end
@@ -243,6 +247,24 @@ function ArenaLayout.preferMiddle(spots: { Spot }, trains: number, shuffle: <T>(
 				end
 			end
 			k += 1
+		end
+	end
+	return list
+end
+
+-- The planks (their numbers in `layout.planks`) resting on car `car` of train `train`: beside that train, within the
+-- car's length (a car that leaves the train takes them along).
+function ArenaLayout.planksOn(layout: Layout, train: number, car: number): { number }
+	local line = layout.trains[train]
+	local place = line and line.cars[car]
+	local list = {}
+	if not place then
+		return list
+	end
+	for n, plank in layout.planks do
+		-- (Planks only lie between neighbouring trains: one that reaches this train's line lies beside it.)
+		if math.abs(plank.x - line.x) < plank.length and plank.z >= place.front and plank.z <= place.back then
+			table.insert(list, n)
 		end
 	end
 	return list

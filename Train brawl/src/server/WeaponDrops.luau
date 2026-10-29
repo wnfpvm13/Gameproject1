@@ -1,6 +1,8 @@
 --!strict
--- Weapon crates on the server (Config.Drops). While a fight runs, crates float down under parachutes onto random spots
--- on the trains' wide tops (roofs and decks, never under a lookout or a crate), each holding a weapon picked by weight
+-- Weapon crates on the server (Config.Drops). While a fight runs, crates float down under parachutes onto spots on the
+-- trains' wide tops (roofs and decks, never under a lookout or a crate, never a car coming off: hooks.away), the one of a
+-- few random tries farthest from the fighters (bait drawing them out of a stand-off: persona fix 6; a crate on a car that
+-- comes off goes with it), each holding a weapon picked by weight
 -- (WeaponRules.pick) and showing its name. Its shadow on the top shows where one will land while it falls (drawn by every
 -- client: GroundMarks). Coal tenders get none (a crate half sunk in coal, its shadow lost on it). A fighter with
 -- bare fists who walks into a landed crate takes its weapon (hooks.give; practice bots go for one on their top: landed()).
@@ -28,11 +30,13 @@ export type Hooks = {
 	fighters: () -> { Model }, -- the fighters still in the round
 	canTake: (model: Model) -> boolean, -- a fighter holding bare fists
 	give: (model: Model, weapon: string) -> (), -- hands the weapon over
+	away: (train: number, car: number) -> boolean, -- that car is coming off or gone (Uncoupling)
 }
 -- landed: where the landed crates nobody has taken yet lie (on their tops).
 export type Drops = { clear: () -> (), landed: () -> { Vector3 }, stop: () -> () }
 
-type Crate = { model: Model, box: Part, weapon: string, landAt: number, marker: Part?, chute: { BasePart } }
+-- train, car: the car it lands on.
+type Crate = { model: Model, box: Part, weapon: string, landAt: number, marker: Part?, chute: { BasePart }, train: number, car: number }
 
 local CRATE = 2.6 -- the box's size
 local MARGIN = 2.5 -- a landing spot keeps this far in from a top's edges
@@ -43,18 +47,23 @@ local function part(name: string, size: Vector3, color: Color3, material: Enum.M
 	return PartUtil.decor(name, size, CFrame.identity, color, material, nil, shape) -- parented by the caller
 end
 
--- A random landing spot on a wide top that nothing higher stands over; nil when none is found in a few tries.
-local function spot(surfaces: { ArenaLayout.Surface }): Vector3?
+local TRIES = 12 -- random spots tried for a crate (the one farthest from the fighters is taken)
+
+-- A landing spot on a wide top that nothing higher stands over and whose car is not coming off: of a few random ones,
+-- the farthest from every fighter at `others` (ArenaLayout.clearest); nil when none is found. Also its surface.
+local function spot(surfaces: { ArenaLayout.Surface }, away: (number, number) -> boolean, others: { { x: number, z: number } }): (Vector3?, ArenaLayout.Surface?)
 	local wide = {}
 	for _, surface in surfaces do
-		if surface.width >= Config.Arena.RoofWidth - 1e-6 and surface.length > MARGIN * 2 and surface.kind ~= "Tender" then
+		if surface.width >= Config.Arena.RoofWidth - 1e-6 and surface.length > MARGIN * 2 and surface.kind ~= "Tender" and not away(surface.train, surface.car) then
 			table.insert(wide, surface)
 		end
 	end
 	if #wide == 0 then
-		return nil
+		return nil, nil
 	end
-	for _ = 1, 12 do
+	local tries: { ArenaLayout.Spot } = {}
+	local onTop: { [ArenaLayout.Spot]: ArenaLayout.Surface } = {}
+	for _ = 1, TRIES do
 		local surface = wide[math.random(#wide)]
 		local x = surface.x + (math.random() * 2 - 1) * (surface.width / 2 - MARGIN)
 		local z = surface.z + (math.random() * 2 - 1) * (surface.length / 2 - MARGIN)
@@ -65,10 +74,16 @@ local function spot(surfaces: { ArenaLayout.Surface }): Vector3?
 			end
 		end
 		if not covered then
-			return Vector3.new(x, surface.top, z)
+			local try = { x = x, y = surface.top, z = z, train = surface.train, car = surface.car }
+			table.insert(tries, try)
+			onTop[try] = surface
 		end
 	end
-	return nil
+	local best = ArenaLayout.clearest(tries, others)
+	if not best then
+		return nil, nil
+	end
+	return Vector3.new(best.x, best.y, best.z), onTop[best]
 end
 
 -- surfaces: the arena's tops (ArenaLayout); folder: where the crates go.
@@ -96,10 +111,15 @@ function WeaponDrops.start(surfaces: { ArenaLayout.Surface }, folder: Instance, 
 		end
 	end
 
-	local function drop(now: number)
-		local at = spot(surfaces)
+	local function drop(now: number, fighters: { Model })
+		local others = {}
+		for _, model in fighters do
+			local p = model:GetPivot().Position
+			table.insert(others, { x = p.X, z = p.Z })
+		end
+		local at, surface = spot(surfaces, hooks.away, others)
 		local weapon = WeaponRules.pick(Config.Weapons, math.random())
-		if not (at and weapon) then
+		if not (at and surface and weapon) then
 			return
 		end
 		local model = Instance.new("Model")
@@ -162,7 +182,7 @@ function WeaponDrops.start(surfaces: { ArenaLayout.Surface }, folder: Instance, 
 		marker.Parent = folder
 		model.Parent = folder
 		TweenService:Create(box, TweenInfo.new(d.FallSeconds, Enum.EasingStyle.Linear), { CFrame = landed }):Play()
-		table.insert(crates, { model = model, box = box, weapon = weapon, landAt = now + d.FallSeconds, marker = marker, chute = chute })
+		table.insert(crates, { model = model, box = box, weapon = weapon, landAt = now + d.FallSeconds, marker = marker, chute = chute, train = surface.train, car = surface.car })
 	end
 
 	local function step(now: number)
@@ -181,11 +201,15 @@ function WeaponDrops.start(surfaces: { ArenaLayout.Surface }, folder: Instance, 
 		local fighters = hooks.fighters()
 		if now >= nextDrop then
 			if #crates < WeaponRules.cratesFor(#fighters, d.MaxOnMap, d.FightersPerCrate) then
-				drop(now)
+				drop(now, fighters)
 			end
 			nextDrop = now + d.Every
 		end
 		for _, crate in table.clone(crates) do
+			if hooks.away(crate.train, crate.car) then
+				remove(crate) -- its car is coming off: it goes with it
+				continue
+			end
 			if now >= crate.landAt then
 				if crate.marker then
 					-- Landed: the parachute and the mark go.

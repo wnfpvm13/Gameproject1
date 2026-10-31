@@ -502,6 +502,9 @@ Config.Thrown = {
 -- Persona fix 3 (2026-10-29): the testers picked a weapon up twice in eight rounds (the first crate came at 15 s, they
 -- were out at 33 s on average), so the first comes 5 s into the fight, then every 12 s, one for every two fighters left
 -- (at most 3; it was one for every three, at most 2).
+-- Where (2026-10-31, the persona rerun: the testers walked 47% of the time and fought 19%, crates landing far away):
+-- one for a fighter with bare fists lands on its train, the nearest of a few spots at least NearGap from it; only when
+-- no hit has landed for QuietSeconds (a stand-off) does it land far from everyone, as bait (persona fix 6).
 Config.Drops = {
 	FirstAfter = 5,
 	Every = 12,
@@ -511,6 +514,8 @@ Config.Drops = {
 	FallHeight = 40,
 	LifeSeconds = 25,
 	PickupReach = 3.5, -- a fighter this close (along the ground) takes it
+	QuietSeconds = 8,
+	NearGap = 5, -- (over PickupReach: it is not taken the moment it lands)
 }
 
 -- Health and what a hit does (the rules are in HitRules; Smash Legends-style): health drops with every hit, and the

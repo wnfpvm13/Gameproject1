@@ -154,6 +154,7 @@ local drops = WeaponDrops.start(arena.layout.surfaces, PartUtil.folder(Workspace
 	end,
 	give = weapons.give,
 	away = uncoupling.away,
+	quietSince = round.quietSince,
 })
 local stringRules = AttackString.rules(Config.Attack)
 brain = BotBrain.new(arena.layout.surfaces, {

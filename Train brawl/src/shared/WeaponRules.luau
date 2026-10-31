@@ -2,7 +2,7 @@
 -- The weapons as pure rules (numbers from Config.Weapons and Config.Drops): which weapon a crate holds (by weight),
 -- who an area hit reaches (a hammer's slam, a dynamite's blast, a burst of firecrackers), whom a thrown lump or a
 -- rolling wheel passes, where a thrown stick is along its arc, which styles show their hits at once or hit from afar,
--- how many crates a round keeps on the map. Requires nothing.
+-- how many crates a round keeps on the map and whom and where the next one is for. Requires nothing.
 
 local WeaponRules = {}
 
@@ -127,6 +127,48 @@ end
 -- How many crates may be on the map with `alive` fighters left: one for every `per`, at least one, at most `most`.
 function WeaponRules.cratesFor(alive: number, most: number, per: number): number
 	return math.clamp(math.ceil(alive / per), 1, most)
+end
+
+-- A fighter as the crates see it: where it stands, and whether it holds bare fists (it can take a crate).
+export type Seen = { x: number, z: number, fists: boolean }
+
+-- Whom the next crate is for (2026-10-31: the testers walked 47% of the time, mostly to crates bait had dropped far
+-- away): nobody when the fight has gone `quiet` seconds without a hit landing (a stand-off: the crate is bait, dropped
+-- far from everyone), else one of `fighters` picked with `random` (a number in [0, 1)) among those holding bare fists
+-- (weapons are the heart of the fight: owner 2026-10-31), among all when none does. Its index in `fighters`, or nil.
+function WeaponRules.crateFor(fighters: { Seen }, quiet: number, quietLimit: number, random: () -> number): number?
+	if quiet >= quietLimit or #fighters == 0 then
+		return nil
+	end
+	local pool = {}
+	for i, seen in fighters do
+		if seen.fists then
+			table.insert(pool, i)
+		end
+	end
+	if #pool == 0 then
+		for i in fighters do
+			table.insert(pool, i)
+		end
+	end
+	return pool[math.clamp(math.floor(random() * #pool) + 1, 1, #pool)]
+end
+
+-- Of `spots`, where a crate for the fighter at (x, z) lands: the nearest at least `gap` away along the ground (it walks
+-- a step or two to it, and it does not drop on its head), or the farthest when all are closer. Its index, or nil.
+function WeaponRules.nearSpot(spots: { { x: number, z: number } }, x: number, z: number, gap: number): number?
+	local best, bestDistance = nil, math.huge
+	local far, farDistance = nil, -1
+	for i, spot in spots do
+		local distance = math.sqrt((spot.x - x) ^ 2 + (spot.z - z) ^ 2)
+		if distance >= gap and distance < bestDistance then
+			best, bestDistance = i, distance
+		end
+		if distance > farDistance then
+			far, farDistance = i, distance
+		end
+	end
+	return best or far
 end
 
 return WeaponRules

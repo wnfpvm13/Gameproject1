@@ -8,6 +8,7 @@
 -- left, the fighter is sent back (hooks.comeback: up to the stands, down by parachute) and stays in the round, but is
 -- not among the fighters on the trains (fighters(), isFighting) until it has landed. A fighter who dies or leaves is out
 -- at once. The last one to hit a fighter within Config.Round.KillCreditSeconds before a fall gets the knock-off.
+-- quietSince() says when a hit last landed in the fight (or when it began): a long quiet is a stand-off (WeaponDrops).
 -- Players who come in during a fight watch until the next round. The knocked out go to a spot of their own in the
 -- waiting room (stands()), so nobody lands on top of anyone.
 local Players = game:GetService("Players")
@@ -30,6 +31,7 @@ export type Service = {
 	isFighting: (model: Model) -> boolean, -- on the trains, and the fight has started
 	stands: () -> CFrame, -- a spot of its own in the waiting room (the stands)
 	noteHit: (victim: Model, swinger: Model) -> (),
+	quietSince: () -> number, -- server time a hit last landed in this fight (its start when none has)
 	-- Fell or flew out: how is "homerun" (health emptied), "fall" (fell off) or "gone" (died or left: out at once). A
 	-- fall or a home run costs a ticket; only the last one puts the fighter out.
 	eliminate: (model: Model, how: string) -> (),
@@ -98,6 +100,7 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 	local r = Config.Round
 	local alive: { [Model]: Fighter } = {}
 	local lastHit: { [Model]: { swinger: Model, at: number } } = {}
+	local lastLanded = 0 -- server time a hit last landed (quietSince)
 	local fighting = false
 	local running = true
 	-- Home runs in a row this round (RoundRules.homerunStreak), and wins in a row this visit by player (or bot name).
@@ -298,6 +301,7 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 			end
 			fighting = true
 			local fightEnds = now() + r.MaxSeconds
+			lastLanded = now()
 			setPhase("Fight", fightEnds)
 			-- With practice bots, it also ends once no player is left in it (the bots would fight on for minutes while
 			-- the player could only watch from the stands; with players only, two or more in means a player is in).
@@ -389,8 +393,12 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 		stands = stands,
 		noteHit = function(victim: Model, swinger: Model)
 			lastHit[victim] = { swinger = swinger, at = now() }
+			lastLanded = now()
 		end,
 		eliminate = eliminate,
+		quietSince = function(): number
+			return lastLanded
+		end,
 		stop = function()
 			running = false
 			for _, connection in connections do

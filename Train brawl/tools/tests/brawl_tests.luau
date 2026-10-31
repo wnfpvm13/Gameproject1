@@ -1161,6 +1161,24 @@ do
 		and Words.feed("B", "A", "homerun", true, 1) == "A → B 홈런!")
 end
 
+-- 24. Crates land near whoever needs one; far away only as bait in a stand-off (persona rerun, 2026-10-31: the testers
+-- walked 47% of the time, mostly to far crates; weapons are the heart of the fight, owner 2026-10-31).
+do
+	local d = Config.Drops
+	local seen = { { x = 0, z = 0, fists = false }, { x = 10, z = 0, fists = true }, { x = 20, z = 0, fists = true } }
+	check("while hits keep landing, a crate is for someone with bare fists",
+		WeaponRules.crateFor(seen, 0, d.QuietSeconds, function() return 0 end) == 2
+			and WeaponRules.crateFor(seen, 0, d.QuietSeconds, function() return 0.99 end) == 3)
+	check("with everyone armed, a crate is for anyone", WeaponRules.crateFor({ { x = 0, z = 0, fists = false } }, 0, d.QuietSeconds, math.random) == 1)
+	check("in a stand-off (no hit for QuietSeconds) a crate is for nobody: bait",
+		WeaponRules.crateFor(seen, d.QuietSeconds, d.QuietSeconds, math.random) == nil and WeaponRules.crateFor({}, 0, d.QuietSeconds, math.random) == nil)
+	check("a crate lands at the nearest spot at least NearGap from whom it is for",
+		WeaponRules.nearSpot({ { x = 1, z = 0 }, { x = 6, z = 0 }, { x = 30, z = 0 } }, 0, 0, d.NearGap) == 2)
+	check("with every spot closer than NearGap, the farthest", WeaponRules.nearSpot({ { x = 1, z = 0 }, { x = 2, z = 0 } }, 0, 0, d.NearGap) == 2
+		and WeaponRules.nearSpot({}, 0, 0, d.NearGap) == nil)
+	check("it is not taken the moment it lands, and the first crate of a fight is never bait", d.NearGap > d.PickupReach and d.FirstAfter < d.QuietSeconds)
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed == 0 then
 	print("ALL PASS")

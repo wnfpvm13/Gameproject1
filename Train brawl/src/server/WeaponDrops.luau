@@ -1,8 +1,10 @@
 --!strict
 -- Weapon crates on the server (Config.Drops). While a fight runs, crates float down under parachutes onto spots on the
--- trains' wide tops (roofs and decks, never under a lookout or a crate, never a car coming off: hooks.away), the one of a
--- few random tries farthest from the fighters (bait drawing them out of a stand-off: persona fix 6; a crate on a car that
--- comes off goes with it), each holding a weapon picked by weight
+-- trains' wide tops (roofs and decks, never under a lookout or a crate, never a car coming off: hooks.away; a crate on
+-- a car that comes off goes with it). Each is for someone (WeaponRules.crateFor): one with bare fists, and lands on its
+-- train, the nearest of a few random tries at least Config.Drops.NearGap from it (WeaponRules.nearSpot) - except in a
+-- stand-off (no hit for QuietSeconds: hooks.quietSince), when it lands the farthest from everyone, as bait (persona
+-- fix 6). Each holds a weapon picked by weight
 -- (WeaponRules.pick) and showing its name. Its shadow on the top shows where one will land while it falls (drawn by every
 -- client: GroundMarks). Coal tenders get none (a crate half sunk in coal, its shadow lost on it). A fighter with
 -- bare fists who walks into a landed crate takes its weapon (hooks.give; practice bots go for one on their top: landed()).
@@ -31,6 +33,7 @@ export type Hooks = {
 	canTake: (model: Model) -> boolean, -- a fighter holding bare fists
 	give: (model: Model, weapon: string) -> (), -- hands the weapon over
 	away: (train: number, car: number) -> boolean, -- that car is coming off or gone (Uncoupling)
+	quietSince: () -> number, -- server time a hit last landed in the fight (RoundService)
 }
 -- landed: where the landed crates nobody has taken yet lie (on their tops).
 export type Drops = { clear: () -> (), landed: () -> { Vector3 }, stop: () -> () }
@@ -47,15 +50,35 @@ local function part(name: string, size: Vector3, color: Color3, material: Enum.M
 	return PartUtil.decor(name, size, CFrame.identity, color, material, nil, shape) -- parented by the caller
 end
 
-local TRIES = 12 -- random spots tried for a crate (the one farthest from the fighters is taken)
+local TRIES = 12 -- random spots tried for a crate (the best of them is taken)
 
 -- A landing spot on a wide top that nothing higher stands over and whose car is not coming off: of a few random ones,
--- the farthest from every fighter at `others` (ArenaLayout.clearest); nil when none is found. Also its surface.
-local function spot(surfaces: { ArenaLayout.Surface }, away: (number, number) -> boolean, others: { { x: number, z: number } }): (Vector3?, ArenaLayout.Surface?)
+-- for the fighter `near` (when one) the nearest at least NearGap from it on its train (WeaponRules.nearSpot), else the
+-- farthest from every fighter at `others` (ArenaLayout.clearest: bait); nil when none is found. Also its surface.
+local function spot(surfaces: { ArenaLayout.Surface }, away: (number, number) -> boolean, others: { { x: number, z: number } }, near: { x: number, z: number }?): (Vector3?, ArenaLayout.Surface?)
 	local wide = {}
 	for _, surface in surfaces do
 		if surface.width >= Config.Arena.RoofWidth - 1e-6 and surface.length > MARGIN * 2 and surface.kind ~= "Tender" and not away(surface.train, surface.car) then
 			table.insert(wide, surface)
+		end
+	end
+	if near then
+		-- Only its own train's tops (the train whose line it stands nearest), when that train has any left.
+		local line, lineDistance = nil, math.huge
+		for _, surface in wide do
+			local distance = math.abs(surface.x - near.x)
+			if distance < lineDistance then
+				line, lineDistance = surface.train, distance
+			end
+		end
+		local own = {}
+		for _, surface in wide do
+			if surface.train == line then
+				table.insert(own, surface)
+			end
+		end
+		if #own > 0 then
+			wide = own
 		end
 	end
 	if #wide == 0 then
@@ -79,7 +102,17 @@ local function spot(surfaces: { ArenaLayout.Surface }, away: (number, number) ->
 			onTop[try] = surface
 		end
 	end
-	local best = ArenaLayout.clearest(tries, others)
+	local best: ArenaLayout.Spot? = nil
+	if near then
+		local points = {}
+		for _, try in tries do
+			table.insert(points, { x = try.x, z = try.z })
+		end
+		local index = WeaponRules.nearSpot(points, near.x, near.z, Config.Drops.NearGap)
+		best = if index then tries[index] else nil
+	else
+		best = ArenaLayout.clearest(tries, others)
+	end
 	if not best then
 		return nil, nil
 	end
@@ -112,12 +145,16 @@ function WeaponDrops.start(surfaces: { ArenaLayout.Surface }, folder: Instance, 
 	end
 
 	local function drop(now: number, fighters: { Model })
+		local seen: { WeaponRules.Seen } = {}
 		local others = {}
 		for _, model in fighters do
 			local p = model:GetPivot().Position
+			table.insert(seen, { x = p.X, z = p.Z, fists = hooks.canTake(model) })
 			table.insert(others, { x = p.X, z = p.Z })
 		end
-		local at, surface = spot(surfaces, hooks.away, others)
+		local index = WeaponRules.crateFor(seen, now - hooks.quietSince(), d.QuietSeconds, math.random)
+		local near = if index then others[index] else nil
+		local at, surface = spot(surfaces, hooks.away, others, near)
 		local weapon = WeaponRules.pick(Config.Weapons, math.random())
 		if not (at and surface and weapon) then
 			return

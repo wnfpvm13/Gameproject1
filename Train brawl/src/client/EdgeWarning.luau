@@ -4,7 +4,8 @@
 -- an edge of the top under it that drops into nothing (just past it there is no lower top: ArenaLayout.topUnder, and
 -- no plank), a red-and-cream striped band lies along that edge where the player is, stronger the closer it gets. Edges
 -- that only step down onto another car (the next car of the train, a lookout's roof below) get none; a car coming off
--- counts as not there (its edges, and the edge it leaves behind, are judged without it). Drawn on this
+-- counts as not there (its edges, and the edge it leaves behind, are judged without it), and so do the planks resting on
+-- it (they go with the first car of the two they rest on to come off: Uncouple.claim). Drawn on this
 -- client only, with a SurfaceGui (no uploaded image, not the glowing Neon that read as a debug marker); no collisions
 -- or raycasts.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -27,7 +28,14 @@ local PLANK_HALF = 2 -- a plank is 4 wide (Config.Arena.PlankWidth)
 
 -- One band per side of a top: -x, +x, -z, +z.
 type Band = { part: Part, fill: Frame }
-type Fields = { all: { ArenaLayout.Surface }, surfaces: { ArenaLayout.Surface }, planks: { ArenaLayout.Plank }, bands: { Band }, folder: Folder }
+type Fields = {
+	layout: ArenaLayout.Layout,
+	all: { ArenaLayout.Surface },
+	surfaces: { ArenaLayout.Surface },
+	planks: { ArenaLayout.Plank },
+	bands: { Band },
+	folder: Folder,
+}
 export type Warning = typeof(setmetatable({} :: Fields, EdgeWarning))
 
 local function makeBand(folder: Folder): Band
@@ -67,7 +75,7 @@ function EdgeWarning.new(layout: ArenaLayout.Layout): Warning
 	for _ = 1, 4 do
 		table.insert(bands, makeBand(folder))
 	end
-	local fields: Fields = { all = layout.surfaces, surfaces = layout.surfaces, planks = layout.planks, bands = bands, folder = folder }
+	local fields: Fields = { layout = layout, all = layout.surfaces, surfaces = layout.surfaces, planks = layout.planks, bands = bands, folder = folder }
 	return setmetatable(fields, EdgeWarning)
 end
 
@@ -96,6 +104,24 @@ function EdgeWarning.update(self: Warning, own: Model?, fighting: boolean, away:
 		end
 	end
 	self.surfaces = here
+	-- A plank resting on a car that is coming off or gone went with it (or with the other car it rests on, earlier).
+	local gone: { [number]: boolean } = {}
+	for i, line in self.layout.trains do
+		for k in line.cars do
+			if away(i, k) then
+				for _, number in ArenaLayout.planksOn(self.layout, i, k) do
+					gone[number] = true
+				end
+			end
+		end
+	end
+	local planks = {}
+	for number, plank in self.layout.planks do
+		if not gone[number] then
+			table.insert(planks, plank)
+		end
+	end
+	self.planks = planks
 	local body = if fighting then CharacterParts.body(own) else nil
 	local top: ArenaLayout.Surface? = nil
 	local feet = 0

@@ -2,7 +2,8 @@
 -- The back cars coming off during a fight (persona fix 6; B's "칸 떨어져 나가기", brought forward against stand-offs).
 -- Config.Uncouple.FirstAfter seconds into the fight, then every Every, the last car of a random train still longer than
 -- KeepCars cars is marked with Names.CarLeavingAt (when it lets go, Warning seconds on: every client warns of it,
--- UncoupleShow). Then the server moves the car's model and the planks resting on it (ArenaLayout.planksOn) along
+-- UncoupleShow). Then the server moves the car's model and the planks resting on it (ArenaLayout.planksOn; one already
+-- taken along by another car this fight stays with that one: Uncouple.claim) along
 -- Uncouple.motion each frame - easing back, then dropping away behind - and gives their parts that motion's velocity,
 -- so whoever stands on it is carried along as on a moving floor (and falls off with it: FallWatch). Once past the drop
 -- it is put far below and marked Names.CarGone. Everything is put back when the fight is over. away() says which cars
@@ -54,6 +55,8 @@ function Uncoupling.start(folder: Instance, layout: ArenaLayout.Layout): Service
 	local moving: { Moving } = {}
 	-- Every car moved this fight, with its planks, to put back.
 	local moved: { Moving } = {}
+	-- The planks a car took along this fight (by number: Uncouple.claim; each goes with one car only).
+	local taken: { [number]: boolean } = {}
 	local nextAt: number? = nil
 
 	local function key(train: number, car: number): string
@@ -103,6 +106,7 @@ function Uncoupling.start(folder: Instance, layout: ArenaLayout.Layout): Service
 		table.clear(moved)
 		table.clear(moving)
 		table.clear(away)
+		table.clear(taken)
 	end
 
 	-- The next car to go: the last car still on of a random train still longer than it keeps.
@@ -128,7 +132,7 @@ function Uncoupling.start(folder: Instance, layout: ArenaLayout.Layout): Service
 		end
 		away[key(train, car)] = true
 		local planks = {}
-		for _, number in ArenaLayout.planksOn(layout, train, car) do
+		for _, number in Uncouple.claim(ArenaLayout.planksOn(layout, train, car), taken) do
 			local part = plankPart(number)
 			if part then
 				table.insert(planks, { part = part, home = part.CFrame })

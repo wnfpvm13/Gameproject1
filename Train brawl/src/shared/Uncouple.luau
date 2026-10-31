@@ -1,8 +1,8 @@
 --!strict
 -- A back car coming off its train, as pure rules (persona fix 6; B's "칸 떨어져 나가기" brought forward, numbers from
--- Config.Uncouple): which car goes next, and where it is `t` seconds after it lets go - easing back first (the gap to
--- the car ahead opening slowly, time to jump across), then dropping away behind the train fast and low. Requires
--- nothing.
+-- Config.Uncouple): which car goes next, which planks it takes along, and where it is `t` seconds after it lets go -
+-- easing back first (the gap to the car ahead opening slowly, time to jump across), then dropping away behind the
+-- train fast and low. Requires nothing.
 
 local Uncouple = {}
 
@@ -43,6 +43,20 @@ function Uncouple.pick(left: { number }, keep: number, random: () -> number): nu
 		return nil
 	end
 	return able[math.clamp(math.floor(random() * #able) + 1, 1, #able)]
+end
+
+-- The planks a car coming off takes along: of `numbers` (the planks resting on it), those no car took this fight yet,
+-- marked taken in `taken`. A plank between two trains rests on a car of each: whichever comes off first takes it, and
+-- the other leaves it be (it has gone, and a second taker would remember its sunk place as home and put it back there).
+function Uncouple.claim(numbers: { number }, taken: { [number]: boolean }): { number }
+	local mine = {}
+	for _, number in numbers do
+		if not taken[number] then
+			taken[number] = true
+			table.insert(mine, number)
+		end
+	end
+	return mine
 end
 
 return Uncouple

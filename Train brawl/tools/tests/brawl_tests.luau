@@ -1086,6 +1086,29 @@ do
 		and U.Every > U.Warning + U.DriftSeconds + U.FallSeconds)
 	check("only a train still longer than it keeps loses a car", Uncouple.pick({ 2, 4, 2 }, 2, function() return 0.99 end) == 2
 		and Uncouple.pick({ 2, 2 }, 2, math.random) == nil)
+	-- A plank between two trains rests on a back car of each: the second car to come off must not take it again (it
+	-- remembered the sunk plank's place as home and put it back there: the plank sank 400 lower every fight).
+	local taken = {}
+	local first = Uncouple.claim({ 3, 1 }, taken)
+	local second = Uncouple.claim({ 3, 4 }, taken)
+	check("a plank goes with the first car that comes off only", #first == 2 and #second == 1 and second[1] == 4)
+	local layoutNow = ArenaLayout.layout(A, Config.Fall.Margin)
+	local shared = 0
+	for n in layoutNow.planks do
+		local on = 0
+		for i, line in layoutNow.trains do
+			for k in line.cars do
+				if table.find(ArenaLayout.planksOn(layoutNow, i, k), n) then
+					on += 1
+				end
+			end
+		end
+		if on > 1 then
+			shared += 1
+		end
+		check("every plank rests on a car of each train it joins", on == 2)
+	end
+	check("the planks are each shared by two cars (why claim is needed)", shared == #layoutNow.planks)
 	check("every top and spawn spot knows its car", (function()
 		for _, surface in L.surfaces do
 			if not surface.car or L.trains[surface.train].cars[surface.car] == nil then

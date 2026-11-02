@@ -24,6 +24,9 @@ local EDGE_BOTTOM = 130
 local PLATE = 38
 local STROKE = Vector2.new(17, 6)
 local LABEL_IN = 46 -- the name sits this far inward from its arrow
+-- The bottom-right corner an arrow keeps out of: the music button (RoundAudio) and the touch buttons (attack, block,
+-- roll: SwingInput, BlockInput, DodgeInput) - an arrow next to the music button read as a button (2026-10-31).
+local KEEP_OUT = Vector2.new(300, 290) -- from the right and from the bottom
 
 type Arrow = { plate: Frame, chevron: Frame, label: TextLabel }
 type Fields = { gui: ScreenGui, folder: Instance, arrows: { [Model]: Arrow } }
@@ -121,6 +124,15 @@ function CrateArrows.update(self: Arrows, show: boolean)
 					local reachY = (if dy > 0 then bottom - cy else cy - top) / math.max(math.abs(dy), 1e-3)
 					local scale = math.min(reachX, reachY)
 					local x, y = cx + dx * scale, cy + dy * scale
+					-- Out of the buttons' corner: up the right edge, or left along the bottom one.
+					local cornerX, cornerY = size.X - KEEP_OUT.X - PLATE / 2, size.Y - KEEP_OUT.Y - PLATE / 2
+					if x > cornerX and y > cornerY then
+						if x >= right - 1 then
+							y = cornerY
+						else
+							x = cornerX
+						end
+					end
 					local length = math.sqrt(dx * dx + dy * dy)
 					arrow.plate.Position = UDim2.fromOffset(x, y)
 					arrow.chevron.Rotation = math.deg(math.atan2(dy, dx))

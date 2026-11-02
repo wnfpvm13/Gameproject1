@@ -664,6 +664,8 @@ do
 	local rows = Words.resultRows(2, 1, 23, 72)
 	check("the result card lists knock-offs, home runs, hits landed and the time on the trains", #rows == 4 and rows[1][2] == "2"
 		and rows[3][1] == "맞힌 수" and rows[4][2] == "1:12")
+	check("the result card sets the winner's tickets and knock-offs beside the player's", Words.standing("봇 5", 2, 5) == "봇 5  승차권 2 · KO 5"
+		and Words.standing(Words.Me, 1, 4) == "나  승차권 1 · KO 4")
 	check("the edge warning shows from a little further in than a light hit pushes, along a short stretch",
 		Config.Edge.Within >= 2 and Config.Edge.Within <= 4 and Config.Edge.Length < A.CarKinds.Boxcar.length and Config.Edge.Probe < 1)
 	check("what the player holds reads its name and what is left", Words.uses("Hammer", 3) == "망치 ×3" and Words.secondsLeft("GoldBar", 12) == "금괴 12초")

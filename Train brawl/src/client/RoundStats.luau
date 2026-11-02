@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
+local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
 
@@ -16,7 +17,10 @@ RoundStats.__index = RoundStats
 -- What the result card shows: knock-offs, home runs, hits landed, seconds on the trains (0 when it watched), and the
 -- titles it earned (Words.Titles keys: the most home runs, the most knock-offs - from the feed, ties share - and still
 -- aboard at the end).
-export type Summary = { kos: number, homers: number, landed: number, seconds: number, played: boolean, titles: { string } }
+-- rival: the winner when the player did not win (its name, tickets left and knock-offs, from the feed), and the
+-- player's own tickets and knock-offs counted the same way to set beside it.
+export type Standing = { name: string, tickets: number, kos: number }
+export type Summary = { kos: number, homers: number, landed: number, seconds: number, played: boolean, titles: { string }, rival: Standing?, mine: Standing? }
 
 type Fields = {
 	landed: number,
@@ -29,11 +33,12 @@ type Fields = {
 	-- Everyone's home runs and knock-offs this round, by name, from the feed.
 	homersBy: { [string]: number },
 	kosBy: { [string]: number },
+	fallsBy: { [string]: number }, -- and how many times each fell or flew out (a ticket each)
 }
 export type Stats = typeof(setmetatable({} :: Fields, RoundStats))
 
 function RoundStats.new(): Stats
-	local fields: Fields = { landed = 0, homers = 0, taken = 0, began = nil, outAt = nil, endedAt = nil, phase = nil, homersBy = {}, kosBy = {} }
+	local fields: Fields = { landed = 0, homers = 0, taken = 0, began = nil, outAt = nil, endedAt = nil, phase = nil, homersBy = {}, kosBy = {}, fallsBy = {} }
 	return setmetatable(fields, RoundStats)
 end
 
@@ -48,10 +53,11 @@ function RoundStats.hit(self: Stats, mine: boolean, me: boolean, guard: string?)
 	end
 end
 
--- A line of the feed: who got the knock-off (nil: nobody), `byMe` the player did, `meOut` the player was knocked off
--- (`out`: for good), how. Returns the hits the player took before that fall when it was the player's (then counted
--- afresh).
-function RoundStats.feed(self: Stats, by: string?, byMe: boolean, meOut: boolean, how: string, out: boolean): number?
+-- A line of the feed: who fell (`victim`), who got the knock-off (nil: nobody), `byMe` the player did, `meOut` the
+-- player was knocked off (`out`: for good), how. Returns the hits the player took before that fall when it was the
+-- player's (then counted afresh).
+function RoundStats.feed(self: Stats, victim: string, by: string?, byMe: boolean, meOut: boolean, how: string, out: boolean): number?
+	self.fallsBy[victim] = (self.fallsBy[victim] or 0) + 1
 	if byMe and how == "homerun" then
 		self.homers += 1
 	end
@@ -82,6 +88,7 @@ function RoundStats.update(self: Stats, phase: string, inRound: boolean)
 		self.landed, self.homers, self.taken, self.began, self.outAt, self.endedAt = 0, 0, 0, nil, nil, nil
 		table.clear(self.homersBy)
 		table.clear(self.kosBy)
+		table.clear(self.fallsBy)
 	elseif fighting and not wasFighting and inRound then
 		self.began = Workspace:GetServerTimeNow()
 	elseif wasFighting and not fighting then
@@ -117,6 +124,21 @@ function RoundStats.summary(self: Stats, own: Model?, name: string): Summary
 	if began and not self.outAt and self.endedAt then
 		table.insert(titles, "survived")
 	end
+	-- The winner beside the player, when the player was in the round and someone else won (the first of a shared win).
+	local rival: Standing? = nil
+	local winners = Workspace:GetAttribute(Names.Winner)
+	if began and typeof(winners) == "string" and winners ~= "" then
+		local first: string? = nil
+		local won = false
+		for part in string.gmatch(winners, "[^,]+") do
+			local winner = (string.gsub(part, "^%s+", ""))
+			first = first or winner
+			won = won or winner == name
+		end
+		if first and not won then
+			rival = { name = first, tickets = math.max(0, Config.Round.Tickets - (self.fallsBy[first] or 0)), kos = self.kosBy[first] or 0 }
+		end
+	end
 	return {
 		titles = titles,
 		kos = if own then PartUtil.number(own, Names.KOs) or 0 else 0,
@@ -124,6 +146,8 @@ function RoundStats.summary(self: Stats, own: Model?, name: string): Summary
 		landed = self.landed,
 		seconds = if began then math.max(0, ended - began) else 0,
 		played = began ~= nil,
+		rival = rival,
+		mine = if rival then { name = name, tickets = math.max(0, Config.Round.Tickets - (self.fallsBy[name] or 0)), kos = self.kosBy[name] or 0 } else nil,
 	}
 end
 

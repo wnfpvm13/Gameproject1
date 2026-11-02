@@ -402,7 +402,7 @@ feedRemote.OnClientEvent:Connect(function(victim: unknown, by: unknown, how: unk
 		feed:add(victim, credited, how, out ~= false, row)
 		-- (Names as shown: the feed carries display names.)
 		local byMe = credited == player.DisplayName
-		local hits = stats:feed(credited, byMe, victim == player.DisplayName, how, out ~= false)
+		local hits = stats:feed(victim, credited, byMe, victim == player.DisplayName, how, out ~= false)
 		if hits then
 			hud:knockedOff(Words.knockedOff(credited, how, hits))
 		end

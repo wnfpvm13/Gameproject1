@@ -1,6 +1,7 @@
 --!strict
--- The dodge roll control (decision 22): Q on a keyboard, B on a gamepad, and a "구르기" button above the attack button
--- on touch screens (in the same look as the block button). A press calls `pressed` (the player's own roll: OwnDodge).
+-- The dodge roll control (decision 22): Q on a keyboard, B on a gamepad, and a "구르기" button left of the block button
+-- on touch screens (in the same look; above the attack button it lay over the music button). A press calls `pressed`
+-- (the player's own roll: OwnDodge).
 -- show() puts the roll's cooldown on the touch button: dimmed with the seconds left, its name again when ready.
 -- (Bound as SwingInput and BlockInput are.)
 local ContextActionService = game:GetService("ContextActionService")
@@ -33,11 +34,11 @@ function DodgeInput.bind(pressed: () -> ()): Input
 		return Enum.ContextActionResult.Pass
 	end, true, Enum.ContextActionPriority.High.Value, Enum.KeyCode.Q, Enum.KeyCode.ButtonB)
 	ContextActionService:SetTitle(ACTION, Words.DodgeButton)
-	-- Above the attack button, the size of the block button (BlockInput's look).
+	-- Left of the block button, its size (BlockInput's look): attack, block, roll in a row from the right.
 	local button = ContextActionService:GetButton(ACTION)
 	if button then
 		button.Size = UDim2.fromOffset(72, 72)
-		button.Position = UDim2.new(1, -101, 1, -318)
+		button.Position = UDim2.new(1, -282, 1, -212)
 		button.Image = ""
 		button.PressedImage = ""
 		button.ImageTransparency = 1

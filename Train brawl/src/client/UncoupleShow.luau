@@ -20,8 +20,10 @@ local Words = require(shared:WaitForChild("Words"))
 local UncoupleShow = {}
 UncoupleShow.__index = UncoupleShow
 
-local RED = Color3.fromRGB(214, 52, 38)
-local CREAM = Color3.fromRGB(255, 238, 205)
+-- Yellow and black like a hazard sign: not the red and cream of a roof edge's band (EdgeWarning), which a tester took for
+-- the same thing (2026-10-31).
+local YELLOW = Color3.fromRGB(255, 198, 24)
+local BLACK = Color3.fromRGB(34, 28, 24)
 local STRIPES = 9 -- (a ColorSequence holds at most 20 keys: two per stripe)
 local BAND = 2 -- the warning band's width along the track, studs
 local BANNER_SECONDS = 3
@@ -46,7 +48,7 @@ type Fields = { arena: Instance, decor: Instance, layout: ArenaLayout.Layout, fo
 export type Show = typeof(setmetatable({} :: Fields, UncoupleShow))
 
 local function stripedBand(size: Vector3, cframe: CFrame): Part
-	local part = PartUtil.decor("LeavingBand", size, cframe, RED, Enum.Material.SmoothPlastic)
+	local part = PartUtil.decor("LeavingBand", size, cframe, YELLOW, Enum.Material.SmoothPlastic)
 	part.Transparency = 1
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = Enum.NormalId.Top
@@ -63,7 +65,7 @@ local function stripedBand(size: Vector3, cframe: CFrame): Part
 	fill.Parent = gui
 	local keys = {}
 	for i = 0, STRIPES - 1 do
-		local color = if i % 2 == 0 then RED else CREAM
+		local color = if i % 2 == 0 then YELLOW else BLACK
 		table.insert(keys, ColorSequenceKeypoint.new(if i == 0 then 0 else i / STRIPES + 1e-3, color))
 		table.insert(keys, ColorSequenceKeypoint.new(if i == STRIPES - 1 then 1 else (i + 1) / STRIPES, color))
 	end

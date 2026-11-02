@@ -17,12 +17,13 @@ local TicketHud = {}
 TicketHud.__index = TicketHud
 
 local SPENT = Color3.fromRGB(96, 84, 74)
-local OWN_SIZE = Vector2.new(30, 22)
-local OWN_GAP = 6
+-- (Bigger than at first, 30 by 22: testers learned how many they had left only from the big "승차권 1장 남음".)
+local OWN_SIZE = Vector2.new(40, 27)
+local OWN_GAP = 7
 local OWN_RIGHT = 152 -- the row ends this far left of the screen's middle (the health bar is 280 wide)
-local OWN_BOTTOM = 22
-local PIP_SIZE = Vector2.new(10, 7)
-local PIP_GAP = 3
+local OWN_BOTTOM = 19
+local PIP_SIZE = Vector2.new(15, 10)
+local PIP_GAP = 4
 
 type Overhead = { gui: BillboardGui, pips: { Frame } }
 type Fields = { gui: ScreenGui, row: Frame, name: TextLabel, own: { Frame }, shownOwn: number?, overhead: { [Model]: Overhead } }
@@ -92,7 +93,7 @@ function TicketHud.new(playerGui: Instance): Hud
 	-- Its name over it, level with the weapon's name over the health bar (WeaponHud).
 	local name = UiStyle.label(gui, "TicketsName", UDim2.fromOffset(own.Size.X.Offset + 20, 22), 18, UiStyle.Gold)
 	name.AnchorPoint = Vector2.new(0.5, 1)
-	name.Position = UDim2.new(0.5, -OWN_RIGHT - own.Size.X.Offset / 2, 1, -50)
+	name.Position = UDim2.new(0.5, -OWN_RIGHT - own.Size.X.Offset / 2, 1, -OWN_BOTTOM - own.Size.Y.Offset)
 	name.Text = Words.Tickets
 	name.Visible = false
 	local cards = {}

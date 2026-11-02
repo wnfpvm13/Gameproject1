@@ -70,6 +70,13 @@ function Words.knockedOff(by: string?, how: string, hits: number): string
 	return if by then string.format("%s에게 밀려 떨어짐%s", by, taken) else string.format("발을 헛디딤%s", taken)
 end
 
+-- On the result card when the player did not win: a fighter's tickets left and knock-offs (2026-10-31: a tester
+-- still in at the end could not tell why another won).
+function Words.standing(name: string, tickets: number, kos: number): string
+	return string.format("%s  승차권 %d · KO %d", name, tickets, kos)
+end
+Words.Me = "나"
+
 -- The player's round on the result card: its rows (a name, then the number).
 function Words.resultRows(kos: number, homers: number, landed: number, seconds: number): { { string } }
 	return {

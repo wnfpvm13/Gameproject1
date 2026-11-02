@@ -2,7 +2,9 @@
 -- The player's own round at its end (persona fix 5: no result screen; the testers asked how they did). While the
 -- result shows (phase "Ended") and the player took part, a plate under the winner's name lists its knock-offs, home
 -- runs, hits landed and how long it stayed on the trains (RoundStats), each number counting up as the card comes in,
--- with the titles it earned this round in gold under the heading (persona fix 8: Words.Titles).
+-- with the titles it earned this round in gold under the heading (persona fix 8: Words.Titles), and - when someone else
+-- won - the winner's tickets left and knock-offs over the player's own (2026-10-31: a tester still in at the end could
+-- not tell why another won; time up ranks tickets, then knock-offs: RoundRules).
 -- The words are Words', the look UiStyle's.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -21,12 +23,14 @@ local BELOW_BIG = 110 -- the card starts this far under it (clear of the winner 
 local COUNT_SECONDS = 0.6 -- the numbers count up this long
 
 -- The summary shown (RoundStats.Summary).
-export type Summary = { kos: number, homers: number, landed: number, seconds: number, played: boolean, titles: { string } }
+export type Standing = { name: string, tickets: number, kos: number }
+export type Summary = { kos: number, homers: number, landed: number, seconds: number, played: boolean, titles: { string }, rival: Standing?, mine: Standing? }
 
 local TITLE_ROW = 26
+local VERSUS_ROW = 24 -- the winner's line and the player's
 
 type Row = { name: TextLabel, value: TextLabel }
-type Fields = { gui: ScreenGui, frame: Frame, titles: TextLabel, rows: { Row }, shownAt: number?, summary: Summary? }
+type Fields = { gui: ScreenGui, frame: Frame, titles: TextLabel, rows: { Row }, versus: { TextLabel }, shownAt: number?, summary: Summary? }
 export type Card = typeof(setmetatable({} :: Fields, ResultCard))
 
 function ResultCard.new(playerGui: Instance): Card
@@ -57,7 +61,14 @@ function ResultCard.new(playerGui: Instance): Card
 		value.TextXAlignment = Enum.TextXAlignment.Right
 		table.insert(rows, { name = name, value = value })
 	end
-	local fields: Fields = { gui = gui, frame = frame, titles = earned, rows = rows, shownAt = nil, summary = nil }
+	local versus = {}
+	for i = 1, 2 do
+		local line = UiStyle.label(frame, "Versus", UDim2.fromOffset(WIDTH - 36, VERSUS_ROW - 4), 18, if i == 1 then UiStyle.Gold else UiStyle.Cream)
+		line.TextXAlignment = Enum.TextXAlignment.Left
+		line.Visible = false
+		table.insert(versus, line)
+	end
+	local fields: Fields = { gui = gui, frame = frame, titles = earned, rows = rows, versus = versus, shownAt = nil, summary = nil }
 	return setmetatable(fields, ResultCard)
 end
 
@@ -81,12 +92,24 @@ function ResultCard.update(self: Card, phase: string, summary: Summary)
 		local extra = if #names > 0 then TITLE_ROW else 0
 		self.titles.Text = table.concat(names, "   ")
 		self.titles.Visible = #names > 0
-		self.frame.Size = UDim2.fromOffset(WIDTH, 8 + 30 + extra + 4 * ROW + 10)
 		for i, labels in self.rows do
 			local y = 8 + 30 + extra + (i - 1) * ROW
 			labels.name.Position = UDim2.fromOffset(18, y)
 			labels.value.Position = UDim2.fromOffset(WIDTH - 18 - 110, y)
 		end
+		-- The winner over the player, under the numbers, when someone else won.
+		local rival, mine = summary.rival, summary.mine
+		local below = 0
+		if rival and mine then
+			below = 6 + 2 * VERSUS_ROW
+			self.versus[1].Text = Words.standing(rival.name, rival.tickets, rival.kos)
+			self.versus[2].Text = Words.standing(Words.Me, mine.tickets, mine.kos)
+		end
+		for i, line in self.versus do
+			line.Visible = below > 0
+			line.Position = UDim2.fromOffset(18, 8 + 30 + extra + 4 * ROW + 6 + (i - 1) * VERSUS_ROW)
+		end
+		self.frame.Size = UDim2.fromOffset(WIDTH, 8 + 30 + extra + 4 * ROW + below + 10)
 	end
 	local y = math.max(Workspace.CurrentCamera.ViewportSize.Y * TOP, 130) + BELOW_BIG
 	self.frame.Position = UDim2.new(0.5, 0, 0, y)

@@ -231,6 +231,15 @@ local function plankStraps(parent: Instance, plank: ArenaLayout.Plank)
 	for _, dx in { -plank.length / 2 + 0.6, 0, plank.length / 2 - 0.6 } do
 		piece(parent, "Strap", Vector3.new(0.3, 0.05, a.PlankWidth + 0.1), CFrame.new(plank.x + dx, y, plank.z), Config.Decor.Colors.Iron)
 	end
+	-- A yellow flag on a post at each end, beside the plank, so a crossing is seen from across the roof (2026-10-31: a
+	-- tester stood still not knowing where the planks were). Part of the plank's model: it goes with the plank.
+	local side = a.PlankWidth / 2 + 0.35
+	for _, dx in { -plank.length / 2 + 0.4, plank.length / 2 - 0.4 } do
+		local x = plank.x + dx
+		piece(parent, "FlagPost", Vector3.new(0.28, 4.8, 0.28), CFrame.new(x, plank.top + 2.4, plank.z + side), Config.Decor.Colors.Iron)
+		piece(parent, "Flag", Vector3.new(2.2, 1.3, 0.08), CFrame.new(x + (if dx < 0 then 1.15 else -1.15), plank.top + 4.1, plank.z + side),
+			Color3.fromRGB(255, 204, 36), Enum.Material.SmoothPlastic)
+	end
 end
 
 -- layout: the arena (ArenaLayout.layout). Returns the folder it all went in.

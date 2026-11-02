@@ -72,6 +72,7 @@ return {
 	Blocking = "Blocking", -- the fighter is blocking now (Guarding; true or none)
 	DodgeAt = "DodgeAt", -- server time the fighter's last dodge roll started (Dodging; every client draws it)
 	DodgeDir = "DodgeDir", -- that roll's flat direction (set just before DodgeAt)
+	CheerAt = "CheerAt", -- server time the fighter last got a knock-off (RoundService; every client draws a fist pump)
 	-- The arena's cars: each a Model named CarModel..k in its train's Model (TrainModel..i), its planks named PlankPart
 	-- with PlankNumber (ArenaBuilder). A back car coming off (Uncoupling) carries CarLeavingAt (server time it lets go)
 	-- and, once gone, CarGone.

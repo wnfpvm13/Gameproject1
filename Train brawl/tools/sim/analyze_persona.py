@@ -11,7 +11,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 
 STATES = {"approach": "다가감", "react": "닿고 반응 전", "inReach": "닿아서 침", "waitFar": "멀리서 기다림", "distracted": "딴짓",
           "offTop": "지붕 밖(석탄·판자 등)", "returning": "복귀 중", "block": "막기", "escape": "떨어질 칸에서 피함", "crate": "상자 가러 감",
-          "retreat": "체력 낮아 피함", "offPlank": "판자 건너감"}
+          "retreat": "체력 낮아 피함", "offPlank": "판자 건너감", "bridge": "낮은 다리 피해 낮은 칸으로", "duck": "다리 밑 숙임"}
 
 
 def falls_of(r):
@@ -69,6 +69,9 @@ def main():
         print(f"  막기 {block['starts']}번 {block['seconds']:.0f}초, 막아 낸 공격 {block['blocked']}, 깨짐 {block['broken']}")
         print(f"  상자 가러 감 {total('crateTrips')}번 (다른 지붕 {total('crateFar')}), 주운 무기 {pickups or '-'}, 무기별 맞힘 {weapons}")
         print(f"  떨어질 칸 위에서 예고를 봄 {total('carsWarned')}번 (피하기 시작한 횟수 {total('carEscapes')}, 같은 칸에서 다시 시작한 것 포함)")
+        bridges = {k: sum((r.get("bridges") or {}).get(k, 0) for r in rounds) for k in ("passes", "caught", "ducked", "wentLow")}
+        gold = [r.get("golden") or {} for r in rounds]
+        print(f"  낮은 다리 {bridges['passes']}번: 맞음 {bridges['caught']}, 숙임 {bridges['ducked']}, 낮은 칸으로 감 {bridges['wentLow']}; 금색 상자 가러 감 {sum(g.get('trips', 0) for g in gold)}번, 가져감 {sum(1 for g in gold if g.get('took'))}판; 반격 {total('counters')} (막아 낸 공격 {total('blockedHits')})")
         states = {}
         for r in rounds:
             for k, v in (r.get("states") or {}).items():
@@ -92,6 +95,9 @@ def main():
         print(f"  처음 떨어지기까지 평균 {sum(firsts) / max(1, len(firsts)):.0f}초 ({len(firsts)}판), 탈락까지 평균 {sum(r['aliveSeconds'] for r in outs) / max(1, len(outs)):.0f}초 ({len(outs)}판), 끝까지 남음 {sum(1 for r in every if not r.get('out'))}판")
         print(f"  떨어짐 {len(falls)}번: {dict((k, sum(1 for f in falls if f['how'] == k)) for k in ('fall', 'homerun'))}, 떨어져 나가는 칸 때문 {sum(1 for f in falls if with_car(f))}")
         print(f"  맞힘 약 {dealt['light']} : 날림+홈런 {dealt['launch'] + dealt['smash']}, 주운 무기 {sum(sum((r.get('pickups') or {}).values()) for r in every)}번")
+        bridges = {k: sum((r.get("bridges") or {}).get(k, 0) for r in every) for k in ("passes", "caught", "ducked", "wentLow")}
+        takers = [((r.get("golden") or {}).get("takenBy") or "-").split("|")[0] for r in every]
+        print(f"  낮은 다리 {bridges['passes']}번: 맞음 {bridges['caught']}, 숙임 {bridges['ducked']}, 낮은 칸으로 감 {bridges['wentLow']}; 금색 상자 가져간 사람 {takers}; 반격 {sum(r.get('counters', 0) for r in every)}")
         feed = [e for r in every for e in (r.get("feed") or [])]
         if feed:
             print(f"  알림 {len(feed)}건: 홈런 {sum(1 for e in feed if e['how'] == 'homerun')}, 낙하 {sum(1 for e in feed if e['how'] == 'fall')} (그중 누구에게도 안 맞고 {sum(1 for e in feed if e['how'] == 'fall' and not e.get('by'))}), 탈락 {sum(1 for e in feed if e.get('out'))}")

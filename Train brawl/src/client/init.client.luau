@@ -297,6 +297,13 @@ local function follow(model: Model)
 		AttackShow.play(model, weapon, step, at)
 		HitFeedback.swing(model, weapon, AttackString.launches(STRING, step, Config.Weapons[weapon].style))
 	end)
+	-- A knock-off it got: a quick fist pump.
+	model:GetAttributeChangedSignal(Names.CheerAt):Connect(function()
+		local at = model:GetAttribute(Names.CheerAt)
+		if typeof(at) == "number" then
+			SwingPose.cheer(model, at)
+		end
+	end)
 end
 local function onPlayer(other: Player)
 	other.CharacterAdded:Connect(follow)
@@ -453,6 +460,9 @@ blastRemote.OnClientEvent:Connect(function(at: unknown, radius: unknown)
 	end
 end)
 
+-- The stands' cheer for a big knock-off: when it last rang (os.clock), and how long until it may ring again.
+local lastCheer = -math.huge
+local CHEER_GAP = 8
 -- A knock-out, from the server: a line in the feed.
 feedRemote.OnClientEvent:Connect(function(victim: unknown, by: unknown, how: unknown, out: unknown, streak: unknown)
 	if typeof(victim) == "string" and typeof(how) == "string" then
@@ -467,6 +477,11 @@ feedRemote.OnClientEvent:Connect(function(victim: unknown, by: unknown, how: unk
 		end
 		if byMe and how == "homerun" and row >= 2 then
 			hud:callout(Words.homerunStreak(row))
+		end
+		-- The stands cheer a big one (home runs in a row, someone out for good), not every knock-off: one cheer in 8 s.
+		if (row >= 2 or (out ~= false and credited ~= nil)) and os.clock() - lastCheer >= CHEER_GAP then
+			lastCheer = os.clock()
+			SoundBank.play("Cheer")
 		end
 	end
 end)

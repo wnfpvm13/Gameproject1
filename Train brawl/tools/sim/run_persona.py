@@ -20,16 +20,17 @@ FIGHT_SECONDS = 160  # Config.Round.MaxSeconds (150) and a little
 # kept as they were, so the two runs compare): block = chance it holds its block after a hit gets through (after its
 # react time); blockHold = seconds it holds it; notice = seconds before it notices its car is coming off; patience =
 # seconds a waiting persona waits for the other to come before it goes itself (the first run waited for good: one
-# persona stood still 100 s at a roof's edge the bots never come to).
+# persona stood still 100 s at a roof's edge the bots never come to). Added for the fun pass (2026-11-02, decisions 23-26):
+# counter = chance it lets go of its block to strike back right after a blocked hit.
 PERSONAS = [
     {"name": "서윤", "react": [0.5, 1.0], "jitter": 0.25, "fullString": 0.5, "crate": 0.9, "chase": False, "retreat": 40, "distracted": 0.08, "reachUse": 0.8,
-     "block": 0.35, "blockHold": [1.0, 2.0], "notice": [1.0, 2.0], "patience": 20},
+     "block": 0.35, "blockHold": [1.0, 2.0], "notice": [1.0, 2.0], "patience": 20, "counter": 0.2},
     {"name": "하은", "react": [0.2, 0.35], "jitter": 0.05, "fullString": 0.95, "crate": 0.5, "chase": True, "retreat": 0, "distracted": 0.01, "reachUse": 0.9,
-     "block": 0.5, "blockHold": [0.4, 0.8], "notice": [0.4, 0.8]},
+     "block": 0.5, "blockHold": [0.4, 0.8], "notice": [0.4, 0.8], "counter": 0.6},
     {"name": "민준", "react": [0.3, 0.6], "jitter": 0.0, "fullString": 1.0, "crate": 1.0, "chase": True, "retreat": 0, "distracted": 0.03, "reachUse": 0.7,
-     "block": 0.1, "blockHold": [0.3, 0.6], "notice": [0.8, 1.6]},
+     "block": 0.1, "blockHold": [0.3, 0.6], "notice": [0.8, 1.6], "counter": 0.3},
     {"name": "도현", "react": [0.3, 0.6], "jitter": 0.12, "fullString": 0.85, "crate": 0.6, "chase": False, "retreat": 35, "distracted": 0.04, "reachUse": 0.95,
-     "block": 0.6, "blockHold": [0.5, 1.0], "notice": [0.4, 0.8], "patience": 8},
+     "block": 0.6, "blockHold": [0.5, 1.0], "notice": [0.4, 0.8], "patience": 8, "counter": 0.7},
 ]
 
 

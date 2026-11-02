@@ -528,6 +528,16 @@ function SwingPose.react(model: Model, kind: string, push: Vector3?, stun: numbe
 	end, 0, false)
 end
 
+-- `model` got a knock-off at server time `at` (Names.CheerAt): a quick fist pump over its stance (AttackPoses.cheer),
+-- unless something else of it is being drawn (an attack, a flinch, a flight, a roll) - and anything it does next
+-- takes over at once (nothing holds it up).
+function SwingPose.cheer(model: Model, at: number)
+	if drawing[model] then
+		return
+	end
+	begin(model, "cheer", at, AttackPoses.CheerSeconds, serverNow, AttackPoses.cheer, BLEND_IN, true)
+end
+
 -- A dodge roll by `model` that started at server time `at` along the flat world `direction` (DodgeShow): the body
 -- tucks and turns once along it over Config.Dodge.Seconds (AttackPoses.roll), snapping in over any attack or stance
 -- (the stance comes back after it, as after a flight).

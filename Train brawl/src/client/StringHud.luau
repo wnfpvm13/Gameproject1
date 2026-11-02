@@ -5,12 +5,16 @@
 -- the launching third, lit for the steps taken; under them a thin bar that runs out over the time left to press the
 -- next step (full while the weapon gets ready again, then emptying over Config.Attack.StringGap). When the next press
 -- is the third the diamond pulses and the hand that will strike (or the weapon held) glows gold. When a hit breaks a
--- running string the marks flash red and shake with "끊김!" under them; a string left to run out just goes dark. Shown
+-- running string the marks flash red and shake with "끊김!" under them; a string left to run out just goes dark. For the
+-- first moment after the weapon is ready again - while a hit just landed still stuns (decision 23: HitRules.stun's
+-- margin, less the third's wind-up when the next press is the third) - the bar shows thicker and white: press now and
+-- the next step lands before the one hit can act (Codex review 2026-11-02: the string's 0.4 s is longer than that). Shown
 -- only while the player fights on the trains with something that strings (punches and swings). The rules stay as they
 -- are (AttackString); this only shows them. The look is UiStyle's colours.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
+local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
 local UiStyle = require(shared:WaitForChild("UiStyle"))
 local Words = require(shared:WaitForChild("Words"))
@@ -27,6 +31,7 @@ local LAST = 15 -- the third, a diamond this big
 local SPACE = 8
 local RIGHT = 22 -- the marks start this far right of the aim dot
 local BAR_HEIGHT = 3
+local BAR_TIGHT = 5 -- the bar's height while a press now still lands within the stun
 local DIM = Color3.fromRGB(40, 28, 20)
 local LIT = UiStyle.Cream
 local EDGE_EMPTY = 0.45 -- an unlit mark's cream edge, this see-through (seen on the dark roofs and the bright sand)
@@ -211,8 +216,12 @@ function StringHud.update(self: Hud, view: View, shown: boolean, gap: number, no
 	self.bar.Visible = running
 	if running then
 		local share = if now < view.ready then 1 else math.clamp(1 - (now - view.ready) / gap, 0, 1)
+		-- Pressed within this of the weapon being ready again, the next step lands while the one hit is still stunned.
+		local tight = Config.Hit.StringMargin + (if readyThird then 0 else Config.Attack.FinisherWindup)
+		local stillStunned = now >= view.ready and now - view.ready <= tight
 		self.fill.Size = UDim2.fromScale(share, 1)
-		self.fill.BackgroundColor3 = if readyThird then UiStyle.Gold else LIT
+		self.fill.BackgroundColor3 = if stillStunned then Color3.new(1, 1, 1) elseif readyThird then UiStyle.Gold else LIT
+		self.bar.Size = UDim2.fromOffset(self.bar.Size.X.Offset, if stillStunned then BAR_TIGHT else BAR_HEIGHT)
 	end
 	setGlow(self, own, readyThird, clock)
 end

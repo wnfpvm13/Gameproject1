@@ -175,6 +175,7 @@ function RoundService.start(spots: { ArenaLayout.Spot }, trains: number, waiting
 		if hit and now() - hit.at <= r.KillCreditSeconds and hit.swinger ~= model then
 			by = hit.swinger
 			hit.swinger:SetAttribute(Names.KOs, (PartUtil.number(hit.swinger, Names.KOs) or 0) + 1)
+			hit.swinger:SetAttribute(Names.CheerAt, now()) -- (every client draws a quick fist pump: decision 26)
 		end
 		local streak = RoundRules.homerunStreak(homers, model, by, how)
 		if not gone then

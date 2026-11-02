@@ -5,7 +5,10 @@
 -- the crates it likes wherever they land (the edge arrows show them all), holds its block after taking a hit as the
 -- persona would, walks off a back car that is about to come off once it notices the warning, sits out its comeback
 -- (the stands, then the parachute), and attacks through the game's own Swing remote (the server judges it as any
--- player's attack). Every round it plays is logged in _G.PersonaLog (hits dealt and taken by kind and weapon, blocks,
+-- player's attack). Since the fun pass (decisions 24-25) it also goes down to a low top when a low bridge comes once it
+-- notices (or ducks under its block when the beam is about to reach it), goes for the golden crate whatever it holds,
+-- and sometimes lets go of its block to strike back right after a blocked hit (PERSONA.counter).
+-- Every round it plays is logged in _G.PersonaLog (hits dealt and taken by kind and weapon, blocks,
 -- falls with how and by whom, every knock-off notice, crates, cars coming off, time with nobody to fight, time on the
 -- way back). Run it in the Client data model with PERSONA set (tools/sim/run_persona.py writes that line);
 -- _G.PersonaStop = true ends it after the round.
@@ -21,6 +24,7 @@ local BotPlan = require(shared.BotPlan)
 local CharacterParts = require(shared.CharacterParts)
 local AttackString = require(shared.AttackString)
 local WeaponRules = require(shared.WeaponRules)
+local BridgeRules = require(shared.BridgeRules)
 
 -- { name, rounds, react = {a, b}, jitter, fullString, crate, chase, retreat, distracted, reachUse, block, blockHold = {a, b},
 -- notice = {a, b}, patience }
@@ -31,6 +35,10 @@ local remotes = shared.Remotes
 local layout = ArenaLayout.layout(Config.Arena, Config.Fall.Margin)
 local STRING = AttackString.rules(Config.Attack)
 local MARGIN = 1.6
+local FRONT_Z = math.huge -- the front of the trains (where a low bridge's beam arrives)
+for _, train in layout.trains do
+	FRONT_Z = math.min(FRONT_Z, train.cars[1].front)
+end
 
 local function between(range: { number }): number
 	return range[1] + math.random() * (range[2] - range[1])
@@ -129,6 +137,10 @@ local function newRound()
 		carEscapes = 0, -- of those, walked off in time
 		lowestHealth = 100,
 		states = {}, -- seconds spent in each step of its choice (what it did while in)
+		bridges = { passes = 0, caught = 0, ducked = 0, wentLow = 0 }, -- low bridges: seen, hit by, ducked under, walked to a low top
+		golden = { trips = 0, took = false, takenBy = nil }, -- the golden crate
+		counters = 0, -- its hits started right after a blocked hit that landed
+		blockedHits = 0, -- hits it took on its block (the same as block.blocked; kept for the counter rate)
 	}
 end
 
@@ -159,6 +171,10 @@ local function stopBlock()
 	blockAt, blockUntil, blockFrom = nil, nil, nil
 end
 
+-- Block, then strike back: when its block last took a hit (os.clock), and the tag of an attack started soon after.
+local lastBlockedAt = -math.huge
+local counterTag = nil
+
 local hitConn = remotes.Hit.OnClientEvent:Connect(function(victim, velocity, swinger, kind, weapon, ganged, tag, guard)
 	if not round then
 		return
@@ -167,6 +183,11 @@ local hitConn = remotes.Hit.OnClientEvent:Connect(function(victim, velocity, swi
 	if victim == me then
 		if guard == "blocked" then
 			round.block.blocked += 1
+			round.blockedHits += 1
+			lastBlockedAt = os.clock()
+			if math.random() < (PERSONA.counter or 0) then
+				stopBlock() -- lets go to strike back (the game's own control does this when attack is pressed while blocking)
+			end
 		else
 			round.taken[kind] = (round.taken[kind] or 0) + 1
 			if guard == "broken" then
@@ -183,6 +204,22 @@ local hitConn = remotes.Hit.OnClientEvent:Connect(function(victim, velocity, swi
 	elseif swinger == me then
 		round.dealt[kind] = (round.dealt[kind] or 0) + 1
 		round.dealtBy[weapon] = (round.dealtBy[weapon] or 0) + 1
+		if counterTag and tag == counterTag and guard == nil then
+			round.counters += 1
+			counterTag = nil
+		end
+	end
+end)
+local sweptConn = remotes.Swept.OnClientEvent:Connect(function(victim)
+	if round and victim == player.Character then
+		round.bridges.caught += 1
+	end
+end)
+local goldenConn = Workspace:GetAttributeChangedSignal(Names.GoldenTaken):Connect(function()
+	local taken = Workspace:GetAttribute(Names.GoldenTaken)
+	if round and typeof(taken) == "string" then
+		round.golden.takenBy = taken
+		round.golden.took = string.match(taken, "^(.*)|") == player.DisplayName
 	end
 end)
 
@@ -212,6 +249,8 @@ local feedConn = remotes.Feed.OnClientEvent:Connect(function(victim, by, how, ou
 end)
 
 local lonelySince = nil
+-- The low bridge it last saw (its BridgeAt), when it notices it, whether it went low / ducked for it, ducking until.
+local bridgeSeen, bridgeNotice, bridgeLow, bridgeDucked, duckUntil = nil, 0, false, false, nil
 local lastPos, lastMoveCheck = nil, 0
 local plankHeading = nil -- +1 or -1 along X: the way it crosses the plank it is on
 
@@ -328,8 +367,9 @@ end
 local wanted = setmetatable({}, { __mode = "k" }) -- crate model -> whether the persona goes for it (decided once)
 local tripTo = nil -- the crate it is going for
 
--- The nearest landed crate it wants, with the top it is on, or nil.
-local function crateToGet(here)
+-- The nearest landed crate it wants, with the top it is on, or nil (goldenOnly: only the golden crate - it holds a
+-- weapon, so only that one can be taken).
+local function crateToGet(here, goldenOnly: boolean)
 	local folder = Workspace:FindFirstChild(Names.CratesFolder)
 	if not folder then
 		return nil
@@ -337,9 +377,11 @@ local function crateToGet(here)
 	local best, bestD, bestTop = nil, math.huge, nil
 	for _, crate in folder:GetChildren() do
 		local box = crate:IsA("Model") and (crate.PrimaryPart or crate:FindFirstChild("Box"))
-		if box and crate:GetAttribute(Names.CrateLanded) == true then
+		local golden = crate:GetAttribute(Names.CrateGolden) == true
+		if box and crate:GetAttribute(Names.CrateLanded) == true and (golden or not goldenOnly) then
 			if wanted[crate] == nil then
-				wanted[crate] = math.random() < PERSONA.crate
+				-- The golden crate draws more (everyone is told of it and it holds a big weapon).
+				wanted[crate] = math.random() < (if golden then math.min(1, PERSONA.crate + 0.3) else PERSONA.crate)
 			end
 			local p = box.Position
 			local on = ArenaLayout.topUnder(layout.surfaces, p.X, p.Z, p.Y - 1)
@@ -382,6 +424,9 @@ local function attack(me, body, facing: Vector3, weapon: string)
 	end
 	body.root.CFrame = CFrame.lookAt(body.root.Position, body.root.Position + facing)
 	tag += 1
+	if os.clock() - lastBlockedAt <= Config.Block.CounterSeconds then
+		counterTag = tag -- started right after a blocked hit: a counter if it lands
+	end
 	remotes.Swing:FireServer(facing, step, tag)
 	round.presses += 1
 	readyAt = now + w.cooldown + math.random() * PERSONA.jitter
@@ -393,6 +438,13 @@ local function mark(state: string, dt: number)
 end
 
 local function tick(dt: number)
+	-- The camera kept off the character: on it, the mouse lock's shoulder camera (AimLock) turns the body to the camera
+	-- every frame, and a Humanoid turned that way every frame does not walk to its MoveTo (Studio 2026-11-02: the first
+	-- fun-pass run stood still for minutes once something put the camera back on the character).
+	local camera = Workspace.CurrentCamera
+	if camera and camera.CameraSubject ~= Workspace.Terrain then
+		camera.CameraSubject = Workspace.Terrain
+	end
 	local me = player.Character
 	local body = CharacterParts.body(me)
 	local phase = Workspace:GetAttribute(Names.Phase)
@@ -529,9 +581,62 @@ local function tick(dt: number)
 			return
 		end
 	end
-	-- A crate it likes, if fists are all it holds (the edge arrows show where every crate is).
-	if weapon == "Fist" and PERSONA.crate > 0 then
-		local crate, at, crateTop = crateToGet(here)
+	-- A low bridge coming and this top too high: once it notices, to the nearest low top of its train, or - the beam about
+	-- to reach it first - ducking under its block where it stands.
+	local B = Config.Bridge
+	local bridgeAt = Workspace:GetAttribute(Names.BridgeAt)
+	if typeof(bridgeAt) == "number" and onTop then
+		if bridgeSeen ~= bridgeAt then
+			bridgeSeen, bridgeNotice, bridgeLow, bridgeDucked = bridgeAt, now + between(PERSONA.notice), false, false
+			round.bridges.passes += 1
+		end
+		if now >= bridgeNotice and not BridgeRules.safe(top.top, B.Stature, B.Clearance) then
+			local beamZ = BridgeRules.beamZ({ arriveAt = bridgeAt, frontZ = FRONT_Z, speed = Config.Run.Speed }, serverNow())
+			if beamZ > here.Z - Config.Run.Speed * 0.7 and beamZ < here.Z + B.Depth then
+				setBlock(true)
+				duckUntil = now + 0.4
+				if not bridgeDucked then
+					bridgeDucked = true
+					round.bridges.ducked += 1
+				end
+				mark("duck", dt)
+				humanoid:MoveTo(here)
+				return
+			end
+			local low = {}
+			for _, safe in BridgeRules.safeTops(layout.surfaces, top.train, B.Stature, B.Clearance) do
+				if not carState(safe.train, safe.car) then
+					table.insert(low, safe)
+				end
+			end
+			local spot = BridgeRules.nearestSafe(low, here.Z)
+			if spot then
+				if not bridgeLow then
+					bridgeLow = true
+					round.bridges.wentLow += 1
+				end
+				mark("bridge", dt)
+				local inset = math.max(0, spot.length / 2 - 2)
+				humanoid.WalkSpeed = 16
+				humanoid:MoveTo(Vector3.new(spot.x, here.Y, math.clamp(here.Z, spot.z - inset, spot.z + inset)))
+				unstick(humanoid, here)
+				return
+			end
+		end
+	end
+	if duckUntil and now >= duckUntil then
+		duckUntil = nil
+		if not (blockAt and blockUntil and now < blockUntil) then
+			setBlock(false)
+		end
+	end
+	-- A crate it likes, if fists are all it holds (the edge arrows show where every crate is); the golden crate whatever
+	-- it holds.
+	if PERSONA.crate > 0 then
+		local crate, at, crateTop = crateToGet(here, weapon ~= "Fist")
+		if crate and crate:GetAttribute(Names.CrateGolden) == true and tripTo ~= crate then
+			round.golden.trips += 1
+		end
 		if crate then
 			if tripTo ~= crate then
 				tripTo = crate
@@ -682,6 +787,8 @@ _G.PersonaKill = function()
 	stepConn:Disconnect()
 	hitConn:Disconnect()
 	feedConn:Disconnect()
+	sweptConn:Disconnect()
+	goldenConn:Disconnect()
 	setBlock(false)
 	_G.PersonaRunning = false
 	_G.PersonaKill = nil

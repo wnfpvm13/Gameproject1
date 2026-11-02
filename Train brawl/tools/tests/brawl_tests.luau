@@ -1416,6 +1416,9 @@ do
 	local two = Words.highlights(false, 1, 0, 4)
 	check("highlights: none for a quiet round, at most two in order, blocks only from three",
 		#none == 0 and #all == 2 and all[1] == "황금 상자" and all[2] == "반격 2회" and two[1] == "반격 1회" and two[2] == "막아 냄 4")
+	local up, done = AttackPoses.cheer(0.5), AttackPoses.cheer(1)
+	check("a knock-off's fist pump is short, raises the right fist and ends at rest",
+		AttackPoses.CheerSeconds <= 0.6 and (up.RightShoulder.x :: number) > 150 and math.abs((done.RightShoulder and done.RightShoulder.x or 0) :: number) < 1e-6)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

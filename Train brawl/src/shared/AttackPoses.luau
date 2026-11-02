@@ -36,6 +36,7 @@ AttackPoses.FlinchSeconds = 0.28
 AttackPoses.FlinchPeak = 0.07
 AttackPoses.FlinchSettle = 0.21
 AttackPoses.FlailSeconds = 0.7
+AttackPoses.CheerSeconds = 0.5 -- a knock-off's fist pump (decision 26)
 local REEL = 0.3 -- how far a long flinch reels back toward the stance before it settles
 local TUMBLE = 0.55 -- a launch's tumble takes this share of the flail (about the flight)
 
@@ -587,6 +588,22 @@ end
 -- The stance a fighter holding `weapon` (of `style`) keeps while fighting: bare fists' guard, or the weapon held ready.
 function AttackPoses.stance(weapon: string, style: string): Pose
 	return setOf(weapon, style).stance
+end
+
+local PUMP: Pose = {
+	Waist = { x = -8 },
+	Neck = { x = -14 },
+	RightShoulder = { x = 165, z = -12 },
+	RightElbow = { x = 35 },
+	LeftShoulder = { x = 35, z = 10 },
+	LeftElbow = { x = 75 },
+}
+
+-- A knock-off's fist pump at share `u` of it (decision 26; Codex review 2026-11-02: short, never holding anyone up): the
+-- right fist shoots up, holds, and comes back down.
+function AttackPoses.cheer(u: number): Pose
+	local s = if u < 0.3 then ease("out", u / 0.3) elseif u < 0.7 then 1 else 1 - ease(nil, math.min((u - 0.7) / 0.3, 1))
+	return blend(REST, PUMP, s)
 end
 
 -- The blocking stance (the same for every weapon); `ducked`: crouched low under a low bridge's beam (decision 24) -

@@ -152,6 +152,20 @@ local BLOCK: Pose = {
 	RightElbow = { x = 120 },
 }
 
+local DUCK: Pose = {
+	Root = { shift = Vector3.new(0, -1.7, 0) },
+	Waist = { x = -22 },
+	Neck = { x = 12 },
+	LeftShoulder = { x = 95, z = 24 },
+	LeftElbow = { x = 125 },
+	RightShoulder = { x = 95, z = -24 },
+	RightElbow = { x = 125 },
+	LeftHip = { x = 70 },
+	RightHip = { x = 70 },
+	LeftKnee = { x = -110 },
+	RightKnee = { x = -110 },
+}
+
 -- Joins pose tables (later ones win for a joint both name).
 local function with(...: Pose): Pose
 	local out: Pose = {}
@@ -575,9 +589,10 @@ function AttackPoses.stance(weapon: string, style: string): Pose
 	return setOf(weapon, style).stance
 end
 
--- The blocking stance (the same for every weapon).
-function AttackPoses.block(): Pose
-	return BLOCK
+-- The blocking stance (the same for every weapon); `ducked`: crouched low under a low bridge's beam (decision 24) -
+-- knees bent, hips back, the body lower and leaning in behind the raised forearms.
+function AttackPoses.block(ducked: boolean?): Pose
+	return if ducked then DUCK else BLOCK
 end
 
 -- The keys of an attack with `weapon` (of `style`) at `step` of the string (`finisher`: its launching last step), the

@@ -7,8 +7,10 @@
 -- after the last step (`count`) or a longer pause the string starts again at 1. The last step's hit launches, and it
 -- lands a little later than the weapon's own hitAt (`windup`), so everyone sees the bigger move coming. Being hit
 -- breaks the string. The player's client draws each step at once and tells the server which step it drew; the server
--- takes that claim only when it is a 1 (a new string may always start) or the next step of a string it counted
--- itself, within `slack` of the gap (network jitter) - a changed client cannot skip to the launching step. Requires
+-- takes that claim only when it is the next step of a string it counted itself, within `slack` of the gap (network
+-- jitter) - a changed client cannot skip to the launching step - or a 1 when its own count had the string over or
+-- within `slack` of lapsing - a changed client cannot keep starting over to stun someone with light hits forever
+-- without the launch (decision 23 made each light hit stun until the next step; Codex review 2026-11-02). Requires
 -- nothing.
 
 local AttackString = {}
@@ -48,8 +50,8 @@ function AttackString.take(state: State, rules: Rules, now: number, cooldown: nu
 		return 1
 	end
 	local step = AttackString.next(state, rules, now)
-	if claim == 1 then
-		step = 1
+	if claim == 1 and (step == 1 or now - state.ready > rules.gap - rules.slack) then
+		step = 1 -- the client's clock had the string over a moment sooner than this server's
 	elseif claim and claim ~= step and state.step > 0 and claim == state.step + 1 and claim <= rules.count
 		and now - state.ready <= rules.gap + rules.slack then
 		step = claim -- the client's clock kept the string a moment longer than this server's

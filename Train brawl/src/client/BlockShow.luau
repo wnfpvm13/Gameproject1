@@ -4,7 +4,8 @@
 -- ForceField material at chest height that turns with it. A hit taken on the block flashes the shield and throws a few
 -- sparks off it (hit); a guard broken by a string's third bursts the shield into shards that fly off and fade, with
 -- "막기 깨짐!" over the head for a moment; a hit that went through a block says why there (through(): "옆!", "뒤!",
--- "못 막는 공격!"). Drawn only: no collisions or raycasts.
+-- "못 막는 공격!"), and a hit the player struck back right after blocking says "반격!" with a ding (counter()). Drawn
+-- only: no collisions or raycasts.
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -16,6 +17,7 @@ local PartUtil = require(shared:WaitForChild("PartUtil"))
 local CharacterParts = require(shared:WaitForChild("CharacterParts"))
 local UiStyle = require(shared:WaitForChild("UiStyle"))
 local Words = require(shared:WaitForChild("Words"))
+local SoundBank = require(shared:WaitForChild("SoundBank"))
 
 local BlockShow = {}
 
@@ -142,6 +144,13 @@ function BlockShow.through(victim: Model, why: string)
 	if text then
 		note(victim, text, UiStyle.Gold)
 	end
+end
+
+-- The player hit `victim` back right after blocking (Config.Block.CounterSeconds): "반격!" over it, and a ding.
+function BlockShow.counter(victim: Model)
+	note(victim, Words.Counter, UiStyle.Gold)
+	local head = victim:FindFirstChild("Head")
+	SoundBank.play("CountBell", if head and head:IsA("BasePart") then head else nil, 1.4)
 end
 
 -- Every frame, for the fighters in the round.

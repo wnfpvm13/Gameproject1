@@ -2,7 +2,9 @@
 -- The block control (decision 11's hold-to-block, persona fix 4): held down, the player blocks. Right mouse button or
 -- F on a keyboard, LT / L2 on a gamepad, and a "막기" button left of the attack button on touch screens (in the same
 -- look). Tells the server when it goes down and up (Names.BlockRemote); held() says whether it is held now, so the
--- player's own attack does not start while blocking. (Bound as SwingInput is.)
+-- player's own attack does not start while blocking. suspend() lets go of the block while the control is still held
+-- (the attack control pressed while blocking: block, then strike back - Codex review 2026-11-02); it blocks again only
+-- on a new press. (Bound as SwingInput is.)
 local ContextActionService = game:GetService("ContextActionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -15,16 +17,17 @@ BlockInput.__index = BlockInput
 
 local ACTION = "TrainBrawlBlock"
 
--- down: the inputs holding it now (a key and a mouse button may both be held).
-type Fields = { remote: RemoteEvent, down: { [string]: boolean }, sent: boolean }
+-- down: the inputs holding it now (a key and a mouse button may both be held); suspended: let go by suspend() until the
+-- next press.
+type Fields = { remote: RemoteEvent, down: { [string]: boolean }, sent: boolean, suspended: boolean }
 export type Input = typeof(setmetatable({} :: Fields, BlockInput))
 
 local function anyDown(self: Input): boolean
-	return next(self.down) ~= nil
+	return next(self.down) ~= nil and not self.suspended
 end
 
 function BlockInput.bind(remote: RemoteEvent): Input
-	local fields: Fields = { remote = remote, down = {}, sent = false }
+	local fields: Fields = { remote = remote, down = {}, sent = false, suspended = false }
 	local self = setmetatable(fields, BlockInput)
 	local press: UIScale? = nil
 	ContextActionService:BindActionAtPriority(ACTION, function(_, state: Enum.UserInputState, input: InputObject)
@@ -33,6 +36,7 @@ function BlockInput.bind(remote: RemoteEvent): Input
 			else input.UserInputType.Name
 		if state == Enum.UserInputState.Begin then
 			self.down[key] = true
+			self.suspended = false -- a new press blocks again
 		elseif state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel then
 			self.down[key] = nil
 		end
@@ -77,9 +81,18 @@ function BlockInput.bind(remote: RemoteEvent): Input
 	return self
 end
 
--- Whether the block control is held now.
+-- Whether the block control is held now (and not let go by suspend()).
 function BlockInput.held(self: Input): boolean
 	return anyDown(self)
+end
+
+-- Lets go of the block now, though the control is still held, until it is pressed again.
+function BlockInput.suspend(self: Input)
+	self.suspended = true
+	if self.sent then
+		self.sent = false
+		self.remote:FireServer(false)
+	end
 end
 
 return BlockInput

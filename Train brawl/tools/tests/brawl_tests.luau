@@ -732,7 +732,10 @@ do
 	check("nor claim a step past the last", AttackString.take(four, r, 1.5, 0.45, "punch", 4) == 1)
 	local o = AttackString.new()
 	hits(o, 0)
-	check("a client may always start a new string", AttackString.take(o, r, 0.5, 0.45, "punch", 1) == 1)
+	check("a client cannot start over in the middle of a string (no endless light hits, decision 23)", AttackString.take(o, r, 0.5, 0.45, "punch", 1) == 2)
+	local o2 = AttackString.new()
+	hits(o2, 0)
+	check("but may when its clock had the string over a moment sooner (within the slack)", AttackString.take(o2, r, 0.45 + r.gap - r.slack + 0.01, 0.45, "punch", 1) == 1)
 	local b = AttackString.new()
 	hits(b, 0)
 	AttackString.reset(b)
@@ -1282,6 +1285,84 @@ do
 	check("a bot notices its car coming off with time left to walk off it", S.Notice[2] + 2 < Config.Uncouple.Warning)
 	check("hit, a bot blocks or rolls only sometimes, and blocks no longer than a moment", S.BlockChance + S.RollChance < 0.6
 		and S.BlockHold[2] <= 1.5 and S.SeeOff <= Config.Arena.PlankOverlap * 2 + 1)
+end
+
+-- 27. Low bridges over the trains (decision 24): every train has somewhere low to duck into, in time.
+do
+	local B = Config.Bridge
+	check("bridges come twice a round, the first well into the fight",
+		table.concat(BridgeRules.times(B.FirstAfter, B.Every, Config.Round.MaxSeconds - B.Warning - B.PassSeconds), ",") == "50,95")
+	-- No bridge comes (or goes over) while a car is being warned of (its banner would stack on the bridge's).
+	local U = Config.Uncouple
+	local clear = true
+	for _, at in BridgeRules.times(B.FirstAfter, B.Every, Config.Round.MaxSeconds - B.Warning - B.PassSeconds) do
+		local warnAt = U.FirstAfter - U.Warning
+		while warnAt < Config.Round.MaxSeconds do
+			if warnAt < at + B.Warning + B.PassSeconds and warnAt + U.Warning > at then
+				clear = false
+			end
+			warnAt += U.Every
+		end
+	end
+	check("a bridge's warning and pass never overlap a car's warning", clear)
+	local cab = A.CarKinds.Locomotive.roof
+	check("ducking (holding the block) passes under on any roof or the cab, not on a lookout or a chimney's top",
+		BridgeRules.safe(15, B.Duck, B.Clearance) and BridgeRules.safe(cab, B.Duck, B.Clearance)
+		and not BridgeRules.safe(A.CarKinds.Caboose.roof + assert(A.CarKinds.Caboose.cupola).height, B.Duck, B.Clearance)
+		and not BridgeRules.safe(assert(A.CarKinds.Locomotive.boiler).top + assert(A.CarKinds.Locomotive.stack).height, B.Duck, B.Clearance))
+	local fullPush = HitRules.force("launch", Config.Health.Max, Config.Health.Max, Config.Hit) * B.PushShare
+	check("caught at full health it is only knocked down nearby; near the end it flies far",
+		fullPush < 10 and HitRules.force("launch", 10, Config.Health.Max, Config.Hit) * B.PushShare > 50 and B.Damage < 20)
+	local everyTrain, roofsSwept = true, true
+	for t in L.trains do
+		if #BridgeRules.safeTops(L.surfaces, t, B.Stature, B.Clearance) == 0 then
+			everyTrain = false
+		end
+	end
+	for _, surface in L.surfaces do
+		local low = surface.kind == "Tender" or (surface.kind == "Flatcar" and surface.top < 13)
+		if BridgeRules.safe(surface.top, B.Stature, B.Clearance) ~= low then
+			roofsSwept = false
+		end
+	end
+	check("every train has a top low enough to pass under", everyTrain)
+	check("only a tender, a flatcar's deck and its low crate pass under; every roof and the high crate are swept", roofsSwept)
+	check("standing on a tender passes under, jumping there does not", BridgeRules.safe(12.5, B.Stature, B.Clearance)
+		and BridgeRules.tooTall(12.5 + 2, B.Stature, B.Clearance))
+	-- The front and back of the trains along the track.
+	local frontZ, backZ = math.huge, -math.huge
+	for _, train in L.trains do
+		frontZ = math.min(frontZ, train.cars[1].front)
+		backZ = math.max(backZ, train.cars[#train.cars].back)
+	end
+	-- From anywhere on a top, the nearest low top of its train is reached walking before the beam gets there.
+	local inTime, worst = true, math.huge
+	for _, surface in L.surfaces do
+		local safe = BridgeRules.safeTops(L.surfaces, surface.train, B.Stature, B.Clearance)
+		for _, end_ in { -1, 1 } do
+			local z = surface.z + end_ * surface.length / 2
+			local _, away = BridgeRules.nearestSafe(safe, z)
+			local reaches = B.Warning + (z - frontZ) / Config.Run.Speed
+			local spare = reaches - (away / WALK_SPEED)
+			worst = math.min(worst, spare)
+			if spare < 3 then
+				inTime = false
+			end
+		end
+	end
+	check("from any top's end, a low top is reached walking with at least 3 s to spare", inTime, string.format("%.1f s", worst))
+	check("the bridge is in sight when the warning starts", B.Warning * Config.Run.Speed <= Config.Run.ViewAhead)
+	local pass = { arriveAt = 10, frontZ = frontZ, speed = Config.Run.Speed }
+	check("the beam reaches the front of the trains when the pass says, then runs on back",
+		BridgeRules.beamZ(pass, 10) == frontZ and BridgeRules.beamZ(pass, 11) == frontZ + Config.Run.Speed
+		and not BridgeRules.over(pass, 11, backZ, B.Depth) and BridgeRules.over(pass, 10 + (backZ - frontZ + B.Depth + 1) / Config.Run.Speed, backZ, B.Depth))
+	check("under the beam is its own length and a little more", BridgeRules.under(100, 103, B.Depth, B.Slack) and not BridgeRules.under(100, 104, B.Depth, B.Slack))
+	local lookout = A.CarKinds.Caboose.roof + assert(A.CarKinds.Caboose.cupola).height
+	local loco = A.CarKinds.Locomotive
+	local boiler, stack = assert(loco.boiler), assert(loco.stack)
+	check("the beam just clears a caboose's lookout and a chimney's top, and stays under the stands",
+		B.Clearance - 1 < lookout and lookout < B.Clearance and boiler.top + stack.height < B.Clearance
+		and B.Clearance + B.Height < A.WaitingRoomHeight - A.StandsMargin)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

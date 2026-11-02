@@ -9,10 +9,14 @@
 -- takes the weapon by walking into it, as a player does, and attacks with it the same way: persona fix 3, so solo
 -- practice shows the weapons). Bots stay on the car top they stand on (crossing between tops comes with B), except
 -- that a bot whose car is coming off (hooks.away) walks to the car in front once it notices, jumping up when it stops
--- against a higher car. Hit (its health dropped since it last looked), a bot sometimes holds its block a moment facing
+-- against a higher car; and a bot on a top too high for a low bridge coming (hooks.bridge) walks to the nearest low top
+-- of its train once it notices (decision 24), staying there till the bridge has gone over (bots keep to their own top),
+-- or ducks under its block where it stands when the beam is about to reach it first.
+-- Hit (its health dropped since it last looked), a bot sometimes holds its block a moment facing
 -- its target (hooks.block: the server's own block) or rolls away from it (hooks.dodge). A fighter standing just off a
 -- top - a plank's end, a roof's edge - counts as on that top (ArenaLayout.nearTop). (2nd fix 4, 2026-10-31.)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Config = require(shared:WaitForChild("Config"))
@@ -22,6 +26,7 @@ local CharacterParts = require(shared:WaitForChild("CharacterParts"))
 local ArenaLayout = require(shared:WaitForChild("ArenaLayout"))
 local BotPlan = require(shared:WaitForChild("BotPlan"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
+local BridgeRules = require(shared:WaitForChild("BridgeRules"))
 
 local BotBrain = {}
 
@@ -31,6 +36,7 @@ export type Hooks = {
 	attack: (model: Model, facing: Vector3) -> number?,
 	crates: () -> { Vector3 }, -- where the landed crates nobody has taken lie
 	away: (train: number, car: number) -> boolean, -- that car is coming off or gone (Uncoupling)
+	bridge: () -> BridgeRules.Pass?, -- a low bridge coming or going over now (Bridges)
 	block: (model: Model, down: boolean) -> (), -- the bot's block control (Guarding)
 	dodge: (model: Model, direction: Vector3) -> boolean, -- a roll (Dodging; false when not now)
 }
@@ -44,7 +50,8 @@ export type Brain = {
 -- nextPunch: the next punch of the string no sooner; left: punches left in this string; wanderAt: a new spot then;
 -- stepping: it is stepping straight in (Humanoid:Move goes on until stopped). health: its health when it last looked;
 -- blockUntil: it holds its block until then; noticeAt: it notices its car coming off then (nil: not seen coming off);
--- lastPlace, stuckAt: where it was when it last checked it was moving, and when (to jump when it is stuck).
+-- bridgeAt: it notices a low bridge coming then (nil: none coming); lastPlace, stuckAt: where it was when it last
+-- checked it was moving, and when (to jump when it is stuck).
 type Mind = {
 	target: Model?,
 	seen: number,
@@ -58,6 +65,7 @@ type Mind = {
 	health: number?,
 	blockUntil: number?,
 	noticeAt: number?,
+	bridgeAt: number?,
 	lastPlace: Vector3?,
 	stuckAt: number,
 }
@@ -107,6 +115,7 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 				health = nil,
 				blockUntil = nil,
 				noticeAt = nil,
+				bridgeAt = nil,
 				lastPlace = nil,
 				stuckAt = now,
 			}
@@ -141,6 +150,54 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 			walkTo(humanoid, here) -- out on a plank, a boiler's side or the sand: stand still
 			return
 		end
+		-- Walking somewhere it must go: jumping when it has not moved for a moment (against a higher car).
+		local function unstuck()
+			if now - mind.stuckAt > 0.5 then
+				if mind.lastPlace and (here - mind.lastPlace).Magnitude < 0.4 then
+					humanoid.Jump = true
+				end
+				mind.lastPlace, mind.stuckAt = here, now
+			end
+		end
+		-- A low bridge coming and this top too high: once it notices, to the nearest low top of its train still on.
+		local B = Config.Bridge
+		local pass = hooks.bridge()
+		if pass and not BridgeRules.safe(top.top, B.Stature, B.Clearance) then
+			local bridgeAt = mind.bridgeAt or now + between(c.Notice)
+			mind.bridgeAt = bridgeAt
+			local beamZ = BridgeRules.beamZ(pass, Workspace:GetServerTimeNow())
+			if now >= bridgeAt and beamZ > here.Z - Config.Run.Speed * c.DuckAhead and beamZ < here.Z + B.Depth then
+				-- The beam is about to reach it: duck under the block where it stands.
+				mind.target = nil
+				mind.blockUntil = now + c.ThinkSeconds * 3
+				hooks.block(model, true)
+				walkTo(humanoid, here)
+				return
+			end
+			if now >= bridgeAt then
+				local low = {}
+				for _, safe in BridgeRules.safeTops(surfaces, top.train, B.Stature, B.Clearance) do
+					if not hooks.away(safe.train, safe.car) then
+						table.insert(low, safe)
+					end
+				end
+				local spot = BridgeRules.nearestSafe(low, here.Z)
+				if spot then
+					if mind.blockUntil then
+						mind.blockUntil = nil
+						hooks.block(model, false)
+					end
+					mind.target = nil
+					humanoid.WalkSpeed = c.ChaseSpeed
+					local inset = math.max(0, spot.length / 2 - c.Margin)
+					walkTo(humanoid, Vector3.new(spot.x, here.Y, math.clamp(here.Z, spot.z - inset, spot.z + inset)))
+					unstuck()
+					return
+				end
+			end
+		elseif not pass then
+			mind.bridgeAt = nil
+		end
 		-- Its car is coming off: once it notices, to the car in front (jumping up a higher one).
 		if hooks.away(top.train, top.car) then
 			local noticeAt = mind.noticeAt or now + between(c.Notice)
@@ -154,12 +211,7 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 				mind.target = nil
 				humanoid.WalkSpeed = c.ChaseSpeed
 				walkTo(humanoid, Vector3.new(front.x, here.Y, front.z))
-				if now - mind.stuckAt > 0.5 then
-					if mind.lastPlace and (here - mind.lastPlace).Magnitude < 0.4 then
-						humanoid.Jump = true
-					end
-					mind.lastPlace, mind.stuckAt = here, now
-				end
+				unstuck()
 				return
 			end
 		else

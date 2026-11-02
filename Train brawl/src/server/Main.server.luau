@@ -5,7 +5,8 @@
 -- and cost that fighter a ticket, as does a home run (health emptied, kept by FighterHealth): with one left it comes
 -- back by balloon and parachute (Comebacks, full health, a short guard on landing), with none it is out; a held block
 -- softens hits from the front (Guarding, judged in WeaponService) and a dodge roll makes a fighter unhittable for a moment
--- (Dodging); late in a fight the back cars come off (Uncoupling); knock-offs and dynamite
+-- (Dodging); late in a fight the back cars come off (Uncoupling), and low bridges come over the trains, sweeping off
+-- whoever stands tall (Bridges); knock-offs and dynamite
 -- bursts go to every client; every character holds its weapon in its hand (WeaponGear), and every player's body is
 -- made the standard size with the standard animations (AvatarRules). For testing alone in Studio, the Workspace
 -- attribute Names.Solo makes practice bots (bodies: Sandbags, minds: BotBrain) join every round and fight.
@@ -33,6 +34,7 @@ local Comebacks = require(script.Parent:WaitForChild("Comebacks"))
 local Guarding = require(script.Parent:WaitForChild("Guarding"))
 local Dodging = require(script.Parent:WaitForChild("Dodging"))
 local Uncoupling = require(script.Parent:WaitForChild("Uncoupling"))
+local Bridges = require(script.Parent:WaitForChild("Bridges"))
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
@@ -41,6 +43,7 @@ local WeaponRules = require(shared:WaitForChild("WeaponRules"))
 local CharacterParts = require(shared:WaitForChild("CharacterParts"))
 local BodyMotion = require(shared:WaitForChild("BodyMotion"))
 local AttackString = require(shared:WaitForChild("AttackString"))
+local HitRules = require(shared:WaitForChild("HitRules"))
 
 local remotes = Net.create()
 local arena = ArenaBuilder.build()
@@ -159,6 +162,28 @@ local weapons = WeaponService.start(remotes.Swing, remotes.Hit, {
 	end,
 })
 weaponsMade = weapons
+-- A low bridge's beam hits whoever it catches like a launch at its health, back along the train (the body's own machine
+-- moves it: the player's client, told with everyone so all hear the clang, or here for a bot). A blow that empties
+-- health is a home run as any other. Someone holding a block ducks under it.
+local bridges = Bridges.start(arena.layout, {
+	fighters = round.fighters,
+	ducking = guarding.blocking,
+	swept = function(model: Model)
+		local b = Config.Bridge
+		local kind, left = health.hit(model, Workspace:GetServerTimeNow(), b.Damage, true, model)
+		if kind == "none" then
+			return -- still unhittable (a launch's moment, a comeback's guard)
+		end
+		local push, lift = HitRules.force(kind, left, Config.Health.Max, Config.Hit)
+		local share = if kind == "smash" then 1 else b.PushShare
+		local velocity = Vector3.new((math.random() - 0.5) * 4, lift, push * share)
+		sandbags.knock(model, velocity, kind, 0)
+		remotes.Swept:FireAllClients(model, velocity, kind)
+		if kind == "smash" then
+			round.eliminate(model, "homerun")
+		end
+	end,
+})
 local drops = WeaponDrops.start(arena.layout.surfaces, PartUtil.folder(Workspace, Names.CratesFolder), {
 	fighters = round.fighters,
 	-- Anyone with bare fists (players, and practice bots since persona fix 3).
@@ -188,6 +213,7 @@ brain = BotBrain.new(arena.layout.surfaces, {
 	end,
 	crates = drops.landed,
 	away = uncoupling.away,
+	bridge = bridges.passing,
 	block = guarding.hold,
 	dodge = dodging.dodge,
 })

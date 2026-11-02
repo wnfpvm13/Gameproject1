@@ -87,7 +87,7 @@ Config.Arena = {
 			spawns = { 0.82 },
 			plank = false,
 			boiler = { to = 0.65, top = 15.5, width = 12 },
-			stack = { along = 0.12, width = 4.8, height = 4.5 },
+			stack = { along = 0.12, width = 4.8, height = 3.3 }, -- (4.5 before decision 24: its top now passes under a low bridge)
 		},
 		Tender = { length = 15, roof = 12.5, spawns = { 0.5 }, plank = true }, -- the coal car behind a locomotive: low and flat
 		Boxcar = { length = 30, roof = 15, spawns = { 0.3, 0.7 }, plank = true },
@@ -687,6 +687,7 @@ Config.Sounds = {
 	Slip = { id = "rbxassetid://9113476527", volume = 0.85, vary = 0.05 }, -- Body Fall Master 36 (a skid and a fall)
 	WheelRoll = { id = "rbxassetid://9116537457", volume = 0.6, seconds = 1.8 }, -- Metal Cart 3 (a wheel rolling on the roof)
 	WheelHit = { id = "rbxassetid://9125672726", volume = 0.8, seconds = 1.2, vary = 0.05 }, -- Metal Impact Sledge Hammer Hits On 5 Ft I-Beam 13
+	BridgeHit = { id = "rbxassetid://9125672726", volume = 1, seconds = 1.4, vary = 0.04 }, -- the same I-beam hit, louder (a low bridge sweeps someone off)
 	-- The boom a launch goes off with (LaunchShow.blast; slower and deeper for a home run).
 	LaunchBoom = { id = "rbxassetid://1841351403", volume = 0.75, seconds = 1.4, vary = 0.05 }, -- Granular Thumpatron Metal Crash Hit 2 (APM)
 	Parachute = { id = "rbxassetid://9117235033", volume = 0.5, seconds = 2 }, -- Parachute Blossom 9
@@ -756,6 +757,10 @@ Config.Block = {
 	BreakDamage = 0.5,
 	BreakSeconds = 1,
 	WalkShare = 0.5,
+	-- Pressing attack while blocking lets go and strikes as soon as the blocked flinch allows (the press is kept:
+	-- Config.Attack.PressBuffer); an attack started within CounterSeconds of a blocked hit that lands says "반격!"
+	-- (Codex review 2026-11-02: blocking should lead into taking the turn back).
+	CounterSeconds = 0.35,
 }
 
 -- The back cars coming off (Uncoupling, persona fix 6; B's "칸 떨어져 나가기": "1분 30초쯤부터 맨 뒤 칸이 예고 후 천천히
@@ -774,6 +779,40 @@ Config.Uncouple = {
 	FallSeconds = 2.5,
 	FallSpeed = 30,
 	Sink = 25,
+}
+
+-- Low bridges over the running trains (BridgeRules, decision 24; the owner left the fun pass to Claude 2026-11-02: "재밌는
+-- 게임이 어떤건지 잘 만들어봐"). FirstAfter seconds into the fight, then every Every, an iron bridge comes over the trains
+-- (Bridges on the server, BridgeShow on every screen). It runs in with the scenery at Config.Run.Speed and is seen from
+-- Warning seconds before its beam reaches the front of the trains (Warning x Speed ahead), when every screen warns and
+-- marks the low tops and the whistle blows. The beam's underside is Clearance high: a fighter Stature tall standing on a
+-- coal tender (12.5) or a flatcar's deck or low crate (10, 12.5) passes under, and so does one holding its block on
+-- any roof (it ducks: Duck tall; Codex review 2026-11-02 - no new control); one standing on a roof, a lookout or the
+-- chimney, mid-jump, or stunned by a hit (no blocking then) is caught as the beam (Depth long, Slack more each way)
+-- goes over: Damage, and thrown back along the train like a launch at its health (HitRules.force, PushShare of it), so
+-- at full health it is knocked down where it stands and near the end it flies off. A body launched up into the beam
+-- is caught too (unless still unhittable from that launch). Every train has a tender, so every train has a place to
+-- stand under it (tests).
+-- The look: a truss Height deep over all the trains and Overhang beyond the outermost, on piers out in the sand. The
+-- underside clears everything solid on the trains: a caboose's lookout (19) and a locomotive's chimney (its top 18.8:
+-- lowered from 20 for it), so the beam only just misses them.
+Config.Bridge = {
+	FirstAfter = 50,
+	Every = 45, -- (at 50 and 95 s: clear of the cars' warnings at 70, 90, 110 and 130; none that would not be over
+	-- PassSeconds after reaching the trains before the round's end)
+	PassSeconds = 4,
+	Warning = 8,
+	Clearance = 19.4,
+	Stature = 5.2,
+	Duck = 3.2,
+	Depth = 5,
+	Slack = 1,
+	Damage = 12,
+	PushShare = 1.4,
+	Height = 5,
+	Overhang = 12,
+	Color = Color3.fromRGB(150, 62, 40),
+	SafeColor = Color3.fromRGB(96, 214, 120),
 }
 
 -- Accessories popping off (AccessoryPop, persona fix 7; decision 11's "체력 50·25에서 장신구 튕김"): at each health in
@@ -843,6 +882,7 @@ Config.Sandbag = {
 	Rest = { 0.6, 0.9 }, -- the breather after a string
 	Jitter = 0.08, -- up to this much later than its fist is ready, between punches of a string
 	FullString = 0.75, -- the chance a string is meant to go all three; otherwise it stops after one or two
+	DuckAhead = 0.6, -- a bot still on a high top ducks under its block once a low bridge's beam is this many seconds off
 	-- Since the persona rerun (2026-10-31: bots rode 7 departing cars in 8 rounds, never blocked, never saw anyone on a
 	-- plank - solo practice was easier than real players): a bot notices its car is coming off after Notice seconds and
 	-- walks to the car in front; hit, it holds its block for BlockHold seconds with the chance BlockChance, or rolls away

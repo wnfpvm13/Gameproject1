@@ -60,6 +60,11 @@ function Words.winStreak(count: number): string
 	return string.format("%d연승!", count)
 end
 Words.CarLeaving = "맨 뒤 칸이 떨어져 나간다! 앞 칸으로!" -- a back car is about to come off
+-- A low bridge coming (decision 24): the seconds until it reaches the trains, then while it goes over.
+function Words.bridgeComing(seconds: number): string
+	return if seconds > 0 then string.format("낮은 다리! 낮은 칸으로 가거나 막기로 숙여! %d", seconds) else "낮은 다리 지나간다! 숙여!"
+end
+Words.BridgeSafe = "여기는 안전" -- over a low top while a bridge comes
 
 -- Under the big text when the player is knocked off: who did it and how, and how many hits it took since its last fall.
 function Words.knockedOff(by: string?, how: string, hits: number): string
@@ -149,6 +154,7 @@ Words.DodgeKey = "Q" -- the roll's key, shown with the cooldown on a keyboard (D
 Words.DodgeKeyPad = "B" -- and its button on a gamepad
 -- Over a blocker an attack went through (BlockRules.through): from the side, from behind, a weapon no block stops.
 Words.BlockThrough = { side = "옆!", back = "뒤!", weapon = "못 막는 공격!" } :: { [string]: string }
+Words.Counter = "반격!" -- over whoever the player hit back right after blocking
 
 -- The first-ride card: its title and its rows (the control, then what it does) for the kind of control in use:
 -- "mouse", "touch" or "gamepad".

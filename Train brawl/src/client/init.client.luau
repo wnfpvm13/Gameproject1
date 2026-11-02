@@ -21,7 +21,8 @@
 -- broken hits clang in HitFeedback, a hit through it says why), the roll control (DodgeInput) rolls the player at once (OwnDodge:
 -- BodyMotion.roll, judged by the server) and everyone's rolls are drawn (DodgeShow) with the cooldown shown (DodgeHud), a roof edge that drops into nothing gets a warning band near the player (EdgeWarning), the player's
 -- own numbers are counted (RoundStats) for the line on who knocked it off (RoundHud) and the card at the round's end (ResultCard), a back car
--- coming off is warned of and its dressing follows it (UncoupleShow), accessories pop off as fighters are worn down (AccessoryPop), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
+-- coming off is warned of and its dressing follows it (UncoupleShow), a low bridge runs in with its warning and the low
+-- tops marked, and whoever it sweeps is thrown off (BridgeShow, KnockFlight), accessories pop off as fighters are worn down (AccessoryPop), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
 -- is watched first).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -84,6 +85,7 @@ local DodgeInput = require(script:WaitForChild("DodgeInput"))
 local OwnDodge = require(script:WaitForChild("OwnDodge"))
 local DodgeShow = require(script:WaitForChild("DodgeShow"))
 local DodgeHud = require(script:WaitForChild("DodgeHud"))
+local BridgeShow = require(script:WaitForChild("BridgeShow"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
@@ -93,6 +95,7 @@ local feedRemote = remotes:WaitForChild(Names.FeedRemote) :: RemoteEvent
 local blastRemote = remotes:WaitForChild(Names.BlastRemote) :: RemoteEvent
 local blockRemote = remotes:WaitForChild(Names.BlockRemote) :: RemoteEvent
 local dodgeRemote = remotes:WaitForChild(Names.DodgeRemote) :: RemoteEvent
+local sweptRemote = remotes:WaitForChild(Names.SweptRemote) :: RemoteEvent
 
 SoundBank.preload()
 -- The same arena the server built (ArenaLayout is pure math from the shared Config).
@@ -125,6 +128,7 @@ local uncoupling = UncoupleShow.new(playerGui, Workspace:WaitForChild(Names.Aren
 local function away(train: number, car: number): boolean
 	return uncoupling:away(train, car)
 end
+local bridge = BridgeShow.new(playerGui, layout, away)
 DropShow.start(Workspace:WaitForChild(Names.CratesFolder), Workspace:WaitForChild(Names.ArenaFolder))
 GroundMarks.start({ Workspace:WaitForChild(Names.ArenaFolder), Workspace:WaitForChild(Names.CratesFolder) })
 
@@ -209,6 +213,10 @@ end
 -- How big each kind of hit burst is, to tell a server's word that made the player's own hit bigger than shown.
 local BURST_SIZE: { [string]: number } = { light = 1, launch = 2, crowd = 3 }
 
+-- Block, then strike back (Config.Block.CounterSeconds): when the player's block last took a hit (os.clock), and the
+-- server time of the player's attack started soon enough after it to count as a counter.
+local blockedAt = -math.huge
+local counterAt: number? = nil
 local own = OwnSwing.new(swingRemote, {
 	fighters = fighters,
 	stunned = function(): boolean
@@ -221,6 +229,9 @@ local own = OwnSwing.new(swingRemote, {
 		return guard:held() or dodge:busy(Workspace:GetServerTimeNow()) -- (no attacking mid-roll either)
 	end,
 	draw = function(model: Model, at: number, weapon: string, step: number)
+		if model == player.Character and os.clock() - blockedAt <= Config.Block.CounterSeconds then
+			counterAt = at
+		end
 		SwingPose.play(model, at, weapon, step)
 		SwingTrail.play(model, weapon, step, at)
 		AttackShow.play(model, weapon, step, at)
@@ -262,6 +273,9 @@ local own = OwnSwing.new(swingRemote, {
 })
 SwingInput.bind(function(mouse: boolean)
 	if not mouse or aim:clickSwings() then
+		if guard:held() then
+			guard:suspend() -- attacking while blocking lets go of the block (the press waits out a blocked flinch)
+		end
 		own:press(player.Character)
 	end
 end)
@@ -320,6 +334,9 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 		knock:hit(victim, push, hitKind, stun)
 		own:broken() -- being hit breaks the player's own string, as on the server
 	end
+	if me and met == "blocked" then
+		blockedAt = os.clock()
+	end
 	local mine = swinger == player.Character
 	-- What this screen showed at once for that attack of the player's on this victim (nil: nothing), and whether it is
 	-- the attack drawn now.
@@ -342,6 +359,11 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 			SwingPose.hold(by, Config.Feedback.AttackerHold.light or 0)
 		end
 		return
+	end
+	-- The player's attack started right after its block took a hit, landing clean: a counter.
+	if mine and counterAt ~= nil and counterAt == own.last and tag == own.count then
+		counterAt = nil
+		BlockShow.counter(victim)
 	end
 	-- A hit through a block: why (from the side, from behind, a weapon no block stops).
 	local hitter = if typeof(swinger) == "Instance" and swinger:IsA("Model") then swinger else nil
@@ -387,6 +409,29 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 			ImpactBurst.play(at, "launch", WeaponRules.FIST, nil) -- the twinkle the flight ends in
 		end)
 	end
+end)
+
+-- A low bridge's beam caught a fighter, from the server ("launch", or "smash" when it emptied health): the player's own
+-- client throws its character back along the train; everyone sees it flail off and hears it hit the beam.
+sweptRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, kind: unknown)
+	if typeof(victim) ~= "Instance" or not victim:IsA("Model") or typeof(velocity) ~= "Vector3" then
+		return
+	end
+	local hitKind = if kind == "smash" then "smash" else "launch"
+	if victim == player.Character then
+		knock:hit(victim, velocity, hitKind, 0)
+		own:broken()
+	end
+	SwingPose.react(victim, hitKind, velocity)
+	LaunchShow.blast(victim:GetPivot().Position, velocity, hitKind == "smash")
+	if hitKind == "smash" then
+		HomeRunShow.play(victim, function(at: Vector3)
+			ImpactBurst.play(at, "launch", WeaponRules.FIST, nil)
+		end)
+	else
+		LaunchShow.play(victim)
+	end
+	bridge:swept(victim)
 end)
 
 -- A dynamite burst, from the server.
@@ -448,6 +493,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 	dodgeHud:update(Workspace:GetAttribute(Names.Phase) == "Fight" and alive and not back, rollWait)
 	dodgeInput:show(rollWait)
 	uncoupling:update()
+	bridge:update()
 	edges:update(character, Workspace:GetAttribute(Names.Phase) == "Fight" and alive and not back, away)
 	local phaseNow = Workspace:GetAttribute(Names.Phase)
 	local phaseName = if typeof(phaseNow) == "string" then phaseNow else "Waiting"

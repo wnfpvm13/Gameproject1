@@ -9,6 +9,7 @@ return {
 	BlastRemote = "Blast", -- server -> every client: a dynamite burst (where, how wide)
 	BlockRemote = "Block", -- client -> server: the block control went down (true) or up (false)
 	DodgeRemote = "Dodge", -- client -> server: I roll, along this flat direction
+	SweptRemote = "Swept", -- server -> every client: a low bridge swept this fighter off (and the throw for it)
 	ArenaFolder = "TrainBrawlArena",
 	SceneryFolder = "TrainBrawlScenery",
 	CanyonFolder = "TrainBrawlCanyon",
@@ -34,6 +35,7 @@ return {
 	WinnerCount = "WinnerCount", -- how many won (more than one: tied when the time ran out)
 	WinnerStreak = "WinnerStreak", -- the single winner's wins in a row this visit (0: none)
 	Solo = "TrainBrawlSolo", -- set in Studio: sandbags join so one tester can play
+	BridgeAt = "BridgeAt", -- server time a low bridge's beam reaches the front of the trains (Bridges; none: no bridge)
 	-- Character attributes
 	SwingAt = "SwingAt", -- server time the character's last attack started (every client draws it)
 	SwingWeapon = "SwingWeapon", -- the weapon that attack was made with (set just before SwingAt)

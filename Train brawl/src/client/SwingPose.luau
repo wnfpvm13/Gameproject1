@@ -172,7 +172,8 @@ local function stanceOf(model: Model): (AttackPoses.Pose?, boolean, Vector3?)
 		return nil, true
 	end
 	if model:GetAttribute(Names.Blocking) == true then
-		return AttackPoses.block(), true, nil -- both forearms up (the left lets go of a two-handed grip)
+		-- Both forearms up (the left lets go of a two-handed grip); crouched while a low bridge comes (it ducks under).
+		return AttackPoses.block(Workspace:GetAttribute(Names.BridgeAt) ~= nil), true, nil
 	end
 	local weapon = WeaponRules.named(Config.Weapons, model:GetAttribute(Names.Weapon))
 	local w = Config.Weapons[weapon]

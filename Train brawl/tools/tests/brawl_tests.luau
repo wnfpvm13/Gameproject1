@@ -651,6 +651,8 @@ do
 	check("the mouse card names Alt, the touch card does not", Words.cardRows("mouse")[7][1] == "왼쪽 Alt" and #Words.cardRows("touch") == 6)
 	check("every card names the block control", Words.cardRows("mouse")[2][1] == "오른쪽 클릭 꾹" and Words.cardRows("touch")[2][1] == "막기 버튼 꾹"
 		and Words.cardRows("gamepad")[2][1] == "LT / L2 꾹")
+	check("every card names the roll control", Words.cardRows("mouse")[3][1] == "Q" and Words.cardRows("touch")[3][1] == "구르기 버튼"
+		and Words.cardRows("gamepad")[3][1] == "B")
 	check("the clock reads minutes and seconds", Words.clock(113) == "1:53" and Words.clock(5) == "0:05" and Words.clock(0) == "0:00")
 	check("the feed credits who knocked who off, and a fall with nobody to credit", Words.feed("B", "A", "homerun", true) == "A → B 홈런!" and Words.feed("B", "A", "fall", true) == "A → B 하차" and Words.feed("B", nil, "fall", true) == "B 하차")
 	check("a fall with a ticket to spare is not 하차 (the fighter comes back)", Words.feed("B", "A", "fall", false) == "A → B 떨어뜨림"
@@ -1177,6 +1179,38 @@ do
 	check("with every spot closer than NearGap, the farthest", WeaponRules.nearSpot({ { x = 1, z = 0 }, { x = 2, z = 0 } }, 0, 0, d.NearGap) == 2
 		and WeaponRules.nearSpot({}, 0, 0, d.NearGap) == nil)
 	check("it is not taken the moment it lands, and the first crate of a fight is never bait", d.NearGap > d.PickupReach and d.FirstAfter < d.QuietSeconds)
+end
+
+-- 25. The dodge roll and why a hit went through a block (decision 22: owner 2026-10-31 "대시·구르기 추가"; the persona
+-- rerun blocked 10 attacks and took 147, and could not tell a late block from one hit from the side).
+do
+	local D = Config.Dodge
+	local x, z = DodgeRules.direction(3, 4, 1, 0)
+	local bx, bz = DodgeRules.direction(0, 0, 0, -1)
+	check("a roll goes the way the fighter walks, straight back from its facing when it stands still",
+		math.abs(x - 0.6) < 1e-9 and math.abs(z - 0.8) < 1e-9 and bx == 0 and bz == 1)
+	check("a roll waits out its cooldown (taken a little early over the network only)",
+		DodgeRules.ready(nil, 0, D.Cooldown, 0) and not DodgeRules.ready(10, 10 + D.Cooldown - 0.2, D.Cooldown, 0)
+			and DodgeRules.ready(10, 10 + D.Cooldown - D.Slack, D.Cooldown, D.Slack) and not DodgeRules.ready(10, 10 + D.Cooldown - D.Slack - 0.01, D.Cooldown, D.Slack))
+	check("a roll is going only for its seconds, and the wait counts down to 0",
+		DodgeRules.rolling(10, 10.1, D.Seconds) and not DodgeRules.rolling(10, 10 + D.Seconds, D.Seconds) and not DodgeRules.rolling(nil, 10, D.Seconds)
+			and DodgeRules.wait(10, 11, D.Cooldown) == D.Cooldown - 1 and DodgeRules.wait(10, 20, D.Cooldown) == 0 and DodgeRules.wait(nil, 0, D.Cooldown) == 0)
+	-- (16: Roblox's walking speed, the players' own)
+	check("the roll is quick and far enough to leave a fist's reach, unhittable only for most of it",
+		D.Distance / D.Seconds > 16 * 1.5 and D.Distance > Config.Weapons.Fist.reach + 2 and D.Immune < D.Seconds and D.Immune > 0.15)
+	check("rolls cannot be chained: the cooldown is many rolls long, longer than a fist's whole string",
+		D.Cooldown >= D.Seconds * 5 and D.Cooldown > Config.Weapons.Fist.cooldown * 3 and D.Slack < 0.5)
+	local start, middle, finish = AttackPoses.roll(0, -1, 0), AttackPoses.roll(0.5, -1, 0), AttackPoses.roll(1, -1, 0)
+	check("a forward roll turns once head over heels and ends upright, tucked in the middle",
+		(start.Root.x or 0) == 0 and math.abs((finish.Root.x or 0) + 360) < 1e-6 and (middle.RightKnee.x or 0) < -90
+			and (finish.RightKnee.x or 0) == 0 and middle.Root.shift ~= nil and middle.Root.shift.Y < 0)
+	local sideways = AttackPoses.roll(0.5, 0, 1)
+	check("a roll more to a side turns over the shoulder", sideways.Root.z ~= nil and sideways.Root.x == nil)
+	check("a hit from the side or behind goes through the block, saying so", BlockRules.through(true, 0, 0, 0, -1, 0, -5, 75) == nil
+		and BlockRules.through(true, 0, 0, 0, -1, 5, 0, 75) == "side" and BlockRules.through(true, 0, 0, 0, -1, 0, 5, 75) == "back"
+		and BlockRules.through(false, 0, 0, 0, -1, 0, -5, 75) == "weapon")
+	check("each reason has a word over the blocker", Words.BlockThrough.side == "옆!" and Words.BlockThrough.back == "뒤!"
+		and Words.BlockThrough.weapon ~= nil)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

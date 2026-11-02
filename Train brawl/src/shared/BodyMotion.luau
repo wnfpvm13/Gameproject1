@@ -156,9 +156,9 @@ function BodyMotion.room(body: CharacterParts.Body, flat: Vector3, studs: number
 	return 0
 end
 
--- An attack steps the fighter in: up to `studs` along the flat `facing` over Config.Attack.LungeSeconds, as far as
--- room() allows, on its feet only (not flying, held or in the air). A hit ends it. Returns how far it steps.
-function BodyMotion.lunge(body: CharacterParts.Body, facing: Vector3, studs: number): number
+-- A step of the body along the flat `facing`: up to `studs` over `seconds`, as far as room() allows, on its feet only
+-- (not flying, held or in the air); a hit (or the next step) ends it. Returns how far it goes.
+local function stride(body: CharacterParts.Body, facing: Vector3, studs: number, seconds: number, name: string): number
 	local root, humanoid = body.root, body.humanoid
 	local flat = Vector3.new(facing.X, 0, facing.Z)
 	if studs <= 0 or flat.Magnitude < 1e-3 or root.Anchored or humanoid.PlatformStand or humanoid.FloorMaterial == Enum.Material.Air then
@@ -170,13 +170,24 @@ function BodyMotion.lunge(body: CharacterParts.Body, facing: Vector3, studs: num
 		return 0
 	end
 	stop(lunges, root)
-	local seconds = Config.Attack.LungeSeconds
-	local step = push(lunges, root, "Lunge", seconds)
+	local step = push(lunges, root, name, seconds)
 	step.VelocityConstraintMode = Enum.VelocityConstraintMode.Line -- along the aim; sideways and falling stay free
 	step.LineDirection = flat
 	step.LineVelocity = go / seconds
 	step.Parent = root
 	return go
+end
+
+-- An attack steps the fighter in: up to `studs` along the flat `facing` over Config.Attack.LungeSeconds, as far as
+-- room() allows, on its feet only (not flying, held or in the air). A hit ends it. Returns how far it steps.
+function BodyMotion.lunge(body: CharacterParts.Body, facing: Vector3, studs: number): number
+	return stride(body, facing, studs, Config.Attack.LungeSeconds, "Lunge")
+end
+
+-- A dodge roll (decision 22): Config.Dodge.Distance along the flat `direction` over Config.Dodge.Seconds, as an
+-- attack's step goes (never off a roof's edge; a hit ends it). Returns how far it rolls.
+function BodyMotion.roll(body: CharacterParts.Body, direction: Vector3): number
+	return stride(body, direction, Config.Dodge.Distance, Config.Dodge.Seconds, "Roll")
 end
 
 -- Whether a body launched `elapsed` seconds ago is done flying: landed (after Config.Knock.MinSeconds), or flying

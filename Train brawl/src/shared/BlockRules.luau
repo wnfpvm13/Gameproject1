@@ -1,8 +1,8 @@
 --!strict
 -- Hold-to-block as pure rules (decision 11's "누르고 버티는 막기", persona fix 4; the numbers come in from
--- Config.Block): whether an attack meets the block (from the front, and not a weapon that always launches), and what
--- it does then - a light hit is softened, the string's launching third breaks the guard instead of launching. Requires
--- nothing.
+-- Config.Block): whether an attack meets the block (from the front, and not a weapon that always launches), what it
+-- does then - a light hit is softened, the string's launching third breaks the guard instead of launching - and why
+-- one went through a block. Requires nothing.
 
 local BlockRules = {}
 
@@ -34,6 +34,20 @@ function BlockRules.outcome(launches: boolean, rules: Rules): (number, number, b
 		return rules.BreakDamage, 1, true
 	end
 	return rules.Damage, rules.Push, false
+end
+
+-- Why an attack from (fx, fz) went through the block of a fighter standing at (x, z) facing (lx, lz) (2026-10-31: a
+-- tester could not tell a late block from one hit from the side): "weapon" (one that always launches), "back"
+-- (from behind: more than 135 degrees off its facing), "side" (outside `arc`), or nil when the block covered it (it went
+-- through as a crowd's launch or a hit that emptied health).
+function BlockRules.through(blockable: boolean, x: number, z: number, lx: number, lz: number, fx: number, fz: number, arc: number): string?
+	if not blockable then
+		return "weapon"
+	end
+	if BlockRules.covers(x, z, lx, lz, fx, fz, arc) then
+		return nil
+	end
+	return if BlockRules.covers(x, z, lx, lz, fx, fz, 135) then "side" else "back"
 end
 
 return BlockRules

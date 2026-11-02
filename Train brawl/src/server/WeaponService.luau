@@ -27,7 +27,8 @@
 -- the victim's resistance (a held gold bar), away from the attacker (a blast: from where it burst); a smash (health
 -- emptied) flies the same home run whatever hit it. A hit meeting a block (hooks.blocking, from the front, a weapon that
 -- can be blocked: BlockRules) lands softened, and a blocked string finisher breaks the guard instead of launching
--- (hooks.guardBroken); a blocker cannot attack and walks slower. A blast after the fight is over hits nobody. It is
+-- (hooks.guardBroken); a blocker cannot attack and walks slower, nor can a fighter mid-roll (hooks.rolling: Dodging,
+-- which asks stunned() whether a hit's stun still holds a fighter). A blast after the fight is over hits nobody. It is
 -- sent to every client (Names.HitRemote: victim, velocity, attacker, kind, weapon, whether a crowd launched it, the
 -- attack's number as its player's client counted them - none for a blast - and "blocked" or "broken" when it met a
 -- block): the victim's own client moves its
@@ -61,6 +62,7 @@ export type Hooks = {
 	onHit: (victim: Model, attacker: Model) -> (), -- for the knock-off credit
 	attacked: (model: Model) -> (), -- an attack of the model's was taken (a fighter just back loses its guard)
 	blocking: (model: Model) -> boolean, -- the model holds its block now (Guarding)
+	rolling: (model: Model) -> boolean, -- the model is mid dodge roll (Dodging)
 	guardBroken: (model: Model, now: number) -> (), -- a string finisher met its block: the guard breaks
 	onSmash: (victim: Model) -> (), -- health emptied: out of the round
 	equip: (model: Model) -> (), -- puts the model's Names.Weapon in its hand (WeaponGear)
@@ -80,6 +82,7 @@ export type Service = {
 	-- A fighter the server runs (a practice bot) attacks along the flat `facing`; false when it may not now.
 	attack: (model: Model, facing: Vector3) -> boolean,
 	repace: (model: Model) -> (), -- sets the model's walk again (it started or stopped blocking)
+	stunned: (model: Model) -> boolean, -- a hit's stun still holds the model
 	stop: () -> (),
 }
 
@@ -282,8 +285,8 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 	-- allowances (taken a little early, and pressed before the hit that stuns it showed). Returns whether it was taken.
 	local function begin(model: Model, aim: unknown, claim: number?, tag: number?, allowance: boolean): boolean
 		local body = CharacterParts.body(model)
-		if not (body and body.humanoid.Health > 0 and hooks.canSwing(model)) or hooks.blocking(model) then
-			return false -- (a blocker cannot attack)
+		if not (body and body.humanoid.Health > 0 and hooks.canSwing(model)) or hooks.blocking(model) or hooks.rolling(model) then
+			return false -- (a blocker or a fighter mid-roll cannot attack)
 		end
 		local now = Workspace:GetServerTimeNow()
 		local since = hitAt[model]
@@ -378,6 +381,11 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		end,
 		repace = function(model: Model)
 			pace(model, holding(model))
+		end,
+		-- Whether a hit's stun still holds the model (a light hit's flinch, a launch's first moments).
+		stunned = function(model: Model): boolean
+			local until_ = stunUntil[model]
+			return until_ ~= nil and Workspace:GetServerTimeNow() < until_
 		end,
 		stop = function()
 			watching = false

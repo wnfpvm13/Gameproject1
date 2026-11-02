@@ -4,7 +4,8 @@
 -- bursts in Dynamite; coal lumps fly in Missiles, bowled wheels roll in Wheels, oil slicks lie in Slicks); weapon crates drop onto the trains during a fight (WeaponDrops); falls are noticed by FallWatch
 -- and cost that fighter a ticket, as does a home run (health emptied, kept by FighterHealth): with one left it comes
 -- back by balloon and parachute (Comebacks, full health, a short guard on landing), with none it is out; a held block
--- softens hits from the front (Guarding, judged in WeaponService); late in a fight the back cars come off (Uncoupling); knock-offs and dynamite
+-- softens hits from the front (Guarding, judged in WeaponService) and a dodge roll makes a fighter unhittable for a moment
+-- (Dodging); late in a fight the back cars come off (Uncoupling); knock-offs and dynamite
 -- bursts go to every client; every character holds its weapon in its hand (WeaponGear), and every player's body is
 -- made the standard size with the standard animations (AvatarRules). For testing alone in Studio, the Workspace
 -- attribute Names.Solo makes practice bots (bodies: Sandbags, minds: BotBrain) join every round and fight.
@@ -30,6 +31,7 @@ local Slicks = require(script.Parent:WaitForChild("Slicks"))
 local RoundService = require(script.Parent:WaitForChild("RoundService"))
 local Comebacks = require(script.Parent:WaitForChild("Comebacks"))
 local Guarding = require(script.Parent:WaitForChild("Guarding"))
+local Dodging = require(script.Parent:WaitForChild("Dodging"))
 local Uncoupling = require(script.Parent:WaitForChild("Uncoupling"))
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Config = require(shared:WaitForChild("Config"))
@@ -97,10 +99,20 @@ FallWatch.start(arena.fallLine, round.fighters, function(model: Model)
 	end
 end)
 
--- Blocking needs the weapons (a blocker walks slower), made right below.
+-- Rolling and blocking need the weapons (no roll while a hit stuns; a blocker walks slower), made right below.
 local weaponsMade: WeaponService.Service? = nil
+local dodging = Dodging.start(remotes.Dodge, {
+	canDodge = round.isFighting,
+	stunned = function(model: Model): boolean
+		return weaponsMade ~= nil and weaponsMade.stunned(model)
+	end,
+	immune = health.immune,
+})
 local guarding = Guarding.start(remotes.Block, {
-	canBlock = round.isFighting,
+	-- (no blocking mid-roll: it starts again by itself after, if still held)
+	canBlock = function(model: Model): boolean
+		return round.isFighting(model) and not dodging.rolling(model)
+	end,
 	repace = function(model: Model)
 		if weaponsMade then
 			weaponsMade.repace(model)
@@ -117,6 +129,7 @@ local weapons = WeaponService.start(remotes.Swing, remotes.Hit, {
 		health.unguard(model, Workspace:GetServerTimeNow())
 	end,
 	blocking = guarding.blocking,
+	rolling = dodging.rolling,
 	guardBroken = guarding.breakGuard,
 	onSmash = function(victim: Model)
 		round.eliminate(victim, "homerun")

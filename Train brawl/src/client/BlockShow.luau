@@ -3,7 +3,8 @@
 -- (Names.Blocking, from the server's Guarding) shows a pale gold shield in front of it, a flattened lens of the
 -- ForceField material at chest height that turns with it. A hit taken on the block flashes the shield and throws a few
 -- sparks off it (hit); a guard broken by a string's third bursts the shield into shards that fly off and fade, with
--- "막기 깨짐!" over the head for a moment. Drawn only: no collisions or raycasts.
+-- "막기 깨짐!" over the head for a moment; a hit that went through a block says why there (through(): "옆!", "뒤!",
+-- "못 막는 공격!"). Drawn only: no collisions or raycasts.
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -90,8 +91,8 @@ local function shatter(at: CFrame)
 	sparks(at, 18)
 end
 
--- "막기 깨짐!" over a fighter's head for a moment.
-local function brokenNote(model: Model)
+-- `text` in `color` over a fighter's head for a moment ("막기 깨짐!", or why a hit went through the block).
+local function note(model: Model, text: string, color: Color3)
 	local head = model:FindFirstChild("Head")
 	if not (head and head:IsA("BasePart")) then
 		return
@@ -103,8 +104,8 @@ local function brokenNote(model: Model)
 	billboard.StudsOffset = Vector3.new(0, 4, 0)
 	billboard.AlwaysOnTop = true
 	billboard.MaxDistance = 80
-	local label = UiStyle.label(billboard, "Note", UDim2.fromScale(1, 1), 26, UiStyle.Red)
-	label.Text = Words.GuardBroken
+	local label = UiStyle.label(billboard, "Note", UDim2.fromScale(1, 1), 26, color)
+	label.Text = text
 	billboard.Parent = head
 	UiStyle.pop(label, 1.5)
 	Debris:AddItem(billboard, BROKEN_SECONDS)
@@ -124,13 +125,22 @@ function BlockShow.hit(victim: Model, guard: string)
 			shields[victim] = nil
 		end
 		shatter(at)
-		brokenNote(victim)
+		note(victim, Words.GuardBroken, UiStyle.Red)
 	else
 		local shield = shields[victim]
 		if shield then
 			shield.flashAt = os.clock()
 		end
 		sparks(at, 10)
+	end
+end
+
+-- A hit went through `victim`'s block (BlockRules.through: "side", "back" or "weapon"): says why over its head
+-- (2026-10-31: a tester could not tell a late block from one hit from the side).
+function BlockShow.through(victim: Model, why: string)
+	local text = Words.BlockThrough[why]
+	if text then
+		note(victim, text, UiStyle.Gold)
 	end
 end
 

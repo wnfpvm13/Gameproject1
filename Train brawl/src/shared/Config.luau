@@ -673,6 +673,7 @@ Config.Sounds = {
 	WhipHit = { id = "rbxassetid://9113615753", volume = 0.8, vary = 0.06 }, -- Buggy Whip Slap Couch Light Crack Swish 6
 	ShovelHit = { id = "rbxassetid://9125819216", volume = 0.75, seconds = 1, vary = 0.06 }, -- Robot Impact Miscellaneous Metal Clangs Clunks 4
 	LassoThrow = { id = "rbxassetid://9119739660", volume = 0.5, vary = 0.06 }, -- Swoosh Pack High End Multiple Variations 9
+	Roll = { id = "rbxassetid://9119739660", volume = 0.4, vary = 0.1 }, -- the same licensed swoosh, played lower (a dodge roll)
 	LassoCatch = { id = "rbxassetid://9118717475", volume = 0.8, seconds = 1.2, vary = 0.05 }, -- Rope Impacts 4
 	CoalHit = { id = "rbxassetid://9118630399", volume = 0.8, vary = 0.08 }, -- Rock Impacts 5
 	Steam = { id = "rbxassetid://9116496074", volume = 0.7, seconds = 0.9, vary = 0.05 }, -- Medium Pressure Air Release 6 (a steam blast)
@@ -716,6 +717,19 @@ Config.Round = {
 	-- others come back: Config.Comeback). Decision 11, brought forward by the persona playtest (2026-10-29): fighters were
 	-- out after 33 s on average and then only watched.
 	Tickets = 2,
+}
+
+-- The dodge roll (decision 22, owner 2026-10-31 "대시·구르기 추가": in the persona rerun the testers blocked 10 attacks
+-- and took 147, and two asked again for a dash or a roll). A quick roll along the way the fighter walks (straight back
+-- when it stands still) of Distance studs over Seconds, unhittable for its first Immune seconds, then not again for
+-- Cooldown (the server takes one up to Slack early: the network). It stops short of a roof's edge as an attack's step
+-- does (BodyMotion.room); no attacking or blocking while rolling.
+Config.Dodge = {
+	Distance = 9,
+	Seconds = 0.3,
+	Immune = 0.25,
+	Cooldown = 3,
+	Slack = 0.15,
 }
 
 -- Hold to block (decision 11's "누르고 버티는 막기", no counter; brought forward by the persona playtest 2026-10-29: "no

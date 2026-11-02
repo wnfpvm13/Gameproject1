@@ -49,7 +49,7 @@ local RUN_FROM, RUN_TO, RUN_LEAST = 10, 16, 0.6
 -- The free hand's elbow bends down and out to the left, a little back (in the upper torso's space).
 local FREE_ELBOW = Vector3.new(-0.5, -1, 0.3)
 
--- A pose being drawn on a character: its joints, what kind ("attack", "light" or "flail"), when it started (server
+-- A pose being drawn on a character: its joints, what kind ("attack", "light", "flail" or "roll"), when it started (server
 -- time for attacks, os.clock for reactions) and how long it lasts, the pose at a share of it, how it blends in, and
 -- what was written to each joint last (put straight before each animation step, and faded from by the next pose).
 -- holdFrom/holdUntil: a hold on the pose (when a blow lands): time stands still for the drawing between them.
@@ -161,7 +161,7 @@ end
 local function stanceOf(model: Model): (AttackPoses.Pose?, boolean, Vector3?)
 	local body = CharacterParts.body(model)
 	local now = drawing[model]
-	if body and (body.humanoid.PlatformStand or (now and now.kind == "flail")) then
+	if body and (body.humanoid.PlatformStand or (now and (now.kind == "flail" or now.kind == "roll"))) then
 		return nil, false -- also when that hit put it out (the flail may come before the stiffness reaches this client)
 	end
 	local phase = Workspace:GetAttribute(Names.Phase)
@@ -411,7 +411,7 @@ RunService.Stepped:Connect(function(_time: number, dt: number)
 	-- taken again as it settles; none while flying.
 	for model, stance in stances do
 		local now = drawing[model]
-		if not model.Parent or (now and now.kind == "flail") then
+		if not model.Parent or (now and (now.kind == "flail" or now.kind == "roll")) then
 			continue
 		end
 		local offHand: Vector3? = nil
@@ -523,6 +523,24 @@ function SwingPose.react(model: Model, kind: string, push: Vector3?)
 		-- A launch tumbles (a home run spins for real: BodyMotion).
 		local turns = if kind == "launch" then Config.Feedback.TumbleTurns else 0
 		return AttackPoses.shaken(AttackPoses.react(kind, u, back, side, settle, turns), u * length, hold, shake, back, side)
+	end, 0, false)
+end
+
+-- A dodge roll by `model` that started at server time `at` along the flat world `direction` (DodgeShow): the body
+-- tucks and turns once along it over Config.Dodge.Seconds (AttackPoses.roll), snapping in over any attack or stance
+-- (the stance comes back after it, as after a flight).
+function SwingPose.roll(model: Model, at: number, direction: Vector3)
+	local body = CharacterParts.body(model)
+	local back, side = -1, 0 -- forward when unknown
+	if body then
+		local flat = body.root.CFrame:VectorToObjectSpace(Vector3.new(direction.X, 0, direction.Z))
+		if flat.Magnitude > 1e-3 then
+			flat = flat.Unit
+			back, side = flat.Z, flat.X -- the body's own +Z is backward
+		end
+	end
+	begin(model, "roll", at, Config.Dodge.Seconds, serverNow, function(u: number): AttackPoses.Pose
+		return AttackPoses.roll(u, back, side)
 	end, 0, false)
 end
 

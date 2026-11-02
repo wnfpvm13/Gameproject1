@@ -3,7 +3,8 @@
 -- Names.Health attribute for the bars on every screen. Not the Humanoid's Health: that one kills at 0 and refills on
 -- its own. Full again at the start of every round and on the way back after a fall (reset). A fighter just back on
 -- the trains is unhittable for a moment unless it attacks (guard, unguard), published as Names.GuardUntil for the
--- shimmer every screen draws on it (ComebackShow).
+-- shimmer every screen draws on it (ComebackShow); a dodge roll makes it unhittable for a moment with nothing shown
+-- (immune: Dodging).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
@@ -17,6 +18,7 @@ export type Keeper = {
 	reset: (model: Model) -> (), -- full health (a new round, or coming back after a fall)
 	guard: (model: Model, now: number, seconds: number) -> (), -- unhittable for `seconds` (just back on the trains)
 	unguard: (model: Model, now: number) -> (), -- the guard ends at once (it attacked)
+	immune: (model: Model, now: number, seconds: number) -> (), -- unhittable for `seconds`, nothing shown (a dodge roll)
 	-- A hit of `damage` by `by` lands (server time; launch: the attacker's hit launches): its kind ("none" while
 	-- unhittable), the health left after it, and whether a crowd launched it (HitRules' guard).
 	hit: (model: Model, now: number, damage: number, launch: boolean, by: Model?) -> (HitRules.Kind, number, boolean),
@@ -50,6 +52,11 @@ function FighterHealth.start(): Keeper
 			local state = stateOf(model)
 			state.immuneUntil = math.max(state.immuneUntil, now + seconds)
 			model:SetAttribute(Names.GuardUntil, now + seconds)
+		end,
+		-- Unhittable until `now + seconds` with nothing shown (a dodge roll: Dodging).
+		immune = function(model: Model, now: number, seconds: number)
+			local state = stateOf(model)
+			state.immuneUntil = math.max(state.immuneUntil, now + seconds)
 		end,
 		unguard = function(model: Model, now: number)
 			local guardUntil = model:GetAttribute(Names.GuardUntil)

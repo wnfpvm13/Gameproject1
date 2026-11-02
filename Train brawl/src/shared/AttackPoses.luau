@@ -645,4 +645,30 @@ function AttackPoses.react(kind: string, u: number, back: number, side: number, 
 	return blend(flail, REST, ease(nil, (u - 0.6) / 0.4))
 end
 
+-- A dodge roll at share `u` of it (decision 22), rolling along `back` (the body's own +Z: backward) and `side` (+X: to
+-- its right): tucked in - bent forward, knees up, arms in - over all but its first and last moments, turning once
+-- head over heels the way it rolls (over a shoulder, sideways, when it rolls more to a side), a little lower at its
+-- middle so the tucked body stays on the roof. A whole turn ends upright: no snap back.
+function AttackPoses.roll(u: number, back: number, side: number): Pose
+	local tuck = ease(nil, math.clamp(math.min(u, 1 - u) / 0.2, 0, 1))
+	local spin = 360 * ease(nil, math.clamp((u - 0.05) / 0.85, 0, 1))
+	local low = Vector3.new(0, -0.8 * math.sin(math.pi * math.clamp(u, 0, 1)), 0)
+	local root: Joint = if math.abs(back) >= math.abs(side)
+		then { x = spin * (if back >= 0 then 1 else -1), shift = low }
+		else { z = -spin * (if side >= 0 then 1 else -1), shift = low }
+	return {
+		Root = root,
+		Waist = { x = -35 * tuck },
+		Neck = { x = -25 * tuck },
+		RightShoulder = { x = 70 * tuck, z = 12 * tuck },
+		LeftShoulder = { x = 70 * tuck, z = -12 * tuck },
+		RightElbow = { x = 95 * tuck },
+		LeftElbow = { x = 95 * tuck },
+		RightHip = { x = 85 * tuck },
+		LeftHip = { x = 85 * tuck },
+		RightKnee = { x = -105 * tuck },
+		LeftKnee = { x = -105 * tuck },
+	}
+end
+
 return AttackPoses

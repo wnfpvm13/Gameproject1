@@ -18,7 +18,8 @@
 -- (RoundAudio), the first-ride card shows the controls once (RideCard), a fighter coming back after a fall drops in under a parachute and
 -- shimmers while guarded (ComebackShow), the player's own 1-2-3 string shows by the aim dot (StringHud), crates out of sight get an arrow
 -- at the screen's edge (CrateArrows), the block control (BlockInput) raises the guard drawn with a shield (BlockShow; its blocked and
--- broken hits clang in HitFeedback), a roof edge that drops into nothing gets a warning band near the player (EdgeWarning), the player's
+-- broken hits clang in HitFeedback, a hit through it says why), the roll control (DodgeInput) rolls the player at once (OwnDodge:
+-- BodyMotion.roll, judged by the server) and everyone's rolls are drawn (DodgeShow) with the cooldown shown (DodgeHud), a roof edge that drops into nothing gets a warning band near the player (EdgeWarning), the player's
 -- own numbers are counted (RoundStats) for the line on who knocked it off (RoundHud) and the card at the round's end (ResultCard), a back car
 -- coming off is warned of and its dressing follows it (UncoupleShow), accessories pop off as fighters are worn down (AccessoryPop), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
 -- is watched first).
@@ -78,6 +79,10 @@ local RoundStats = require(script:WaitForChild("RoundStats"))
 local ResultCard = require(script:WaitForChild("ResultCard"))
 local UncoupleShow = require(script:WaitForChild("UncoupleShow"))
 local AccessoryPop = require(script:WaitForChild("AccessoryPop"))
+local DodgeInput = require(script:WaitForChild("DodgeInput"))
+local OwnDodge = require(script:WaitForChild("OwnDodge"))
+local DodgeShow = require(script:WaitForChild("DodgeShow"))
+local DodgeHud = require(script:WaitForChild("DodgeHud"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
@@ -86,6 +91,7 @@ local hitRemote = remotes:WaitForChild(Names.HitRemote) :: RemoteEvent
 local feedRemote = remotes:WaitForChild(Names.FeedRemote) :: RemoteEvent
 local blastRemote = remotes:WaitForChild(Names.BlastRemote) :: RemoteEvent
 local blockRemote = remotes:WaitForChild(Names.BlockRemote) :: RemoteEvent
+local dodgeRemote = remotes:WaitForChild(Names.DodgeRemote) :: RemoteEvent
 
 SoundBank.preload()
 -- The same arena the server built (ArenaLayout is pure math from the shared Config).
@@ -113,6 +119,7 @@ local edges = EdgeWarning.new(layout)
 local stats = RoundStats.new()
 local results = ResultCard.new(playerGui)
 local pops = AccessoryPop.new()
+local dodgeHud = DodgeHud.new(playerGui)
 local uncoupling = UncoupleShow.new(playerGui, Workspace:WaitForChild(Names.ArenaFolder), carDecor, layout)
 local function away(train: number, car: number): boolean
 	return uncoupling:away(train, car)
@@ -155,6 +162,38 @@ end
 
 local STRING = AttackString.rules(Config.Attack)
 local guard = BlockInput.bind(blockRemote)
+-- A roll drawn: the tucked turn, a low swoosh, a puff of dust where it starts.
+local function drawRoll(model: Model, at: number, direction: Vector3)
+	SwingPose.roll(model, at, direction)
+	local body = CharacterParts.body(model)
+	if body then
+		SoundBank.play("Roll", body.root, 0.85)
+		local p = body.root.Position
+		LaunchShow.dust(Vector3.new(p.X, CharacterParts.feetY(body), p.Z), 6)
+	end
+end
+local rolls = DodgeShow.new(drawRoll)
+-- The player's own roll: when it fights on the trains (not on its way back) and no hit stuns it.
+local dodge = OwnDodge.new(dodgeRemote, {
+	may = function(): boolean
+		local character = player.Character
+		return Workspace:GetAttribute(Names.Phase) == "Fight" and character ~= nil and character:GetAttribute(Names.Alive) == true
+			and character:GetAttribute(Names.ReturnPhase) == nil
+	end,
+	stunned = function(): boolean
+		return knock:stunned()
+	end,
+	roll = function(model: Model, at: number, direction: Vector3)
+		local body = CharacterParts.body(model)
+		if body then
+			BodyMotion.roll(body, direction)
+		end
+		drawRoll(model, at, direction)
+	end,
+})
+local dodgeInput = DodgeInput.bind(function()
+	dodge:press(player.Character)
+end)
 
 -- Whether `victim` blocks an attack with `weapon` from `from` now, as this client sees it (BlockRules, as the server
 -- judges it).
@@ -177,7 +216,7 @@ local own = OwnSwing.new(swingRemote, {
 		return knock:launched()
 	end,
 	blocking = function(): boolean
-		return guard:held()
+		return guard:held() or dodge:busy(Workspace:GetServerTimeNow()) -- (no attacking mid-roll either)
 	end,
 	draw = function(model: Model, at: number, weapon: string, step: number)
 		SwingPose.play(model, at, weapon, step)
@@ -302,6 +341,15 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 		end
 		return
 	end
+	-- A hit through a block: why (from the side, from behind, a weapon no block stops).
+	local hitter = if typeof(swinger) == "Instance" and swinger:IsA("Model") then swinger else nil
+	if hitter and victim:GetAttribute(Names.Blocking) == true then
+		local at, from = victim:GetPivot(), hitter:GetPivot().Position
+		local why = BlockRules.through(BlockRules.blockable(w.launch), at.Position.X, at.Position.Z, at.LookVector.X, at.LookVector.Z, from.X, from.Z, Config.Block.Arc)
+		if why then
+			BlockShow.through(victim, why)
+		end
+	end
 	SwingPose.react(victim, hitKind, push)
 	-- (Shown at once as met by a block that the server says was not: the plain hit shows now.)
 	local shown = HitFeedback.hit(victim, guess ~= nil and guess ~= "blocked", mine, me, hitKind, hitWeapon, push)
@@ -381,6 +429,10 @@ RunService.RenderStepped:Connect(function(dt: number)
 	tickets:update(list, character)
 	ComebackShow.update(all)
 	BlockShow.update(all)
+	rolls:update(all, function(model: Model, at: number): boolean
+		local mine = dodge:rolledAt()
+		return model == player.Character and mine ~= nil and math.abs(at - mine) < 1 -- drawn when pressed
+	end)
 	weaponHud:update(list, character, Workspace:GetServerTimeNow())
 	feed:update()
 	audio:update(Workspace:GetServerTimeNow())
@@ -390,6 +442,9 @@ RunService.RenderStepped:Connect(function(dt: number)
 	local stringing = Workspace:GetAttribute(Names.Phase) == "Fight" and alive and not back and AttackString.uses(Config.Weapons[holding].style)
 	stringHud:update(own:stringView(serverNow, holding), stringing, Config.Attack.StringGap, serverNow, os.clock(), character)
 	crateArrows:update(Workspace:GetAttribute(Names.Phase) == "Fight" and alive and not back)
+	local rollWait = dodge:wait(serverNow)
+	dodgeHud:update(Workspace:GetAttribute(Names.Phase) == "Fight" and alive and not back, rollWait)
+	dodgeInput:show(rollWait)
 	uncoupling:update()
 	edges:update(character, Workspace:GetAttribute(Names.Phase) == "Fight" and alive and not back, away)
 	local phaseNow = Workspace:GetAttribute(Names.Phase)

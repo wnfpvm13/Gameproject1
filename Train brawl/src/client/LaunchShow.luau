@@ -3,7 +3,7 @@
 -- like a blast where it is hit (blast(): a white-hot flash, a fireball, a shock dome, smoke, embers, a light and a low
 -- boom - also for a home run, bigger; owner 2026-10-28: "금칙어게임의 의자 날라가기처럼 아주 쾅 하고 날라가야 해", "날라갈 때
 -- 이펙트가 더 화려해야 해"), it trails fire, smoke and sparkles while it flies, and a puff of sand-coloured dust shows where
--- it comes down (Config.Feedback.DustSeconds).
+-- it comes down (Config.Feedback.DustSeconds; dust() also puffs where a dodge roll starts: DodgeShow).
 -- The landing is watched each frame: once the body is seen leaving the roof (higher than where it was hit, or rising
 -- fast: on another player's screen it leaves a moment late, after their client's hold and the network), then seen
 -- falling, it has landed when it no longer falls with something solid just under it - not another fighter (rising or
@@ -44,8 +44,8 @@ local DOWN = 4 -- something solid within this under the body's middle is the gro
 -- The watch running on each launched body (a newer launch replaces it).
 local watching: { [Model]: RBXScriptConnection } = setmetatable({}, { __mode = "k" }) :: any
 
--- A puff of dust on the ground at `at`.
-local function dust(at: Vector3)
+-- A puff of dust on the ground at `at` (`amount` specks, 12 when not given).
+local function dust(at: Vector3, amount: number?)
 	local anchor = Instance.new("Part")
 	anchor.Name = "TrainBrawlDust"
 	anchor.Anchored = true
@@ -70,9 +70,11 @@ local function dust(at: Vector3)
 	puff.Rotation = NumberRange.new(0, 360)
 	puff.Parent = anchor
 	anchor.Parent = Workspace
-	puff:Emit(12)
+	puff:Emit(amount or 12)
 	Debris:AddItem(anchor, Config.Feedback.DustSeconds + 0.2)
 end
+
+LaunchShow.dust = dust
 
 -- A part only seen (no collisions, no rays) at `at`, gone after `seconds`.
 local function seen(name: string, size: Vector3, at: CFrame, color: Color3, material: Enum.Material, shape: Enum.PartType, seconds: number): Part

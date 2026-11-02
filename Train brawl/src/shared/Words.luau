@@ -137,6 +137,11 @@ Words.MusicOn = "음악 ON"
 Words.MusicOff = "음악 OFF"
 Words.AttackButton = "때리기"
 Words.BlockButton = "막기"
+Words.DodgeButton = "구르기"
+Words.DodgeKey = "Q" -- the roll's key, shown with the cooldown on a keyboard (DodgeHud)
+Words.DodgeKeyPad = "B" -- and its button on a gamepad
+-- Over a blocker an attack went through (BlockRules.through): from the side, from behind, a weapon no block stops.
+Words.BlockThrough = { side = "옆!", back = "뒤!", weapon = "못 막는 공격!" } :: { [string]: string }
 
 -- The first-ride card: its title and its rows (the control, then what it does) for the kind of control in use:
 -- "mouse", "touch" or "gamepad".
@@ -144,11 +149,12 @@ Words.CardTitle = "탑승 안내"
 function Words.cardRows(control: string): { { string } }
 	local attack = if control == "touch" then "오른쪽 버튼" elseif control == "gamepad" then "RT / R2" else "클릭"
 	local block = if control == "touch" then "막기 버튼 꾹" elseif control == "gamepad" then "LT / L2 꾹" else "오른쪽 클릭 꾹"
+	local dodge = if control == "touch" then "구르기 버튼" elseif control == "gamepad" then "B" else "Q"
 	local rows = {
 		{ attack, "때리기" },
 		{ block, "앞에서 오는 공격 막기" },
-		{ "3연타", "상대가 날아간다" },
-		{ "체력이 낮을수록", "더 멀리 날아간다" },
+		{ dodge, "구르기 (잠깐 안 맞음)" },
+		{ "3연타", "상대가 날아간다 (체력이 낮을수록 멀리)" },
 		{ "낙하산 상자", "맨손으로 닿으면 무기" },
 		{ "떨어지면", "승차권 1장 쓰고 복귀" },
 	}

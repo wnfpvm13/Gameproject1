@@ -8,6 +8,7 @@ return {
 	FeedRemote = "Feed", -- server -> every client: who knocked whom out and how ("homerun" or "fall")
 	BlastRemote = "Blast", -- server -> every client: a dynamite burst (where, how wide)
 	BlockRemote = "Block", -- client -> server: the block control went down (true) or up (false)
+	DodgeRemote = "Dodge", -- client -> server: I roll, along this flat direction
 	ArenaFolder = "TrainBrawlArena",
 	SceneryFolder = "TrainBrawlScenery",
 	CanyonFolder = "TrainBrawlCanyon",
@@ -63,6 +64,8 @@ return {
 	ReturnAt = "ReturnAt", -- server time the parachute drop starts (while "Up")
 	GuardUntil = "GuardUntil", -- server time a fighter just back stops being unhittable (FighterHealth; 0 = attacked)
 	Blocking = "Blocking", -- the fighter is blocking now (Guarding; true or none)
+	DodgeAt = "DodgeAt", -- server time the fighter's last dodge roll started (Dodging; every client draws it)
+	DodgeDir = "DodgeDir", -- that roll's flat direction (set just before DodgeAt)
 	-- The arena's cars: each a Model named CarModel..k in its train's Model (TrainModel..i), its planks named PlankPart
 	-- with PlankNumber (ArenaBuilder). A back car coming off (Uncoupling) carries CarLeavingAt (server time it lets go)
 	-- and, once gone, CarGone.

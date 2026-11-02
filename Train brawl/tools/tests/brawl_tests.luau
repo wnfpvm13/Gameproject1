@@ -695,7 +695,9 @@ do
 		and Words.knockedOff("봇 1", "fall", 4) == "봇 1에게 밀려 떨어짐, 4대 맞음" and Words.knockedOff(nil, "fall", 0) == "발을 헛디딤")
 	local rows = Words.resultRows(2, 1, 23, 72)
 	check("the result card lists knock-offs, home runs, hits landed and the time on the trains", #rows == 4 and rows[1][2] == "2"
-		and rows[3][1] == "맞힌 수" and rows[4][2] == "1:12")
+		and rows[3][1] == "맞힌 수" and rows[3][2] == "23" and rows[4][2] == "1:12")
+	check("beside the hits, their share of the attacks made", Words.resultRows(2, 1, 41, 72, 50)[3][2] == "41 (82%)"
+		and Words.resultRows(0, 0, 0, 5, 0)[3][2] == "0")
 	check("the result card sets the winner's tickets and knock-offs beside the player's", Words.standing("봇 5", 2, 5) == "봇 5  승차권 2 · KO 5"
 		and Words.standing(Words.Me, 1, 4) == "나  승차권 1 · KO 4")
 	check("the edge warning shows from a little further in than a light hit pushes, along a short stretch",
@@ -1220,6 +1222,9 @@ do
 		WeaponRules.crateFor(seen, 0, d.QuietSeconds, function() return 0 end) == 2
 			and WeaponRules.crateFor(seen, 0, d.QuietSeconds, function() return 0.99 end) == 3)
 	check("with everyone armed, a crate is for anyone", WeaponRules.crateFor({ { x = 0, z = 0, fists = false } }, 0, d.QuietSeconds, math.random) == 1)
+	local mixed = { { x = 0, z = 0, fists = true }, { x = 10, z = 0, fists = true, person = true }, { x = 20, z = 0, fists = true } }
+	check("a person with bare fists gets it before a practice bot does",
+		WeaponRules.crateFor(mixed, 0, d.QuietSeconds, function() return 0 end) == 2 and WeaponRules.crateFor(mixed, 0, d.QuietSeconds, function() return 0.99 end) == 2)
 	check("in a stand-off (no hit for QuietSeconds) a crate is for nobody: bait",
 		WeaponRules.crateFor(seen, d.QuietSeconds, d.QuietSeconds, math.random) == nil and WeaponRules.crateFor({}, 0, d.QuietSeconds, math.random) == nil)
 	check("a crate lands at the nearest spot at least NearGap from whom it is for",

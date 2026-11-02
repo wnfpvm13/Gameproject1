@@ -32,6 +32,7 @@ export type Summary = {
 	played: boolean,
 	titles: { string },
 	highlights: { string },
+	pressed: number,
 	rival: Standing?,
 	mine: Standing?,
 }
@@ -128,7 +129,7 @@ function ResultCard.update(self: Card, phase: string, summary: Summary)
 	self.frame.Position = UDim2.new(0.5, 0, 0, y)
 	local shown = self.summary or summary
 	local share = math.clamp((os.clock() - (self.shownAt :: number)) / COUNT_SECONDS, 0, 1)
-	for i, row in Words.resultRows(math.floor(shown.kos * share + 0.5), math.floor(shown.homers * share + 0.5), math.floor(shown.landed * share + 0.5), math.floor(shown.seconds * share)) do
+	for i, row in Words.resultRows(math.floor(shown.kos * share + 0.5), math.floor(shown.homers * share + 0.5), math.floor(shown.landed * share + 0.5), math.floor(shown.seconds * share), shown.pressed) do
 		local labels = self.rows[i]
 		if labels then
 			labels.name.Text = row[1]

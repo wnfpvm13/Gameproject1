@@ -31,6 +31,7 @@ export type Summary = {
 	played: boolean,
 	titles: { string },
 	highlights: { string },
+	pressed: number,
 	rival: Standing?,
 	mine: Standing?,
 }
@@ -47,6 +48,7 @@ type Fields = {
 	homersBy: { [string]: number },
 	kosBy: { [string]: number },
 	fallsBy: { [string]: number }, -- and how many times each fell or flew out (a ticket each)
+	pressed: number, -- attacks the player made
 	counters: number, -- hits struck back right after a block
 	booms: number, -- hits with a weapon that always launches
 	blocks: number, -- attacks taken on the block
@@ -66,6 +68,7 @@ function RoundStats.new(): Stats
 		homersBy = {},
 		kosBy = {},
 		fallsBy = {},
+		pressed = 0,
 		counters = 0,
 		booms = 0,
 		blocks = 0,
@@ -89,6 +92,11 @@ function RoundStats.hit(self: Stats, mine: boolean, me: boolean, guard: string?,
 	if me and guard == "blocked" then
 		self.blocks += 1
 	end
+end
+
+-- The player made an attack (for its hits' share on the result card).
+function RoundStats.notePress(self: Stats)
+	self.pressed += 1
 end
 
 -- The player struck back right after blocking (BlockShow.counter).
@@ -134,7 +142,7 @@ function RoundStats.update(self: Stats, phase: string, inRound: boolean)
 	local wasCounting, wasFighting = before == "Countdown", before == "Fight"
 	if counting and not wasCounting then
 		self.landed, self.homers, self.taken, self.began, self.outAt, self.endedAt = 0, 0, 0, nil, nil, nil
-		self.counters, self.booms, self.blocks, self.golden = 0, 0, 0, false
+		self.counters, self.booms, self.blocks, self.golden, self.pressed = 0, 0, 0, false, 0
 		table.clear(self.homersBy)
 		table.clear(self.kosBy)
 		table.clear(self.fallsBy)
@@ -191,6 +199,7 @@ function RoundStats.summary(self: Stats, own: Model?, name: string): Summary
 	return {
 		titles = titles,
 		highlights = Words.highlights(self.golden, self.counters, self.booms, self.blocks),
+		pressed = self.pressed,
 		kos = if own then PartUtil.number(own, Names.KOs) or 0 else 0,
 		homers = self.homers,
 		landed = self.landed,

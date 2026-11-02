@@ -232,8 +232,11 @@ local own = OwnSwing.new(swingRemote, {
 		return guard:held() or dodge:busy(Workspace:GetServerTimeNow()) -- (no attacking mid-roll either)
 	end,
 	draw = function(model: Model, at: number, weapon: string, step: number)
-		if model == player.Character and os.clock() - blockedAt <= Config.Block.CounterSeconds then
-			counterAt = at
+		if model == player.Character then
+			stats:notePress()
+			if os.clock() - blockedAt <= Config.Block.CounterSeconds then
+				counterAt = at
+			end
 		end
 		SwingPose.play(model, at, weapon, step)
 		SwingTrail.play(model, weapon, step, at)

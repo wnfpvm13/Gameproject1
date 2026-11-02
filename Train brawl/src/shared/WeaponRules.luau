@@ -130,21 +130,31 @@ function WeaponRules.cratesFor(alive: number, most: number, per: number): number
 	return math.clamp(math.ceil(alive / per), 1, most)
 end
 
--- A fighter as the crates see it: where it stands, and whether it holds bare fists (it can take a crate).
-export type Seen = { x: number, z: number, fists: boolean }
+-- A fighter as the crates see it: where it stands, whether it holds bare fists (it can take a crate), and whether it
+-- is a person (not a practice bot).
+export type Seen = { x: number, z: number, fists: boolean, person: boolean? }
 
 -- Whom the next crate is for (2026-10-31: the testers walked 47% of the time, mostly to crates bait had dropped far
 -- away): nobody when the fight has gone `quiet` seconds without a hit landing (a stand-off: the crate is bait, dropped
--- far from everyone), else one of `fighters` picked with `random` (a number in [0, 1)) among those holding bare fists
--- (weapons are the heart of the fight: owner 2026-10-31), among all when none does. Its index in `fighters`, or nil.
+-- far from everyone), else one of `fighters` picked with `random` (a number in [0, 1)) among the people holding bare
+-- fists, then any holding bare fists, then all (weapons are the heart of the fight: owner 2026-10-31; practice bots
+-- only fill in, and the persona testers kept chasing crates dropped by bots on other trains - 2026-11-02). Its index
+-- in `fighters`, or nil.
 function WeaponRules.crateFor(fighters: { Seen }, quiet: number, quietLimit: number, random: () -> number): number?
 	if quiet >= quietLimit or #fighters == 0 then
 		return nil
 	end
 	local pool = {}
 	for i, seen in fighters do
-		if seen.fists then
+		if seen.fists and seen.person then
 			table.insert(pool, i)
+		end
+	end
+	if #pool == 0 then
+		for i, seen in fighters do
+			if seen.fists then
+				table.insert(pool, i)
+			end
 		end
 	end
 	if #pool == 0 then

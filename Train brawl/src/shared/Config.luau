@@ -883,7 +883,9 @@ Config.Sandbag = {
 	WalkSpeed = 8, -- wandering
 	ChaseSpeed = 14, -- going for someone (a little slower than a player's 16, so one can get away)
 	ThinkSeconds = 0.1, -- how often a bot looks again
-	PerTarget = 2, -- at most this many bots go for one fighter
+	-- At most this many bots go for one fighter (2 before the fun-pass persona run, 2026-11-02: with the stun, two bots
+	-- taking turns on one tester kept it stunned through both strings and the testers went out at 72 s on average).
+	PerTarget = 1,
 	-- It runs to StandOff away and, within StepIn of PunchFrom, steps straight in at StepSpeed; it punches once at
 	-- StandOff (inside a fist's reach, 4) and goes after it again past PunchFrom. Two bots stepping at each other
 	-- close 2 x StepSpeed x ThinkSeconds (1.2) between looks, so they stop no nearer than about 2 (bodies touch at 1.5).

@@ -82,12 +82,12 @@ end
 Words.CarLeaving = "맨 뒤 칸이 떨어져 나간다! 앞 칸으로!" -- a back car is about to come off
 -- A low bridge coming (decision 24): the seconds until it reaches the trains, then while it goes over.
 function Words.bridgeComing(seconds: number): string
-	return if seconds > 0 then string.format("낮은 다리! 낮은 칸으로 가거나 막기로 숙여! %d", seconds) else "낮은 다리 지나간다! 숙여!"
+	return if seconds > 0 then string.format("낮은 다리! 낮은 칸으로 가거나 막기로 숙여! %d초", seconds) else "낮은 다리 지나간다! 숙여!"
 end
 Words.BridgeSafe = "여기는 안전" -- over a low top while a bridge comes
 -- The golden crate (decision 25): coming (seconds until it starts falling), lying there, and who took what.
 function Words.goldenComing(seconds: number): string
-	return string.format("황금 상자가 온다! 가운데 기차 %d", seconds)
+	return string.format("황금 상자가 온다! 가운데 기차로 · %d초", seconds) -- (a bare number read as a train's number)
 end
 Words.GoldenHere = "황금 상자! 옆에 잠깐 서 있으면 가져간다"
 function Words.goldenTaken(name: string, weapon: string): string
@@ -112,11 +112,13 @@ end
 Words.Me = "나"
 
 -- The player's round on the result card: its rows (a name, then the number).
-function Words.resultRows(kos: number, homers: number, landed: number, seconds: number): { { string } }
+-- `pressed`: the attacks the player made (its hits as a share of them beside the hits: a tester asked for it three times).
+function Words.resultRows(kos: number, homers: number, landed: number, seconds: number, pressed: number?): { { string } }
+	local share = if pressed and pressed > 0 then string.format(" (%d%%)", math.floor(math.min(landed / pressed, 1) * 100 + 0.5)) else ""
 	return {
 		{ "떨어뜨린 수", tostring(kos) },
 		{ "홈런", tostring(homers) },
-		{ "맞힌 수", tostring(landed) },
+		{ "맞힌 수", tostring(landed) .. share },
 		{ "버틴 시간", Words.clock(seconds) },
 	}
 end

@@ -32,7 +32,7 @@ local STRIPES = 9
 local BORDER = 0.4 -- a low top's green border strips, how wide
 
 -- A low top marked while a bridge comes: its green border's strips, the label over it, where it is along the track.
-type Mark = { train: number, car: number, strips: { BasePart }, label: BillboardGui, z: number }
+type Mark = { train: number, car: number, strips: { BasePart }, label: BillboardGui?, z: number }
 type Fields = {
 	layout: ArenaLayout.Layout,
 	away: (train: number, car: number) -> boolean,
@@ -114,7 +114,7 @@ local function build(half: number): Model
 end
 
 -- A green border round low top `top` (thin strips just inside its edges, just over it) and its label over the middle.
-local function mark(top: BridgeRules.Top, parent: Instance): Mark
+local function mark(top: BridgeRules.Top, parent: Instance, labelled: boolean): Mark
 	local b = Config.Bridge
 	local y = top.top + 0.1
 	local w, l, inset = top.width, top.length, 0.6
@@ -140,7 +140,7 @@ local function mark(top: BridgeRules.Top, parent: Instance): Mark
 	label.Parent = anchor
 	local text = UiStyle.label(label, "Text", UDim2.fromScale(1, 1), 22, b.SafeColor)
 	text.Text = Words.BridgeSafe
-	return { train = top.train, car = top.car, strips = strips, label = label, z = top.z }
+	return { train = top.train, car = top.car, strips = strips, label = if labelled then label else nil, z = top.z }
 end
 
 -- layout: where everything is; away(train, car): that car is coming off or gone (UncoupleShow).
@@ -151,8 +151,17 @@ function BridgeShow.new(playerGui: Instance, layout: ArenaLayout.Layout, away: (
 	local model = build(layout.outerEdge + b.Overhang)
 	local marks = {}
 	for t in layout.trains do
-		for _, top in BridgeRules.safeTops(layout.surfaces, t, b.Stature, b.Clearance) do
-			table.insert(marks, mark(top, folder))
+		-- One label a car: over its biggest low top (a flatcar's deck, not its low crate as well: two read as one blur).
+		local labelled: { [number]: BridgeRules.Top } = {}
+		local safe = BridgeRules.safeTops(layout.surfaces, t, b.Stature, b.Clearance)
+		for _, top in safe do
+			local best = labelled[top.car]
+			if not best or top.width * top.length > best.width * best.length then
+				labelled[top.car] = top
+			end
+		end
+		for _, top in safe do
+			table.insert(marks, mark(top, folder, labelled[top.car] == top))
 		end
 	end
 	local gui = Instance.new("ScreenGui")
@@ -187,7 +196,9 @@ function BridgeShow.update(self: Show)
 			for _, strip in m.strips do
 				strip.Transparency = 1
 			end
-			m.label.Enabled = false
+			if m.label then
+				m.label.Enabled = false
+			end
 		end
 		return
 	end
@@ -210,7 +221,9 @@ function BridgeShow.update(self: Show)
 		for _, strip in m.strips do
 			strip.Transparency = if showing then pulse else 1
 		end
-		m.label.Enabled = showing
+		if m.label then
+			m.label.Enabled = showing
+		end
 	end
 end
 

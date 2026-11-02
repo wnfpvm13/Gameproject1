@@ -261,7 +261,7 @@ function WeaponDrops.start(surfaces: { ArenaLayout.Surface }, folder: Instance, 
 		local others = {}
 		for _, model in fighters do
 			local p = model:GetPivot().Position
-			table.insert(seen, { x = p.X, z = p.Z, fists = hooks.canTake(model) })
+			table.insert(seen, { x = p.X, z = p.Z, fists = hooks.canTake(model), person = Players:GetPlayerFromCharacter(model) ~= nil })
 			table.insert(others, { x = p.X, z = p.Z })
 		end
 		local index = WeaponRules.crateFor(seen, now - hooks.quietSince(), d.QuietSeconds, math.random)

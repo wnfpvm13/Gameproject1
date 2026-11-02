@@ -22,7 +22,8 @@
 -- BodyMotion.roll, judged by the server) and everyone's rolls are drawn (DodgeShow) with the cooldown shown (DodgeHud), a roof edge that drops into nothing gets a warning band near the player (EdgeWarning), the player's
 -- own numbers are counted (RoundStats) for the line on who knocked it off (RoundHud) and the card at the round's end (ResultCard), a back car
 -- coming off is warned of and its dressing follows it (UncoupleShow), a low bridge runs in with its warning and the low
--- tops marked, and whoever it sweeps is thrown off (BridgeShow, KnockFlight), accessories pop off as fighters are worn down (AccessoryPop), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
+-- tops marked, and whoever it sweeps is thrown off (BridgeShow, KnockFlight), the golden crate is told of with a beam
+-- of light and who took it (GoldenShow), accessories pop off as fighters are worn down (AccessoryPop), and a player who is out watches the others from the stands (SpectateCam; a home-run flight or a fall
 -- is watched first).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -86,6 +87,7 @@ local OwnDodge = require(script:WaitForChild("OwnDodge"))
 local DodgeShow = require(script:WaitForChild("DodgeShow"))
 local DodgeHud = require(script:WaitForChild("DodgeHud"))
 local BridgeShow = require(script:WaitForChild("BridgeShow"))
+local GoldenShow = require(script:WaitForChild("GoldenShow"))
 
 local player = Players.LocalPlayer
 local remotes = shared:WaitForChild(Names.RemotesFolder)
@@ -129,6 +131,7 @@ local function away(train: number, car: number): boolean
 	return uncoupling:away(train, car)
 end
 local bridge = BridgeShow.new(playerGui, layout, away)
+local golden = GoldenShow.new(playerGui)
 DropShow.start(Workspace:WaitForChild(Names.CratesFolder), Workspace:WaitForChild(Names.ArenaFolder))
 GroundMarks.start({ Workspace:WaitForChild(Names.ArenaFolder), Workspace:WaitForChild(Names.CratesFolder) })
 
@@ -494,6 +497,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 	dodgeInput:show(rollWait)
 	uncoupling:update()
 	bridge:update()
+	golden:update()
 	edges:update(character, Workspace:GetAttribute(Names.Phase) == "Fight" and alive and not back, away)
 	local phaseNow = Workspace:GetAttribute(Names.Phase)
 	local phaseName = if typeof(phaseNow) == "string" then phaseNow else "Waiting"

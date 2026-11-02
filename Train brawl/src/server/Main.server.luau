@@ -193,6 +193,9 @@ local drops = WeaponDrops.start(arena.layout.surfaces, PartUtil.folder(Workspace
 	give = weapons.give,
 	away = uncoupling.away,
 	quietSince = round.quietSince,
+	busy = function(model: Model): boolean
+		return weapons.stunned(model) or dodging.rolling(model)
+	end,
 })
 local stringRules = AttackString.rules(Config.Attack)
 brain = BotBrain.new(arena.layout.surfaces, {
@@ -212,6 +215,7 @@ brain = BotBrain.new(arena.layout.surfaces, {
 		return BodyMotion.lunge(body, facing, WeaponRules.lunge(style, AttackString.launches(stringRules, step, style), Config.Attack))
 	end,
 	crates = drops.landed,
+	golden = drops.golden,
 	away = uncoupling.away,
 	bridge = bridges.passing,
 	block = guarding.hold,

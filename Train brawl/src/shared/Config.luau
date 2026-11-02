@@ -516,6 +516,19 @@ Config.Drops = {
 	PickupReach = 3.5, -- a fighter this close (along the ground) takes it
 	QuietSeconds = 8,
 	NearGap = 5, -- (over PickupReach: it is not taken the moment it lands)
+	-- The golden crate (decision 25; Codex review 2026-11-02: one shared chase, not a stronger weapon): the first
+	-- regular drop at or after At seconds into the fight is golden instead (WeaponRules.goldenTime: 29 s). Notice
+	-- seconds before, every screen is told where (the middle train's biggest top) and a beam of light stands there.
+	-- It holds one of Weapons, in turn without repeats (WeaponRules.goldenNext), with the weapon's usual uses and
+	-- power. Anyone may take it - also one already holding a weapon, which it replaces - by staying within
+	-- PickupReach of it for Hold seconds without being stunned or rolling (a hit meanwhile starts it over).
+	Golden = {
+		At = 29,
+		Notice = 5,
+		Weapons = { "Hammer", "Dynamite", "Wheel" },
+		Hold = 0.35,
+		Color = Color3.fromRGB(255, 196, 40),
+	},
 }
 
 -- Health and what a hit does (the rules are in HitRules; Smash Legends-style): health drops with every hit, and the
@@ -692,6 +705,7 @@ Config.Sounds = {
 	LaunchBoom = { id = "rbxassetid://1841351403", volume = 0.75, seconds = 1.4, vary = 0.05 }, -- Granular Thumpatron Metal Crash Hit 2 (APM)
 	Parachute = { id = "rbxassetid://9117235033", volume = 0.5, seconds = 2 }, -- Parachute Blossom 9
 	CrateLand = { id = "rbxassetid://9113466920", volume = 0.7, seconds = 1.5, vary = 0.08 }, -- Board Drops Wood Impacts Wobble 3
+	GoldenBell = { id = "rbxassetid://9113583408", volume = 0.55, seconds = 1.8 }, -- the winner's brass bell, cut short (a golden crate is coming)
 	Pickup = { id = "rbxassetid://9120873789", volume = 0.7, seconds = 0.8 }, -- Wooden Chest Open Close Cedar Box 9 (a weapon taken from a crate)
 	CountBell = { id = "rbxassetid://9116223567", volume = 0.5, seconds = 0.9 }, -- Large Metal Triangle Single Ringing Hits 3 (each count-down second)
 	Whistle = { id = "rbxassetid://9119628070", volume = 0.55, seconds = 2.5 }, -- Steam Train Whistle Airy 2

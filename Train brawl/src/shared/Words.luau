@@ -65,6 +65,15 @@ function Words.bridgeComing(seconds: number): string
 	return if seconds > 0 then string.format("낮은 다리! 낮은 칸으로 가거나 막기로 숙여! %d", seconds) else "낮은 다리 지나간다! 숙여!"
 end
 Words.BridgeSafe = "여기는 안전" -- over a low top while a bridge comes
+-- The golden crate (decision 25): coming (seconds until it starts falling), lying there, and who took what.
+function Words.goldenComing(seconds: number): string
+	return string.format("황금 상자가 온다! 가운데 기차 %d", seconds)
+end
+Words.GoldenHere = "황금 상자! 옆에 잠깐 서 있으면 가져간다"
+function Words.goldenTaken(name: string, weapon: string): string
+	return string.format("%s, 황금 상자에서 %s!", name, Words.Weapons[weapon] or weapon)
+end
+Words.GoldenTag = "황금 " -- before the weapon's name over the golden crate
 
 -- Under the big text when the player is knocked off: who did it and how, and how many hits it took since its last fall.
 function Words.knockedOff(by: string?, how: string, hits: number): string

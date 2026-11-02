@@ -1365,6 +1365,50 @@ do
 		and B.Clearance + B.Height < A.WaitingRoomHeight - A.StandsMargin)
 end
 
+-- 28. The golden crate (decision 25): one shared chase for a "쾅" weapon, not a stronger one.
+do
+	local D = Config.Drops
+	local G = D.Golden
+	local at = WeaponRules.goldenTime(D.FirstAfter, D.Every, G.At)
+	check("the golden crate takes the place of the regular drop at 29 s, told 5 s ahead",
+		at == 29 and (at - D.FirstAfter) % D.Every == 0 and G.Notice < D.Every and G.Notice >= 3)
+	check("the golden time is the first regular drop at or after At", WeaponRules.goldenTime(5, 12, 5) == 5
+		and WeaponRules.goldenTime(5, 12, 6) == 17 and WeaponRules.goldenTime(5, 12, 17) == 17)
+	local boom = true
+	for _, name in G.Weapons do
+		local w = Config.Weapons[name]
+		boom = boom and w ~= nil and w.launch == true
+	end
+	check("the golden crate holds only weapons that always launch (the big moments)", boom and #G.Weapons == 3)
+	local function noAway(): boolean
+		return false
+	end
+	local top = WeaponRules.goldenTop(L.surfaces, 2, A.RoofWidth, noAway)
+	check("it lands on the middle train's biggest roof", top ~= nil and top.train == 2 and top.kind == "Boxcar")
+	local onlyAway = WeaponRules.goldenTop(L.surfaces, 2, A.RoofWidth, function(train: number, car: number): boolean
+		return train == 2 and car == 3
+	end)
+	check("not on a car coming off (then another wide top)", onlyAway ~= nil and not (onlyAway.train == 2 and onlyAway.car == 3))
+	local bag, last, seen, repeats = {}, nil, {}, 0
+	local rolls = { 0.1, 0.9, 0.5, 0.3, 0.7, 0.2, 0.8, 0.4, 0.6 }
+	local r = 0
+	local function roll(): number
+		r = r % #rolls + 1
+		return rolls[r]
+	end
+	for i = 1, 12 do
+		local name = WeaponRules.goldenNext(bag, G.Weapons, last, roll)
+		if name == last then
+			repeats += 1
+		end
+		seen[name] = (seen[name] or 0) + 1
+		last = name
+	end
+	check("its weapon comes in turn: each once in every three, never twice running",
+		repeats == 0 and seen.Hammer == 4 and seen.Dynamite == 4 and seen.Wheel == 4)
+	check("taking it takes a moment shorter than a punch's gap, so a hit can stop it", G.Hold > 0.2 and G.Hold < Config.Weapons.Fist.cooldown)
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed == 0 then
 	print("ALL PASS")

@@ -2,7 +2,8 @@
 -- The weapons as pure rules (numbers from Config.Weapons and Config.Drops): which weapon a crate holds (by weight),
 -- who an area hit reaches (a hammer's slam, a dynamite's blast, a burst of firecrackers), whom a thrown lump or a
 -- rolling wheel passes, where a thrown stick is along its arc, which styles show their hits at once or hit from afar,
--- how many crates a round keeps on the map and whom and where the next one is for. Requires nothing.
+-- how many crates a round keeps on the map and whom and where the next one is for, and the golden crate's time, top
+-- and weapon (decision 25). Requires nothing.
 
 local WeaponRules = {}
 
@@ -169,6 +170,52 @@ function WeaponRules.nearSpot(spots: { { x: number, z: number } }, x: number, z:
 		end
 	end
 	return best or far
+end
+
+-- A walkable top as ArenaLayout has it (ArenaLayout.Surface, written out: this requires nothing).
+export type Top = { train: number, car: number, kind: string, x: number, z: number, width: number, length: number, top: number, plank: boolean }
+
+-- When the golden crate drops, in seconds into the fight: the first regular drop (`firstAfter`, then every `every`)
+-- at or after `at` - it takes that drop's place.
+function WeaponRules.goldenTime(firstAfter: number, every: number, at: number): number
+	if at <= firstAfter then
+		return firstAfter
+	end
+	return firstAfter + every * math.ceil((at - firstAfter) / every - 1e-9)
+end
+
+-- Where the golden crate lands: the middle of the biggest wide top (`wide` across, not a tender) of the middle train
+-- (`middle`) whose car is not coming off (`away`) - the main stage everyone can reach - or of any train when none.
+function WeaponRules.goldenTop(tops: { Top }, middle: number, wide: number, away: (number, number) -> boolean): Top?
+	local best: Top? = nil
+	local bestScore = -math.huge
+	for _, top in tops do
+		if top.width >= wide - 1e-6 and top.kind ~= "Tender" and not away(top.train, top.car) then
+			local score = top.width * top.length - (if top.train == middle then 0 else 1e6)
+			if score > bestScore then
+				best, bestScore = top, score
+			end
+		end
+	end
+	return best
+end
+
+-- The golden crate's weapon: the next of `bag` (taken from its end), refilled from `pool` in a random order (`random`
+-- in [0, 1)) when empty, never the same as `last` twice running across a refill. Changes `bag`.
+function WeaponRules.goldenNext(bag: { string }, pool: { string }, last: string?, random: () -> number): string
+	if #bag == 0 then
+		for _, name in pool do
+			table.insert(bag, name)
+		end
+		for i = #bag, 2, -1 do
+			local j = math.floor(random() * i) + 1
+			bag[i], bag[j] = bag[j], bag[i]
+		end
+		if #bag > 1 and bag[#bag] == last then
+			bag[#bag], bag[1] = bag[1], bag[#bag]
+		end
+	end
+	return table.remove(bag) :: string
 end
 
 return WeaponRules

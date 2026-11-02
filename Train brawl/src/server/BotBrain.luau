@@ -7,7 +7,8 @@
 -- sometimes stopping after one or two, with a breather after each string. With nobody on its top it wanders the top.
 -- With bare fists it goes for a landed crate on its top first when that is nearer than its target (hooks.crates; it
 -- takes the weapon by walking into it, as a player does, and attacks with it the same way: persona fix 3, so solo
--- practice shows the weapons). Bots stay on the car top they stand on (crossing between tops comes with B), except
+-- practice shows the weapons); the golden crate on its top it goes for whatever it holds (hooks.golden, decision 25:
+-- anyone takes it by standing by it a moment). Bots stay on the car top they stand on (crossing between tops comes with B), except
 -- that a bot whose car is coming off (hooks.away) walks to the car in front once it notices, jumping up when it stops
 -- against a higher car; and a bot on a top too high for a low bridge coming (hooks.bridge) walks to the nearest low top
 -- of its train once it notices (decision 24), staying there till the bridge has gone over (bots keep to their own top),
@@ -35,6 +36,7 @@ export type Hooks = {
 	-- The bot attacks along the flat facing: how far the attack stepped it in (nil: not now).
 	attack: (model: Model, facing: Vector3) -> number?,
 	crates: () -> { Vector3 }, -- where the landed crates nobody has taken lie
+	golden: () -> Vector3?, -- where the landed golden crate lies (nil: none)
 	away: (train: number, car: number) -> boolean, -- that car is coming off or gone (Uncoupling)
 	bridge: () -> BridgeRules.Pass?, -- a low bridge coming or going over now (Bridges)
 	block: (model: Model, down: boolean) -> (), -- the bot's block control (Guarding)
@@ -244,6 +246,17 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 			end
 		end
 		local target = current or BotPlan.nearest(here.X, here.Z, top, others, taken, c.PerTarget)
+		-- The golden crate on this top: for it, whatever it holds (it takes it by standing there a moment).
+		local golden = hooks.golden()
+		if golden then
+			local crate = BotPlan.crateOn(top, here.X, here.Z, { { x = golden.X, z = golden.Z } })
+			if crate then
+				mind.target = nil
+				humanoid.WalkSpeed = c.ChaseSpeed
+				walkTo(humanoid, Vector3.new(crate.x, here.Y, crate.z))
+				return
+			end
+		end
 		-- Bare fists: a crate on this top nearer than the target first.
 		if WeaponRules.named(Config.Weapons, model:GetAttribute(Names.Weapon)) == WeaponRules.FIST then
 			local spots = {}

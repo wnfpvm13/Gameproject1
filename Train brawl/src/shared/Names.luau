@@ -36,6 +36,9 @@ return {
 	WinnerStreak = "WinnerStreak", -- the single winner's wins in a row this visit (0: none)
 	Solo = "TrainBrawlSolo", -- set in Studio: sandbags join so one tester can play
 	BridgeAt = "BridgeAt", -- server time a low bridge's beam reaches the front of the trains (Bridges; none: no bridge)
+	GoldenAt = "GoldenAt", -- server time the golden crate starts falling (WeaponDrops; none: none coming or lying)
+	GoldenSpot = "GoldenSpot", -- where it lands (a Vector3, with GoldenAt)
+	GoldenTaken = "GoldenTaken", -- who took it this fight and what: "name|weapon" (none: nobody yet)
 	-- Character attributes
 	SwingAt = "SwingAt", -- server time the character's last attack started (every client draws it)
 	SwingWeapon = "SwingWeapon", -- the weapon that attack was made with (set just before SwingAt)
@@ -56,6 +59,7 @@ return {
 	CrateWeapon = "Weapon", -- what is inside
 	CrateLanded = "Landed",
 	CrateTakenBy = "TakenBy", -- the name of the character who took it
+	CrateGolden = "Golden", -- the golden crate (true)
 	Alive = "Alive", -- in the current round and still on the trains
 	KOs = "KOs", -- knock-offs this round (on the fighter's character or sandbag model)
 	Health = "Health", -- combat health this round (not the Humanoid's), written by the server (FighterHealth)

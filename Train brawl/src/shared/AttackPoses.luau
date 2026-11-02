@@ -28,9 +28,15 @@ export type Pose = { [string]: Joint }
 -- this key, "out": slowing into it, "linear", or eased both ways when nil).
 export type Key = { t: number, pose: Pose, ease: string? }
 
--- How long a light hit's flinch and a launch's flail are drawn (seconds).
+-- How long a light hit's flinch and a launch's flail are drawn (seconds). A flinch is drawn as long as its stun when
+-- that is longer (decision 23: the fighter cannot act all through it, so it reels until then): it holds its peak
+-- FlinchPeak, reels a little back toward the stance and settles into it over its last FlinchSettle (a FlinchSeconds
+-- flinch only holds and settles).
 AttackPoses.FlinchSeconds = 0.28
+AttackPoses.FlinchPeak = 0.07
+AttackPoses.FlinchSettle = 0.21
 AttackPoses.FlailSeconds = 0.7
+local REEL = 0.3 -- how far a long flinch reels back toward the stance before it settles
 local TUMBLE = 0.55 -- a launch's tumble takes this share of the flail (about the flight)
 
 local JOINTS = { "Root", "Waist", "Neck", "RightShoulder", "LeftShoulder", "RightElbow", "LeftElbow", "RightWrist", "LeftWrist", "RightHip", "LeftHip", "RightKnee", "LeftKnee" }
@@ -601,13 +607,20 @@ function AttackPoses.shaken(pose: Pose, t: number, hold: number, studs: number, 
 	return out
 end
 
+-- The share of a flinch drawn `length` seconds long (nil: FlinchSeconds) from which it settles back into the stance.
+function AttackPoses.flinchSettles(length: number?): number
+	local seconds = math.max(length or AttackPoses.FlinchSeconds, AttackPoses.FlinchSeconds)
+	return 1 - AttackPoses.FlinchSettle / seconds
+end
+
 -- A hit reaction ("light" or a launch), `u` (0..1) through it. `back` and `side` say which way the hit pushed, in the
 -- body's own frame (back: +1 straight backward, -1 forward; side: +1 to its right): a light hit snaps the torso and
--- head that way at once, knocks the arms open and eases back into `stance` (the fighter's stance; nil: none); a launch
+-- head that way at once, knocks the arms open, reels while a long stun lasts (`length`: the flinch's seconds, nil:
+-- FlinchSeconds) and eases back into `stance` (the fighter's stance; nil: none); a launch
 -- throws the arms up and flails them while flying, the whole body tumbling `turns` times (default none) head over heels
 -- the way it was pushed (a backflip when pushed back, a cartwheel when pushed sideways) over the first TUMBLE share
 -- of it: whole turns, so the flail settles from upright.
-function AttackPoses.react(kind: string, u: number, back: number, side: number, stance: Pose?, turns: number?): Pose
+function AttackPoses.react(kind: string, u: number, back: number, side: number, stance: Pose?, turns: number?, length: number?): Pose
 	if kind == "light" then
 		local peak: Pose = {
 			Waist = { x = 20 * back, y = -10 * side, z = -14 * side },
@@ -619,10 +632,18 @@ function AttackPoses.react(kind: string, u: number, back: number, side: number, 
 		}
 		-- The stance's joints the flinch does not move (a weapon's hips, its wrist) stay as the stance has them.
 		local held = if stance then with(stance, peak) else peak
-		if u <= 0.25 then
+		local seconds = math.max(length or AttackPoses.FlinchSeconds, AttackPoses.FlinchSeconds)
+		local settles = AttackPoses.flinchSettles(seconds)
+		local peaked = math.min(AttackPoses.FlinchPeak / seconds, settles)
+		if u <= peaked then
 			return held
 		end
-		return blend(held, stance or REST, ease(nil, (u - 0.25) / 0.75))
+		local home = stance or REST
+		local reeled = if settles > peaked then blend(held, home, REEL) else held
+		if u <= settles then
+			return blend(held, home, REEL * ease(nil, (u - peaked) / (settles - peaked)))
+		end
+		return blend(reeled, home, ease(nil, (u - settles) / (1 - settles)))
 	end
 	local wave = math.sin(u * math.pi * 6) * 30 * (1 - u) -- the arms flail, less as the flight ends
 	local spin = 360 * math.floor(turns or 0) * ease("out", math.min(u / TUMBLE, 1))

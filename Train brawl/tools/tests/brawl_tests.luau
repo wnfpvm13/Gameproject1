@@ -402,13 +402,46 @@ do
 		quickest = math.min(quickest, w.cooldown)
 	end
 	local a = Config.Attack
-	check("a light hit's stun ends before any weapon can attack again (the one hit can answer)", h.LightStun + 0.1 < quickest)
 	local fist = Config.Weapons.Fist
-	check(
-		"one punched can land first, with bare fists or a bat, before the puncher's next punch",
-		h.LightStun + fist.hitAt < fist.cooldown and h.LightStun + Config.Weapons.Bat.hitAt < fist.cooldown
-	)
-	check("the server still refuses swings for part of a light stun", Config.Knock.SwingGrace < h.LightStun)
+	-- Decision 23 (owner 2026-11-02: whoever hits first should stun the other, so it is not a free-for-all of trades).
+	local S = HitRules.stuns(h, a, Config.Block)
+	local held, lapse, heldDetail, lapseDetail = true, true, "", ""
+	local quickestString = math.huge
+	for name, w in Config.Weapons do
+		if AttackString.uses(w.style) then
+			quickestString = math.min(quickestString, w.cooldown)
+			local stun = HitRules.stun(true, w.cooldown, w.stun, nil, S)
+			-- Kept in rhythm, the next step lands a cooldown after this one (the finisher its wind-up later still).
+			if not (stun >= w.cooldown + a.FinisherWindup + 0.05) then
+				held, heldDetail = false, heldDetail .. string.format(" %s %.2f", name, stun)
+			end
+			-- Let lapse, the string starts again no sooner than a cooldown and the string's gap after the last hit.
+			if not (stun + fist.hitAt + 0.05 < w.cooldown + a.StringGap) then
+				lapse, lapseDetail = false, lapseDetail .. string.format(" %s %.2f", name, stun)
+			end
+		end
+	end
+	check("a punch or swing stuns until its string's next step lands, kept in rhythm, with room for the network", held, heldDetail)
+	check("an attacker who lets the string lapse gives the one hit time to land a punch first", lapse, lapseDetail)
+	check("bare fists stun about half a second, the bat a little longer",
+		near(HitRules.stun(true, fist.cooldown, nil, nil, S), 0.58) and near(HitRules.stun(true, Config.Weapons.Bat.cooldown, nil, nil, S), 0.73))
+	local others, othersDetail = true, ""
+	for name, w in Config.Weapons do
+		if not AttackString.uses(w.style) and not w.launch and not w.stun then
+			-- A toss, spray or burst makes no string: its light hit leaves time to answer before its next one.
+			local stun = HitRules.stun(false, w.cooldown, w.stun, nil, S)
+			if not (stun == h.LightStun and stun + fist.hitAt < w.cooldown) then
+				others, othersDetail = false, othersDetail .. " " .. name
+			end
+		end
+	end
+	check("a hit from a weapon that makes no string stuns briefly, so it cannot keep anyone stunned", others, othersDetail)
+	local lasso = Config.Weapons.Lasso
+	check("a lasso's tie keeps its own stun", HitRules.stun(false, lasso.cooldown, lasso.stun, nil, S) == lasso.stun)
+	check("a broken guard stuns as a string's hit (the one who broke it keeps the turn)",
+		HitRules.stun(true, fist.cooldown, nil, "broken", S) == HitRules.stun(true, fist.cooldown, nil, nil, S))
+	check("a blocked hit's flinch lets the blocker let go and land a punch before any string's next step",
+		HitRules.stun(true, fist.cooldown, nil, "blocked", S) == Config.Block.Stun and Config.Block.Stun + fist.hitAt + 0.05 < quickestString)
 	check("a launched fighter stays unhittable past lying down", h.LaunchImmune > Config.Knock.MinSeconds + 0.2)
 	check("a string waits a moment for the next press, then starts again", a.StringGap >= 0.2 and a.StringGap <= 0.6 and a.StringSlack < a.StringGap and a.StringCount == 3)
 	check("a crowd's hits launch within the same window the old combo had", h.GangWindow >= 1 and h.GangHits == 3)
@@ -419,7 +452,6 @@ do
 		within = within and w.hitAt < w.seconds and w.seconds <= w.cooldown + 0.3
 	end
 	check("every attack lands within its drawn move, and the move ends about when the next may start", within)
-	check("a swing pressed before the hit showed is taken, a swing while flying is not", Config.Knock.SwingGrace > 0 and Config.Knock.SwingGrace < Config.Knock.MinSeconds)
 	check("the server's slack keeps its reach above the client's", Config.Attack.ReachSlack > 0 and Config.Attack.CooldownSlack < quickest)
 	check("the server's network slack stays small (it shows as hits from too far)", Config.Attack.ReachSlack <= 2)
 	check("the waiting room's walls are higher than a jump off someone's head", A.WaitingRoomWall > JUMP_HEIGHT + 5.5)
@@ -830,6 +862,17 @@ do
 	check("a jab's arm is straight as it lands and already on its way back a tenth later", (AttackPoses.sample(jab, 0.4).LeftElbow.x :: number) < 10 and (AttackPoses.sample(jab, 0.5).LeftElbow.x :: number) > 15)
 	local settled = AttackPoses.react("light", 1, 1, 0, guard)
 	check("a light hit's flinch settles back into the guard", near(settled.LeftElbow.x :: number, guard.LeftElbow.x :: number) and near(settled.RightShoulder.x :: number, guard.RightShoulder.x :: number))
+	-- A flinch as long as a long stun (decision 23): the same peak and the same settling seconds, reeling between.
+	local long = 0.73
+	local reelEnd = AttackPoses.react("light", AttackPoses.flinchSettles(long), 1, 0, guard, nil, long)
+	local longEnd = AttackPoses.react("light", 1, 1, 0, guard, nil, long)
+	local peakShort = AttackPoses.react("light", 0.01, 1, 0, guard)
+	local peakLong = AttackPoses.react("light", 0.01, 1, 0, guard, nil, long)
+	check("a flinch as short as before is drawn as before", near(AttackPoses.flinchSettles(nil), 0.25) and near(AttackPoses.flinchSettles(AttackPoses.FlinchSeconds), 0.25))
+	check("a long stun's flinch keeps the same peak, reels part way back and still settles into the guard",
+		near(peakShort.Waist.x :: number, peakLong.Waist.x :: number) and near(longEnd.LeftElbow.x :: number, guard.LeftElbow.x :: number)
+			and (reelEnd.Waist.x :: number) < (peakLong.Waist.x :: number) and (reelEnd.Waist.x :: number) > (peakLong.Waist.x :: number) * 0.5
+			and near((1 - AttackPoses.flinchSettles(long)) * long, AttackPoses.FlinchSettle))
 	-- A stance's joints the flinch does not move (a weapon's hips and wrist) stay as the stance has them all through it.
 	local kept, keptDetail = true, ""
 	for name, w in Config.Weapons do
@@ -1068,7 +1111,7 @@ do
 	check("a blocked light hit lands softened and the blocker keeps blocking", damage == B.Damage and push == B.Push and not broke and damage < 0.5 and push < 0.5)
 	local breakDamage, breakPush, breaks = BlockRules.outcome(true, B)
 	check("a blocked string finisher breaks the guard instead of launching", breaks and breakDamage == B.BreakDamage and breakPush == 1)
-	check("a blocked hit's flinch is shorter than a light hit's, so the blocker can let go and answer", B.Stun < Config.Hit.LightStun)
+	check("a blocked hit's flinch is shorter than any light hit's stun", B.Stun < Config.Hit.LightStun)
 	check("a broken guard lasts longer than a fist's string takes to start again", B.BreakSeconds > Config.Weapons.Fist.cooldown * 2)
 	check("a blocker walks slower but still moves", B.WalkShare > 0 and B.WalkShare < 1)
 end

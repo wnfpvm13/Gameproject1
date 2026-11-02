@@ -109,9 +109,9 @@ local dodging = Dodging.start(remotes.Dodge, {
 	immune = health.immune,
 })
 local guarding = Guarding.start(remotes.Block, {
-	-- (no blocking mid-roll: it starts again by itself after, if still held)
+	-- (no blocking mid-roll nor through a hit's stun: it starts again by itself after, if still held)
 	canBlock = function(model: Model): boolean
-		return round.isFighting(model) and not dodging.rolling(model)
+		return round.isFighting(model) and not dodging.rolling(model) and not (weaponsMade ~= nil and weaponsMade.staggered(model))
 	end,
 	repace = function(model: Model)
 		if weaponsMade then

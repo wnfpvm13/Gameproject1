@@ -435,7 +435,8 @@ RunService.Stepped:Connect(function(_time: number, dt: number)
 			end
 		end
 		if now and now.kind == "light" then
-			w *= smooth(math.clamp(((now.progress or 0) - 0.25) / 0.75, 0, 1))
+			local settles = AttackPoses.flinchSettles(now.length)
+			w *= smooth(math.clamp(((now.progress or 0) - settles) / (1 - settles), 0, 1))
 		end
 		if now and now.fadeFrom and (now.fadeFrom.LeftShoulder or now.fadeFrom.LeftElbow) then
 			-- A pose taken over that had the free arm elsewhere (a flinch): the hand comes onto the handle with its fade.
@@ -500,8 +501,8 @@ function SwingPose.hold(model: Model, seconds: number)
 end
 
 -- A hit on `model` of `kind` ("light", "launch" or "smash") that pushed it along `push`: its reaction, starting now
--- (snapping in at once).
-function SwingPose.react(model: Model, kind: string, push: Vector3?)
+-- (snapping in at once); a light one reels as long as its `stun` (HitRules.stun) when that is longer than a flinch.
+function SwingPose.react(model: Model, kind: string, push: Vector3?, stun: number?)
 	local body = CharacterParts.body(model)
 	local back, side = 1, 0 -- straight back when the push is unknown
 	if body and push then
@@ -512,7 +513,7 @@ function SwingPose.react(model: Model, kind: string, push: Vector3?)
 		end
 	end
 	local light = kind == "light"
-	local length = if light then AttackPoses.FlinchSeconds else AttackPoses.FlailSeconds
+	local length = if light then math.max(AttackPoses.FlinchSeconds, stun or 0) else AttackPoses.FlailSeconds
 	-- Shaking along the push while the hit holds the body still (the body itself stays put).
 	local hold = Config.Feedback.HitStop[kind] or 0
 	local shake = Config.Feedback.Shake[kind] or 0
@@ -522,7 +523,7 @@ function SwingPose.react(model: Model, kind: string, push: Vector3?)
 		local settle = if stance and stance.weight > 0 then shownStance(stance) else nil
 		-- A launch tumbles (a home run spins for real: BodyMotion).
 		local turns = if kind == "launch" then Config.Feedback.TumbleTurns else 0
-		return AttackPoses.shaken(AttackPoses.react(kind, u, back, side, settle, turns), u * length, hold, shake, back, side)
+		return AttackPoses.shaken(AttackPoses.react(kind, u, back, side, settle, turns, length), u * length, hold, shake, back, side)
 	end, 0, false)
 end
 

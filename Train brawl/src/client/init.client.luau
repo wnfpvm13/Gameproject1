@@ -38,6 +38,7 @@ local SoundBank = require(shared:WaitForChild("SoundBank"))
 local Words = require(shared:WaitForChild("Words"))
 local WeaponRules = require(shared:WaitForChild("WeaponRules"))
 local AttackString = require(shared:WaitForChild("AttackString"))
+local HitRules = require(shared:WaitForChild("HitRules"))
 local CharacterParts = require(shared:WaitForChild("CharacterParts"))
 local BodyMotion = require(shared:WaitForChild("BodyMotion"))
 local Scenery = require(script:WaitForChild("Scenery"))
@@ -161,6 +162,7 @@ local function fighters(): { Model }
 end
 
 local STRING = AttackString.rules(Config.Attack)
+local STUNS = HitRules.stuns(Config.Hit, Config.Attack, Config.Block)
 local guard = BlockInput.bind(blockRemote)
 -- A roll drawn: the tucked turn, a low swoosh, a puff of dust where it starts.
 local function drawRoll(model: Model, at: number, direction: Vector3)
@@ -310,10 +312,10 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 	local me = victim == player.Character
 	local hitWeapon = WeaponRules.named(Config.Weapons, weapon)
 	local w = Config.Weapons[hitWeapon]
-	-- On a block (the server says "blocked" or "broken"): a short flinch (a broken guard: a light hit's).
+	-- On a block (the server says "blocked" or "broken"): a short flinch (a broken guard: the string's stun).
 	local met = if guarded == "blocked" or guarded == "broken" then guarded else nil
 	stats:hit(swinger == player.Character, me, met)
-	local stun = if met == "blocked" then Config.Block.Stun elseif met == "broken" then Config.Hit.LightStun else w.stun or Config.Hit.LightStun
+	local stun = HitRules.stun(AttackString.uses(w.style), w.cooldown, w.stun, met, STUNS)
 	if me and push then
 		knock:hit(victim, push, hitKind, stun)
 		own:broken() -- being hit breaks the player's own string, as on the server
@@ -327,7 +329,7 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 	end
 	if met then
 		if met == "broken" then
-			SwingPose.react(victim, "light", push) -- (a blocked hit keeps the block's pose)
+			SwingPose.react(victim, "light", push, stun) -- (a blocked hit keeps the block's pose)
 		end
 		-- (The player's own attack may have shown it at once; shown as a plain hit, the block still shows now, without a
 		-- second kick.)
@@ -350,7 +352,7 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 			BlockShow.through(victim, why)
 		end
 	end
-	SwingPose.react(victim, hitKind, push)
+	SwingPose.react(victim, hitKind, push, stun)
 	-- (Shown at once as met by a block that the server says was not: the plain hit shows now.)
 	local shown = HitFeedback.hit(victim, guess ~= nil and guess ~= "blocked", mine, me, hitKind, hitWeapon, push)
 	local attacker = if typeof(swinger) == "Instance" and swinger:IsA("Model") then swinger else nil

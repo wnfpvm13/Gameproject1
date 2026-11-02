@@ -5,7 +5,8 @@
 -- attacker's string (AttackString) or a weapon that always launches (a hammer, a dynamite blast) - or when it makes
 -- `gang` hits within the last `window` seconds and those hits came from two or more attackers (a crowd cannot keep
 -- one fighter flinching); any other hit is light (a flinch). Right after a launch the fighter cannot be hit for `immune`
--- seconds. How hard a hit pushes grows as health drops (force, scale). Requires nothing.
+-- seconds. How hard a hit pushes grows as health drops (force, scale). How long a light hit stuns its fighter (stun:
+-- decision 23, Lost Saga's 경직) lets whoever hits first keep the turn through a string. Requires nothing.
 
 local HitRules = {}
 
@@ -25,6 +26,10 @@ export type Forces = {
 	SmashPush: number,
 	SmashLift: number,
 }
+
+-- The stun numbers (stuns() takes them from Config): light: an ordinary light hit's; margin: past a string's next step;
+-- windup: the string finisher's wind-up (Config.Attack.FinisherWindup); blocked: a blocked hit's flinch.
+export type Stuns = { light: number, margin: number, windup: number, blocked: number }
 
 function HitRules.new(max: number): State
 	return { health = max, recent = {}, immuneUntil = -math.huge }
@@ -84,6 +89,27 @@ function HitRules.force(kind: Kind, health: number, max: number, forces: Forces)
 		return HitRules.scale(health, max, forces.LaunchFull, forces.LaunchEmpty), lift
 	end
 	return HitRules.scale(health, max, forces.LightFull, forces.LightEmpty), 0
+end
+
+function HitRules.stuns(hit: { LightStun: number, StringMargin: number }, attack: { FinisherWindup: number }, block: { Stun: number }): Stuns
+	return { light = hit.LightStun, margin = hit.StringMargin, windup = attack.FinisherWindup, blocked = block.Stun }
+end
+
+-- How long a light hit stops its fighter (no attacking, walking, jumping, rolling, nor blocking unless the hit was
+-- blocked), from a weapon whose attacks make a string or not (`stringy`: AttackString.uses), its `cooldown` and its
+-- own stun (`own`: a lasso's tie), and whether a block met it (`guard`: "blocked" or "broken"). A blocked hit: a short
+-- flinch. A punch or swing (a broken guard too): until that weapon's next string step lands when kept in rhythm (the
+-- cooldown, plus the finisher's wind-up for the longest gap) and a margin more, so the one who hit first keeps the turn.
+-- Anything else: an ordinary light stun.
+function HitRules.stun(stringy: boolean, cooldown: number, own: number?, guard: string?, stuns: Stuns): number
+	if guard == "blocked" then
+		return stuns.blocked
+	elseif own then
+		return own
+	elseif stringy or guard == "broken" then
+		return cooldown + stuns.windup + stuns.margin
+	end
+	return stuns.light
 end
 
 return HitRules

@@ -4,12 +4,12 @@
 -- (Names.WeaponUses) or the server time it runs out (Names.WeaponEndsAt) for every screen to show.
 --
 -- A player's client attacks at once and tells the server where it aimed; the server takes the attack when the player
--- is fighting, alive, not stunned by a hit (from Config.Knock.SwingGrace until the hit's stun ends: an attack arriving
--- sooner was pressed before the player saw the hit) and the last attack's weapon is ready again (its cooldown: a
--- hammer's stays even if the hammer ran out with it). The server takes an attack up to Config.Attack's slack early, but
--- the next one is still counted from when this one was due, so the slack never adds up to a faster rate. A fighter the
--- server runs itself (a practice bot: attack()) goes through the same judging with no network allowances: refused all
--- through a stun and until its weapon is ready.
+-- is fighting, alive, not stunned by a hit (all through the hit's stun: HitRules.stun, decision 23) and the last
+-- attack's weapon is ready again (its cooldown: a hammer's stays even if the hammer ran out with it). The server takes
+-- an attack up to Config.Attack's slack early, but the next one is still counted from when this one was due, so the
+-- slack never adds up to a faster rate. A fighter the server runs itself (a practice bot: attack()) goes through the
+-- same judging with no early allowance. An attack whose attacker is hit before it lands never lands (Lost Saga's 경직:
+-- whoever hits first wins the exchange) and its use is given back.
 -- Each punch or swing is a step of its attacker's 1-2-3 string (AttackString: it goes on hit or miss while the attacks
 -- come in time; the client says which step it drew, the server takes that only as far as its own count allows; being
 -- hit breaks a fighter's string; the launching last step lands a moment later). It marks the character's
@@ -28,7 +28,8 @@
 -- emptied) flies the same home run whatever hit it. A hit meeting a block (hooks.blocking, from the front, a weapon that
 -- can be blocked: BlockRules) lands softened, and a blocked string finisher breaks the guard instead of launching
 -- (hooks.guardBroken); a blocker cannot attack and walks slower, nor can a fighter mid-roll (hooks.rolling: Dodging,
--- which asks stunned() whether a hit's stun still holds a fighter). A blast after the fight is over hits nobody. It is
+-- which asks stunned() whether a hit's stun still holds a fighter; Guarding asks staggered(): no blocking through the
+-- stun of a hit that got through). A blast after the fight is over hits nobody. It is
 -- sent to every client (Names.HitRemote: victim, velocity, attacker, kind, weapon, whether a crowd launched it, the
 -- attack's number as its player's client counted them - none for a blast - and "blocked" or "broken" when it met a
 -- block): the victim's own client moves its
@@ -58,7 +59,8 @@ export type Hooks = {
 	-- The health keeper: this hit's kind and the health left (damage taken; launch: the attacker's hit launches; by:
 	-- the attacker, told apart for the guard against being ganged up on).
 	hit: (victim: Model, now: number, damage: number, launch: boolean, by: Model) -> (HitRules.Kind, number, boolean),
-	knockHere: (model: Model, velocity: Vector3, kind: HitRules.Kind) -> boolean, -- moves a server-owned model (a sandbag)
+	-- Moves a server-owned model (a sandbag) for a hit of `kind`, stunned `stun` seconds by a light one.
+	knockHere: (model: Model, velocity: Vector3, kind: HitRules.Kind, stun: number) -> boolean,
 	onHit: (victim: Model, attacker: Model) -> (), -- for the knock-off credit
 	attacked: (model: Model) -> (), -- an attack of the model's was taken (a fighter just back loses its guard)
 	blocking: (model: Model) -> boolean, -- the model holds its block now (Guarding)
@@ -83,6 +85,7 @@ export type Service = {
 	attack: (model: Model, facing: Vector3) -> boolean,
 	repace: (model: Model) -> (), -- sets the model's walk again (it started or stopped blocking)
 	stunned: (model: Model) -> boolean, -- a hit's stun still holds the model
+	staggered: (model: Model) -> boolean, -- the stun of a hit that got through (not a blocked one) still holds it
 	stop: () -> (),
 }
 
@@ -91,14 +94,17 @@ local FIST = WeaponRules.FIST
 function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, hooks: Hooks): Service
 	local attack = Config.Attack
 	local weapons = Config.Weapons
+	local stuns = HitRules.stuns(Config.Hit, attack, Config.Block)
 	-- Per fighter (a player's character or a bot): the server time its last attack's weapon is ready again, and its
 	-- 1-2-3 string.
 	local readyAt: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
 	local strings: { [Model]: AttackString.State } = setmetatable({}, { __mode = "k" }) :: any
 	local stringRules = AttackString.rules(attack)
-	-- Per fighter: when the last hit landed and when its stun ends (server time).
+	-- Per fighter: when the last hit landed and when its stun ends (server time), and whether that stun is only a
+	-- blocked hit's flinch (still blocking through it).
 	local hitAt: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
 	local stunUntil: { [Model]: number } = setmetatable({}, { __mode = "k" }) :: any
+	local onlyBlocked: { [Model]: boolean? } = setmetatable({}, { __mode = "k" }) :: any
 	local armed: { [Model]: boolean } = setmetatable({}, { __mode = "k" }) :: any -- holding something other than fists
 
 	local function holding(model: Model): string
@@ -192,17 +198,20 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 			local vx, vy, vz = BatMath.knock(from.X, from.Z, facing.X, facing.Z, at.X, at.Z, push, lift)
 			velocity = Vector3.new(vx, vy, vz)
 		end
-		hitAt[victim.model] = now
-		-- A hit never shortens a stun still running (a lasso's tie outlasts the jab that follows it).
+		hitAt[victim.model] = now -- (its own attack not landed yet never lands: begin)
+		-- A hit never shortens a stun still running (a lasso's tie outlasts the jab that follows it), and a blocked one
+		-- does not turn a stun that got through into a blocked flinch.
 		local stun = if kind ~= "light" then Config.Knock.MinSeconds
-			elseif guard == "blocked" then Config.Block.Stun
-			elseif guard == "broken" then Config.Hit.LightStun
-			else w.stun or Config.Hit.LightStun
-		stunUntil[victim.model] = math.max(stunUntil[victim.model] or now, now + stun)
+			else HitRules.stun(AttackString.uses(w.style), w.cooldown, w.stun, guard, stuns)
+		local running = stunUntil[victim.model]
+		local through = running ~= nil and now < running and not onlyBlocked[victim.model]
+		local blockedOnly = guard == "blocked" and not through
+		stunUntil[victim.model] = math.max(running or now, now + stun)
+		onlyBlocked[victim.model] = if blockedOnly then true else nil
 		if guard == "broken" then
 			hooks.guardBroken(victim.model, now)
 		end
-		hooks.knockHere(victim.model, velocity, kind)
+		hooks.knockHere(victim.model, velocity, kind, stun)
 		hitRemote:FireAllClients(victim.model, velocity, attacker, kind, weapon, ganged, tag, guard)
 		hooks.onHit(victim.model, attacker)
 		if kind == "smash" then
@@ -282,17 +291,15 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 
 	-- An attack by `model` along `aim` (unchecked: the flat facing the server sees when unusable). `claim`: the step its
 	-- client drew; `tag`: the attack's number its client sent; `allowance`: whether to grant a player's network
-	-- allowances (taken a little early, and pressed before the hit that stuns it showed). Returns whether it was taken.
+	-- allowance (taken a little early). Returns whether it was taken.
 	local function begin(model: Model, aim: unknown, claim: number?, tag: number?, allowance: boolean): boolean
 		local body = CharacterParts.body(model)
 		if not (body and body.humanoid.Health > 0 and hooks.canSwing(model)) or hooks.blocking(model) or hooks.rolling(model) then
 			return false -- (a blocker or a fighter mid-roll cannot attack)
 		end
 		local now = Workspace:GetServerTimeNow()
-		local since = hitAt[model]
 		local stunned = stunUntil[model]
-		local grace = if allowance then Config.Knock.SwingGrace else 0
-		if since and stunned and now - since >= grace and now < stunned then
+		if stunned and now < stunned then
 			return false -- still stunned by a hit (the client does not attack then either)
 		end
 		local weapon = holding(model)
@@ -331,6 +338,14 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 			model:SetAttribute(Names.WeaponUses, uses - 1)
 		end
 		task.delay(AttackString.hitAt(stringRules, w.hitAt, step, w.style), function()
+			if (hitAt[model] or -math.huge) > now then
+				-- Hit before it landed: it never lands, and its use comes back (the last one too: still held).
+				local left = model:GetAttribute(Names.WeaponUses)
+				if holding(model) == weapon and typeof(left) == "number" then
+					model:SetAttribute(Names.WeaponUses, left + 1)
+				end
+				return
+			end
 			strike(model, weapon, facing, step, tag)
 			if spent and holding(model) == weapon then
 				set(model, FIST)
@@ -386,6 +401,10 @@ function WeaponService.start(swingRemote: RemoteEvent, hitRemote: RemoteEvent, h
 		stunned = function(model: Model): boolean
 			local until_ = stunUntil[model]
 			return until_ ~= nil and Workspace:GetServerTimeNow() < until_
+		end,
+		staggered = function(model: Model): boolean
+			local until_ = stunUntil[model]
+			return until_ ~= nil and Workspace:GetServerTimeNow() < until_ and not onlyBlocked[model]
 		end,
 		stop = function()
 			watching = false

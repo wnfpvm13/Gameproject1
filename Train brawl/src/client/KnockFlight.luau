@@ -1,6 +1,6 @@
 --!strict
--- The player's own character, hit: a light hit flinches it (BodyMotion.stagger, no swinging for Config.Hit.LightStun or
--- the weapon's own stun - a lasso's tie - and never less than a stun still running);
+-- The player's own character, hit: a light hit flinches it (BodyMotion.stagger: no swinging, walking or jumping for its
+-- stun - HitRules.stun - and never less than a stun still running);
 -- a launch or smash sends it flying (BodyMotion.launch), back on its feet once it has landed (BodyMotion.landed). The
 -- player's client moves its own character, so the server sends the hit here (WeaponService) instead of applying it.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -31,13 +31,13 @@ function KnockFlight.hit(self: Flight, model: Model, velocity: Vector3, kind: st
 	-- The server sends a light hit only after a launch's unhittable moment, so it always counts (even if this screen
 	-- still shows the flight: it ends it).
 	local launched = kind ~= "light"
+	local now = os.clock()
+	self.stunUntil = if launched then 0 elseif self.since and not self.flying then math.max(self.stunUntil, now + stun) else now + stun
 	if launched then
 		BodyMotion.launch(body, velocity, kind)
 	else
-		BodyMotion.stagger(body, velocity)
+		BodyMotion.stagger(body, velocity, self.stunUntil - now)
 	end
-	local now = os.clock()
-	self.stunUntil = if launched then 0 elseif self.since and not self.flying then math.max(self.stunUntil, now + stun) else now + stun
 	self.body = body
 	self.since = now
 	self.flying = launched

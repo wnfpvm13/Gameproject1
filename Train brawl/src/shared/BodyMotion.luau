@@ -2,9 +2,11 @@
 -- How a fighter's body moves when it attacks, is hit, has landed or fell off, the same wherever its physics runs: on
 -- the player's own client for a player (KnockFlight, FallDrift, the player's own attack) and on the server for a
 -- sandbag (Sandbags, a bot's attack). An attack steps the body in (lunge); a light hit flinches (stagger: held still,
--- then pushed along the ground on its feet, or pulled in by a lasso); a launch or smash sends the body flying (launch).
+-- then pushed along the ground on its feet, or pulled in by a lasso, then kept where it is - no walking, no jumping -
+-- until its stun ends); a launch or smash sends the body flying (launch).
 -- How far a body may go along the ground without leaving its top is room().
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
@@ -15,7 +17,7 @@ local BodyMotion = {}
 
 -- The latest hit on each root: a hold that a newer hit restarted must not end it early.
 local launches: { [BasePart]: number } = setmetatable({}, { __mode = "k" }) :: any
--- The push of a stagger still running on each root (a newer hit removes it).
+-- The push of a stagger still running on each root, and its hold after (a newer hit or a fall removes it).
 local slides: { [BasePart]: LinearVelocity } = setmetatable({}, { __mode = "k" }) :: any
 -- The step of an attack still running on each root (a hit, or the next attack's step, removes it).
 local lunges: { [BasePart]: LinearVelocity } = setmetatable({}, { __mode = "k" }) :: any
@@ -28,10 +30,18 @@ local function stop(pushes: { [BasePart]: LinearVelocity }, root: BasePart)
 	end
 end
 
--- A new hit on `root`: ends any push or step still running and returns this hit's number.
-local function newHit(root: BasePart): number
+-- Jumping on or off for `body` (off through a light hit's stun).
+local function jumping(body: CharacterParts.Body, on: boolean)
+	body.humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, on)
+end
+
+-- A new hit on `body`: ends any push, hold or step still running (and a stun's no-jumping) and returns this hit's
+-- number.
+local function newHit(body: CharacterParts.Body): number
+	local root = body.root
 	stop(slides, root)
 	stop(lunges, root)
+	jumping(body, true)
 	local mine = (launches[root] or 0) + 1
 	launches[root] = mine
 	return mine
@@ -63,12 +73,27 @@ local function push(pushes: { [BasePart]: LinearVelocity }, root: BasePart, name
 end
 
 -- Whether something solid is right under the feet (the body's own parts left out).
-function BodyMotion.grounded(body: CharacterParts.Body): boolean
+local function under(body: CharacterParts.Body): RaycastResult?
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = { body.model }
 	local reach = body.root.Position.Y - CharacterParts.feetY(body) + Config.Knock.GroundReach
-	return Workspace:Raycast(body.root.Position, Vector3.new(0, -reach, 0), params) ~= nil
+	return Workspace:Raycast(body.root.Position, Vector3.new(0, -reach, 0), params)
+end
+
+function BodyMotion.grounded(body: CharacterParts.Body): boolean
+	return under(body) ~= nil
+end
+
+-- The velocity along the ground of what `body` stands on (a car coming off moves, carrying whoever stands on it:
+-- Uncoupling), none in the air.
+local function floorVelocity(body: CharacterParts.Body): Vector2
+	local hit = under(body)
+	if not hit then
+		return Vector2.zero
+	end
+	local v = hit.Instance.AssemblyLinearVelocity
+	return Vector2.new(v.X, v.Z)
 end
 
 -- A launch (`kind` "launch" or "smash"): stiff, held still for its Config.Feedback.HitStop, then flying with
@@ -78,7 +103,7 @@ end
 -- `reclaim(root)` runs first (the server takes a sandbag back).
 function BodyMotion.launch(body: CharacterParts.Body, velocity: Vector3, kind: string, reclaim: ((BasePart) -> ())?)
 	local root = body.root
-	local mine = newHit(root)
+	local mine = newHit(body)
 	body.humanoid.PlatformStand = true
 	root.Anchored = true
 	task.delay(Config.Feedback.HitStop[kind] or Config.Feedback.HitStop.launch, function()
@@ -107,13 +132,17 @@ end
 
 -- A light hit: held still for Config.Feedback.HitStop.light, then pushed along the ground at `velocity` (its X and
 -- Z) for Config.Hit.SlideSeconds while staying on its feet (a constraint, as the Humanoid would stop a plain push at
--- once). `reclaim(root)` as for launch.
-function BodyMotion.stagger(body: CharacterParts.Body, velocity: Vector3, reclaim: ((BasePart) -> ())?)
+-- once), then kept where it is until `stun` seconds after the hit (the same constraint, still: no walking), with
+-- jumping off all that time (decision 23: no acting through a hit's stun). Both ride along with what it stands on (a car
+-- coming off). `reclaim(root)` as for launch.
+function BodyMotion.stagger(body: CharacterParts.Body, velocity: Vector3, stun: number, reclaim: ((BasePart) -> ())?)
 	local root = body.root
-	local mine = newHit(root)
+	local mine = newHit(body)
+	local hold = Config.Feedback.HitStop.light
 	body.humanoid.PlatformStand = false
+	jumping(body, false)
 	root.Anchored = true
-	task.delay(Config.Feedback.HitStop.light, function()
+	task.delay(hold, function()
 		if launches[root] ~= mine or not root.Parent then
 			return
 		end
@@ -121,12 +150,28 @@ function BodyMotion.stagger(body: CharacterParts.Body, velocity: Vector3, reclai
 		if reclaim then
 			reclaim(root)
 		end
-		local slide = push(slides, root, "Stagger", Config.Hit.SlideSeconds)
+		local slide = push(slides, root, "Stagger", math.max(Config.Hit.SlideSeconds, stun - hold))
 		slide.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane -- along the ground; falling stays free
 		slide.PrimaryTangentAxis = Vector3.xAxis
 		slide.SecondaryTangentAxis = Vector3.zAxis
-		slide.PlaneVelocity = Vector2.new(velocity.X, velocity.Z)
+		local pushed = Vector2.new(velocity.X, velocity.Z)
+		local slid = os.clock() + Config.Hit.SlideSeconds
+		slide.PlaneVelocity = pushed + floorVelocity(body)
 		slide.Parent = root
+		local riding: RBXScriptConnection
+		riding = RunService.Heartbeat:Connect(function()
+			if slides[root] ~= slide or not slide.Parent then
+				riding:Disconnect()
+				return
+			end
+			-- Pushed, then kept there for the rest of the stun (on whatever it stands on).
+			slide.PlaneVelocity = (if os.clock() < slid then pushed else Vector2.zero) + floorVelocity(body)
+		end)
+	end)
+	task.delay(stun, function()
+		if launches[root] == mine and root.Parent then
+			jumping(body, true)
+		end
 	end)
 end
 
@@ -207,6 +252,7 @@ end
 -- Fallen off (feet under the fall line), every frame: lying down and sliding backward at the run's speed, with the
 -- ground. The trains stand still in the world while the scenery scrolls, so this is what being left behind looks like.
 function BodyMotion.drift(body: CharacterParts.Body)
+	stop(slides, body.root) -- (a stun's hold would keep it from sliding away)
 	body.humanoid.PlatformStand = true
 	local v = body.root.AssemblyLinearVelocity
 	body.root.AssemblyLinearVelocity = Vector3.new(v.X * 0.9, v.Y, Config.Run.Speed)

@@ -297,7 +297,7 @@ Config.Bat = {
 Config.Weapons = {
 	-- A quick jab: short reach, light damage, a little push (13 punches empty health). Quicker since 2026-10-27 (owner:
 	-- punching looked slow; 0.45 / 0.26 before): the guard fills the time between punches.
-	-- (Its cooldown leaves a punched fighter, stunned Config.Hit.LightStun, a moment to answer before the next punch.)
+	-- (A punched fighter stays stunned until the next punch of a string kept in rhythm lands: HitRules.stun.)
 	Fist = { style = "punch", damage = 8, push = 0.8, reach = 4, halfAngle = 60, cooldown = 0.4, hitAt = 0.1, seconds = 0.24 },
 	-- The old bat: as the whole game used before the weapons (reach measured: the drawn tip passes 4.2 ahead as it hits).
 	Bat = {
@@ -552,11 +552,18 @@ Config.Hit = {
 	GangWindow = 1.5,
 	GangHits = 3,
 	-- Light: held still Config.Feedback.HitStop.light, then pushed along the ground for SlideSeconds at a speed from
-	-- LightFull (full health) to LightEmpty (none); no swinging for LightStun. Measured 2026-10-25: 1.2 studs at 88
-	-- health, 2 at 40 (the Humanoid carries on a little after the push).
-	-- With the fist's 0.4 cooldown the one hit can still answer first, with bare fists or a bat (its 0.12 to land):
-	-- 0.26 + 0.12 < 0.4 (tests; 0.3 before, with 0.45).
+	-- LightFull (full health) to LightEmpty (none). Measured 2026-10-25: 1.2 studs at 88 health, 2 at 40 (the Humanoid
+	-- carries on a little after the push).
+	-- Its stun (HitRules.stun; decision 23, owner 2026-11-02: "내가 먼저 때렸을 때 상대한테 경직이 있어야 개싸움이 안될 것
+	-- 같아. 로스트사가를 참고해봐"): no attacking, walking, jumping, rolling or blocking, and the fighter's own attack not
+	-- landed yet never lands (Lost Saga's 경직: no acting through the hit's motion). A punch's or swing's stun lasts until
+	-- that weapon's next string step lands when kept in rhythm (its cooldown, plus the finisher's wind-up) and
+	-- StringMargin more (network jitter): whoever hits first keeps the turn through the string (fists 0.58 s, bat 0.73 s;
+	-- tests), while an attacker who lets the string lapse (Config.Attack.StringGap) gives the one hit time to answer first.
+	-- Every other light hit stuns LightStun (or the weapon's own stun: a lasso's tie). Until 2026-11-02 every light hit
+	-- stunned 0.26 s so that the one hit could answer first (decisions 5 and 16); that made trading blows the norm.
 	LightStun = 0.26,
+	StringMargin = 0.1,
 	SlideSeconds = 0.18,
 	LightFull = 5.5,
 	LightEmpty = 14,
@@ -591,10 +598,9 @@ Config.Knock = {
 	MinSeconds = 0.5, -- stiff at least this long
 	MaxSeconds = 2.5, -- and at most this long, landed or not
 	GroundReach = 0.6, -- the feet within this of something solid count as landed
-	-- A swing reaching the server this soon after its swinger was hit was pressed before the hit reached that player's
-	-- screen (about a round trip), so it is still taken; later, while the hit's stun lasts (Config.Hit.LightStun or
-	-- MinSeconds), the server refuses swings.
-	SwingGrace = 0.22, -- under Config.Hit.LightStun, so the server still refuses swings for part of a light stun
+	-- (While a hit's stun lasts - HitRules.stun or MinSeconds - the server refuses attacks, all through it since
+	-- decision 23: a swing pressed before the hit showed on its player's screen came after the hit all the same. Until
+	-- then a swing reaching it within 0.22 s of the hit was still taken.)
 	-- A home run's body tumbles head over heels the way it was pushed, this many turns over its flight. A plain launch
 	-- does not: measured 2026-10-26 (Studio, same rig with and without), a quarter turn sent a health-64 launch 6.9 studs
 	-- instead of 3.1 (the body lands on its back and slides) - near the 7.5 from a roof's middle to its edge, so it
@@ -735,10 +741,13 @@ Config.Dodge = {
 -- Hold to block (decision 11's "누르고 버티는 막기", no counter; brought forward by the persona playtest 2026-10-29: "no
 -- block, whoever hits first wins"). While the block control is held (Guarding) an attack reaching the blocker from the
 -- front (within Arc degrees either side of where it faces) does Damage of its damage and Push of its push, with only a
--- Stun flinch; the string's launching third does not launch but breaks the guard: BreakDamage of its damage, a light
--- hit's full push and stun, and no blocking for BreakSeconds. Weapons that always launch (hammer, dynamite, wheel, oil)
--- break through, and so does anything from the side or behind or a crowd's launch. A blocker cannot attack and walks at
--- WalkShare of its speed; it is only pushed less, so blocking at an edge still ends in a fall.
+-- Stun flinch (still blocking through it; shorter than any string's next step takes, so the blocker can let go and
+-- answer first); the string's launching third does not launch but breaks the guard: BreakDamage of its damage, a light
+-- hit's full push and the string's stun (the one who broke it keeps the turn: HitRules.stun), and no blocking for
+-- BreakSeconds. Weapons that always launch (hammer, dynamite, wheel, oil) break through, and so does anything from the
+-- side or behind or a crowd's launch. A blocker cannot attack and walks at WalkShare of its speed; it is only pushed
+-- less, so blocking at an edge still ends in a fall. A hit that gets through stops the block for its stun (it comes
+-- back by itself if still held).
 Config.Block = {
 	Arc = 75,
 	Damage = 0.25,

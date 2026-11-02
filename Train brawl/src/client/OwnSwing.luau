@@ -143,8 +143,9 @@ local function try(self: Swing, model: Model?): string
 	end
 	task.delay(AttackString.hitAt(STRING, w.hitAt, step, w.style), function()
 		local me = CharacterParts.body(body.model)
-		-- Hit while attacking: the server judges from where the knock took the player, so show no hits of its own.
-		if me and not self.hooks.stunned() then
+		-- Hit while attacking (since it was pressed: cut, or flinching still): it never lands on the server (decision 23),
+		-- so show no hits of its own.
+		if me and tag > self.cut and not self.hooks.stunned() then
 			local victims = SwingTargets.find(me, self.hooks.fighters(), reach, aim, w.halfAngle)
 			-- The server's word may have corrected this attack's step meanwhile (settle): show the step it counts.
 			local counted = if current(self, tag) then self.chain.step else step

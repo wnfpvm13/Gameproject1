@@ -25,7 +25,7 @@ export type Service = {
 	spawn: (count: number, parent: Instance, equip: (Model) -> ()) -> { Model },
 	-- A hit of this kind on a sandbag: a light one flinches it, a launch or smash sends it flying (stiff until it
 	-- lands). Returns false for a model that is not one.
-	knock: (model: Model, velocity: Vector3, kind: string) -> boolean,
+	knock: (model: Model, velocity: Vector3, kind: string, stun: number) -> boolean,
 	-- Removes every sandbag.
 	clear: () -> (),
 	stop: () -> (),
@@ -163,7 +163,7 @@ function Sandbags.start(fallLine: number, think: (model: Model, body: CharacterP
 
 	return {
 		spawn = spawn,
-		knock = function(model: Model, velocity: Vector3, kind: string): boolean
+		knock = function(model: Model, velocity: Vector3, kind: string, stun: number): boolean
 			local bag = bags[model]
 			if not bag then
 				return false
@@ -175,8 +175,9 @@ function Sandbags.start(fallLine: number, think: (model: Model, body: CharacterP
 			if kind == "light" then
 				-- As a player's client does: the server sends a light hit only after a launch's unhittable moment.
 				bag.stiffSince = nil
-				bag.flinchUntil = os.clock() + Config.Hit.LightStun
-				BodyMotion.stagger(bag.body, velocity, reclaim)
+				local now = os.clock()
+				bag.flinchUntil = math.max(bag.flinchUntil, now + stun) -- (never shorter than a stun still running)
+				BodyMotion.stagger(bag.body, velocity, bag.flinchUntil - now, reclaim)
 			else
 				bag.stiffSince = os.clock()
 				BodyMotion.launch(bag.body, velocity, kind, reclaim)

@@ -30,7 +30,7 @@ export type Weapon = {
 	rollSeconds: number?,
 	lasts: number?, -- a slick lies this long
 	pull: number?, -- a lasso pulls its catch in to this far in front of the attacker instead of pushing it away
-	stun: number?, -- a light hit's stun (no attacking) instead of Config.Hit.LightStun
+	stun: number?, -- a light hit's own stun (no acting: a lasso's tie) instead of HitRules.stun's
 	cooldown: number,
 	hitAt: number,
 	seconds: number,

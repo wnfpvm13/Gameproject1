@@ -520,7 +520,7 @@ Config.Drops = {
 
 -- Health and what a hit does (the rules are in HitRules; Smash Legends-style): health drops with every hit, and the
 -- lower it is the farther a hit pushes. The first hits of an attacker's string are light (a flinch and a short push,
--- no lying down, over before the swinger's next swing, so the one hit can answer); the string's last hit launches
+-- no lying down, stunned until the string's next step lands: decision 23); the string's last hit launches
 -- (flying, lying down) and leaves its fighter unhittable for a moment; the hit that empties health is a smash (a certain
 -- ring-out). Falling off is out at any health. A body travels about 0.28 to 0.42 x the launch push (measured: push 18
 -- went 6.2, 24.4 went 10.3, 28 went 10.6, 15.4 went 4.3 to 5.4, 29.2 went 11.0, landing lying and sliding a little) and

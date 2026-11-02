@@ -7,7 +7,11 @@
 -- sometimes stopping after one or two, with a breather after each string. With nobody on its top it wanders the top.
 -- With bare fists it goes for a landed crate on its top first when that is nearer than its target (hooks.crates; it
 -- takes the weapon by walking into it, as a player does, and attacks with it the same way: persona fix 3, so solo
--- practice shows the weapons). Bots stay on the car top they stand on (crossing between tops comes with B).
+-- practice shows the weapons). Bots stay on the car top they stand on (crossing between tops comes with B), except
+-- that a bot whose car is coming off (hooks.away) walks to the car in front once it notices, jumping up when it stops
+-- against a higher car. Hit (its health dropped since it last looked), a bot sometimes holds its block a moment facing
+-- its target (hooks.block: the server's own block) or rolls away from it (hooks.dodge). A fighter standing just off a
+-- top - a plank's end, a roof's edge - counts as on that top (ArenaLayout.nearTop). (2nd fix 4, 2026-10-31.)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
@@ -17,6 +21,7 @@ local WeaponRules = require(shared:WaitForChild("WeaponRules"))
 local CharacterParts = require(shared:WaitForChild("CharacterParts"))
 local ArenaLayout = require(shared:WaitForChild("ArenaLayout"))
 local BotPlan = require(shared:WaitForChild("BotPlan"))
+local PartUtil = require(shared:WaitForChild("PartUtil"))
 
 local BotBrain = {}
 
@@ -25,6 +30,9 @@ export type Hooks = {
 	-- The bot attacks along the flat facing: how far the attack stepped it in (nil: not now).
 	attack: (model: Model, facing: Vector3) -> number?,
 	crates: () -> { Vector3 }, -- where the landed crates nobody has taken lie
+	away: (train: number, car: number) -> boolean, -- that car is coming off or gone (Uncoupling)
+	block: (model: Model, down: boolean) -> (), -- the bot's block control (Guarding)
+	dodge: (model: Model, direction: Vector3) -> boolean, -- a roll (Dodging; false when not now)
 }
 export type Brain = {
 	-- `model` (its `body`) is free to act at `now` (os.clock()) in a fight.
@@ -34,7 +42,9 @@ export type Brain = {
 -- target: whom it goes for; seen: when it last thought (a long gap means it was flying or held: it reacts anew);
 -- thinkAt: when it looks again; inReach: the target was in reach last time; readyAt: no punch before this (reacting);
 -- nextPunch: the next punch of the string no sooner; left: punches left in this string; wanderAt: a new spot then;
--- stepping: it is stepping straight in (Humanoid:Move goes on until stopped).
+-- stepping: it is stepping straight in (Humanoid:Move goes on until stopped). health: its health when it last looked;
+-- blockUntil: it holds its block until then; noticeAt: it notices its car coming off then (nil: not seen coming off);
+-- lastPlace, stuckAt: where it was when it last checked it was moving, and when (to jump when it is stuck).
 type Mind = {
 	target: Model?,
 	seen: number,
@@ -45,6 +55,11 @@ type Mind = {
 	left: number,
 	wanderAt: number,
 	stepping: boolean,
+	health: number?,
+	blockUntil: number?,
+	noticeAt: number?,
+	lastPlace: Vector3?,
+	stuckAt: number,
 }
 
 -- A random number between the two of `range`.
@@ -89,6 +104,11 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 				left = planString(),
 				wanderAt = now,
 				stepping = false,
+				health = nil,
+				blockUntil = nil,
+				noticeAt = nil,
+				lastPlace = nil,
+				stuckAt = now,
 			}
 			minds[model] = mind
 		end
@@ -104,9 +124,46 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 		mind.stepping = false
 		local humanoid = body.humanoid
 		local here, top = placeOf(body)
+		-- Hit since it last looked: sometimes a block for a moment, sometimes a roll away from whom it fights.
+		local health = PartUtil.number(model, Names.Health)
+		local hit = health ~= nil and mind.health ~= nil and health < mind.health
+		mind.health = health
+		if mind.blockUntil and now >= mind.blockUntil then
+			mind.blockUntil = nil
+			hooks.block(model, false)
+		end
 		if not top then
-			walkTo(humanoid, here) -- on a plank, a boiler's side or the sand: stand still
+			-- Just off a top itself (a plank's end it stepped onto after someone): on that top still - it walks back onto it,
+			-- and walks off a car coming off.
+			top = ArenaLayout.nearTop(surfaces, here.X, here.Z, CharacterParts.feetY(body), c.SeeOff, c.SeeRise)
+		end
+		if not top then
+			walkTo(humanoid, here) -- out on a plank, a boiler's side or the sand: stand still
 			return
+		end
+		-- Its car is coming off: once it notices, to the car in front (jumping up a higher one).
+		if hooks.away(top.train, top.car) then
+			local noticeAt = mind.noticeAt or now + between(c.Notice)
+			mind.noticeAt = noticeAt
+			local front = ArenaLayout.frontTop(surfaces, top.train, top.car)
+			if front and now >= noticeAt then
+				if mind.blockUntil then
+					mind.blockUntil = nil
+					hooks.block(model, false)
+				end
+				mind.target = nil
+				humanoid.WalkSpeed = c.ChaseSpeed
+				walkTo(humanoid, Vector3.new(front.x, here.Y, front.z))
+				if now - mind.stuckAt > 0.5 then
+					if mind.lastPlace and (here - mind.lastPlace).Magnitude < 0.4 then
+						humanoid.Jump = true
+					end
+					mind.lastPlace, mind.stuckAt = here, now
+				end
+				return
+			end
+		else
+			mind.noticeAt = nil
 		end
 		-- Everyone else on this top, and how many other bots still in the round go for each.
 		local others: { BotPlan.Seen } = {}
@@ -117,6 +174,10 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 			local otherBody = if other ~= model then CharacterParts.body(other) else nil
 			if otherBody then
 				local at, otherTop = placeOf(otherBody)
+				if not otherTop then
+					-- Just off a top (a plank's end, over a roof's edge): seen as on it.
+					otherTop = ArenaLayout.nearTop(surfaces, at.X, at.Z, CharacterParts.feetY(otherBody), c.SeeOff, c.SeeRise)
+				end
 				local seen: BotPlan.Seen = { key = other, x = at.X, z = at.Z, top = otherTop }
 				table.insert(others, seen)
 				if other == mind.target and otherTop == top then
@@ -165,6 +226,23 @@ function BotBrain.new(surfaces: { ArenaLayout.Surface }, hooks: Hooks): Brain
 		end
 		local toward = Vector3.new(target.x - here.X, 0, target.z - here.Z)
 		local distance = toward.Magnitude
+		-- Hit: a block facing it for a moment, or a roll away.
+		if hit and not mind.blockUntil then
+			local roll = math.random()
+			if roll < c.BlockChance then
+				mind.blockUntil = now + between(c.BlockHold)
+				hooks.block(model, true)
+			elseif roll < c.BlockChance + c.RollChance and distance > 1e-3 then
+				hooks.dodge(model, -toward.Unit)
+			end
+		end
+		if mind.blockUntil then
+			walkTo(humanoid, here)
+			if distance > 1e-3 then
+				body.root.CFrame = CFrame.lookAt(here, here + toward.Unit) -- the block faces whom it fights
+			end
+			return
+		end
 		-- In reach once it has stepped in to StandOff; out again past PunchFrom.
 		if distance > (if mind.inReach then c.PunchFrom else c.StandOff) then
 			mind.inReach = false

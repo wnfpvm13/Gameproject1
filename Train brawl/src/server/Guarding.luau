@@ -5,6 +5,7 @@
 -- for Config.Block.BreakSeconds: breakGuard); it starts blocking again by itself after that if it still holds it. The
 -- block is published as the model's Names.Blocking for every screen and for the attack judging (WeaponService asks
 -- blocking()), and the fighter's walk is set again when it starts or stops (hooks.repace: the weapons slow a blocker).
+-- A fighter the server runs (a practice bot) holds its control through hold() instead (2nd fix 4).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -23,6 +24,7 @@ export type Hooks = {
 export type Service = {
 	blocking: (model: Model) -> boolean,
 	breakGuard: (model: Model, now: number) -> (), -- a blocked finisher: no blocking for a while
+	hold: (model: Model, down: boolean) -> (), -- a server-run fighter's block control goes down or up
 	stop: () -> (),
 }
 
@@ -78,6 +80,10 @@ function Guarding.start(remote: RemoteEvent, hooks: Hooks): Service
 	return {
 		blocking = function(model: Model): boolean
 			return shown[model] == true
+		end,
+		hold = function(model: Model, down: boolean)
+			held[model] = if down then true else nil
+			refresh(model, Workspace:GetServerTimeNow())
 		end,
 		breakGuard = function(model: Model, now: number)
 			brokenUntil[model] = now + Config.Block.BreakSeconds

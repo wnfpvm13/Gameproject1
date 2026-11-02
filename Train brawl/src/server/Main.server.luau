@@ -187,6 +187,9 @@ brain = BotBrain.new(arena.layout.surfaces, {
 		return BodyMotion.lunge(body, facing, WeaponRules.lunge(style, AttackString.launches(stringRules, step, style), Config.Attack))
 	end,
 	crates = drops.landed,
+	away = uncoupling.away,
+	block = guarding.hold,
+	dodge = dodging.dodge,
 })
 
 -- The avatar's own body parts arrive after the character and replace the default hand: the body is made standard,

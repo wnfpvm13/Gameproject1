@@ -1215,6 +1215,32 @@ do
 		and Words.BlockThrough.weapon ~= nil)
 end
 
+-- 26. Practice bots closer to real players (2nd fix 4: in the persona rerun bots rode 7 departing cars in 8 rounds,
+-- never blocked and never saw anyone on a plank).
+do
+	local S = Config.Sandbag
+	local plank = L.planks[1]
+	local side = if plank.x < 0 then 1 else -1 -- toward the middle train
+	local roofEdge = plank.x + side * (A.Gap / 2)
+	local onEnd = ArenaLayout.nearTop(L.surfaces, roofEdge - side * 1, plank.z, plank.top, S.SeeOff, S.SeeRise)
+	local midway = ArenaLayout.nearTop(L.surfaces, plank.x, plank.z, plank.top, S.SeeOff, S.SeeRise)
+	check("a bot sees someone on a plank's end as on the roof beside it, not someone out in the plank's middle",
+		onEnd ~= nil and onEnd.top == plank.top and midway == nil)
+	local back = #L.trains[1].cars
+	local front = ArenaLayout.frontTop(L.surfaces, 1, back)
+	local biggest = 0
+	for _, surface in L.surfaces do
+		if surface.train == 1 and surface.car == back - 1 then
+			biggest = math.max(biggest, surface.width * surface.length)
+		end
+	end
+	check("a bot leaving a back car heads for the biggest top of the car in front",
+		front ~= nil and front.car == back - 1 and front.width * front.length == biggest and ArenaLayout.frontTop(L.surfaces, 1, 1) == nil)
+	check("a bot notices its car coming off with time left to walk off it", S.Notice[2] + 2 < Config.Uncouple.Warning)
+	check("hit, a bot blocks or rolls only sometimes, and blocks no longer than a moment", S.BlockChance + S.RollChance < 0.6
+		and S.BlockHold[2] <= 1.5 and S.SeeOff <= Config.Arena.PlankOverlap * 2 + 1)
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed == 0 then
 	print("ALL PASS")

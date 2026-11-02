@@ -301,6 +301,37 @@ function ArenaLayout.topUnder(surfaces: { Surface }, x: number, z: number, feet:
 	return best
 end
 
+-- The top someone just off every top stands next to (on a plank's end, over a roof's edge): of `surfaces` whose height
+-- is within `rise` of the feet, the one whose footprint is nearest (x, z) along the ground, if within `within`; nil
+-- when none is (out on a plank's middle, in the air). For the practice bots to see a fighter standing there.
+function ArenaLayout.nearTop(surfaces: { Surface }, x: number, z: number, feet: number, within: number, rise: number): Surface?
+	local best: Surface? = nil
+	local bestDistance = within
+	for _, surface in surfaces do
+		if math.abs(surface.top - feet) <= rise then
+			local dx = math.max(math.abs(x - surface.x) - surface.width / 2, 0)
+			local dz = math.max(math.abs(z - surface.z) - surface.length / 2, 0)
+			local distance = math.sqrt(dx * dx + dz * dz)
+			if distance <= bestDistance then
+				best, bestDistance = surface, distance
+			end
+		end
+	end
+	return best
+end
+
+-- The top in front of car `car` of train `train` to get onto when that car comes off: the biggest top of the car ahead
+-- (car - 1), nil when there is none.
+function ArenaLayout.frontTop(surfaces: { Surface }, train: number, car: number): Surface?
+	local best: Surface? = nil
+	for _, surface in surfaces do
+		if surface.train == train and surface.car == car - 1 and (not best or surface.width * surface.length > best.width * best.length) then
+			best = surface
+		end
+	end
+	return best
+end
+
 -- How far a running jump carries along the ground when it lands `drop` lower than it started (Roblox's character
 -- jump: up to `jumpHeight` at `walkSpeed`, under `gravity`). The plain flight only: a real jump crosses about 4 more
 -- (it can start past the edge and catch the far edge; measured, tests' JUMP_EXTRA).

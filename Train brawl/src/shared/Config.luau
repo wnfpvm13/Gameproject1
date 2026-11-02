@@ -834,6 +834,17 @@ Config.Sandbag = {
 	Rest = { 0.6, 0.9 }, -- the breather after a string
 	Jitter = 0.08, -- up to this much later than its fist is ready, between punches of a string
 	FullString = 0.75, -- the chance a string is meant to go all three; otherwise it stops after one or two
+	-- Since the persona rerun (2026-10-31: bots rode 7 departing cars in 8 rounds, never blocked, never saw anyone on a
+	-- plank - solo practice was easier than real players): a bot notices its car is coming off after Notice seconds and
+	-- walks to the car in front; hit, it holds its block for BlockHold seconds with the chance BlockChance, or rolls away
+	-- with the chance RollChance; it sees a fighter standing up to SeeOff off its top (a plank's end, a roof's edge) whose
+	-- feet are within SeeRise of the top's height.
+	Notice = { 0.6, 1.4 },
+	BlockChance = 0.3,
+	BlockHold = { 0.6, 1.2 },
+	RollChance = 0.12,
+	SeeOff = 3,
+	SeeRise = 3,
 }
 
 return Config

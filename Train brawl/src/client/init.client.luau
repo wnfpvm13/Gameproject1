@@ -331,7 +331,7 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 	local w = Config.Weapons[hitWeapon]
 	-- On a block (the server says "blocked" or "broken"): a short flinch (a broken guard: the string's stun).
 	local met = if guarded == "blocked" or guarded == "broken" then guarded else nil
-	stats:hit(swinger == player.Character, me, met)
+	stats:hit(swinger == player.Character, me, met, w.launch == true)
 	local stun = HitRules.stun(AttackString.uses(w.style), w.cooldown, w.stun, met, STUNS)
 	if me and push then
 		knock:hit(victim, push, hitKind, stun)
@@ -367,6 +367,7 @@ hitRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, swi
 	if mine and counterAt ~= nil and counterAt == own.last and tag == own.count then
 		counterAt = nil
 		BlockShow.counter(victim)
+		stats:counter()
 	end
 	-- A hit through a block: why (from the side, from behind, a weapon no block stops).
 	local hitter = if typeof(swinger) == "Instance" and swinger:IsA("Model") then swinger else nil
@@ -435,6 +436,14 @@ sweptRemote.OnClientEvent:Connect(function(victim: unknown, velocity: unknown, k
 		LaunchShow.play(victim)
 	end
 	bridge:swept(victim)
+end)
+
+-- The golden crate taken (Names.GoldenTaken: "name|weapon"): the player's own highlight when it was the player.
+Workspace:GetAttributeChangedSignal(Names.GoldenTaken):Connect(function()
+	local taken = Workspace:GetAttribute(Names.GoldenTaken)
+	if typeof(taken) == "string" and string.match(taken, "^(.*)|") == player.DisplayName then
+		stats:tookGolden()
+	end
 end)
 
 -- A dynamite burst, from the server.

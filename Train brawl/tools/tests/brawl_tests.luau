@@ -1409,6 +1409,15 @@ do
 	check("taking it takes a moment shorter than a punch's gap, so a hit can stop it", G.Hold > 0.2 and G.Hold < Config.Weapons.Fist.cooldown)
 end
 
+-- 29. The player's highlights on the result card (decision 26).
+do
+	local none = Words.highlights(false, 0, 0, 2)
+	local all = Words.highlights(true, 2, 3, 5)
+	local two = Words.highlights(false, 1, 0, 4)
+	check("highlights: none for a quiet round, at most two in order, blocks only from three",
+		#none == 0 and #all == 2 and all[1] == "황금 상자" and all[2] == "반격 2회" and two[1] == "반격 1회" and two[2] == "막아 냄 4")
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed == 0 then
 	print("ALL PASS")

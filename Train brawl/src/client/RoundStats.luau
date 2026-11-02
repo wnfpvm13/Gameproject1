@@ -1,8 +1,9 @@
 --!strict
 -- The player's own numbers this round, counted on this client from the server's words (persona fix 5): hits landed on
 -- others (not taken on a block), home runs dealt (the feed), hits taken since its last fall - not those it blocked -
--- (for the knock-off line: RoundHud), when its fight began and when it went out for good. Starts over at each count-down. The knock-offs are
--- the server's (Names.KOs on the character).
+-- (for the knock-off line: RoundHud), when its fight began and when it went out for good, and its highlights (decision
+-- 26: hits struck back right after a block, hits with a weapon that always launches, attacks taken on the block, the
+-- golden crate). Starts over at each count-down. The knock-offs are the server's (Names.KOs on the character).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
@@ -10,6 +11,7 @@ local shared = ReplicatedStorage:WaitForChild("TrainBrawl")
 local Config = require(shared:WaitForChild("Config"))
 local Names = require(shared:WaitForChild("Names"))
 local PartUtil = require(shared:WaitForChild("PartUtil"))
+local Words = require(shared:WaitForChild("Words"))
 
 local RoundStats = {}
 RoundStats.__index = RoundStats
@@ -20,7 +22,18 @@ RoundStats.__index = RoundStats
 -- rival: the winner when the player did not win (its name, tickets left and knock-offs, from the feed), and the
 -- player's own tickets and knock-offs counted the same way to set beside it.
 export type Standing = { name: string, tickets: number, kos: number }
-export type Summary = { kos: number, homers: number, landed: number, seconds: number, played: boolean, titles: { string }, rival: Standing?, mine: Standing? }
+-- highlights: the player's own (Words.highlights: at most two).
+export type Summary = {
+	kos: number,
+	homers: number,
+	landed: number,
+	seconds: number,
+	played: boolean,
+	titles: { string },
+	highlights: { string },
+	rival: Standing?,
+	mine: Standing?,
+}
 
 type Fields = {
 	landed: number,
@@ -34,23 +47,58 @@ type Fields = {
 	homersBy: { [string]: number },
 	kosBy: { [string]: number },
 	fallsBy: { [string]: number }, -- and how many times each fell or flew out (a ticket each)
+	counters: number, -- hits struck back right after a block
+	booms: number, -- hits with a weapon that always launches
+	blocks: number, -- attacks taken on the block
+	golden: boolean, -- took the golden crate
 }
 export type Stats = typeof(setmetatable({} :: Fields, RoundStats))
 
 function RoundStats.new(): Stats
-	local fields: Fields = { landed = 0, homers = 0, taken = 0, began = nil, outAt = nil, endedAt = nil, phase = nil, homersBy = {}, kosBy = {}, fallsBy = {} }
+	local fields: Fields = {
+		landed = 0,
+		homers = 0,
+		taken = 0,
+		began = nil,
+		outAt = nil,
+		endedAt = nil,
+		phase = nil,
+		homersBy = {},
+		kosBy = {},
+		fallsBy = {},
+		counters = 0,
+		booms = 0,
+		blocks = 0,
+		golden = false,
+	}
 	return setmetatable(fields, RoundStats)
 end
 
 -- A hit from the server: `mine` the player struck it, `me` the player took it; `guard` "blocked" or "broken" when it
--- met a block.
-function RoundStats.hit(self: Stats, mine: boolean, me: boolean, guard: string?)
+-- met a block; `boom`: by a weapon that always launches.
+function RoundStats.hit(self: Stats, mine: boolean, me: boolean, guard: string?, boom: boolean)
 	if mine and guard == nil then
 		self.landed += 1
+		if boom then
+			self.booms += 1
+		end
 	end
 	if me and guard ~= "blocked" then
 		self.taken += 1 -- (a hit taken on the block does not count; one that broke it does)
 	end
+	if me and guard == "blocked" then
+		self.blocks += 1
+	end
+end
+
+-- The player struck back right after blocking (BlockShow.counter).
+function RoundStats.counter(self: Stats)
+	self.counters += 1
+end
+
+-- The player took the golden crate.
+function RoundStats.tookGolden(self: Stats)
+	self.golden = true
 end
 
 -- A line of the feed: who fell (`victim`), who got the knock-off (nil: nobody), `byMe` the player did, `meOut` the
@@ -86,6 +134,7 @@ function RoundStats.update(self: Stats, phase: string, inRound: boolean)
 	local wasCounting, wasFighting = before == "Countdown", before == "Fight"
 	if counting and not wasCounting then
 		self.landed, self.homers, self.taken, self.began, self.outAt, self.endedAt = 0, 0, 0, nil, nil, nil
+		self.counters, self.booms, self.blocks, self.golden = 0, 0, 0, false
 		table.clear(self.homersBy)
 		table.clear(self.kosBy)
 		table.clear(self.fallsBy)
@@ -141,6 +190,7 @@ function RoundStats.summary(self: Stats, own: Model?, name: string): Summary
 	end
 	return {
 		titles = titles,
+		highlights = Words.highlights(self.golden, self.counters, self.booms, self.blocks),
 		kos = if own then PartUtil.number(own, Names.KOs) or 0 else 0,
 		homers = self.homers,
 		landed = self.landed,

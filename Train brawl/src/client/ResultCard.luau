@@ -24,7 +24,17 @@ local COUNT_SECONDS = 0.6 -- the numbers count up this long
 
 -- The summary shown (RoundStats.Summary).
 export type Standing = { name: string, tickets: number, kos: number }
-export type Summary = { kos: number, homers: number, landed: number, seconds: number, played: boolean, titles: { string }, rival: Standing?, mine: Standing? }
+export type Summary = {
+	kos: number,
+	homers: number,
+	landed: number,
+	seconds: number,
+	played: boolean,
+	titles: { string },
+	highlights: { string },
+	rival: Standing?,
+	mine: Standing?,
+}
 
 local TITLE_ROW = 26
 local VERSUS_ROW = 24 -- the winner's line and the player's
@@ -84,10 +94,13 @@ function ResultCard.update(self: Card, phase: string, summary: Summary)
 		self.summary = summary -- the numbers as the fight ended
 		self.frame.Visible = true
 		UiStyle.pop(self.frame, 1.12)
-		-- The titles, when earned, take a row under the heading and push the numbers down.
+		-- The titles, when earned, and the player's highlights take a row under the heading and push the numbers down.
 		local names = {}
 		for _, key in summary.titles do
 			table.insert(names, Words.Titles[key] or key)
+		end
+		for _, line in summary.highlights do
+			table.insert(names, line)
 		end
 		local extra = if #names > 0 then TITLE_ROW else 0
 		self.titles.Text = table.concat(names, "   ")

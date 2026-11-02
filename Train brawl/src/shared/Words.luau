@@ -45,6 +45,26 @@ Words.ResultTitle = "이번 판"
 -- Titles on the result card (persona fix 8): the most home runs, the most knock-offs, still aboard at the end.
 Words.Titles = { homers = "홈런왕", kos = "KO왕", survived = "끝까지 버팀" } :: { [string]: string }
 
+-- The player's own highlights beside them (decision 26; Codex review 2026-11-02: something to be proud of without
+-- winning): at most two, in this order - the golden crate taken, hits struck back right after a block, hits with a
+-- weapon that always launches, attacks taken on the block (three or more).
+function Words.highlights(golden: boolean, counters: number, booms: number, blocks: number): { string }
+	local list = {}
+	if golden then
+		table.insert(list, "황금 상자")
+	end
+	if counters > 0 then
+		table.insert(list, string.format("반격 %d회", counters))
+	end
+	if booms > 0 then
+		table.insert(list, string.format("쾅 무기 명중 %d", booms))
+	end
+	if blocks >= 3 then
+		table.insert(list, string.format("막아 냄 %d", blocks))
+	end
+	return { list[1], list[2] }
+end
+
 -- The big call when the player hits home runs in a row (two or more).
 function Words.homerunStreak(count: number): string
 	if count == 2 then
